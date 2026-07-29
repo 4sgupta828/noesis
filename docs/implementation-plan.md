@@ -1,150 +1,131 @@
-# Factra v2 — Phased Implementation Plan
+# Noesis — Phased Implementation Plan (v2, panel-reviewed)
 
-**Companion to:** `factra-rearchitecture-spec.md` (v2, panel-reviewed).
-**Decisions locked:** O1 = clean OH, no legacy DB/pipeline/bridge, OH adaptation layered on the generic pipeline. O2 = lift-and-refactor (port proven organs under contract, rewrite the domain-welded skeleton, re-author the qa eval). **O3 = single vertical per deployment** (a deployment activates exactly one vertical manifest; verticals get separate deployments + DBs). **O5 = Financial** is the second vertical (P5) — forces XBRL + fact-coordinate verification.
+**Companion to:** `architecture-spec.md`. **Repo:** `~/noesis` (scaffolded).
+**Decisions locked:** O1 clean-OH-no-legacy · O2 lift-and-refactor · O3 single-vertical-per-deployment · O5 Financial 2nd vertical.
+**Panel:** Codex + Gemini 3 Pro + code-grounded subagent — all three returned; v2 folds in their corrections.
 **Date:** 2026-07-29
 
 ---
 
 ## A. Approach & ground rules
+- **Kernel-first, vertical as the forcing function.** Regulatory vertical proves each kernel contract.
+- **Lift-and-refactor (O2), with a THIRD disposition the panel forced:** many modules are **PORT-mechanics / REWRITE-contract** — the algorithm lifts, but its data shape / DTOs / storage keys / SQL filters are domain-welded and must be rewritten. Pure "PORT" is reserved for genuinely domain-free code (verified list in §C).
+- **Every phase ends at a hard gate** (an eval on the *retained* gold subset, a throughput soak, a boot check). Code-complete ≠ done.
+- **Success invariant, enforced two ways** (W5): (1) a regex grep gate over the kernel for *unambiguous* domain nouns — implemented as `\bstate_code\b`, NOT bare `\bstate\b`, because "state" collides with mutation-state / circuit-breaker-state / `StateSnapshot` (panel finding — already reflected in `tools/check_kernel_invariant.sh`); (2) an **AST import-graph check** for ambiguous concepts (no kernel module imports a vertical package; "state"-like nouns judged structurally, not by regex).
+- **Execution:** subagent-driven development; **judge-panel design pass before P2 and each P3 sub-phase** (security-critical span-check split + the load-bearing policy interface).
+- **Definition of done (regulatory product):** re-authored qa + lookup evals at parity on the retained gold subset; all service roles boot; OH ingests via the residential strategy (multi-day throughput soak); tenant-isolation probe passes; financial conformance stub compiles; prod-shadow parity at cutover.
 
-- **Kernel-first, vertical as the forcing function.** Build the domain-agnostic kernel; the regulatory vertical is the first (and only shipping) consumer that proves each kernel contract.
-- **Lift-and-refactor, not green-field.** Every "port" task starts from the named existing module, extracts it behind a clean contract, and strips the domain branch. "Rewrite" tasks replace domain-welded control flow. "Discard" = deleted, not carried.
-- **Each phase ends at a hard gate** (an eval, a boot check, a soak) that must pass before the next phase depends on it. No phase is "done" on code-complete alone.
-- **Every change behind the success invariant:** CI greps the kernel for semantic domain nouns (`docket|utility|puco|ohio|\bstate\b|case_number|doc_family`) and fails on a hit outside the vertical package.
-- **Execution model (per CLAUDE.md):** subagent-driven development — a fresh subagent per task, code review between tasks. High-blast-radius phases (P2 span-check split, P3 gating/routing policy) get a judge-panel design pass before implementation.
-- **New repo layout:** `packages/kernel/` · `packages/vertical_regulatory/` · `apps/{api,web,workers}/` · `packages/kernel/conformance/` (the `VerticalConformance` suite) · `evals/`.
-- **Definition of done for the whole build:** the regulatory vertical passes the re-authored qa eval + lookup eval at parity with the captured prod baseline, all 5 service roles boot, OH ingests through the residential strategy (live soak), tenant-isolation probe passes, and a legislative conformance stub compiles against the same contracts.
+## B. Cross-cutting workstreams
+- **W1 — Vertical Contract SPI** (`packages/kernel/noesis_kernel/contract/`): the manifest + typed Protocols. Grows per phase.
+- **W2 — Conformance suite** (`.../conformance/`): one check per contract + tenant-isolation probe. CI gate.
+- **W3 — Eval harness**: port `lookup` scoring; **re-author `qa`** vertical-parameterized; **persist frozen graded-answer artifacts** (prose + cited_by_origin + cited_snapshot_ids + refused + resolved_expected + law_audit) so P0 reproduction doesn't require re-running the live stack.
+- **W4 — Observability/admin**: cost-governor metrics, breaker/pipeline-settings admin API, ingestion dashboards — **including replacements** for today's operator surfaces (see §C dis_client/remote-download note).
+- **W5 — Success-invariant CI**: grep gate (safe nouns) + AST import-graph check (ambiguous nouns) + boot-all-roles.
+- **W6 — Auth / RBAC / secrets / config (NEW)**: session + tenant mapping + org isolation (today `deps.py` + `RequireCapability.tsx`), single-vertical manifest-activation env (O3), secret injection incl. the **per-connector proxy-off** config OH needs.
+- **W7 — Migrations / schema bootstrap / seeding (NEW)**: new-repo alembic harness, `create_all` bootstrap, pre-deploy wiring, the 7-registry + default-scope seeder. Un-owned in v1 — now W7 from P1.
+- **W8 — Frontend architecture (NEW, its own design sub-project)**: how a vertical **declares its UI** (entity views, deliverable renderers) and how much of `web/research_system` is a generic shell vs. per-vertical components. Panel: this "rivals the kernel in complexity" — do a design pass before P4.
+- **W9 — New-repo CI/CD + cutover (NEW)**: Railway service defs, committed-dist rebuild step, dual-run / traffic-shift / backfill for the prod-shadow cutover.
 
----
+## C. Port / Rewrite / Discard map (v2 — panel-corrected)
+Dispositions: **PORT** (domain-free lift) · **PORT-mech/REWRITE-contract** (algorithm lifts, data-shape rewritten) · **REWRITE** · **MOVE→vertical** · **DISCARD**.
 
-## B. Cross-cutting workstreams (span all phases — assign an owner each)
-
-- **W1 — Vertical Contract SPI** (`packages/kernel/contract/`): the 14 typed Protocols from spec §4, plus the `VerticalManifest` + entry-point discovery. Grows phase by phase; each kernel contract lands here first, then the regulatory vertical implements it.
-- **W2 — Conformance suite** (`packages/kernel/conformance/`): one check per contract (manifest completeness, connector round-trip, retrieval→BlockHit, span-check on gold claim, tenant-isolation probe, deliverable render). Every vertical must pass; CI gate.
-- **W3 — Eval harness**: port `lookup` scoring as-is; **re-author `qa` scoring** to be vertical-parameterized (remove the corpus/ingest-recall + state_bleed OH-cutover gates). Baseline capture of current prod scores is P0.
-- **W4 — Observability/admin**: cost-governor metrics, WAF-breaker + pipeline-settings admin API, ingestion dashboards — built alongside the modules they observe, not bolted on.
-- **W5 — Success-invariant CI + import-graph AST check**: the grep gate + a boot-all-roles check, wired from P1.
-
----
-
-## C. Port / Rewrite / Discard map (grounds every phase)
-
-| Existing module | Disposition | Target |
+| Existing module | Disposition | Notes (panel file:line) |
 |---|---|---|
-| `commission_ingest/queue.py`, `storage.py`, `breaker.py`, `pipeline.py` (run loop), `browser.py` | **PORT** | kernel ingestion (rename `Commission`→`Source`, `commission_id`→`source_id`) |
-| `commission_ingest/connectors/base.py` (verbs/DTOs) | **REWRITE** | generic `Connector`/`EntityRef`/`DocumentRef` + `FetchStrategy` |
-| `commission_ingest/connectors/*` (ohio, indiana, …) | **MOVE → vertical** | regulatory connectors; OH gets `WarmedResidentialBrowserStrategy` |
-| `search/{parse_loop,block_builder,embed_loop,engine,classify_block,reranker}` | **PORT** | kernel index/retrieval (strip domain text-prefix in `block_builder:51`) |
-| `search_models.py` denorm dims (`:141`) | **REWRITE** | generic `facets JSONB` (+ vertical typed facet cols) |
-| `services/retrieval/dispatcher.py`, `structured_leg.py` | **PORT** | kernel retrieval fusion |
-| `services/retrieval/sources/base.py` `BlockHit`/`CorpusSource` | **REWRITE** | generic `domain_metadata`/`facets`; scope-generic contract |
-| `services/retrieval/sources/registry.py` `select_sources`, `oh_corpus.py` | **REWRITE / DISCARD** | scope/routing policy (registry) ; oh_corpus discarded (no legacy substrate) |
-| `retrieval/plan_intent.py`, `allowlists.py` | **MOVE → vertical** | retrieval-intent contract + allowlists |
-| `retrieval/authority_floor.py` | **MOVE → vertical** | authority/gate contract |
-| `research_orchestrator/loop.py` (mechanics, tools dispatch, atom model) | **PORT** | kernel ReAct core |
-| `loop.py` gate-activation (`_DOCKET_RE`, `:91-148`), coverage/web-floor/termination (`:791-880`) | **REWRITE** | gating/coverage policy interface |
-| `loop.py:44-52` PUCO module imports; `_SYSTEM` + tool descriptions (`:431-605`) | **MOVE → vertical** | persona pack (prompt + tool schema as one unit) |
-| `research_orchestrator/verify.py` corpus span-check (`:456-508`) + cross-tenant guard (`:579-595`) | **PORT** | kernel provenance gate + tenant isolation |
-| `verify.py` web path (`:22,201`), `authority_floor_check`, judge prompts (`:50-55,626,956,1025`) | **MOVE → vertical** | authority/gate + locator/citation contract |
-| `tools.py` `query_corpus_structured`/`compare_metrics`/`monitor_filings` | **MOVE → vertical** | vertical structured tools |
-| `application/commands/compose_comparison_table.py` | **PORT** | kernel synthesis (excerpt-source + verifier prompt vertical-configurable) |
-| `canonicalize_table_schema.py` `utility_axis` (`:47`) | **MOVE → vertical** | comparison-axis hook |
-| collective-take template system, `builtin_templates.py` | **PORT / MOVE** | mechanism kernel; regulatory templates → vertical |
-| `extensions/{fetcher,parser}.py`, `models/source_kind.py` | **PORT (mechanism)** | registry mechanisms kernel; registrations → vertical manifest |
-| `extensions/deliverable_kinds/__init__.py` `KIND_REGISTRY` | **REWRITE (mechanism) / MOVE (classes)** | manifest-registered kinds |
-| `services/case_issue_core.py` `_METRICS`, `case_issue_*` models | **MOVE → vertical** | extraction schema (data) + structured-fact-store |
-| `budget.py` cost governor | **PORT** | kernel research-path governor |
-| `tests/.../eval/lookup/scoring.py` | **PORT** | kernel eval |
-| `tests/.../eval/qa/scoring.py` | **REWRITE** | vertical-parameterized qa eval |
-| `models/project.py` (`default_research_states`, PUCO `source_fetch_policy`) | **REWRITE** | `default_scope JSONB`, vertical source policy |
+| `commission_ingest/breaker.py` | **PORT** | verified clean; per-source CLOSED→OPEN→HALF_OPEN, successor to the global WAF breaker (`breaker.py:6-10`) |
+| `commission_ingest/browser.py` `BrowserSession` | **PORT** | domain only in comments; **but** add per-connector **proxy-off** (today `_proxy_config` injects proxy globally `:24-34` — OH needs proxy OFF) |
+| `commission_ingest/storage.py` | **PORT-mech/REWRITE-contract** | sha256 dedup is clean; `readable_key(state,case_number)` keys are domain (`:38,91`) → generic facets in the key |
+| `commission_ingest/queue.py` | **PORT** | generic SKIP-LOCKED job table |
+| `commission_ingest/pipeline.py` (run loop) | **PORT-mech/REWRITE-contract** | 3-phase loop shell ports; **handlers rewrite** (persist `IngestCase/Filing/CaseCollection`); generic Connector SPI must keep the **4th verb `fetch_case_detail`** (`:472-484`) + **n:m case↔filing membership** (`ingest_filing_case_link`) — the genericized verb list dropped both |
+| `connectors/base.py` (verbs/DTOs) | **REWRITE** | `CaseRef/FilingRef/native_case_number/discover_cases/list_filings` (`:31-102`) → generic `Connector`/`EntityRef`/`DocumentRef` + `FetchStrategy` (encoding per-op session lifetime, warm-on-reject, proxy-off) |
+| `connectors/*` (ohio, indiana, …) | **MOVE→vertical** | OH gets `WarmedResidentialBrowserStrategy`; **port the OH golden config** (Firefox, homepage warm-on-reject, fresh-session-per-op, 1 concurrency, 1 job/min, proxy-off) — these are control-flow invariants, not just knobs (`ohio.py:118-121,381,571-601`) |
+| `search/{parse_loop,embed_loop,reranker,classify_block}` | **PORT-mech/REWRITE-contract** | mechanics clean; strip domain assumptions |
+| `search/block_builder.py` | **PORT-mech/REWRITE-contract** | strip the `state/native_case_number` **text-prefix** (`:51`) |
+| `search/engine.py` + `search_models.py` | **PORT-mech/REWRITE-contract** | fusion clean; `ingest_search(states,native_case_number,doc_families)` + hard-filter `b.state` (`engine.py:7,77`) + denorm dims (`search_models.py:141`) → generic `facets` |
+| `services/retrieval/dispatcher.py` | **PORT-mech/REWRITE-contract** | fusion ports; default-origin resolution rewritten |
+| `services/retrieval/structured_leg.py` | **MOVE→vertical** | regulatory structured-fact retrieval (case-issue tables, metric keywords, lifecycle stages `:1,58,185`); kernel keeps only the **fusion-slot interface** |
+| `retrieval/sources/base.py` `BlockHit`/`CorpusSource` | **REWRITE** | `jurisdictions/ready_states/states` + "never default to OH" (`:27,33,44,55`) → generic `facets`/`domain_metadata` |
+| `retrieval/sources/registry.py`, `oh_corpus.py` | **REWRITE / DISCARD** | oh_corpus is the **default source/fallback** woven through registry/authority_floor/block_retrieval/dispatcher — replace default-origin resolution everywhere, not just the DTO |
+| `retrieval/plan_intent.py`, `allowlists.py`, `authority_floor.py` | **MOVE→vertical** | retrieval-intent + authority contracts |
+| `research_orchestrator/loop.py` (loop mechanics, generic tools) | **PORT-mech/REWRITE-contract** | **gate-activation (`_DOCKET_RE`, `:85-148`) + coverage/termination (`:791-880`) are INTERLEAVED in the ported functions** → the gating/coverage **policy interface must exist in P2**; **cut `loop.py:44-52` import-time PUCO imports first** or the research role won't boot |
+| `verify.py` span-check `:452-454,:483-488` | **PORT** | the tiny locator-shortcut + normalized-substring check — the genuinely domain-free core |
+| `verify.py` `make_origin_block_loader_v2` `:566-611` | **REWRITE** | it's the **origin router** (corpus→strata_rs SQL, ingest→doc_object_id, workspace→tenant); "retire origin routing" ⇒ rewrite to (unified-corpus loader + workspace-tenant loader). **Keep only the workspace branch (`:585-590`) as the tenant guard** — security-critical, P2 design-panel |
+| `verify.py` web path, authority_floor_check, judge prompts | **MOVE→vertical** | authority/gate + locator/citation contract |
+| `tool_impls.py` structured tool impls (`:1080,1234`) + `tools.py` schemas + `_SYSTEM` prompt + `SITE_REGISTRY` | **MOVE→vertical** | prompt + schemas + **implementations** move as ONE unit (impls are in `tool_impls.py`, not `tools.py`) |
+| `application/commands/compose_comparison_table.py` | **PORT** | verified clean (0 domain nouns; "state" hits are mutation-state); make excerpt-source + verifier prompt vertical-configurable; `utility_axis` (`canonicalize_table_schema.py:47`) → vertical comparison-axis hook |
+| collective-take templates, `builtin_templates.py` | **PORT (mech) / MOVE (content)** | template engine kernel; regulatory templates vertical |
+| `extensions/{fetcher,parser}.py`, `models/source_kind.py` | **PORT (mechanism)** | registry mechanisms kernel; registrations → manifest |
+| `extensions/deliverable_kinds/__init__.py` `KIND_REGISTRY` | **REWRITE (mech) / MOVE (classes)** | manifest-registered kinds |
+| `services/case_issue_core.py` `_METRICS`, `case_issue_*` models | **MOVE→vertical** | extraction schema (data) + structured-fact-store |
+| `budget.py` cost governor | **PORT** | verified clean (`:1-40`) |
+| `eval/lookup/scoring.py` | **PORT** | verified pure |
+| `eval/qa/scoring.py` | **REWRITE** | welded to OH-cutover (`state_bleed`, corpus-vs-ingest recall `:171-198,269-327`) → vertical-parameterized; OH-cutover gold cases **retired/migrated**, not reproduced |
+| `models/project.py` | **REWRITE** | `default_scope JSONB`, vertical source policy (`:118,166`) |
 | legacy `app/{api,services,models,core,workers,main.py}` | **DISCARD** | — |
-| `poll_sources`, `document_sweep`, `remote_bridge/ship`, `corpus_ingest_loop`, sentinel, `dis_client`, `remote_download` endpoints, `oh_corpus` | **DISCARD** | superseded by generic residential ingestion (O1) |
+| `dis_client` | **DISCARD scraper / REIMPLEMENT callers** | not just the OH scraper — **product features** call it: `case_monitoring.py:295,478`, `threads.py:899`, `source_refine.py:185`, `fetch_source.py:647`. Monitoring + thread source-refine need reimplementation on the connector path (P3/P4 work items), not silent discard |
+| `poll_sources`, `corpus_ingest_loop`, sentinel, `oh_corpus` pipeline | **DISCARD** | superseded by generic residential ingestion |
+| `document_sweep`, `remote_bridge/ship`, `/admin/remote-download/*` | **DISCARD** | genuinely dark (default-OFF `rs_doc_sweep`/`rs_remote_download_bridge_enabled`) — clean discards |
 | companion app, voice, active-questions, OFF-flag dead code | **DISCARD** | — |
-
----
 
 ## D. Phases
 
-### P0 — Foundations, baselines, eval re-authoring *(blocks everything; no product code)*
-**Goal:** the measuring instruments + repo skeleton exist before we build.
-1. Stand up the repo layout (B) + CI: success-invariant grep gate (W5), lint/type, empty `VerticalConformance` runner (W2).
-2. **Capture current-prod eval baselines** — run today's `lookup` + `qa` evals against prod, freeze the scores as the parity bar (record model/prompt/SHA per Rule 11).
-3. **Re-author the qa scorer** vertical-parameterized: keep the generic correctness/citation-grounding math; remove `LEGAL_SOURCE_FAMILIES`-in-core, the corpus-vs-ingest recall gate, and `state_bleed`; expose gold + vocab + a `grounded-in-scope` check via the (stub) vertical. Prove it reproduces the frozen baseline verdicts on the existing gold set.
-4. Port the `lookup` scorer unchanged; wire both into W3.
-**Gate:** re-authored qa eval reproduces the P0-frozen pass/fail on every existing gold case (no verdict drift); lookup eval green; CI grep gate live.
-**Dependency:** none. **Risk:** qa re-author changes a verdict → investigate before proceeding (the eval is the contract).
+### P0 — Foundations, baselines, eval re-authoring *(critical path)*
+1. Repo/CI (done: scaffold + invariant gate). Add the **AST import-graph check** (W5) and empty `VerticalConformance` runner (W2).
+2. **Capture prod eval baselines AND persist frozen graded-answer artifacts** (W3) — the full graded objects, not just `answer_prose` (today `results/*.json` drops them), so verdicts are reproducible offline (Rule 11: model/prompt/SHA).
+3. **Re-author the qa scorer** vertical-parameterized: keep generic correctness/citation-grounding; **remove** `LEGAL_SOURCE_FAMILIES`-in-core + corpus-vs-ingest recall + `state_bleed`; **retire/migrate the OH-cutover gold cases** (their verdicts are defined by the removed gates — they cannot and should not be "reproduced").
+4. Port `lookup` scorer unchanged.
+**Gate (fixed):** re-authored qa reproduces frozen verdicts **on the retained vertical-agnostic gold subset only**, with a **"same verdict for same reason" diff** (not just pass/fail) + a contamination audit; OH-cutover cases explicitly retired; lookup green; grep + AST gates live.
+**Risk:** the plan's original "no verdict drift on *every* case" was mathematically impossible (removed gates ⇒ guaranteed drift) — scoping to the retained subset is the fix.
 
-### P1 — Kernel ingestion + document spine + FetchStrategy (incl. residential OH) *(the O1 proof)*
-**Goal:** a generic pipeline that ingests any source into the unified corpus, and proves OH works cleanly with no legacy carryover.
-1. **PORT** queue/storage/breaker/pipeline-run-loop → kernel `ingestion/` with `Source`/`source_id` rename; job types genericized (`discover_entities|list_documents|fetch_artifact`).
-2. **REWRITE** the `Connector` SPI + `EntityRef`/`DocumentRef` (generic head + `extra`); **NEW** `FetchStrategy` (egress-placement: `egress_class/engine/warmup/pacing/session_lifetime/live_probe`); **PORT** `BrowserSession`.
-3. **Document spine:** `Document`(sha256, content_type, facets, **version/supersedes**) → `ParsedDoc` → `Block` → `BlockContent`; **content-type-keyed parser registry** (ship pdf; html stubbed for P4/vertical-2). Strip domain text-prefix from block builder.
-4. **Vertical (regulatory) minimal:** implement 2 http-state connectors + the **OH connector with `WarmedResidentialBrowserStrategy`** (Firefox, F5 homepage warm-up, cookies, 8s pacing, residential egress). Register via manifest (W1).
-5. **Residential worker role** in `apps/workers` + scheduler egress placement (W4 dashboards).
-**Gate (the O1 soak):** 2 http states + **OH end-to-end** (discover→fetch→parse→block→embed) into the unified corpus from the residential worker; sustained OH soak (multi-hour, no WAF block, dedup working); zero references to legacy `strata_rs`/bridge. Boot-all-ingest-roles green.
-**Dependency:** P0. **Risk (O1):** OH WAF still blocks from residential worker → tune strategy (engine/warmup/pacing) before declaring the path viable; do NOT reintroduce the legacy bridge.
+### P1 — Kernel ingestion + document spine + FetchStrategy (the O1 proof)
+1. **PORT/REWRITE** queue (PORT) + storage/pipeline (PORT-mech/REWRITE-contract): `Source`/`source_id`; generic Connector SPI carrying **all four verbs** (`discover_entities|list_documents|fetch_artifact|fetch_entity_detail`) + **n:m entity↔document membership**.
+2. **FetchStrategy** (egress-placement) encoding **per-op session lifetime, warm-on-reject, per-connector proxy-off**; PORT `BrowserSession` + add per-connector proxy-off.
+3. **Document spine** (+version/supersedes; content-type-keyed parser registry, pdf now).
+4. **W7:** new-repo migration/seed harness (schema bootstrap owned here).
+5. Regulatory-minimal: 2 http connectors + **OH connector + golden config** on the residential worker; **scheduler egress-placement** (NEW infra — today per-state loops, not pools).
+**Gate (fixed — absence-of-block ≠ liveness; the 21h deadlock produced no block):** **multi-DAY soak with a throughput FLOOR** (N docs/hr over M days), asserting fresh-session-per-op, proxy-off, breaker stability, PDF capture, dedup + version-lineage, no wedged session; boot-all-ingest-roles green; zero legacy `strata_rs`/bridge refs.
 
-### P2 — Kernel retrieval + provenance gate + ReAct mechanics + cost governor + tenant isolation
-**Goal:** the generic evidence engine and research loop mechanics, domain-free, provable on the lookup eval.
-1. **PORT** hybrid fusion (dispatcher + structured_leg) + reranker + `Capability`; **REWRITE** `BlockHit`/`CorpusSource`/`SearchContext` to carry generic `facets`/`domain_metadata` (no `case_number`/`state`); hard-filter `facets @> :filter`.
-2. **Split `verify.py`:** **PORT** the corpus/locator span-check + the **cross-tenant FALSE-PASS guard** into the kernel provenance gate; leave web/authority/judge paths for the vertical (P3). Define the **locator/citation contract** (PDF page now; HTML/XBRL/table-cell/registry-row stubs).
-3. **PORT** ReAct loop mechanics, tool dispatch, atom model, the 4 generic tools (`search_evidence`/`precision_lookup`(+cell verifier)/`read_doc_section`/`emit_answer`); **PORT** `budget.py` cost governor.
-4. **Tenant isolation** modeled explicitly: per-tenant scoping on every retrieval + at the gate (`tenant`/`workspace` boundary in the data model).
-**Gate:** ported **lookup eval** passes at P0 baseline against the unified corpus (regulatory gold); **tenant-isolation probe** in W2 passes (a workspace atom cannot ground a claim in another tenant's corpus); boot research role green; kernel grep gate clean.
-**Dependency:** P1. **Design-panel pass first** (span-check split is high-blast-radius provenance/security code).
+### P2 — Retrieval + provenance/tenant gate + ReAct mechanics + POLICY interface + cost governor
+*(moved earlier from P3 per panel: the loop can't boot or pass the grep gate without these)*
+1. **Cut `loop.py:44-52` import-time PUCO coupling first** (else research role won't boot).
+2. **Define in P2 (not P3):** the gating/coverage/routing **policy interface (10th seam)**; the **origin/tenant data model + locator/citation union** (incl. a **fact-coordinate stub** so financial isn't a P5 surprise — no XBRL parser exists today).
+3. **PORT-mech/REWRITE** fusion + `BlockHit`(generic facets); **span-check: PORT the substring/locator check, REWRITE the loader routing** to unified+workspace-tenant, keeping the workspace branch as the tenant guard.
+4. **PORT** ReAct mechanics + 4 generic tools + `budget.py`; MOVE `structured_leg` impl to vertical (keep fusion slot).
+**Gate (strengthened):** ported **lookup eval** at baseline + **facet hard-filter tests** + **provenance test per locator type** + **tenant-isolation probe** + boot research role (post import-cut). **P2 design-panel first** (span-check/tenant rewrite is security-critical).
 
-### P3 — Vertical contract completion + regulatory vertical + gating/routing policy *(the parity proof)*
-**Goal:** the full plug-in contract exists and the regulatory vertical drives the loop to qa-parity.
-1. **Contract (W1) completion:** scope/routing model, **gating/coverage policy (10th seam)**, retrieval-intent contract, authority/gate contract, entity-resolution contract, structured-fact-store contract (+ fact-coordinate verification hook), persona pack (prompt + tool schemas as one unit), structured tools, comparison-axis, change-event/monitoring, eval gold/vocab.
-2. **REWRITE** the domain-welded skeleton against the policy interface: gate activation (was `_DOCKET_RE`), coverage/web-floor/termination (was `ohio_sufficient`/`use_ingest_engine`), the `agent.py` OH-router + entity→jurisdiction resolver + capability gate → generic router reading the vertical scope table. **DISCARD** origin routing (unified corpus).
-3. **MOVE → regulatory vertical:** connectors (done P1) + retrieval-intent + allowlists + authority_floor + judge prompts + `_SYSTEM` + tool descriptions + structured tools + extraction schema (`_METRICS`→data) + `case_issue_*` fact store + web `SITE_REGISTRY`.
-**Gate:** **re-authored qa eval at P0 parity** on the regulatory vertical; `VerticalConformance` fully green for regulatory; success-invariant grep clean (all domain nouns now live only in `packages/vertical_regulatory/`).
-**Dependency:** P2. **Design-panel pass first** (the gating/routing policy interface is the load-bearing abstraction).
+### P3 — Vertical contract + regulatory vertical + skeleton rewrite *(SPLIT — was a hidden multi-month phase)*
+- **P3a — Data/retrieval/gating contracts + skeleton rewrite:** finish scope/routing, retrieval-intent, entity-resolution, structured-fact-store contracts; rewrite the domain-welded control flow (gate activation, coverage/termination, `agent.py` OH-router + capability gate) against the P2 policy interface; MOVE connectors/allowlists/structured-fact-store to the vertical.
+  **Gate:** `VerticalConformance` data/retrieval checks green; grep+AST clean (domain nouns now only in the vertical); routing/structured-leg regression tests.
+- **P3b — Persona/authority/tools + qa parity:** MOVE `_SYSTEM` + tool schemas + `tool_impls` + authority/judge prompts + extraction schema; **reimplement the `dis_client` product-feature callers** (monitoring, thread source-refine) on the connector path.
+  **Gate:** **re-authored qa at parity on the retained gold subset** (weak baseline caveat stated); full conformance green.
 
-### P4 — Synthesis, deliverables, project model, API/UI, observability
-**Goal:** the full product surface on the kernel.
-1. **PORT** `compose_comparison_table` (excerpt-source + verifier prompt vertical-configurable) + **MOVE** comparison-axis to vertical; **PORT/MOVE** collective-take templates (mechanism/regulatory); **REWRITE** deliverable-kind registration → manifest.
-2. **REWRITE** `Project` (`default_scope JSONB`, vertical source policy); wire the 7 registries. **O3 — single vertical per deployment:** the deployment **activates exactly one vertical manifest at boot** (env/config), so scope/registry/prompt/tool loading is *deployment-level*, not per-request; no runtime multi-vertical routing or cross-vertical registry isolation. All projects in a deployment share that vertical. (Tenant/workspace isolation from P2 still applies *within* the vertical for BYOD.)
-3. **apps/api + apps/web:** vertical-neutral shells rendering declared entities/deliverables; **W4** admin/observability (WAF-breaker, pipeline-settings, ingestion dashboards, cost metrics).
-**Gate:** end-to-end product flow on regulatory (create project → ingest → ask/orchestrator → deliverable draft → comparison table → monitoring); all service roles boot; single-vertical activation verified (a second manifest present but inactive changes nothing); conformance still green.
-**Dependency:** P3.
+### P4 — Product surface *(SPLIT into work packages — each was hiding real effort)*
+- **WP-API/Auth (W6):** apps/api + auth/session/RBAC/org-isolation (no phase defined this before).
+- **WP-Frontend (W8):** the vertical-UI-declaration contract + apps/web rebuild — **its own design sub-project** (panel: complexity rivals the kernel; the current SPA has monitor/admin/RBAC routes).
+- **WP-Workers/Scheduling:** dispatch, redrafts, deliverable drift, egress-placement pools.
+- **WP-Migrations/Deploy (W7/W9):** per-vertical Railway defs, committed-dist rebuild, pre-deploy.
+- **WP-Observability/Admin (W4):** replace remote-download/pipeline-settings/WAF-breaker/monitor operator surfaces.
+- **WP-Synthesis:** compose_comparison_table (+comparison-axis), templates, deliverable kinds, `Project`(default_scope), manifest boot-activation (O3).
+**Gate:** e2e flow **including auth/RBAC/org isolation, worker scheduling, admin controls, frontend route coverage, deploy health**; then **prod-shadow parity** (W9 dual-run) = definition of done.
 
-### P5 — Financial vertical conformance stub (prove the seam is real) + hardening
-**Goal:** demonstrate the abstraction holds for **financial** (O5) — the hardest stress test — without shipping it.
-1. **Financial manifest + EDGAR connector** (`HttpStrategy` — EDGAR is http, **no residential worker needed**, so the fetch layer is exercised on the easy path while the *data model* is exercised on the hard path).
-2. **XBRL content-type parser** (validates the content-type-keyed parser registry from P1/P3 — structured data, not prose/PDF).
-3. **Fact-coordinate verification** (validates the structured-fact-store + locator/citation contracts from P2/P3): financial facts are identified by coordinate — `CIK/accession/statement/period/unit/decimals/context_ref` — and verified against the XBRL fact, not just a prose span. **Version-lineage** exercised via amended filings/restatements.
-4. Financial entity model: `issuer(CIK) → filing(accession, form_type) → period`; scope facets `{issuer, period, form_type}`.
-5. 1+ held-out eval case (a `value` lookup + a `refuse` case) through the re-authored qa + lookup harnesses.
-6. Run `VerticalConformance`; **fix any kernel contract that turns out secretly regulatory** (the point). Hardening: soak, cost-budget tuning, deferred-ETL migration-spec kickoff (O4).
-**Gate:** financial vertical passes conformance + its eval cases against the SAME kernel with **zero kernel edits that name financial** (the success invariant holds for a 2nd domain); regulatory eval unchanged. **De-risk earlier:** the XBRL/fact-coordinate hooks are *designed* (stubbed) in P2 (locator/citation) and P3 (structured-fact-store) precisely because financial is the confirmed 2nd vertical — P5 fills stubs, not redesigns.
-**Dependency:** P4. Ship **regulatory only**; financial stays a conformance proof until its own build.
+### P5 — Financial conformance stub (prove the seam) + hardening
+As spec §P5 — EDGAR (http) connector + **XBRL parser (new code)** + **fact-coordinate verification** (validates the P2 stub) + issuer/accession/period entity model + version-lineage via restatements + held-out eval cases.
+**Gate:** financial passes conformance + eval with **zero kernel edits naming financial**; regulatory eval unchanged. (XBRL fixture already spiked in P2/P3 so this is fill-in, not redesign.)
 
----
+## E. Sequencing
+Hard chain P0→P1→P2→P3a→P3b→P4(WPs, partly parallel)→P5. **Design-panel gates:** before P2, before P3a, before P3b. W6/W7 start at P1; W8 design before P4; W9 before cutover.
 
-## E. Sequencing, dependencies, parallelism
-- Hard chain: **P0 → P1 → P2 → P3 → P4 → P5.**
-- Parallelizable within: P1 http-connectors ∥ OH-strategy ∥ document-spine; P2 retrieval ∥ ReAct-mechanics (join at the gate); P3 contract-items fan out per seam.
-- W1–W5 run continuously; W3 (qa re-author) is the P0 critical path; W2 grows one check per phase.
-- **Panel design-pass gates:** before P2 (span-check split), before P3 (gating/routing policy). Before P1's OH-strategy if the first residential soak fails.
+## F. Verification ladder
+P0 retained-subset verdict reproduction (+reason diff) · P1 multi-day throughput soak · P2 lookup + facet + per-locator provenance + tenant probe + boot · P3a routing/structured regression + conformance · P3b qa parity (retained) · P4 e2e incl auth/admin/frontend + prod-shadow · P5 cross-vertical conformance.
 
-## F. Verification ladder (strongest per phase — Rule 16)
-P0 eval-verdict reproduction · P1 live OH soak + boot · P2 lookup eval + tenant probe · P3 qa parity + conformance · P4 e2e product flow · P5 cross-vertical conformance. **Prod-shadow** after P4 cutover is the definition of done for the regulatory product.
+## G. Top de-risks before writing feature code (panel consensus)
+1. **Re-scope the P0 gate** to the retained gold subset + persist frozen graded artifacts (the original gate was impossible).
+2. **Reclassify the port map** to PORT-mechanics/REWRITE-contract for ingestion/search/structured retrieval; reclassify span-check to "port the check, rewrite the router."
+3. **Pull the gating/coverage policy interface + origin/tenant model + locator/fact-coordinate union into P2**, and cut `loop.py` import-time PUCO coupling first.
+4. **FetchStrategy must encode session-per-op + warm-on-reject + proxy-off**; P1 soak is a multi-day throughput floor, not absence-of-block.
+5. **Add the missing workstreams** (W6 auth/secrets, W7 migrations/seed, W8 frontend design, W9 CI/CD/cutover) and enumerate the `dis_client` product-feature callers as reimplementation work.
 
-## G. Risks & checkpoints
-- **qa re-author drifts a verdict (P0)** → the eval is the contract; stop and reconcile.
-- **OH residential soak fails (P1)** → tune strategy; escalate to panel; never reintroduce legacy bridge.
-- **A "port" turns out domain-welded on contact** → reclassify to "rewrite," design-panel the seam.
-- **Kernel grep gate flags a leak late** → the seam wasn't cut; fix before the phase gate, not after.
-- **Scope creep** → kernel stays minimal; anything domain goes to the vertical; the conformance suite is the arbiter.
-- **Rollback:** the current prod system remains live and untouched throughout; cutover is a P4 event gated on prod-shadow parity.
+## H. Resolved / open inputs
+- O1/O2/O3/O5 resolved (see header). **O4 [open, non-blocking]** historical-OH ETL vs re-ingest → deferred migration spec; P1 re-ingests OH fresh regardless.
 
-## H. Remaining inputs
-- **O3 [RESOLVED]** single vertical per deployment → P4 activates one manifest at boot; separate deployments + DBs per vertical; no runtime cross-vertical isolation needed.
-- **O5 [RESOLVED]** Financial is the 2nd vertical → P5; its XBRL + fact-coordinate hooks are pre-designed in P2/P3.
-- **O4 [OPEN, non-blocking]** historical-OH ETL vs re-ingest → deferred migration spec; P1 re-ingests OH fresh regardless, so this only affects whether pre-existing OH facts are back-filled to save re-extraction cost.
-
-## I. Design implications of the two new decisions
-- **Single-vertical-per-deployment (O3)** simplifies the kernel: vertical activation is a boot-time config, registries load once, and the "10th seam" gating/routing policy resolves against one vertical — not a per-request dispatch. It does **not** relax the success invariant (kernel still names no domain noun) or tenant isolation (BYOD workspaces still isolate within a deployment). Financial and regulatory each get their own Railway project + corpus DB + workers.
-- **Financial-second (O5)** front-loads the two hardest kernel contracts — the **content-type-keyed parser** (XBRL ≠ PDF) and **fact-coordinate verification** (structured fact identity ≠ prose span-check). Designing their stubs in P2/P3 (not deferring to P5) is what keeps P5 a fill-in rather than a redesign; EDGAR being http means the fetch layer stays on the easy path, isolating the stress to the data/verification model where the real generalization risk lives.
+## I. Panel provenance
+Codex GPT-5.5 + Gemini 3 Pro + code-grounded subagent — all returned, strongly aligned. Verified-clean PORTs: `compose_comparison_table`, `budget.py`, `browser.py`, `breaker.py`, lookup scorer. Corrections integrated: PORT-mechanics/REWRITE-contract split; span-check-is-a-router; P0-gate-impossible; policy/origin/locator→P2; loop import-time coupling; FetchStrategy operational invariants; multi-day soak; P3/P4 splits; missing W6–W9; dis_client feature-callers; `\bstate\b` grep false-positive (scaffold already uses `\bstate_code\b`).

@@ -18,6 +18,8 @@ class Atom:
     text: str
     locator: Locator | None = None
     facets: Facets = field(default_factory=dict)
+    source_key: str = ""            # which source produced it (corpus/web/workspace/…)
+    document_title: str = ""
 
 
 class AtomStore:
@@ -44,6 +46,8 @@ class AtomStore:
                 text=h.text,
                 locator=h.locator,
                 facets=dict(h.facets),
+                source_key=h.source_key,
+                document_title=h.document_title,
             )
             self._atoms[atom.atom_id] = atom
             added.append(atom)

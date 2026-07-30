@@ -6,8 +6,13 @@ serves its sources + gating + persona. Providers run in NOESIS_PROVIDER_MODE
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+
+_WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 from noesis_kernel.providers.base import resolve_mode
 from noesis_kernel.runtime.build import build_embedder, build_llm, build_web, load_active_vertical
@@ -26,6 +31,8 @@ class Citation(BaseModel):
     text: str
     quote: str
     atom_id: str
+    source: str = ""
+    title: str = ""
 
 
 class ResearchOut(BaseModel):
@@ -51,6 +58,7 @@ def build_default_service() -> ResearchService:
     return ResearchService(
         llm=build_llm(mode=mode), embedder=build_embedder(mode=mode),
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
+        vertical_name=manifest.name, ui=manifest.ui,
     )
 
 
@@ -62,6 +70,25 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     def health() -> dict:
         return {"status": "ok"}
 
+    @app.get("/config")
+    def config() -> dict:
+        """The active vertical's declared UI + available sources (drives the shell)."""
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        ui = getattr(svc, "ui", None)
+        return {
+            "vertical": getattr(svc, "vertical_name", ""),
+            "sources": list(svc.sources.keys()),
+            "navigation": ui.navigation() if ui else [],
+            "search_facets": ui.search_facets() if ui else [],
+        }
+
+    @app.get("/", response_class=HTMLResponse)
+    def index() -> str:
+        page = _WEB_DIR / "index.html"
+        return page.read_text() if page.exists() else "<h1>Noesis</h1>"
+
     @app.post("/research", response_model=ResearchOut)
     async def research(body: ResearchIn) -> ResearchOut:
         if app.state.service is None:
@@ -72,7 +99,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         )
         return ResearchOut(
             grounded=res.grounded,
-            claims=[Citation(text=c.text, quote=c.quote, atom_id=c.atom_id)
+            claims=[Citation(text=c.text, quote=c.quote, atom_id=c.atom_id,
+                             source=c.source_key, title=c.document_title)
                     for c in res.verified_claims],
             coverage_gaps=res.coverage_gaps,
             rejected=len(res.rejected_claims),

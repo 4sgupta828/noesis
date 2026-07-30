@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Noesis — Research</title>
+<style>
+  /* ---- tokens: an "evidence ledger" — warm paper, blue-ink, considered verified-green ---- */
+  :root{
+    --paper:#FCFBF8; --card:#FFFFFF; --ink:#16202E; --slate:#5B6773;
+    --verified:#0B7A5B; --gap:#A65A0B; --hair:#E8E4DB; --rail:#0B7A5B;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--paper:#10151C;--card:#161C25;--ink:#EDEAE3;--slate:#8A96A3;
+      --verified:#35B98F;--gap:#D08A3C;--hair:#263140;--rail:#35B98F;}
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+    line-height:1.5;font-size:16px;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:44rem;margin:0 auto;padding:1.25rem 1.15rem 5rem;}
+
+  /* ---- masthead ---- */
+  header{display:flex;align-items:baseline;gap:.6rem;padding:.4rem 0 1.4rem;
+    border-bottom:1px solid var(--hair);margin-bottom:1.6rem;}
+  .mark{font-weight:640;letter-spacing:-.02em;font-size:1.15rem;}
+  .mark b{color:var(--verified)}
+  .vertical{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;
+    letter-spacing:.08em;color:var(--slate);border:1px solid var(--hair);
+    border-radius:999px;padding:.12rem .5rem;}
+  .tagline{margin-left:auto;font-size:.8rem;color:var(--slate);}
+
+  /* ---- ask ---- */
+  h1{font-size:1.55rem;line-height:1.2;letter-spacing:-.02em;font-weight:600;
+    margin:.2rem 0 1rem;}
+  form{display:flex;flex-direction:column;gap:.7rem;}
+  .field{display:flex;gap:.5rem;background:var(--card);border:1px solid var(--hair);
+    border-radius:12px;padding:.5rem .5rem .5rem .9rem;box-shadow:0 1px 0 rgba(0,0,0,.02);}
+  textarea{flex:1;border:0;background:transparent;color:var(--ink);font:inherit;
+    resize:none;outline:none;padding:.35rem 0;min-height:2.6rem;max-height:9rem;}
+  button.go{border:0;border-radius:9px;background:var(--ink);color:var(--paper);
+    font:inherit;font-weight:560;padding:.55rem 1.05rem;cursor:pointer;align-self:flex-end;}
+  button.go:disabled{opacity:.55;cursor:default;}
+  button.go:focus-visible,.pill:focus-visible,textarea:focus-visible{outline:2px solid var(--verified);outline-offset:2px;}
+
+  .sources{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;}
+  .sources .lbl{font-size:.78rem;color:var(--slate);margin-right:.1rem;}
+  .pill{font-family:var(--mono);font-size:.74rem;letter-spacing:.02em;cursor:pointer;
+    border:1px solid var(--hair);background:var(--card);color:var(--slate);
+    border-radius:999px;padding:.2rem .62rem;user-select:none;}
+  .pill[aria-pressed="true"]{color:var(--paper);background:var(--verified);border-color:var(--verified);}
+
+  /* ---- results ---- */
+  #out{margin-top:2rem;}
+  .status{font-size:.85rem;color:var(--slate);}
+  .empty{margin-top:2.2rem;color:var(--slate);font-size:.95rem;
+    border:1px dashed var(--hair);border-radius:12px;padding:1.3rem;text-align:center;}
+  .empty .k{color:var(--ink);font-weight:560;}
+
+  .summary{font-size:.82rem;color:var(--slate);display:flex;gap:.9rem;flex-wrap:wrap;
+    padding-bottom:.5rem;border-bottom:1px solid var(--hair);margin-bottom:1.1rem;}
+  .summary .ok{color:var(--verified);font-weight:600;}
+  .summary .no{color:var(--gap);font-weight:600;}
+
+  /* signature: the claim → evidence rail */
+  .claim{background:var(--card);border:1px solid var(--hair);border-radius:12px;
+    padding:1rem 1.05rem;margin-bottom:.85rem;
+    animation:rise .38s cubic-bezier(.2,.7,.2,1) both;}
+  .claim .txt{font-weight:520;letter-spacing:-.01em;}
+  .rail{margin-top:.7rem;border-left:2.5px solid var(--rail);padding:.15rem 0 .15rem .8rem;}
+  .rail q{font-family:var(--serif);font-size:1.02rem;color:var(--ink);quotes:"\201C" "\201D";}
+  .meta{display:flex;align-items:center;gap:.55rem;margin-top:.45rem;flex-wrap:wrap;}
+  .verified{display:inline-flex;align-items:center;gap:.3rem;color:var(--verified);
+    font-size:.72rem;font-weight:640;text-transform:uppercase;letter-spacing:.06em;}
+  .src{font-family:var(--mono);font-size:.72rem;color:var(--slate);}
+
+  .gaps{margin-top:.4rem 0 1.1rem;border:1px solid var(--hair);border-left:3px solid var(--gap);
+    border-radius:10px;padding:.7rem .9rem;background:var(--card);}
+  .gaps h4{margin:0 0 .3rem;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--gap);}
+  .gaps li{font-size:.9rem;color:var(--ink);margin-left:1rem;}
+
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.claim{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="mark">No<b>e</b>sis</span>
+    <span class="vertical" id="vertical">…</span>
+    <span class="tagline">Every claim, pinned to its source.</span>
+  </header>
+
+  <h1>Ask a research question.</h1>
+  <form id="ask">
+    <div class="field">
+      <textarea id="q" rows="1" placeholder="e.g. What return on equity was approved, and who set it?"
+                aria-label="Research question"></textarea>
+      <button class="go" id="go" type="submit">Research</button>
+    </div>
+    <div class="sources" id="sources"><span class="lbl">Sources</span></div>
+  </form>
+
+  <section id="out" aria-live="polite">
+    <div class="empty">Ask a question. Noesis answers only with claims it can
+      <span class="k">verify against a source</span> — and tells you when a source falls short.</div>
+  </section>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const out = $("#out"), go = $("#go"), q = $("#q");
+let SOURCES = [];
+
+const label = k => k === "web" ? "Web" : k === "workspace" ? "Workspace" : "Corpus";
+
+async function loadConfig(){
+  try{
+    const c = await (await fetch("/config")).json();
+    $("#vertical").textContent = c.vertical || "vertical";
+    SOURCES = c.sources || [];
+    const box = $("#sources");
+    for(const k of SOURCES){
+      const b = document.createElement("button");
+      b.type="button"; b.className="pill"; b.dataset.key=k;
+      b.setAttribute("aria-pressed","true"); b.textContent = label(k);
+      b.onclick = () => b.setAttribute("aria-pressed", b.getAttribute("aria-pressed")==="true"?"false":"true");
+      box.appendChild(b);
+    }
+  }catch(e){ $("#vertical").textContent = "offline"; }
+}
+
+const chosen = () => [...document.querySelectorAll('.pill[aria-pressed="true"]')].map(b=>b.dataset.key);
+
+function esc(s){const d=document.createElement("div");d.textContent=s??"";return d.innerHTML;}
+
+function render(data){
+  const parts = [];
+  const n = data.claims.length;
+  parts.push(`<div class="summary">
+    <span>${n ? `<span class="ok">${n} verified claim${n>1?"s":""}</span>` : `<span class="no">no verified claims</span>`}</span>
+    ${data.rejected ? `<span>${data.rejected} rejected (ungrounded)</span>`:""}
+    ${data.grounded ? "" : `<span class="no">answer not fully grounded</span>`}
+  </div>`);
+  if(data.coverage_gaps && data.coverage_gaps.length){
+    parts.push(`<div class="gaps"><h4>Coverage gaps</h4><ul>` +
+      data.coverage_gaps.map(g=>`<li>${esc(g)}</li>`).join("") + `</ul></div>`);
+  }
+  for(const c of data.claims){
+    const src = c.source ? `<span class="src">${esc(c.source)}${c.title?" · "+esc(c.title):""}</span>` : "";
+    parts.push(`<article class="claim">
+      <div class="txt">${esc(c.text)}</div>
+      <div class="rail"><q>${esc(c.quote)}</q>
+        <div class="meta"><span class="verified">✓ Verified in source</span>${src}</div>
+      </div>
+    </article>`);
+  }
+  if(!n && !(data.coverage_gaps||[]).length){
+    parts.push(`<div class="empty">No grounded answer for that question with the chosen sources.</div>`);
+  }
+  out.innerHTML = parts.join("");
+}
+
+$("#ask").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const question = q.value.trim();
+  if(!question) return;
+  go.disabled = true; go.textContent = "Researching…";
+  out.innerHTML = `<div class="status">Searching sources and verifying evidence…</div>`;
+  try{
+    const resp = await fetch("/research",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({question, tenant_id:"demo", sources: chosen()})});
+    if(!resp.ok) throw new Error("request failed");
+    render(await resp.json());
+  }catch(err){
+    out.innerHTML = `<div class="empty">Something went wrong reaching the research service. Try again.</div>`;
+  }finally{
+    go.disabled = false; go.textContent = "Research";
+  }
+});
+
+q.addEventListener("input", ()=>{ q.style.height="auto"; q.style.height=Math.min(q.scrollHeight,144)+"px"; });
+loadConfig();
+</script>
+</body>
+</html>

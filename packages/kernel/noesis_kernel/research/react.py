@@ -48,6 +48,8 @@ class VerifiedClaim:
     text: str
     atom_id: str
     quote: str
+    source_key: str = ""
+    document_title: str = ""
 
 
 @dataclass
@@ -139,7 +141,8 @@ async def run_react(
             if atom is None or atom.locator is None:
                 result.rejected_claims.append(RejectedClaim(c.text, c.atom_id, c.quote, "unknown_atom"))
             elif verifier.verify(c.quote, atom.locator):
-                result.verified_claims.append(VerifiedClaim(c.text, c.atom_id, c.quote))
+                result.verified_claims.append(VerifiedClaim(
+                    c.text, c.atom_id, c.quote, atom.source_key, atom.document_title))
             else:
                 result.rejected_claims.append(RejectedClaim(c.text, c.atom_id, c.quote, "quote_not_grounded"))
         result.stopped_reason = "answered"

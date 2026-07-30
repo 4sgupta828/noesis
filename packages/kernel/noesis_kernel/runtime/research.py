@@ -24,6 +24,8 @@ class ResearchService:
     gating: GatingPolicy | None = None
     persona_prompt: str = "You are an evidence-grounded research agent."
     max_calls: int = 40
+    vertical_name: str = ""
+    ui: object | None = None                # the vertical's UIContract (for /config)
 
     async def ask(
         self,

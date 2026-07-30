@@ -66,6 +66,28 @@ def test_gating_coverage_gap_is_real() -> None:
     assert g.gate_applies("tell me about 24-1009-EL-AIR", {})
 
 
+def test_blocks_carry_regulatory_metadata_and_narrow_search() -> None:
+    from noesis_kernel.contract.dto import RetrievalRequest
+    emb = FakeEmbedder(dim=16)
+    source = RegulatoryRetrievalSource(tenant_id="acme", embedder=emb)
+    q = "return on equity"
+
+    # every block carries the regulatory narrowing facets + document provenance
+    hits = asyncio.run(source.search(RetrievalRequest(query=q, tenant_id="acme")))
+    assert hits
+    f = hits[0].facets
+    assert f["jurisdiction"] == "OH" and f["year"] == "2024"
+    assert f["utility"] == "sample-electric" and f["filing_type"] == "rate_case"
+    assert f["doc_family"] == "order"
+    assert "Opinion and Order" in hits[0].document_title
+
+    # narrow: matching facets return, a wrong facet filters out pre-ranking
+    assert asyncio.run(source.search(RetrievalRequest(
+        query=q, tenant_id="acme", facets={"utility": "sample-electric", "year": "2024"})))
+    assert not asyncio.run(source.search(RetrievalRequest(
+        query=q, tenant_id="acme", facets={"year": "2020"})))
+
+
 def test_authority_ordering() -> None:
     a = reg.manifest.authority_policy
     assert a.outranks("order", "staff_report")

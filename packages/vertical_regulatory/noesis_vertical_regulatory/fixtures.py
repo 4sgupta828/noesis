@@ -25,8 +25,17 @@ recommendation to reflect current capital market conditions.
 FIXTURE_DOCS = [
     {
         "native_id": "order-1",
+        "title": f"Opinion and Order — Sample Electric Company ({DOCKET})",
         "content_type": "text/markdown",
-        "facets": {"jurisdiction": JURISDICTION, "doc_family": "order"},
+        # Regulatory narrowing facets — denormalized onto every block so filtered
+        # search can scope by state/year/utility/filing type/document type.
+        "facets": {
+            "jurisdiction": JURISDICTION,
+            "year": "2024",
+            "utility": "sample-electric",
+            "filing_type": "rate_case",
+            "doc_family": "order",
+        },
         "body": ORDER_TEXT.encode("utf-8"),
     },
 ]

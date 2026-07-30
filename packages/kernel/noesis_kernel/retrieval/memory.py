@@ -49,8 +49,11 @@ class IndexedBlock:
     tenant_id: str
     embedding: tuple[float, ...] = ()
     workspace_id: str | None = None          # None = tenant-wide corpus
-    facets: Facets = field(default_factory=dict)
+    facets: Facets = field(default_factory=dict)  # narrowing dims (denormalized to block)
     locator: Locator | None = None
+    document_title: str = ""                  # provenance (display/scoping)
+    content_type: str = ""
+    source_key: str = ""
 
 
 class InMemoryRetrievalSource:
@@ -144,6 +147,9 @@ class InMemoryRetrievalSource:
                 score=score,
                 facets=dict(by_id[bid].facets),
                 locator=by_id[bid].locator,
+                document_title=by_id[bid].document_title,
+                content_type=by_id[bid].content_type,
+                source_key=by_id[bid].source_key,
                 legs=legs_hit,
             )
             for bid, score, legs_hit in fused

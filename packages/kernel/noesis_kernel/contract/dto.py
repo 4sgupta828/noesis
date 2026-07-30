@@ -61,13 +61,21 @@ class Locator:
 
 @dataclass(frozen=True)
 class BlockHit:
-    """A retrieved chunk of evidence — domain-neutral."""
+    """A retrieved chunk of evidence — domain-neutral.
+
+    Carries generic document provenance (title/type/source, for display + scoping)
+    and the `facets` bag (the vertical's narrowing dimensions) that the block was
+    filtered on.
+    """
     document_id: str
     block_id: str
     text: str
     score: float = 0.0
     facets: Facets = field(default_factory=dict)
     locator: Locator | None = None
+    document_title: str = ""
+    content_type: str = ""
+    source_key: str = ""
     legs: tuple[str, ...] = ()          # which retrieval legs matched (lexical/dense/…)
     extra: dict = field(default_factory=dict)
 

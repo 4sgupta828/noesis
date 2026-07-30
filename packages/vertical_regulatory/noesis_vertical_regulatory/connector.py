@@ -32,8 +32,8 @@ class RegulatoryConnector:
 
     async def list_documents(self, entity: EntityRef) -> list[DocumentRef]:
         return [DocumentRef(source_key="regulatory", native_id=d["native_id"],
-                            content_type=d["content_type"], facets=dict(d["facets"]),
-                            entity_ids=(entity.native_id,))
+                            title=d.get("title", ""), content_type=d["content_type"],
+                            facets=dict(d["facets"]), entity_ids=(entity.native_id,))
                 for d in FIXTURE_DOCS]
 
     async def fetch_artifact(self, doc: DocumentRef) -> bytes:

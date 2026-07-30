@@ -55,6 +55,7 @@ async def ingest_source(
                 source_key=ref.source_key,
                 tenant_id=tenant_id,
                 workspace_id=workspace_id,
+                title=ref.title,
                 facets=dict(ref.facets),
                 dates=dict(ref.dates),
                 entity_ids=tuple(ref.entity_ids) or (entity.native_id,),

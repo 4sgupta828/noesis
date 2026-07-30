@@ -19,6 +19,8 @@ def materialize(repo: CorpusRepository, source: InMemoryRetrievalSource) -> int:
         for block in repo.blocks_for(doc.id):
             bc = repo.block_content(block.content_key)
             embedding = tuple(bc.embedding) if (bc and bc.embedding) else ()
+            # narrowing facets: document dims + any per-block tags (block wins).
+            facets = {**doc.facets, **block.facets}
             source.add(IndexedBlock(
                 block_id=block.content_key,       # content-addressed block id
                 document_id=doc.id,
@@ -26,8 +28,11 @@ def materialize(repo: CorpusRepository, source: InMemoryRetrievalSource) -> int:
                 tenant_id=doc.tenant_id,
                 workspace_id=doc.workspace_id,
                 embedding=embedding,
-                facets=dict(doc.facets),
+                facets=facets,
                 locator=Locator("block_span", doc.id, {"block_id": block.content_key}),
+                document_title=doc.title,
+                content_type=doc.content_type,
+                source_key=doc.source_key,
             ))
             added += 1
     return added

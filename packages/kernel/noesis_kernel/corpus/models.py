@@ -19,7 +19,8 @@ class Document:
     source_key: str
     tenant_id: str = ""          # owning tenant (isolation boundary)
     workspace_id: str | None = None  # None = tenant-wide corpus; else BYOD scope
-    facets: Facets = field(default_factory=dict)
+    title: str = ""              # human document name (provenance / display)
+    facets: Facets = field(default_factory=dict)  # vertical narrowing dims (state/year/…)
     dates: dict[str, str] = field(default_factory=dict)
     entity_ids: tuple[str, ...] = ()       # n:m membership
     supersedes: str | None = None          # version lineage (prior document id)
@@ -43,6 +44,7 @@ class Block:
     page_start: int | None = None
     page_end: int | None = None
     section_path: tuple[str, ...] = ()
+    facets: Facets = field(default_factory=dict)  # per-block tags (merged OVER doc facets)
 
 
 @dataclass

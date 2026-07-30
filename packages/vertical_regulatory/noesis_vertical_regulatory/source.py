@@ -37,7 +37,8 @@ class RegulatoryRetrievalSource:
             doc = Document(
                 id=f"reg:{spec['native_id']}", sha256=sha,
                 content_type=spec["content_type"], source_key="regulatory",
-                tenant_id=tenant_id, facets=dict(spec["facets"]),
+                tenant_id=tenant_id, title=spec.get("title", ""),
+                facets=dict(spec["facets"]),
             )
             repo.upsert_document(doc)
             index_document(doc, spec["body"], parsers=parsers, embedder=embedder, repo=repo)

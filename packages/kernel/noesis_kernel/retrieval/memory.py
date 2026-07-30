@@ -8,7 +8,6 @@ offline and is the tenant-isolation conformance probe.
 """
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 
 from noesis_kernel.contract.dto import (
@@ -20,12 +19,7 @@ from noesis_kernel.contract.dto import (
     RetrievalRequest,
 )
 from noesis_kernel.retrieval.fusion import rrf_fuse
-
-_TOKEN = re.compile(r"[a-z0-9]+")
-
-
-def _tokens(s: str) -> list[str]:
-    return _TOKEN.findall(s.lower())
+from noesis_kernel.retrieval.scoring import bm25_rank, signal
 
 
 def _facets_match(have: Facets, want: FacetFilter) -> bool:
@@ -107,16 +101,8 @@ class InMemoryRetrievalSource:
         by_id = {b.block_id: b for b in cands}
         pool = req.fetch_pool
 
-        # lexical leg: term-frequency overlap, deterministic tie-break by id
-        q_tokens = _tokens(req.query)
-        lex_scored = []
-        for b in cands:
-            bt = _tokens(b.text)
-            score = sum(bt.count(t) for t in q_tokens)
-            if score > 0:
-                lex_scored.append((b.block_id, score))
-        lex_scored.sort(key=lambda t: (-t[1], t[0]))
-        lexical = [bid for bid, _ in lex_scored[:pool]]
+        # lexical leg: real BM25 (IDF + length-norm) over the filtered candidates
+        lexical = bm25_rank(req.query, [(b.block_id, b.text) for b in cands])[:pool]
 
         # dense leg: cosine vs the kernel-supplied query embedding
         dense: list[str] = []
@@ -138,7 +124,14 @@ class InMemoryRetrievalSource:
         if not legs:
             return []
 
-        fused = rrf_fuse(legs)[: req.k]
+        # fuse, then demote low-signal (boilerplate/stub) blocks before top-k
+        fused = rrf_fuse(legs)
+        demoted = []
+        for bid, score, legs_hit in fused:
+            sig = signal(by_id[bid].text)
+            demoted.append((bid, score * (0.4 + 0.6 * sig), legs_hit, sig))
+        demoted.sort(key=lambda t: (-t[1], t[0]))
+
         return [
             BlockHit(
                 document_id=by_id[bid].document_id,
@@ -151,6 +144,7 @@ class InMemoryRetrievalSource:
                 content_type=by_id[bid].content_type,
                 source_key=by_id[bid].source_key,
                 legs=legs_hit,
+                extra={"signal": sig},
             )
-            for bid, score, legs_hit in fused
+            for bid, score, legs_hit, sig in demoted[: req.k]
         ]

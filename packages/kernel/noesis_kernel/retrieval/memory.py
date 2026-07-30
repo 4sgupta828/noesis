@@ -65,6 +65,22 @@ class InMemoryRetrievalSource:
     def capabilities(self) -> frozenset[Capability]:
         return frozenset({Capability.RETRIEVAL, Capability.PRECISION})
 
+    def make_block_loader(self, tenant_id: str, workspace_id: str | None = None):
+        """A block loader scoped to (tenant, workspace) — the provenance gate's
+        isolation boundary. It can only return blocks visible to that scope, so a
+        cited quote can never be verified against another tenant's document."""
+        def _load(document_id: str, block_id: str) -> str | None:
+            for b in self._blocks:
+                if b.block_id != block_id or b.document_id != document_id:
+                    continue
+                if b.tenant_id != tenant_id:
+                    return None
+                if b.workspace_id is not None and b.workspace_id != workspace_id:
+                    return None
+                return b.text
+            return None
+        return _load
+
     def _visible(self, req: RetrievalRequest) -> list[IndexedBlock]:
         """Hard isolation + facet filter — applied BEFORE ranking, always."""
         out = []

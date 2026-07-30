@@ -13,7 +13,7 @@ set -uo pipefail
 KERNEL_DIR="${1:-packages/kernel/noesis_kernel}"
 
 # Semantic domain nouns that must not appear in the kernel. Word-boundaried.
-PATTERN='docket|utilit(y|ies)|puco|\bohio\b|\brate case\b|case_number|native_case_number|doc_family|\bstate_code\b|commission_id|dis_client'
+PATTERN='docket|utilit(y|ies)|puco|\bohio\b|\brate case\b|case_number|native_case_number|doc_family|\bstate_code\b|\bjurisdiction\b|\bfiling\b|rate_base|\broe\b|commission_id|dis_client'
 
 # Files/paths that are allowed to mention them (none in kernel by design).
 # Vertical packages and docs are out of scope for this gate.

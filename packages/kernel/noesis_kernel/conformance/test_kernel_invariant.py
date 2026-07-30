@@ -11,7 +11,8 @@ from pathlib import Path
 # Semantic domain nouns that must never appear in the kernel package.
 _DOMAIN_NOUNS = re.compile(
     r"docket|utilit(y|ies)|puco|\bohio\b|\brate case\b|case_number"
-    r"|native_case_number|doc_family|\bstate_code\b|commission_id|dis_client",
+    r"|native_case_number|doc_family|\bstate_code\b|\bjurisdiction\b|\bfiling\b"
+    r"|rate_base|\broe\b|commission_id|dis_client",
     re.IGNORECASE,
 )
 

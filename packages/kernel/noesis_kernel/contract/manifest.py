@@ -4,16 +4,24 @@ A deployment activates exactly one vertical (O3). The kernel discovers installed
 verticals via the `noesis.verticals` entry-point group and builds its registries
 from the manifest — no kernel edits per vertical.
 
-This is the P0 skeleton: `name` + declared capability slots. Each slot is filled
-in as its owning phase lands its contract (connectors P1; retrieval/gating P2;
-persona/authority/structured-tools/extraction P3). Slots are Optional so a
-partial manifest is valid early; `VerticalConformance` (conformance/runner.py)
-enforces completeness per phase.
+Slots are TYPED against contract/protocols.py (not `Any`), so `VerticalConformance`
+can assert structural conformance and a new domain cannot be bolted on with a
+mis-shaped component. Slots are Optional/empty so a partial manifest is valid in
+early phases; conformance enforces completeness per phase.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+
+from .protocols import (
+    CitationVerifier,
+    Connector,
+    GatingPolicy,
+    Parser,
+    Persona,
+    RetrievalSource,
+    UIContract,
+)
 
 
 @dataclass(frozen=True)
@@ -21,20 +29,31 @@ class VerticalManifest:
     # Identity
     name: str
 
-    # Capability slots — typed contracts are attached as each phase lands them.
-    # Kept as opaque Optionals at P0 so the skeleton is usable before P1/P2/P3.
-    entity_types: tuple[str, ...] = ()          # P1: declared entity taxonomy
-    scope_dimensions: tuple[str, ...] = ()      # P2: scope/routing facets
-    connectors: dict[str, Any] = field(default_factory=dict)      # P1
-    fetch_strategies: dict[str, Any] = field(default_factory=dict)  # P1
-    retrieval_sources: dict[str, Any] = field(default_factory=dict)  # P2
-    gating_policy: Any | None = None            # P2: 10th-seam gating/routing
-    authority_policy: Any | None = None         # P3
-    persona: Any | None = None                  # P3: prompt pack
-    structured_tools: dict[str, Any] = field(default_factory=dict)  # P3
-    extraction_schema: Any | None = None        # P3
-    deliverable_kinds: dict[str, Any] = field(default_factory=dict)  # P4
-    eval_gold: dict[str, Any] = field(default_factory=dict)      # gold + vocab
+    # Taxonomy / scope (declared vocabulary — plain data)
+    entity_types: tuple[str, ...] = ()          # P1
+    scope_dimensions: tuple[str, ...] = ()      # P2 (facet keys the vertical uses)
+
+    # Acquisition (P1)
+    connectors: dict[str, Connector] = field(default_factory=dict)
+    parsers: tuple[Parser, ...] = ()
+
+    # Retrieval + policy (P2)
+    retrieval_sources: dict[str, RetrievalSource] = field(default_factory=dict)
+    gating_policy: GatingPolicy | None = None
+    citation_verifier: CitationVerifier | None = None
+
+    # Language + authority (P3)
+    persona: Persona | None = None
+    authority_policy: object | None = None      # typed in P3 (authority contract)
+    structured_tools: dict[str, object] = field(default_factory=dict)
+    extraction_schema: object | None = None
+
+    # Presentation (P4)
+    ui: UIContract | None = None
+    deliverable_kinds: dict[str, object] = field(default_factory=dict)
+
+    # Held-out eval gold + vocab
+    eval_gold: dict[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.strip():

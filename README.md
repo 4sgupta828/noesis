@@ -12,11 +12,20 @@ touching the kernel.
 
 ## The one rule that defines the architecture
 
-**The kernel names no domain noun.** No `docket`, `utility`, `case`, `state`,
-`puco`, or `ohio` appears anywhere in `packages/kernel/`. All domain vocabulary
-and policy live in a vertical package and reach the kernel only through the
-`VerticalManifest` contract. This is enforced in CI by
-`tools/check_kernel_invariant.sh` — a failing grep gate is a failing build.
+**The kernel names no domain noun.** All domain vocabulary and policy live in a
+vertical package and reach the kernel only through typed `VerticalManifest`
+contracts (`packages/kernel/noesis_kernel/contract/`). Enforced three ways in CI:
+
+- `tools/check_kernel_invariant.sh` — grep gate for unambiguous domain nouns
+  (`docket`, `utility`, `puco`, `ohio`, `jurisdiction`, `case_number`,
+  `doc_family`, `filing`, `rate_base`, `roe`, …).
+- `tools/check_kernel_imports.py` — AST gate: the kernel imports no
+  `noesis_vertical_*` package.
+- Ambiguous words (`state`, `case`) that legitimately mean non-domain things
+  (mutation state, `switch` case) are judged structurally in review + by the
+  typed contract, not by a noisy regex.
+
+Any failure is a failing build.
 
 ## Layout
 

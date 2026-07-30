@@ -6,6 +6,11 @@ requires-python = ">=3.13"
 # Deps added per phase (P1 ingestion, P2 retrieval, ...). Kept minimal on purpose.
 dependencies = []
 
+[project.optional-dependencies]
+# The Postgres retrieval backend (pgvector + tsvector). Optional so the offline
+# kernel + tests need no DB driver; installed to run PostgresRetrievalSource.
+postgres = ["asyncpg>=0.30", "pgvector>=0.3"]
+
 [project.entry-points."noesis.verticals"]
 # Verticals register here (in THEIR pyproject), e.g.:
 #   regulatory = "noesis_vertical_regulatory:manifest"

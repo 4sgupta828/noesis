@@ -18,8 +18,7 @@ from noesis_kernel.contract.dto import (
     Locator,
     RetrievalRequest,
 )
-from noesis_kernel.retrieval.fusion import rrf_fuse
-from noesis_kernel.retrieval.scoring import bm25_rank, signal
+from noesis_kernel.retrieval.rank import Candidate, rank_candidates
 
 
 def _facets_match(have: Facets, want: FacetFilter) -> bool:
@@ -28,11 +27,6 @@ def _facets_match(have: Facets, want: FacetFilter) -> bool:
         if have.get(key) not in allowed_set:
             return False
     return True
-
-
-def _cosine(a: tuple[float, ...], b: tuple[float, ...]) -> float:
-    # embeddings are stored L2-normalized → dot product is cosine.
-    return sum(x * y for x, y in zip(a, b))
 
 
 @dataclass
@@ -95,56 +89,13 @@ class InMemoryRetrievalSource:
         return out
 
     async def search(self, req: RetrievalRequest) -> list[BlockHit]:
-        cands = self._visible(req)
-        if not cands:
-            return []
-        by_id = {b.block_id: b for b in cands}
-        pool = req.fetch_pool
-
-        # lexical leg: real BM25 (IDF + length-norm) over the filtered candidates
-        lexical = bm25_rank(req.query, [(b.block_id, b.text) for b in cands])[:pool]
-
-        # dense leg: cosine vs the kernel-supplied query embedding
-        dense: list[str] = []
-        if req.query_embedding is not None:
-            qv = tuple(req.query_embedding)
-            dense_scored = [
-                (b.block_id, _cosine(qv, b.embedding))
-                for b in cands if b.embedding
-            ]
-            dense_scored = [(bid, s) for bid, s in dense_scored if s > 0.0]  # drop orthogonal/opposite
-            dense_scored.sort(key=lambda t: (-t[1], t[0]))
-            dense = [bid for bid, _ in dense_scored[:pool]]
-
-        legs: dict[str, list[str]] = {}
-        if lexical:
-            legs["lexical"] = lexical
-        if dense:
-            legs["dense"] = dense
-        if not legs:
-            return []
-
-        # fuse, then demote low-signal (boilerplate/stub) blocks before top-k
-        fused = rrf_fuse(legs)
-        demoted = []
-        for bid, score, legs_hit in fused:
-            sig = signal(by_id[bid].text)
-            demoted.append((bid, score * (0.4 + 0.6 * sig), legs_hit, sig))
-        demoted.sort(key=lambda t: (-t[1], t[0]))
-
-        return [
-            BlockHit(
-                document_id=by_id[bid].document_id,
-                block_id=bid,
-                text=by_id[bid].text,
-                score=score,
-                facets=dict(by_id[bid].facets),
-                locator=by_id[bid].locator,
-                document_title=by_id[bid].document_title,
-                content_type=by_id[bid].content_type,
-                source_key=by_id[bid].source_key,
-                legs=legs_hit,
-                extra={"signal": sig},
-            )
-            for bid, score, legs_hit, sig in demoted[: req.k]
+        # backend job: hard-filter to a candidate pool; ranking is shared (rank.py)
+        cands = [
+            Candidate(block_id=b.block_id, document_id=b.document_id, text=b.text,
+                      embedding=b.embedding, facets=dict(b.facets), locator=b.locator,
+                      document_title=b.document_title, content_type=b.content_type,
+                      source_key=b.source_key)
+            for b in self._visible(req)
         ]
+        return rank_candidates(req.query, req.query_embedding, cands,
+                               k=req.k, fetch_pool=req.fetch_pool)

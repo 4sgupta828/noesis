@@ -6,6 +6,8 @@ strategy), extraction schema, authority policy, persona pack, and structured
 tools live here — never in noesis_kernel.
 """
 
-# Placeholder — the real VerticalManifest is authored in P3. Kept resolvable so
-# the `noesis.verticals` entry point loads once the manifest exists.
-manifest = None
+from .manifest import build_manifest
+
+# The `noesis.verticals` entry point resolves to this. Built once at import
+# (single-vertical-per-deployment, O3).
+manifest = build_manifest()

@@ -128,8 +128,12 @@ def _persona(m: VerticalManifest) -> tuple[bool, str]:
 
 @check("citation-verifier-conforms", "P3")
 def _citation(m: VerticalManifest) -> tuple[bool, str]:
-    ok = m.citation_verifier is not None and isinstance(m.citation_verifier, CitationVerifier)
-    return (ok, "conforms" if ok else "missing/mis-shaped")
+    # Optional: the kernel verifies block_span itself. A vertical declares a
+    # verifier only for NEW locator kinds; if present it must conform.
+    if m.citation_verifier is None:
+        return (True, "none (kernel handles block_span)")
+    ok = isinstance(m.citation_verifier, CitationVerifier)
+    return (ok, "conforms" if ok else "mis-shaped")
 
 
 @check("eval-gold-present", "P3")

@@ -36,3 +36,21 @@ def materialize(repo: CorpusRepository, source: InMemoryRetrievalSource) -> int:
             ))
             added += 1
     return added
+
+
+async def materialize_to_postgres(repo: CorpusRepository, pg_source) -> int:
+    """Same join, into a PostgresRetrievalSource's index table (async upserts)."""
+    added = 0
+    for doc in repo.iter_documents():
+        for block in repo.blocks_for(doc.id):
+            bc = repo.block_content(block.content_key)
+            embedding = list(bc.embedding) if (bc and bc.embedding) else None
+            await pg_source.upsert_block(
+                tenant_id=doc.tenant_id, document_id=doc.id, block_id=block.content_key,
+                text=block.text, embedding=embedding,
+                facets={**doc.facets, **block.facets}, workspace_id=doc.workspace_id,
+                document_title=doc.title, content_type=doc.content_type,
+                source_key=doc.source_key,
+            )
+            added += 1
+    return added

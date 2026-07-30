@@ -6,9 +6,9 @@ vertical's gating policy + persona driving the loop. This is what the API calls.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from noesis_kernel.contract.protocols import GatingPolicy, RetrievalSource
+from noesis_kernel.contract.protocols import Connector, GatingPolicy, RetrievalSource
 from noesis_kernel.providers.embeddings import Embedder
 from noesis_kernel.providers.llm import LLMClient
 from noesis_kernel.research.budget import BudgetState
@@ -26,6 +26,8 @@ class ResearchService:
     max_calls: int = 40
     vertical_name: str = ""
     ui: object | None = None                # the vertical's UIContract (for /config)
+    connectors: dict[str, Connector] = field(default_factory=dict)  # for /ingest
+    corpus_source_key: str = ""             # the pg-backed corpus key (if any)
 
     async def ask(
         self,

@@ -6,18 +6,21 @@ serves its sources + gating + persona. Providers run in NOESIS_PROVIDER_MODE
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-_WEB_DIR = Path(__file__).resolve().parent.parent / "web"
-
 from noesis_kernel.providers.base import resolve_mode
-from noesis_kernel.runtime.build import build_embedder, build_llm, build_web, load_active_vertical
-from noesis_kernel.runtime.research import ResearchService
+from noesis_kernel.retrieval.postgres import PostgresRetrievalSource
 from noesis_kernel.retrieval.web import WebRetrievalSource
+from noesis_kernel.runtime.build import build_embedder, build_llm, build_web, load_active_vertical
+from noesis_kernel.runtime.ingest import ingest_connector_to_postgres
+from noesis_kernel.runtime.research import ResearchService
+
+_WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
 class ResearchIn(BaseModel):
@@ -51,14 +54,32 @@ def build_default_service() -> ResearchService:
     """
     manifest = load_active_vertical()
     mode = resolve_mode()
-    sources = dict(manifest.retrieval_sources)
+    embedder = build_embedder(mode=mode)
+    dsn = os.environ.get("NOESIS_CORPUS_DSN")
+
+    sources: dict = {}
+    connectors: dict = {}
+    corpus_key = ""
+    if dsn:
+        # Real pgvector corpus (empty until POST /ingest). One pg source, registered
+        # under the vertical's corpus source key so gating/covers still align.
+        covers = next((s.covers() for s in manifest.retrieval_sources.values()
+                       if hasattr(s, "covers")), {})
+        pg = PostgresRetrievalSource(dsn, dim=embedder.dim, table="rs_block", covers=covers)
+        corpus_key = next(iter(manifest.retrieval_sources), "corpus")
+        sources[corpus_key] = pg
+        connectors = dict(manifest.connectors)
+    else:
+        sources = dict(manifest.retrieval_sources)      # fixture (in-memory) corpus
     sources["web"] = WebRetrievalSource(build_web(mode=mode))
+
     persona = manifest.persona.system_prompt() if manifest.persona else \
         "You are an evidence-grounded research agent."
     return ResearchService(
-        llm=build_llm(mode=mode), embedder=build_embedder(mode=mode),
+        llm=build_llm(mode=mode), embedder=embedder,
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
         vertical_name=manifest.name, ui=manifest.ui,
+        connectors=connectors, corpus_source_key=corpus_key,
     )
 
 
@@ -83,6 +104,22 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "navigation": ui.navigation() if ui else [],
             "search_facets": ui.search_facets() if ui else [],
         }
+
+    @app.post("/ingest")
+    async def ingest(tenant_id: str = "demo") -> dict:
+        """Populate the pg-backed corpus from the active vertical's connectors.
+        No-op with a note if no NOESIS_CORPUS_DSN is configured (fixture corpus)."""
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        if not svc.connectors or not svc.corpus_source_key:
+            return {"ingested": 0, "note": "no pg corpus configured — set NOESIS_CORPUS_DSN"}
+        pg = svc.sources[svc.corpus_source_key]
+        total = 0
+        for conn in svc.connectors.values():
+            total += await ingest_connector_to_postgres(
+                conn, pg, tenant_id=tenant_id, embedder=svc.embedder)
+        return {"ingested": total, "tenant_id": tenant_id}
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:

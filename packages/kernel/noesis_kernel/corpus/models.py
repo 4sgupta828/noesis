@@ -17,6 +17,8 @@ class Document:
     sha256: str                  # content key of the raw bytes
     content_type: str
     source_key: str
+    tenant_id: str = ""          # owning tenant (isolation boundary)
+    workspace_id: str | None = None  # None = tenant-wide corpus; else BYOD scope
     facets: Facets = field(default_factory=dict)
     dates: dict[str, str] = field(default_factory=dict)
     entity_ids: tuple[str, ...] = ()       # n:m membership

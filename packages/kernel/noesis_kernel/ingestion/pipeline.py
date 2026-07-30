@@ -36,6 +36,8 @@ async def ingest_source(
     store: ObjectStore,
     repo: CorpusRepository,
     *,
+    tenant_id: str = "",
+    workspace_id: str | None = None,
     window: dict | None = None,
 ) -> IngestSummary:
     summary = IngestSummary()
@@ -51,6 +53,8 @@ async def ingest_source(
                 sha256=key,
                 content_type=ref.content_type,
                 source_key=ref.source_key,
+                tenant_id=tenant_id,
+                workspace_id=workspace_id,
                 facets=dict(ref.facets),
                 dates=dict(ref.dates),
                 entity_ids=tuple(ref.entity_ids) or (entity.native_id,),

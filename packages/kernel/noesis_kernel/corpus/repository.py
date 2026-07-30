@@ -56,6 +56,13 @@ class InMemoryCorpusRepository:
     def set_block_embedding(self, content_key: str, embedding: tuple[float, ...]) -> None:
         self._block_content[content_key].embedding = embedding
 
+    # accessors
+    def iter_documents(self) -> list[Document]:
+        return list(self._docs.values())
+
+    def block_content(self, content_key: str) -> BlockContent | None:
+        return self._block_content.get(content_key)
+
     # inspection helpers
     def document_count(self) -> int:
         return len(self._docs)

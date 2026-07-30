@@ -65,6 +65,9 @@ class InMemoryRetrievalSource:
     def capabilities(self) -> frozenset[Capability]:
         return frozenset({Capability.RETRIEVAL, Capability.PRECISION})
 
+    def covers(self) -> FacetFilter:
+        return {}   # in-memory reference source covers everything
+
     def make_block_loader(self, tenant_id: str, workspace_id: str | None = None):
         """A block loader scoped to (tenant, workspace) — the provenance gate's
         isolation boundary. It can only return blocks visible to that scope, so a

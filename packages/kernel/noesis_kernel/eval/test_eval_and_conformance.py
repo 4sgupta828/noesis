@@ -90,6 +90,10 @@ class _FakeRetrieval:
         self.key = "src"
     def capabilities(self):
         return frozenset({Capability.RETRIEVAL})
+    def covers(self):
+        return {}
+    def make_block_loader(self, tenant_id, workspace_id=None):  # noqa: ANN001
+        return lambda d, b: None
     async def search(self, req: RetrievalRequest):  # noqa: ANN001
         return [BlockHit(document_id="d1", block_id="b1", text="t", locator=Locator("block_span", "d1"))]
 
@@ -97,6 +101,8 @@ class _FakeRetrieval:
 class _FakeGating:
     def gate_applies(self, question, plan):  # noqa: ANN001
         return False
+    def claim_in_scope(self, claim, cited_hits):  # noqa: ANN001
+        return True
     def coverage_gap(self, question, hits):  # noqa: ANN001
         return None
 

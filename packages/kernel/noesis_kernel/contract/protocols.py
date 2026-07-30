@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-from .dto import BlockHit, Capability, DocumentRef, EntityRef, Locator, RetrievalRequest
+from .dto import BlockHit, Capability, DocumentRef, EntityRef, FacetFilter, Locator, RetrievalRequest
 
 
 # ---- acquisition ---------------------------------------------------------
@@ -57,15 +57,39 @@ class RetrievalSource(Protocol):
     key: str
     def capabilities(self) -> frozenset[Capability]: ...
     async def search(self, req: RetrievalRequest) -> list[BlockHit]: ...
+    # The source owns the corpus, so it manufactures the tenant/workspace-scoped
+    # block loader the provenance gate verifies against. Declared here (panel-
+    # caught: run_react/precision require it) so conformance can't pass a source
+    # that would crash the loop. Returns a BlockLoader (load(document_id, block_id)).
+    def make_block_loader(self, tenant_id: str, workspace_id: str | None = None) -> object: ...
+    # Source-declared scope coverage: the kernel routes by matching a request's
+    # facets against this, so simple verticals need no ScopeRouter and no domain
+    # noun enters the kernel. Empty = covers everything.
+    def covers(self) -> "FacetFilter": ...
 
 
 @runtime_checkable
 class GatingPolicy(Protocol):
-    """The domain-neutral seam for 'when does the hard gate run / is this a
-    coverage gap / is a web-floor warranted' — so no domain-format regex is ever
-    inlined into the kernel loop."""
+    """The domain-neutral seam for gating/coverage — so no domain-format regex or
+    single-corpus geographic constant is ever inlined into the kernel loop. The
+    semantic VERDICT (is this claim sufficient) stays LLM-run in the kernel,
+    parameterized by the vertical's Persona/criteria — never a pure function here.
+    """
     def gate_applies(self, question: str, plan: dict) -> bool: ...
+    # Per-claim seam (panel): which claims face the hard gate — replaces the old
+    # 'exclude web-only claims' rule so the kernel needn't inline a source policy.
+    def claim_in_scope(self, claim: object, cited_hits: list[BlockHit]) -> bool: ...
     def coverage_gap(self, question: str, hits: list[BlockHit]) -> str | None: ...
+
+
+@runtime_checkable
+class ScopeRouter(Protocol):
+    """OPTIONAL cross-source arbitration. The kernel default routes by source-
+    declared `covers()`; a vertical supplies a ScopeRouter only when multiple
+    sources need arbitration (the seam that keeps any 'default-OH' tree out of
+    the kernel). Returns the source keys to query, best-first."""
+    def select(self, *, scope: "FacetFilter", needed: frozenset[Capability],
+               available: dict[str, RetrievalSource]) -> tuple[str, ...]: ...
 
 
 @runtime_checkable

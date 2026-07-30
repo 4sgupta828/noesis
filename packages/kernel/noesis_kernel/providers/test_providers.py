@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from noesis_kernel.providers.base import LiveCallForbidden, ProviderMode, guard_live
 from noesis_kernel.providers.cassette import CassetteMiss
-from noesis_kernel.providers.embeddings import FakeEmbedder
+from noesis_kernel.providers.embeddings import CassetteEmbedder, FakeEmbedder
 from noesis_kernel.providers.llm import CassetteLLM, FakeLLM, LLMResult
 
 
@@ -57,6 +57,17 @@ def test_replay_miss_is_loud(tmp_path) -> None:
 def test_live_call_blocked_under_pytest() -> None:
     with pytest.raises(LiveCallForbidden):
         guard_live(ProviderMode.LIVE)
+
+
+def test_cassette_embedder_record_then_replay(tmp_path) -> None:
+    inner = FakeEmbedder(dim=16)
+    rec = CassetteEmbedder(inner, cassette_root=tmp_path, namespace="emb", dim=16,
+                           mode=ProviderMode.RECORD)
+    recorded = rec.embed(["a", "b"])
+    # Replay with NO inner embedder — proves no network/credits.
+    rep = CassetteEmbedder(None, cassette_root=tmp_path, namespace="emb", dim=16,
+                           mode=ProviderMode.REPLAY)
+    assert rep.embed(["a", "b"]) == recorded
 
 
 def test_fake_embedder_deterministic_and_normed() -> None:

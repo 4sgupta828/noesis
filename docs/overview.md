@@ -88,6 +88,26 @@ code) stress-tested every version. The big saves:
   **silently stalled for 21 hours** without any error, so "no error" isn't proof
   it's working — we need a multi-day throughput test.
 
+## Building it without burning API credits
+
+The whole build and test loop is designed to run **offline, at zero cost**.
+Every paid call — to the AI models, the embedding service, and web search —
+goes through a single "switch" with three settings:
+
+- **replay** (the default): use previously-recorded answers from disk. No
+  network, no credits. This is what every test, every eval, and every local dev
+  run uses.
+- **record**: make the real call once and save the result to disk (a
+  "cassette"). Costs credits that one time.
+- **live**: call the real service (production).
+
+So you pay for credits only deliberately and rarely — to record a fresh
+cassette, to run an occasional real smoke test, or to run real production. The
+day-to-day work costs nothing, and the build even fails if a test tries to make
+a live call by accident. Document parsing already runs locally for free, and
+embeddings can use a local model too — so even real ingestion can avoid credits,
+trading a little search quality (which we measure).
+
 ## What's still open (not blocking)
 
 Just one real item: whether to **carry over the existing Ohio data** into the new

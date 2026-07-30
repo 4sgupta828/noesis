@@ -25,6 +25,7 @@
 - **W7 — Migrations / schema bootstrap / seeding (NEW)**: new-repo alembic harness, `create_all` bootstrap, pre-deploy wiring, the 7-registry + default-scope seeder. Un-owned in v1 — now W7 from P1.
 - **W8 — Frontend architecture (NEW, its own design sub-project)**: how a vertical **declares its UI** (entity views, deliverable renderers) and how much of `web/research_system` is a generic shell vs. per-vertical components. Panel: this "rivals the kernel in complexity" — do a design pass before P4.
 - **W9 — New-repo CI/CD + cutover (NEW)**: Railway service defs, committed-dist rebuild step, dual-run / traffic-shift / backfill for the prod-shadow cutover.
+- **W10 — Provider ports + cassettes: ZERO-CREDIT dev posture (NEW, foundational — starts P0)**: put every metered external call behind a kernel Provider Port (`llm`, `embeddings`, `web_search`) with a `NOESIS_PROVIDER_MODE ∈ {replay, record, live}` config, default **`replay`** for dev/CI/eval. PORT the existing `llm/interface.py` + `llm/fake.py` (`FakeLLM`) + `eval/cassette.py`/`record_cassettes.py` (`CassetteLLM`) + `eval/runner.py`. Add an **embeddings port with a local `sentence_transformers` backend** (already used in `snapshot_search.py`) so ingestion/embedding costs nothing in dev — and optionally in prod (retrieval-quality tradeoff validated by the P2 retrieval eval; the pgvector dim is chosen once to match the chosen backend). Add a **web-search cassette**. **Reality check:** credits are spent ONLY to (a) record/refresh cassettes, (b) run a rare live smoke test, (c) run real production ingestion/answers — every test, eval, and local dev loop is offline and free. A CI guard fails any test that attempts a `live` call.
 
 ## C. Port / Rewrite / Discard map (v2 — panel-corrected)
 Dispositions: **PORT** (domain-free lift) · **PORT-mech/REWRITE-contract** (algorithm lifts, data-shape rewritten) · **REWRITE** · **MOVE→vertical** · **DISCARD**.
@@ -57,6 +58,8 @@ Dispositions: **PORT** (domain-free lift) · **PORT-mech/REWRITE-contract** (alg
 | `extensions/deliverable_kinds/__init__.py` `KIND_REGISTRY` | **REWRITE (mech) / MOVE (classes)** | manifest-registered kinds |
 | `services/case_issue_core.py` `_METRICS`, `case_issue_*` models | **MOVE→vertical** | extraction schema (data) + structured-fact-store |
 | `budget.py` cost governor | **PORT** | verified clean (`:1-40`) |
+| `llm/interface.py`, `llm/fake.py` (`FakeLLM`), `eval/cassette.py`, `eval/record_cassettes.py`, `eval/runner.py` | **PORT** | the provider-port + cassette basis for the zero-credit posture (W10) — domain-free infra |
+| `services/embedder.py` (OpenAI) + `snapshot_search.py` local `sentence_transformers` | **PORT-mech / REWRITE-contract** | unify behind one embeddings port with `{local, hosted}` backends; pick pgvector dim once |
 | `eval/lookup/scoring.py` | **PORT** | verified pure |
 | `eval/qa/scoring.py` | **REWRITE** | welded to OH-cutover (`state_bleed`, corpus-vs-ingest recall `:171-198,269-327`) → vertical-parameterized; OH-cutover gold cases **retired/migrated**, not reproduced |
 | `models/project.py` | **REWRITE** | `default_scope JSONB`, vertical source policy (`:118,166`) |
@@ -69,8 +72,8 @@ Dispositions: **PORT** (domain-free lift) · **PORT-mech/REWRITE-contract** (alg
 ## D. Phases
 
 ### P0 — Foundations, baselines, eval re-authoring *(critical path)*
-1. Repo/CI (done: scaffold + invariant gate). Add the **AST import-graph check** (W5) and empty `VerticalConformance` runner (W2).
-2. **Capture prod eval baselines AND persist frozen graded-answer artifacts** (W3) — the full graded objects, not just `answer_prose` (today `results/*.json` drops them), so verdicts are reproducible offline (Rule 11: model/prompt/SHA).
+1. Repo/CI (done: scaffold + invariant gate). Add the **AST import-graph check** (W5), the empty `VerticalConformance` runner (W2), and **the Provider Port + cassette layer (W10) with `replay` as the default + a CI guard that fails any `live` call** — this is what makes every subsequent phase's tests and evals cost zero credits.
+2. **Capture prod eval baselines AND persist frozen graded-answer artifacts** (W3) — the full graded objects, not just `answer_prose` (today `results/*.json` drops them), so verdicts are reproducible offline (Rule 11: model/prompt/SHA). **This capture IS the cassette recording** (a one-time, budgeted `record`/`live` run against current prod); every eval run thereafter is `replay` = free.
 3. **Re-author the qa scorer** vertical-parameterized: keep generic correctness/citation-grounding; **remove** `LEGAL_SOURCE_FAMILIES`-in-core + corpus-vs-ingest recall + `state_bleed`; **retire/migrate the OH-cutover gold cases** (their verdicts are defined by the removed gates — they cannot and should not be "reproduced").
 4. Port `lookup` scorer unchanged.
 **Gate (fixed):** re-authored qa reproduces frozen verdicts **on the retained vertical-agnostic gold subset only**, with a **"same verdict for same reason" diff** (not just pass/fail) + a contamination audit; OH-cutover cases explicitly retired; lookup green; grep + AST gates live.
@@ -79,7 +82,7 @@ Dispositions: **PORT** (domain-free lift) · **PORT-mech/REWRITE-contract** (alg
 ### P1 — Kernel ingestion + document spine + FetchStrategy (the O1 proof)
 1. **PORT/REWRITE** queue (PORT) + storage/pipeline (PORT-mech/REWRITE-contract): `Source`/`source_id`; generic Connector SPI carrying **all four verbs** (`discover_entities|list_documents|fetch_artifact|fetch_entity_detail`) + **n:m entity↔document membership**.
 2. **FetchStrategy** (egress-placement) encoding **per-op session lifetime, warm-on-reject, per-connector proxy-off**; PORT `BrowserSession` + add per-connector proxy-off.
-3. **Document spine** (+version/supersedes; content-type-keyed parser registry, pdf now).
+3. **Document spine** (+version/supersedes; content-type-keyed parser registry, pdf now). **Embeddings via the W10 port with a local `sentence_transformers` backend as the dev default (zero credit); pgvector dim fixed to the chosen backend.**
 4. **W7:** new-repo migration/seed harness (schema bootstrap owned here).
 5. Regulatory-minimal: 2 http connectors + **OH connector + golden config** on the residential worker; **scheduler egress-placement** (NEW infra — today per-state loops, not pools).
 **Gate (fixed — absence-of-block ≠ liveness; the 21h deadlock produced no block):** **multi-DAY soak with a throughput FLOOR** (N docs/hr over M days), asserting fresh-session-per-op, proxy-off, breaker stability, PDF capture, dedup + version-lineage, no wedged session; boot-all-ingest-roles green; zero legacy `strata_rs`/bridge refs.

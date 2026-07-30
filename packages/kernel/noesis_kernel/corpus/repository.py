@@ -18,6 +18,7 @@ class CorpusRepository(Protocol):
     def add_parsed(self, parsed: ParsedDoc) -> None: ...
     def add_blocks(self, blocks: list[Block]) -> None: ...
     def upsert_block_content(self, bc: BlockContent) -> bool: ...  # True if newly stored
+    def set_block_embedding(self, content_key: str, embedding: tuple[float, ...]) -> None: ...
 
 
 class InMemoryCorpusRepository:
@@ -51,6 +52,9 @@ class InMemoryCorpusRepository:
             return False
         self._block_content[bc.content_key] = bc
         return True
+
+    def set_block_embedding(self, content_key: str, embedding: tuple[float, ...]) -> None:
+        self._block_content[content_key].embedding = embedding
 
     # inspection helpers
     def document_count(self) -> int:

@@ -10,9 +10,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from noesis_kernel.contract.protocols import Connector
-from noesis_kernel.corpus.models import Document
+from noesis_kernel.corpus import splitter as _splitter
+from noesis_kernel.corpus.models import BlockContent, Document, ParsedDoc
+from noesis_kernel.corpus.parsers import ParserRegistry
 from noesis_kernel.corpus.repository import CorpusRepository
 from noesis_kernel.ingestion.storage import ObjectStore
+from noesis_kernel.providers.embeddings import Embedder
 
 
 @dataclass
@@ -20,6 +23,12 @@ class IngestSummary:
     entities: int = 0
     documents: int = 0
     objects_stored: int = 0     # unique bytes actually stored (dedup misses)
+
+
+@dataclass
+class IndexSummary:
+    blocks: int = 0
+    block_contents_stored: int = 0   # unique block texts embedded (dedup misses)
 
 
 async def ingest_source(
@@ -49,4 +58,42 @@ async def ingest_source(
             repo.upsert_document(doc)
             summary.documents += 1
     summary.objects_stored = getattr(store, "put_count", 0)
+    return summary
+
+
+def index_document(
+    document: Document,
+    raw: bytes,
+    *,
+    parsers: ParserRegistry,
+    embedder: Embedder,
+    repo: CorpusRepository,
+) -> IndexSummary:
+    """parse → block → embed → persist for one already-stored Document.
+
+    Separable from ingest_source so fetch and index can run on different workers.
+    Embedding goes through the Embedder port (fake/local/OpenAI/cassette), and
+    only NEW block contents (by content_key) are embedded — identical passages
+    across documents are embedded once.
+    """
+    summary = IndexSummary()
+
+    parser = parsers.for_content_type(document.content_type)
+    text = parser.parse(raw, content_type=document.content_type)
+    repo.add_parsed(ParsedDoc(document_id=document.id, text=text,
+                              parser_version=getattr(parser, "version", "parser.v1")))
+
+    blocks = _splitter.split(document.id, text)
+    repo.add_blocks(blocks)
+    summary.blocks = len(blocks)
+
+    # Embed only block-contents not already stored (dedup by content_key).
+    fresh = {b.content_key: b.text for b in blocks if repo.upsert_block_content(
+        BlockContent(content_key=b.content_key, text=b.text))}
+    if fresh:
+        keys = list(fresh)
+        vecs = embedder.embed([fresh[k] for k in keys])
+        for k, vec in zip(keys, vecs):
+            repo.set_block_embedding(k, tuple(vec))
+    summary.block_contents_stored = len(fresh)
     return summary

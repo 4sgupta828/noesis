@@ -11,9 +11,14 @@ from __future__ import annotations
 import enum
 from dataclasses import dataclass, field
 
-# A facet map: caller/vertical-defined dimension name → value. The kernel treats
-# keys and values as opaque strings and never hardcodes one.
+# A facet map on a stored item: caller/vertical-defined dimension → single value
+# (a document is in exactly one region, of one kind, etc). Opaque to the kernel.
 Facets = dict[str, str]
+
+# A facet FILTER on a query: each dimension maps to one required value OR a set of
+# acceptable values (IN semantics), so `region in {north, south}` is expressible.
+# A hit matches iff, for every filter key, hit.facets[key] is in the allowed set.
+FacetFilter = dict[str, "str | tuple[str, ...]"]
 
 
 @dataclass(frozen=True)
@@ -63,6 +68,23 @@ class BlockHit:
     score: float = 0.0
     facets: Facets = field(default_factory=dict)
     locator: Locator | None = None
+    legs: tuple[str, ...] = ()          # which retrieval legs matched (lexical/dense/…)
+    extra: dict = field(default_factory=dict)
+
+
+@dataclass
+class RetrievalRequest:
+    """A retrieval query. Tenant/workspace isolation is a FIRST-CLASS, mandatory
+    boundary (security — never a soft facet). query_embedding is supplied by the
+    kernel's Embedder so a source doesn't re-embed and fusion stays app-level.
+    """
+    query: str
+    tenant_id: str
+    workspace_id: str | None = None
+    query_embedding: list[float] | None = None
+    facets: FacetFilter = field(default_factory=dict)
+    k: int = 20
+    fetch_pool: int = 60                 # per-leg candidate pool before fusion
 
 
 class Capability(str, enum.Enum):

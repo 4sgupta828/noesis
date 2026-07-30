@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-from .dto import BlockHit, Capability, DocumentRef, EntityRef, Facets, Locator
+from .dto import BlockHit, Capability, DocumentRef, EntityRef, Locator, RetrievalRequest
 
 
 # ---- acquisition ---------------------------------------------------------
@@ -56,7 +56,7 @@ class Parser(Protocol):
 class RetrievalSource(Protocol):
     key: str
     def capabilities(self) -> frozenset[Capability]: ...
-    async def search(self, query: str, *, facets: Facets, k: int = 20) -> list[BlockHit]: ...
+    async def search(self, req: RetrievalRequest) -> list[BlockHit]: ...
 
 
 @runtime_checkable

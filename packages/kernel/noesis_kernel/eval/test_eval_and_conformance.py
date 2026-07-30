@@ -5,7 +5,7 @@ kernel must not carry any vertical's vocabulary, tests included.
 """
 from __future__ import annotations
 
-from noesis_kernel.contract.dto import BlockHit, Capability, DocumentRef, EntityRef, Facets, Locator
+from noesis_kernel.contract.dto import BlockHit, Capability, DocumentRef, EntityRef, Locator, RetrievalRequest
 from noesis_kernel.contract.manifest import VerticalManifest
 from noesis_kernel.conformance.runner import run_conformance
 from noesis_kernel.eval.lookup_scoring import score_lookup
@@ -90,7 +90,7 @@ class _FakeRetrieval:
         self.key = "src"
     def capabilities(self):
         return frozenset({Capability.RETRIEVAL})
-    async def search(self, query, *, facets: Facets, k: int = 20):  # noqa: ANN001
+    async def search(self, req: RetrievalRequest):  # noqa: ANN001
         return [BlockHit(document_id="d1", block_id="b1", text="t", locator=Locator("block_span", "d1"))]
 
 

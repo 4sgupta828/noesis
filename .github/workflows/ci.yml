@@ -7,12 +7,18 @@ on:
 
 jobs:
   kernel-invariant:
-    # The load-bearing architectural guardrail: the kernel must name no domain noun.
+    # The load-bearing architectural guardrails: the kernel names no domain noun
+    # (grep) AND imports no vertical package (AST).
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: kernel domain-noun gate
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: kernel domain-noun gate (grep)
         run: bash tools/check_kernel_invariant.sh
+      - name: kernel import gate (AST)
+        run: python tools/check_kernel_imports.py
 
   test:
     runs-on: ubuntu-latest

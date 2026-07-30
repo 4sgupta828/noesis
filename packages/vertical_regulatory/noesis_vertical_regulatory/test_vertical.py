@@ -55,6 +55,23 @@ def test_regulatory_run_react_grounded_answer() -> None:
     assert res.verified_claims[0].quote == gold["supporting_quote"]
 
 
+def test_manifest_gating_drives_loop_coverage_gap() -> None:
+    # The vertical's gating policy + persona drive the KERNEL loop: asking about a
+    # jurisdiction absent from the corpus yields an honest coverage gap, no claims.
+    emb = FakeEmbedder(dim=16)
+    source = RegulatoryRetrievalSource(tenant_id="acme", embedder=emb)
+    llm = _LLM([
+        AgentStep(action="search", query="approved return on equity in CA"),
+        AgentStep(action="answer", claims=[]),           # honest refusal
+    ])
+    res = asyncio.run(run_react(
+        question="what ROE was approved in CA?", llm=llm, embedder=emb, source=source,
+        tenant_id="acme", budget=BudgetState(max_calls=10),
+        gating=reg.manifest.gating_policy, system_prompt=reg.manifest.persona.system_prompt()))
+    assert any("CA" in g for g in res.coverage_gaps)
+    assert not res.grounded
+
+
 def test_gating_coverage_gap_is_real() -> None:
     # Adversarial: a jurisdiction the corpus lacks → a real coverage gap.
     from noesis_kernel.contract.dto import BlockHit

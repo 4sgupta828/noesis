@@ -88,6 +88,47 @@ def test_budget_stops_the_loop() -> None:
     assert res.steps == 1 and not res.verified_claims
 
 
+def test_loop_reformulation_broadens_recall() -> None:
+    # The agent issues a reformulation; multi-query fusion pulls in a block the
+    # original query alone would miss.
+    src = InMemoryRetrievalSource()
+    src.add(IndexedBlock(block_id="b1", document_id="d", tenant_id="A",
+                         text="alpha discussion of the first topic here",
+                         locator=Locator("block_span", "d", {"block_id": "b1"})))
+    src.add(IndexedBlock(block_id="b2", document_id="d", tenant_id="A",
+                         text="beta discussion of the second topic here",
+                         locator=Locator("block_span", "d", {"block_id": "b2"})))
+    llm = ScriptedLLM([
+        AgentStep(action="search", query="alpha", queries=["beta"]),
+        AgentStep(action="answer", claims=[
+            ClaimOut(text="c1", atom_id="a1", quote="alpha discussion of the first topic"),
+            ClaimOut(text="c2", atom_id="a2", quote="beta discussion of the second topic"),
+        ]),
+    ])
+    res = _run(llm, src)
+    assert res.atoms_gathered == 2          # both retrieved via reformulation
+    assert res.grounded and len(res.verified_claims) == 2
+
+
+class _GapGating:
+    def gate_applies(self, q, plan): return True                # noqa: ANN001,E704
+    def claim_in_scope(self, claim, hits): return bool(hits)     # noqa: ANN001,E704
+    def coverage_gap(self, q, hits): return None if hits else "no evidence in corpus"  # noqa: ANN001,E704
+
+
+def test_coverage_gap_signalled_when_corpus_empty() -> None:
+    src = _source()                          # has tenant-A data only
+    llm = ScriptedLLM([
+        AgentStep(action="search", query="nonexistent zzz topic"),   # matches nothing
+        AgentStep(action="answer", claims=[]),                       # honestly refuses
+    ])
+    res = asyncio.run(run_react(
+        question="what about a missing topic?", llm=llm, embedder=FakeEmbedder(dim=8),
+        source=src, tenant_id="A", budget=BudgetState(max_calls=10), gating=_GapGating()))
+    assert res.coverage_gaps == ["no evidence in corpus"]
+    assert not res.grounded                   # no claims → not grounded (honest)
+
+
 def test_tenant_isolation_end_to_end() -> None:
     # Source has only tenant-A data; a tenant-B run retrieves nothing, so a claim
     # citing a1 is rejected as unknown (B can never reach A's evidence).

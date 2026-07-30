@@ -1,0 +1,66 @@
+"""Build providers by mode, and discover the active vertical.
+
+Providers are always cassette-wrapped: `replay` (default) runs offline for free;
+`record`/`live` use the real Anthropic/OpenAI/Tavily backends. So the same code
+path serves dev/CI/eval and production — credits are opt-in via NOESIS_PROVIDER_MODE.
+"""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from noesis_kernel.providers.anthropic_llm import AnthropicLLM
+from noesis_kernel.providers.base import ProviderMode, resolve_mode
+from noesis_kernel.providers.embeddings import (
+    OPENAI_EMBED_DIM,
+    CassetteEmbedder,
+    Embedder,
+    OpenAIEmbedder,
+)
+from noesis_kernel.providers.llm import CassetteLLM, LLMClient
+from noesis_kernel.providers.web_tavily import TavilyWebSearch
+from noesis_kernel.providers.websearch import CassetteWebSearch, WebSearchClient
+
+
+def default_cassette_root() -> Path:
+    return Path(os.environ.get("NOESIS_CASSETTE_ROOT", "evals/cassettes"))
+
+
+def build_llm(*, mode: ProviderMode | str | None = None, cassette_root: Path | None = None,
+              model: str | None = None) -> LLMClient:
+    m = resolve_mode(mode)
+    inner = None if m is ProviderMode.REPLAY else AnthropicLLM(model=model) if model \
+        else AnthropicLLM()
+    return CassetteLLM(inner, cassette_root=cassette_root or default_cassette_root(),
+                       namespace="llm", mode=m)
+
+
+def build_embedder(*, mode: ProviderMode | str | None = None, cassette_root: Path | None = None,
+                   dim: int = OPENAI_EMBED_DIM) -> Embedder:
+    m = resolve_mode(mode)
+    inner = None if m is ProviderMode.REPLAY else OpenAIEmbedder(dim=dim)
+    return CassetteEmbedder(inner, cassette_root=cassette_root or default_cassette_root(),
+                            namespace="embed", dim=dim, mode=m)
+
+
+def build_web(*, mode: ProviderMode | str | None = None,
+              cassette_root: Path | None = None) -> WebSearchClient:
+    m = resolve_mode(mode)
+    inner = None if m is ProviderMode.REPLAY else TavilyWebSearch()
+    return CassetteWebSearch(inner, cassette_root=cassette_root or default_cassette_root(),
+                             namespace="web", mode=m)
+
+
+def load_active_vertical(name: str | None = None):
+    """Discover installed verticals via the `noesis.verticals` entry point and
+    return the one named by NOESIS_ACTIVE_VERTICAL (single-vertical-per-deployment)."""
+    from importlib.metadata import entry_points
+
+    want = name or os.environ.get("NOESIS_ACTIVE_VERTICAL")
+    eps = list(entry_points(group="noesis.verticals"))
+    if not eps:
+        raise RuntimeError("no noesis.verticals installed")
+    ep = next((e for e in eps if e.name == want), None) if want else eps[0]
+    if ep is None:
+        raise RuntimeError(f"active vertical {want!r} not found (have: {[e.name for e in eps]})")
+    return ep.load()

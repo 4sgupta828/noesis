@@ -30,11 +30,12 @@ jobs:
       - name: install
         run: |
           python -m pip install --upgrade pip
-          pip install pydantic pytest ruff
+          pip install pydantic pytest ruff fastapi httpx
           pip install -e packages/kernel -e packages/vertical_regulatory
       - name: lint
-        run: ruff check packages tools
+        run: ruff check packages tools apps
       - name: tests (incl. kernel-invariant + conformance) — must pass
         env:
           NOESIS_PROVIDER_MODE: replay
-        run: pytest -q packages
+          PYTHONPATH: apps
+        run: pytest -q packages apps

@@ -141,6 +141,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 "No model available in replay mode. Set NOESIS_PROVIDER_MODE=live "
                 "with ANTHROPIC_API_KEY + OPENAI_API_KEY to answer live, or record "
                 "cassettes first.")) from e
+        except Exception as e:   # provider errors (auth, credits, rate limit, timeout)
+            raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
         return ResearchOut(
             grounded=res.grounded,
             claims=[Citation(text=c.text, quote=c.quote, atom_id=c.atom_id,

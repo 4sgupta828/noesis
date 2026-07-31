@@ -9,11 +9,12 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from noesis_kernel.providers.base import resolve_mode
+from noesis_kernel.providers.cassette import CassetteMiss
 from noesis_kernel.retrieval.postgres import PostgresRetrievalSource
 from noesis_kernel.retrieval.web import WebRetrievalSource
 from noesis_kernel.runtime.build import build_embedder, build_llm, build_web, load_active_vertical
@@ -130,10 +131,16 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     async def research(body: ResearchIn) -> ResearchOut:
         if app.state.service is None:
             app.state.service = build_default_service()
-        res = await app.state.service.ask(
-            question=body.question, tenant_id=body.tenant_id,
-            workspace_id=body.workspace_id, source_keys=body.sources,
-        )
+        try:
+            res = await app.state.service.ask(
+                question=body.question, tenant_id=body.tenant_id,
+                workspace_id=body.workspace_id, source_keys=body.sources,
+            )
+        except CassetteMiss as e:
+            raise HTTPException(status_code=503, detail=(
+                "No model available in replay mode. Set NOESIS_PROVIDER_MODE=live "
+                "with ANTHROPIC_API_KEY + OPENAI_API_KEY to answer live, or record "
+                "cassettes first.")) from e
         return ResearchOut(
             grounded=res.grounded,
             claims=[Citation(text=c.text, quote=c.quote, atom_id=c.atom_id,

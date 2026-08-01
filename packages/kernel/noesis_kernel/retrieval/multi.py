@@ -53,10 +53,17 @@ class MultiSourceRetriever:
         by_cid: dict[str, BlockHit] = {}
         scores: dict[str, float] = {}
         appears: Counter[str] = Counter()
+        self.failed_sources: dict[str, str] = {}   # key -> error, for observability
 
         for skey, src in self._sources.items():
             w = self._weights.get(skey, 1.0)
-            hits = await src.search(req)
+            try:
+                hits = await src.search(req)
+            except Exception as e:
+                # A flaky source (bad key, timeout, provider outage) must NOT kill a
+                # query the other sources can answer. Skip it and continue.
+                self.failed_sources[skey] = f"{type(e).__name__}: {e}"
+                continue
             for rank, h in enumerate(hits, start=1):
                 cid = f"{skey}::{h.block_id}"
                 by_cid.setdefault(cid, h)

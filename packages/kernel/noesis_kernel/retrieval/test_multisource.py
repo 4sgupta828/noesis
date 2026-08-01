@@ -89,3 +89,18 @@ def test_run_react_answers_from_corpus_and_web() -> None:
     assert res.grounded
     assert len(res.verified_claims) == 2                # one corpus-cited, one web-cited
     assert {c.atom_id for c in res.verified_claims} == {"a1", "a2"}
+
+
+def test_failing_source_is_skipped_not_fatal():
+    class _Boom:
+        key = "boom"
+        def capabilities(self): 
+            from noesis_kernel.contract.dto import Capability
+            return frozenset({Capability.RETRIEVAL})
+        def covers(self): return {}
+        def make_block_loader(self, t, w=None): return lambda d,b: None
+        async def search(self, req): raise RuntimeError("provider down")
+    multi = MultiSourceRetriever({"corpus": _corpus(), "boom": _Boom()})
+    hits = asyncio.run(multi.search(RetrievalRequest(query="target value approved period", tenant_id="t", k=10)))
+    assert hits                                   # corpus still answered
+    assert multi.failed_sources.get("boom", "").startswith("RuntimeError")

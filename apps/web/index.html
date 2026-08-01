@@ -77,6 +77,17 @@
     font-family:var(--mono);font-size:.72rem;font-weight:640;margin-right:.5rem;}
   .claim.flash{outline:2px solid var(--verified);outline-offset:2px;}
 
+  /* answer-video add-on (separate; only when video_enabled) */
+  .vid{margin:.2rem 0 1.4rem;padding:.9rem 1rem;border:1px dashed var(--hair);
+    border-radius:12px;background:var(--card);}
+  .vid .vbtn{font-family:var(--mono);font-size:.8rem;font-weight:600;cursor:pointer;
+    border:1px solid var(--verified);color:var(--verified);background:transparent;
+    border-radius:8px;padding:.5rem .85rem;}
+  .vid .vbtn:hover{background:var(--verified);color:var(--paper);}
+  .vid .vbtn:disabled{opacity:.55;cursor:default;}
+  .vid .vhint{font-size:.74rem;color:var(--slate);margin-top:.5rem;}
+  .vid video{width:100%;max-width:640px;border-radius:10px;margin-top:.7rem;display:block;}
+
   /* signature: the claim → evidence rail */
   .claim{background:var(--card);border:1px solid var(--hair);border-radius:12px;scroll-margin-top:1rem;
     padding:1rem 1.05rem;margin-bottom:.85rem;
@@ -129,6 +140,9 @@
 const $ = s => document.querySelector(s);
 const out = $("#out"), go = $("#go"), q = $("#q");
 let SOURCES = [];
+let VIDEO_ENABLED = false;
+let LAST = null;            // {question, answer} for the answer-video add-on
+let CURRENT_Q = "";        // the question of the answer currently rendered
 
 const label = k => k === "web" ? "Web" : k === "workspace" ? "Workspace" : "Corpus";
 
@@ -137,6 +151,7 @@ async function loadConfig(){
     const c = await (await fetch("/config")).json();
     $("#vertical").textContent = c.vertical || "vertical";
     SOURCES = c.sources || [];
+    VIDEO_ENABLED = !!c.video_enabled;
     const box = $("#sources");
     for(const k of SOURCES){
       const b = document.createElement("button");
@@ -178,6 +193,14 @@ function render(data){
     const withRefs = esc(data.answer).replace(/\[(\d+)\]/g,
       '<sup class="ref" data-n="$1">[$1]</sup>');
     parts.push(`<div class="answer">${withRefs}</div>`);
+    // answer-video add-on: only when enabled AND there is a grounded answer to narrate
+    if(VIDEO_ENABLED && data.grounded){
+      LAST = {question:CURRENT_Q, answer:data.answer};
+      parts.push(`<div class="vid" id="vid">
+        <button type="button" class="vbtn" id="vgo">▶ Generate guidance video</button>
+        <div class="vhint">A ~60-second narrated explainer of this answer, spoken as an experienced physician. Takes ~2 minutes.</div>
+      </div>`);
+    }
     parts.push(`<h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}</h4>`);
   }
   data.claims.forEach((c,idx)=>{
@@ -202,6 +225,40 @@ function render(data){
     if(el){ el.scrollIntoView({behavior:"smooth",block:"center"});
       el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1200); }
   }));
+  const vgo = document.getElementById("vgo");
+  if(vgo) vgo.addEventListener("click", generateVideo);
+}
+
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+async function generateVideo(){
+  if(!LAST) return;
+  const panel = document.getElementById("vid");
+  const btn = document.getElementById("vgo");
+  const hint = panel.querySelector(".vhint");
+  btn.disabled = true; btn.textContent = "Generating…";
+  hint.textContent = "Storyboarding, narrating, and assembling the video… (~2 min)";
+  try{
+    const r = await fetch("/video/generate",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify(LAST)});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+    const {job_id} = await r.json();
+    for(let i=0;i<120;i++){                 // poll up to ~4 min
+      await sleep(2000);
+      const s = await (await fetch("/video/status/"+job_id)).json();
+      if(s.status==="done"){
+        hint.textContent = (s.title||"Guidance video")+" · "+Math.round(s.duration_sec)+"s";
+        const v = document.createElement("video");
+        v.controls = true; v.src = "/video/file/"+encodeURIComponent(s.filename);
+        panel.appendChild(v); btn.remove(); return;
+      }
+      if(s.status==="error") throw new Error(s.error||"generation failed");
+    }
+    throw new Error("timed out waiting for the video");
+  }catch(e){
+    btn.disabled = false; btn.textContent = "▶ Generate guidance video";
+    hint.textContent = "Couldn't generate the video: "+(e.message||e);
+  }
 }
 
 function renderEvidence(data, note){
@@ -217,6 +274,7 @@ $("#ask").addEventListener("submit", async e=>{
   e.preventDefault();
   const question = q.value.trim();
   if(!question) return;
+  CURRENT_Q = question;
   const body = JSON.stringify({question, tenant_id:"demo", sources: chosen()});
   go.disabled = true; go.textContent = "Researching…";
   out.innerHTML = `<div class="status">Searching sources and verifying evidence…</div>`;

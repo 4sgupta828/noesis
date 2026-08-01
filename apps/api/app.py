@@ -93,6 +93,12 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     app = FastAPI(title="Noesis Research", version="0")
     app.state.service = service   # lazily built on first request if None
 
+    # Answer-video add-on — separate, flag-gated router (default OFF). Kept fully out of
+    # the research path: mounting it changes nothing about how answers are produced.
+    from api.video import build_video_router, video_enabled
+    if video_enabled():
+        app.include_router(build_video_router())
+
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok"}
@@ -104,11 +110,13 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             app.state.service = build_default_service()
         svc = app.state.service
         ui = getattr(svc, "ui", None)
+        from api.video import video_enabled
         return {
             "vertical": getattr(svc, "vertical_name", ""),
             "sources": list(svc.sources.keys()),
             "navigation": ui.navigation() if ui else [],
             "search_facets": ui.search_facets() if ui else [],
+            "video_enabled": video_enabled(),
         }
 
     @app.post("/search")

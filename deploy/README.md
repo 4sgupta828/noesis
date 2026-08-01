@@ -37,3 +37,19 @@ NOESIS_ACTIVE_VERTICAL=regulatory NOESIS_PROVIDER_MODE=replay \
   real answers over it.
 - `replay` needs recorded cassettes under `NOESIS_CASSETTE_ROOT`; `live` needs the
   API keys but no cassettes.
+
+## Medical vertical — data infra (added)
+
+- **Dedicated DB:** a fresh pgvector Postgres (container `noesis-db`, port 5434) —
+  separate from any other project. `NOESIS_CORPUS_DSN=postgresql://noesis:noesis@localhost:5434/noesis`.
+- **Object store (R2):** raw fetched artifacts (assembled trial/label markdown) are
+  content-addressed into Cloudflare R2 via `S3ObjectStore`. Env: `R2_BUCKET`,
+  `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (see gitignored `.env.medical`).
+- **Embeddings:** OpenAI `text-embedding-3-small` (1536-d) — `OPENAI_API_KEY`.
+- **Download real data:**
+  ```bash
+  set -a; . ./.env.medical; set +a
+  PYTHONPATH=packages/kernel:packages/vertical_medical:apps \
+    .venv/bin/python scripts/ingest_medical.py --condition diabetes --trials 100 --drugs 100 --drug-query "openfda.route:ORAL"
+  ```
+  Sources: ClinicalTrials.gov v2 (trials) + openFDA drug labels. Raw → R2, index → pgvector.

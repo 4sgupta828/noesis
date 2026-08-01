@@ -47,19 +47,26 @@ def split(document_id: str, text: str, *, min_chars: int = 1) -> list[Block]:
         if not stripped:
             continue
 
-        lvl = _heading_level(stripped)
+        # A chunk may be a heading, OR a heading immediately followed by body text
+        # on the next line (well-formed markdown without a blank line between). Peel
+        # any leading heading line off as a section marker; keep the body as a block.
+        first_nl = stripped.find("\n")
+        first_line = stripped if first_nl == -1 else stripped[:first_nl]
+        lvl = _heading_level(first_line)
         if lvl is not None:
-            title = stripped.lstrip("#").strip()
+            title = first_line.lstrip("#").strip()
             section = section[: lvl - 1] + [title]   # update heading stack
-            # headings are structural markers, not standalone evidence blocks
-            continue
+            if first_nl == -1:
+                continue                              # heading only, no body
+            stripped = stripped[first_nl + 1:].strip()
+            if not stripped:
+                continue
 
         if len(stripped) < min_chars:
             continue
 
-        # char offsets of the trimmed text within the original document
-        lead = len(chunk) - len(chunk.lstrip())
-        char_start = start + lead
+        # locate the (post-heading) block text within the original document
+        char_start = text.find(stripped, start)
         char_end = char_start + len(stripped)
         blocks.append(Block(
             document_id=document_id,

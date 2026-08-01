@@ -88,6 +88,9 @@
   .verified{display:inline-flex;align-items:center;gap:.3rem;color:var(--verified);
     font-size:.72rem;font-weight:640;text-transform:uppercase;letter-spacing:.06em;}
   .src{font-family:var(--mono);font-size:.72rem;color:var(--slate);}
+  a.srclink{text-decoration:none;color:var(--verified);border-bottom:1px dotted var(--verified);}
+  a.srclink:hover{opacity:.8;}
+  a.srclink:focus-visible{outline:2px solid var(--verified);outline-offset:2px;}
 
   .gaps{margin-top:.4rem 0 1.1rem;border:1px solid var(--hair);border-left:3px solid var(--gap);
     border-radius:10px;padding:.7rem .9rem;background:var(--card);}
@@ -178,7 +181,10 @@ function render(data){
     parts.push(`<h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}</h4>`);
   }
   data.claims.forEach((c,idx)=>{
-    const src = c.source ? `<span class="src">${esc(c.source)}${c.title?" · "+esc(c.title):""}</span>` : "";
+    const label = esc(c.source) + (c.title ? " · " + esc(c.title) : "");
+    const src = c.url
+      ? `<a class="src srclink" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer" title="Open source in a new tab">${label} ↗</a>`
+      : (c.source ? `<span class="src">${label}</span>` : "");
     parts.push(`<article class="claim" id="f${idx+1}">
       <div class="txt"><span class="fnum">${idx+1}</span>${esc(c.text)}</div>
       <div class="rail"><q>${esc(c.quote)}</q>

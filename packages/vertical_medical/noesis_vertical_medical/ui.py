@@ -10,7 +10,13 @@ class _EntityView:
     def detail_sections(self): return list(self._s)
 
 
+from . import links as _links
+
+
 class MedicalUI:
+    def source_url(self, document_id, quote=None):
+        return _links.source_url(document_id, quote)
+
     def navigation(self):
         return [
             {"key": "trials", "label": "Trials", "entity_type": "trial"},

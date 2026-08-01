@@ -37,6 +37,8 @@ class Citation(BaseModel):
     atom_id: str
     source: str = ""
     title: str = ""
+    url: str | None = None           # canonical source page (opens in a new tab)
+    document_id: str = ""
 
 
 class ResearchOut(BaseModel):
@@ -164,11 +166,19 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 "cassettes first.")) from e
         except Exception as e:   # provider errors (auth, credits, rate limit, timeout)
             raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
+        ui = getattr(app.state.service, "ui", None)
+        def _url(c):
+            fn = getattr(ui, "source_url", None)
+            try:
+                return fn(c.document_id, c.quote) if fn and c.document_id else None
+            except Exception:
+                return None
         return ResearchOut(
             grounded=res.grounded,
             answer=res.composed_answer,
             claims=[Citation(text=c.text, quote=c.quote, atom_id=c.atom_id,
-                             source=c.source_key, title=c.document_title)
+                             source=c.source_key, title=c.document_title,
+                             url=_url(c), document_id=c.document_id)
                     for c in res.verified_claims],
             coverage_gaps=res.coverage_gaps,
             rejected=len(res.rejected_claims),

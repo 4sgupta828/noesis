@@ -90,3 +90,18 @@ def test_source_stats_tracks_retrieved_vs_cited():
     assert res.source_stats["europepmc"]["cited"] == 1
     assert res.source_stats["europepmc"]["retrieved"] >= 1
     assert res.source_stats.get("faers", {}).get("cited", 0) == 0
+
+
+def test_source_urls_are_canonical():
+    from noesis_vertical_medical.links import source_url
+    assert source_url("clinicaltrials:NCT00841061").startswith("https://clinicaltrials.gov/study/NCT00841061")
+    assert "dailymed.nlm.nih.gov" in source_url("openfda:abc-123")
+    assert source_url("europepmc:MED:29494065").startswith("https://europepmc.org/article/MED/29494065")
+    assert source_url("cdc:2efk-s9c2") == "https://data.cdc.gov/d/2efk-s9c2"
+    assert source_url("faers:10003336") is None            # no clean per-report page
+    # quote → text-fragment deep link
+    u = source_url("clinicaltrials:NCT1", quote="the primary endpoint was met")
+    assert "#:~:text=" in u
+
+    from noesis_vertical_medical.ui import MedicalUI
+    assert MedicalUI().source_url("clinicaltrials:NCT1", "x").startswith("https://clinicaltrials.gov/")

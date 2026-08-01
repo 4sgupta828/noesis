@@ -74,8 +74,14 @@ class AnswerResult:
 
     @property
     def grounded(self) -> bool:
-        """True iff the run produced ≥1 claim and none were rejected."""
-        return bool(self.verified_claims) and not self.rejected_claims
+        """True iff the delivered answer has ≥1 span-verified claim.
+
+        Rejected (ungrounded) claims are caught by the gate and excluded from the
+        answer — they're reported separately via `rejected_claims`, not a reason to
+        call the surviving verified claims ungrounded. A pure refusal (0 verified)
+        or an all-fabricated answer (0 verified, ≥1 rejected) is not grounded.
+        """
+        return bool(self.verified_claims)
 
 
 async def run_react(
@@ -95,8 +101,41 @@ async def run_react(
     atoms = AtomStore()
     result = AnswerResult()
     notes: list[str] = []          # running coverage-gap / step notes for the agent
+    verifier = BlockSpanVerifier(source.make_block_loader(tenant_id, workspace_id))
 
-    for _ in range(max_steps):
+    def _apply_answer(step: AgentStep) -> None:
+        for c in step.claims:
+            atom = atoms.get(c.atom_id)
+            if atom is None or atom.locator is None:
+                result.rejected_claims.append(RejectedClaim(c.text, c.atom_id, c.quote, "unknown_atom"))
+            elif verifier.verify(c.quote, atom.locator):
+                result.verified_claims.append(VerifiedClaim(
+                    c.text, c.atom_id, c.quote, atom.source_key, atom.document_title))
+            else:
+                result.rejected_claims.append(RejectedClaim(c.text, c.atom_id, c.quote, "quote_not_grounded"))
+
+    async def _ask(force_answer: bool) -> AgentStep:
+        obs = "\n".join(f"{a.atom_id}: {a.text}" for a in atoms.all()) or "(no evidence yet)"
+        instr = ("You have reached the evidence-gathering limit. You MUST now "
+                 "action='answer': give claims citing atom_ids + verbatim quotes for "
+                 "what the evidence supports, or answer with an empty claims list if "
+                 "the evidence does not address the question. Do NOT search."
+                 if force_answer else
+                 "Either action='search' with a query (and optional reformulations in "
+                 "'queries') to gather more, or action='answer' with claims — each claim "
+                 "citing an atom_id and a verbatim 'quote' from that atom.")
+        # One fresh user message per step (all evidence so far). Ends with a user
+        # turn — required by chat LLMs — and keeps the agent stateless per step.
+        user = (f"Question: {question}\n\nEVIDENCE GATHERED SO FAR:\n{obs}\n\n"
+                + ("NOTES:\n" + "\n".join(notes) + "\n\n" if notes else "") + instr)
+        res = await llm.complete(system=system_prompt,
+                                 messages=[{"role": "user", "content": user}],
+                                 response_format=AgentStep)
+        budget.charge(calls=1, tokens=res.output_tokens)
+        result.steps += 1
+        return res.parsed
+
+    for step_i in range(max_steps):
         if budget.exhausted:
             result.stopped_reason = "budget"
             break
@@ -106,20 +145,8 @@ async def run_react(
             result.stopped_reason = "budget"
             break
 
-        obs = "\n".join(f"{a.atom_id}: {a.text}" for a in atoms.all()) or "(no evidence yet)"
-        # One fresh user message per step (all evidence so far). Ends with a user
-        # turn — required by chat LLMs — and keeps the agent stateless per step.
-        user = (f"Question: {question}\n\nEVIDENCE GATHERED SO FAR:\n{obs}\n\n"
-                + ("NOTES:\n" + "\n".join(notes) + "\n\n" if notes else "")
-                + "Either action='search' with a query (and optional reformulations in "
-                  "'queries') to gather more, or action='answer' with claims — each claim "
-                  "citing an atom_id and a verbatim 'quote' from that atom.")
-        llm_res = await llm.complete(system=system_prompt,
-                                     messages=[{"role": "user", "content": user}],
-                                     response_format=AgentStep)
-        budget.charge(calls=1, tokens=llm_res.output_tokens)
-        result.steps += 1
-        step: AgentStep = llm_res.parsed
+        # On the final allowed step, force an answer instead of another search.
+        step: AgentStep = await _ask(force_answer=(step_i == max_steps - 1))
 
         if step.action == "search":
             q = step.query or question
@@ -144,20 +171,23 @@ async def run_react(
             continue
 
         # action == "answer": provenance hard gate on every claim
-        verifier = BlockSpanVerifier(source.make_block_loader(tenant_id, workspace_id))
-        for c in step.claims:
-            atom = atoms.get(c.atom_id)
-            if atom is None or atom.locator is None:
-                result.rejected_claims.append(RejectedClaim(c.text, c.atom_id, c.quote, "unknown_atom"))
-            elif verifier.verify(c.quote, atom.locator):
-                result.verified_claims.append(VerifiedClaim(
-                    c.text, c.atom_id, c.quote, atom.source_key, atom.document_title))
-            else:
-                result.rejected_claims.append(RejectedClaim(c.text, c.atom_id, c.quote, "quote_not_grounded"))
+        _apply_answer(step)
         result.stopped_reason = "answered"
         break
     else:
+        # Loop exhausted without an answer action. Force one final answer over the
+        # evidence gathered (so the agent never silently returns nothing) — unless
+        # the budget is spent.
         result.stopped_reason = "max_steps"
+        if not budget.exhausted:
+            try:
+                budget.reserve()
+                final = await _ask(force_answer=True)
+                if final.action == "answer":
+                    _apply_answer(final)
+                    result.stopped_reason = "answered"
+            except BudgetExceeded:
+                pass
 
     result.atoms_gathered = len(atoms.all())
 

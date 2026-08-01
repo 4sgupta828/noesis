@@ -33,6 +33,7 @@ async def main() -> None:
     ap.add_argument("--drug-query", default="")  # e.g. openfda.route:ORAL
     ap.add_argument("--papers", type=int, default=0)   # Europe PMC literature
     ap.add_argument("--faers", type=int, default=0)    # adverse-event reports
+    ap.add_argument("--faers-drug", default="")        # drug name for FAERS (else condition)
     ap.add_argument("--cdc", type=int, default=0)      # CDC public-health datasets
     ap.add_argument("--tenant", default="demo")
     args = ap.parse_args()
@@ -66,7 +67,7 @@ async def main() -> None:
     if args.faers:
         n = await ingest_connector_to_postgres(
             FaersConnector(), pg, tenant_id=args.tenant, embedder=embedder, object_store=store,
-            window={"query": f"patient.drug.openfda.generic_name:{args.condition}", "limit": args.faers})
+            window={"query": args.faers_drug or args.condition, "limit": args.faers})
         print(f"[faers] {n} blocks indexed")
         total += n
     if args.cdc:

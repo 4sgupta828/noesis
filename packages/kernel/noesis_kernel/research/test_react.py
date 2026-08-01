@@ -129,6 +129,43 @@ def test_coverage_gap_signalled_when_corpus_empty() -> None:
     assert not res.grounded                   # no claims → not grounded (honest)
 
 
+def test_forced_answer_on_last_step() -> None:
+    # An agent that always chooses "search" must still produce an answer on the
+    # final step (forced), rather than silently returning nothing.
+    src = _source()
+    class _AlwaysSearch:
+        def __init__(self): self.n = 0
+        async def complete(self, *, system, messages, response_format, max_tokens=2048, temperature=None):
+            self.n += 1
+            # On the forced/last step the prompt says "MUST answer"; emit an answer then.
+            if "MUST now" in messages[0]["content"]:
+                return LLMResult(parsed=AgentStep(action="answer", claims=[
+                    ClaimOut(text="v", atom_id="a1",
+                             quote="the approved metric value was 9.8 percent")]), output_tokens=5)
+            return LLMResult(parsed=AgentStep(action="search", query="term metric value"), output_tokens=5)
+    res = asyncio.run(run_react(
+        question="what was the metric value?", llm=_AlwaysSearch(), embedder=FakeEmbedder(dim=8),
+        source=src, tenant_id="A", budget=BudgetState(max_calls=20), max_steps=3))
+    assert res.stopped_reason == "answered"        # forced answer, not "max_steps"
+    assert res.grounded and len(res.verified_claims) == 1
+
+
+def test_forced_answer_can_honestly_refuse() -> None:
+    # If forced to answer with no usable evidence, an empty-claims answer is fine
+    # (honest refusal), still not a silent max_steps.
+    src = _source()
+    class _SearchThenEmpty:
+        async def complete(self, *, system, messages, response_format, max_tokens=2048, temperature=None):
+            if "MUST now" in messages[0]["content"]:
+                return LLMResult(parsed=AgentStep(action="answer", claims=[]), output_tokens=5)
+            return LLMResult(parsed=AgentStep(action="search", query="x"), output_tokens=5)
+    res = asyncio.run(run_react(
+        question="?", llm=_SearchThenEmpty(), embedder=FakeEmbedder(dim=8), source=src,
+        tenant_id="A", budget=BudgetState(max_calls=20), max_steps=2))
+    assert res.stopped_reason == "answered"
+    assert not res.grounded and not res.verified_claims   # honest refusal
+
+
 def test_tenant_isolation_end_to_end() -> None:
     # Source has only tenant-A data; a tenant-B run retrieves nothing, so a claim
     # citing a1 is rejected as unknown (B can never reach A's evidence).

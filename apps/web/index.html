@@ -149,6 +149,15 @@ function render(data){
     parts.push(`<div class="gaps"><h4>Coverage gaps</h4><ul>` +
       data.coverage_gaps.map(g=>`<li>${esc(g)}</li>`).join("") + `</ul></div>`);
   }
+  const ss = data.source_stats || {};
+  const skeys = Object.keys(ss);
+  if(skeys.length){
+    const chips = skeys.map(k=>{
+      const s = ss[k]; const helped = s.cited>0;
+      return `<span class="pill" style="cursor:default;${helped?'color:var(--paper);background:var(--verified);border-color:var(--verified)':''}">${esc(k)} · ${s.cited}/${s.retrieved} cited</span>`;
+    }).join(" ");
+    parts.push(`<div class="summary" style="border:none;padding-top:.2rem"><span>Sources used:</span>${chips}</div>`);
+  }
   for(const c of data.claims){
     const src = c.source ? `<span class="src">${esc(c.source)}${c.title?" · "+esc(c.title):""}</span>` : "";
     parts.push(`<article class="claim">

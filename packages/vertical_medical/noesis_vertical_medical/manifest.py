@@ -7,6 +7,10 @@ from . import entities
 from .authority import MedicalAuthorityPolicy
 from .connector import ClinicalTrialsConnector
 from .openfda import OpenFdaConnector
+from .europepmc import EuropePmcConnector
+from .faers import FaersConnector
+from .dailymed import DailyMedConnector
+from .cdc import CdcConnector
 from .eval_gold import GOLD
 from .fixtures import sample_studies
 from .gating import MedicalGatingPolicy
@@ -24,6 +28,10 @@ def build_manifest() -> VerticalManifest:
         connectors={
             "clinicaltrials": ClinicalTrialsConnector(studies=sample_studies()),
             "openfda": OpenFdaConnector(),
+            "europepmc": EuropePmcConnector(),
+            "faers": FaersConnector(),
+            "dailymed": DailyMedConnector(),
+            "cdc": CdcConnector(),
         },
         retrieval_sources={"clinicaltrials": MedicalRetrievalSource()},
         gating_policy=MedicalGatingPolicy(),

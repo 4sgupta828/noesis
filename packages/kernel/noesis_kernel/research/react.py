@@ -65,6 +65,9 @@ class AnswerResult:
     verified_claims: list[VerifiedClaim] = field(default_factory=list)
     rejected_claims: list[RejectedClaim] = field(default_factory=list)
     coverage_gaps: list[str] = field(default_factory=list)   # vertical-signalled gaps
+    # per-source contribution: which sources were retrieved vs. actually CITED in a
+    # verified claim → shows what sources help answer (user-requested analytics).
+    source_stats: dict[str, dict[str, int]] = field(default_factory=dict)
     steps: int = 0
     atoms_gathered: int = 0
     stopped_reason: str = "answered"     # "answered" | "budget" | "max_steps"
@@ -157,4 +160,14 @@ async def run_react(
         result.stopped_reason = "max_steps"
 
     result.atoms_gathered = len(atoms.all())
+
+    # per-source contribution: retrieved (atoms) vs. cited (verified claims)
+    stats: dict[str, dict[str, int]] = {}
+    for a in atoms.all():
+        s = a.source_key or "unknown"
+        stats.setdefault(s, {"retrieved": 0, "cited": 0})["retrieved"] += 1
+    for vc in result.verified_claims:
+        s = vc.source_key or "unknown"
+        stats.setdefault(s, {"retrieved": 0, "cited": 0})["cited"] += 1
+    result.source_stats = stats
     return result

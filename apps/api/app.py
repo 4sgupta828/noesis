@@ -44,6 +44,8 @@ class ResearchOut(BaseModel):
     claims: list[Citation]
     coverage_gaps: list[str]
     rejected: int
+    source_stats: dict = {}          # source -> {retrieved, cited}
+    degraded_sources: dict = {}      # sources that failed this request
 
 
 def build_default_service() -> ResearchService:
@@ -168,6 +170,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     for c in res.verified_claims],
             coverage_gaps=res.coverage_gaps,
             rejected=len(res.rejected_claims),
+            source_stats=res.source_stats,
         )
 
     return app

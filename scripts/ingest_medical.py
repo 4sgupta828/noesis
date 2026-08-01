@@ -20,6 +20,9 @@ from noesis_kernel.runtime.ingest import ingest_connector_to_postgres
 
 from noesis_vertical_medical.connector import ClinicalTrialsConnector
 from noesis_vertical_medical.openfda import OpenFdaConnector
+from noesis_vertical_medical.europepmc import EuropePmcConnector
+from noesis_vertical_medical.faers import FaersConnector
+from noesis_vertical_medical.cdc import CdcConnector
 
 
 async def main() -> None:
@@ -28,6 +31,9 @@ async def main() -> None:
     ap.add_argument("--trials", type=int, default=150)
     ap.add_argument("--drugs", type=int, default=100)
     ap.add_argument("--drug-query", default="")  # e.g. openfda.route:ORAL
+    ap.add_argument("--papers", type=int, default=0)   # Europe PMC literature
+    ap.add_argument("--faers", type=int, default=0)    # adverse-event reports
+    ap.add_argument("--cdc", type=int, default=0)      # CDC public-health datasets
     ap.add_argument("--tenant", default="demo")
     args = ap.parse_args()
 
@@ -50,6 +56,24 @@ async def main() -> None:
             fda, pg, tenant_id=args.tenant, embedder=embedder, object_store=store,
             window={"query": args.drug_query, "limit": args.drugs})
         print(f"[drugs] {n} blocks indexed")
+        total += n
+    if args.papers:
+        n = await ingest_connector_to_postgres(
+            EuropePmcConnector(), pg, tenant_id=args.tenant, embedder=embedder, object_store=store,
+            window={"query": args.condition, "limit": args.papers})
+        print(f"[papers] europepmc: {n} blocks indexed")
+        total += n
+    if args.faers:
+        n = await ingest_connector_to_postgres(
+            FaersConnector(), pg, tenant_id=args.tenant, embedder=embedder, object_store=store,
+            window={"query": f"patient.drug.openfda.generic_name:{args.condition}", "limit": args.faers})
+        print(f"[faers] {n} blocks indexed")
+        total += n
+    if args.cdc:
+        n = await ingest_connector_to_postgres(
+            CdcConnector(), pg, tenant_id=args.tenant, embedder=embedder, object_store=store,
+            window={"query": args.condition, "limit": args.cdc})
+        print(f"[cdc] {n} blocks indexed")
         total += n
 
     print(f"raw artifacts stored to R2: {store.put_count} | total blocks: {total}")

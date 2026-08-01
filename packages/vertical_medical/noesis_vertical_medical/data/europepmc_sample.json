@@ -1,0 +1,478 @@
+[
+ {
+  "id": "42530338",
+  "source": "MED",
+  "pmid": "42530338",
+  "doi": "10.1111/dom.71128",
+  "title": "Effect of Medications for Type 2 Diabetes on Cardiovascular Events and Mortality: A Comprehensive Pairwise and Network Meta-Analysis.",
+  "authorString": "Silverii GA, Velardi V, Marinelli C, Lax A, Monami M, Mannucci E.",
+  "authorList": {
+   "author": [
+    {
+     "fullName": "Silverii GA",
+     "firstName": "Giovanni Antonio",
+     "lastName": "Silverii",
+     "initials": "GA",
+     "authorId": {
+      "type": "ORCID",
+      "value": "0000-0002-6695-3213"
+     },
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Diabetology Unit, Careggi Hospital, Florence, Italy."
+       },
+       {
+        "affiliation": "University of Florence, Florence, Italy."
+       }
+      ]
+     }
+    },
+    {
+     "fullName": "Velardi V",
+     "firstName": "Valerio",
+     "lastName": "Velardi",
+     "initials": "V",
+     "authorId": {
+      "type": "ORCID",
+      "value": "0009-0001-4516-8427"
+     },
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Department of Medical Surgical and Health Sciences, University of Trieste, Trieste, Italy."
+       }
+      ]
+     }
+    },
+    {
+     "fullName": "Marinelli C",
+     "firstName": "Christian",
+     "lastName": "Marinelli",
+     "initials": "C",
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Diabetology Unit, Careggi Hospital, Florence, Italy."
+       },
+       {
+        "affiliation": "University of Florence, Florence, Italy."
+       }
+      ]
+     }
+    },
+    {
+     "fullName": "Lax A",
+     "firstName": "Antonino",
+     "lastName": "Lax",
+     "initials": "A",
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Diabetology Unit, Careggi Hospital, Florence, Italy."
+       },
+       {
+        "affiliation": "University of Florence, Florence, Italy."
+       }
+      ]
+     }
+    },
+    {
+     "fullName": "Monami M",
+     "firstName": "Matteo",
+     "lastName": "Monami",
+     "initials": "M",
+     "authorId": {
+      "type": "ORCID",
+      "value": "0000-0001-9349-828X"
+     },
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Diabetology Unit, Careggi Hospital, Florence, Italy."
+       },
+       {
+        "affiliation": "University of Florence, Florence, Italy."
+       }
+      ]
+     }
+    },
+    {
+     "fullName": "Mannucci E",
+     "firstName": "Edoardo",
+     "lastName": "Mannucci",
+     "initials": "E",
+     "authorId": {
+      "type": "ORCID",
+      "value": "0000-0001-9759-9408"
+     },
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Diabetology Unit, Careggi Hospital, Florence, Italy."
+       },
+       {
+        "affiliation": "University of Florence, Florence, Italy."
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "authorIdList": {
+   "authorId": [
+    {
+     "type": "ORCID",
+     "value": "0000-0001-9349-828X"
+    },
+    {
+     "type": "ORCID",
+     "value": "0000-0001-9759-9408"
+    },
+    {
+     "type": "ORCID",
+     "value": "0000-0002-6695-3213"
+    },
+    {
+     "type": "ORCID",
+     "value": "0009-0001-4516-8427"
+    }
+   ]
+  },
+  "journalInfo": {
+   "journalIssueId": 4224065,
+   "dateOfPublication": "2026 Jul",
+   "monthOfPublication": 7,
+   "yearOfPublication": 2026,
+   "printPublicationDate": "2026-07-01",
+   "journal": {
+    "title": "Diabetes, obesity & metabolism",
+    "medlineAbbreviation": "Diabetes Obes Metab",
+    "essn": "1463-1326",
+    "issn": "1462-8902",
+    "isoabbreviation": "Diabetes Obes Metab",
+    "nlmid": "100883645"
+   }
+  },
+  "pubYear": "2026",
+  "abstractText": "<h4>Aim</h4>To assess the effect of all the approved classes of medications for type 2 diabetes on Major Adverse Cardiovascular events (MACE) and all-cause mortality.<h4>Methods</h4>We performed a pairwise and network meta-analysis, including randomised controlled trials with a duration of at least 40\u2009weeks, comparing medications versus placebo or an active comparator, in which MACE and deaths were adjudicated.<h4>Results</h4>We included 93 studies. In pairwise meta-analyses, versus all comparators, GLP-1 receptor agonists (GLP1RA), SGLT-2 inhibitors (SGLT2i), metformin and pioglitazone were associated with a significant reduction of MACE and sulfonylureas with increased MACE. Furthermore, tirzepatide, SGLT2i and GLP1RA were associated with a significantly reduced all-cause mortality. In the principal (frequentist) network meta-analysis, metformin (OR 0.69, 95% CI 0.53-0.89), SGLT2i (0.82, 0.75-0.90), GLP1RA (0.87, 0.83-0.92) and tirzepatide (0.82, 0.72-0.93) were associated with a significant reduction of MACE versus placebo; no effect was observed for insulin, DPP4 inhibitors (DPP4i) or sulfonylureas. Tirzepatide (0.72, 0.64-0.82), SGLT2i (0.85, 0.80-0.91) and GLP1RA (0.85, 0.80-0.91) were associated with a significantly reduced mortality versus placebo; no effect was detected for other drugs. The sensitivity (Bayesian) analysis did not confirm the significance of results for pioglitazone on MACE. The certainty of evidence was moderate-to-high for GLP1RA, SGLT2i, Tirzepatide, DPP4i; low for metformin; low-to-moderate for other drugs.<h4>Conclusion</h4>SGLT2i, GLP1RA, tirzepatide and (with lower quality of evidence) pioglitazone and metformin are associated with a reduced incidence of cardiovascular events; tirzepatide, SGLT2i and GLP1RA are also associated with a reduced all-cause mortality.",
+  "affiliation": "Diabetology Unit, Careggi Hospital, Florence, Italy.",
+  "publicationStatus": "aheadofprint",
+  "language": "eng",
+  "pubModel": "Print-Electronic",
+  "pubTypeList": {
+   "pubType": [
+    "Journal Article"
+   ]
+  },
+  "keywordList": {
+   "keyword": [
+    "Cardiovascular disease",
+    "Type 2 diabetes",
+    "Antidiabetic Drug",
+    "Meta\u2010analysis",
+    "Network Meta\u2010analysis"
+   ]
+  },
+  "subsetList": {
+   "subset": [
+    {
+     "code": "IM",
+     "name": "Index Medicus"
+    }
+   ]
+  },
+  "fullTextUrlList": {
+   "fullTextUrl": [
+    {
+     "availability": "Subscription required",
+     "availabilityCode": "S",
+     "documentStyle": "doi",
+     "site": "DOI",
+     "url": "https://doi.org/10.1111/dom.71128"
+    }
+   ]
+  },
+  "isOpenAccess": "N",
+  "inEPMC": "N",
+  "inPMC": "N",
+  "hasPDF": "N",
+  "hasBook": "N",
+  "hasSuppl": "N",
+  "citedByCount": 0,
+  "hasData": "N",
+  "hasReferences": "N",
+  "hasTextMinedTerms": "N",
+  "hasDbCrossReferences": "N",
+  "hasLabsLinks": "N",
+  "hasEvaluations": "N",
+  "authMan": "N",
+  "epmcAuthMan": "N",
+  "nihAuthMan": "N",
+  "hasTMAccessionNumbers": "N",
+  "dateOfCreation": "2026-07-30",
+  "firstIndexDate": "2026-07-31",
+  "dateOfRevision": "2026-07-30",
+  "electronicPublicationDate": "2026-07-30",
+  "firstPublicationDate": "2026-07-30"
+ },
+ {
+  "id": "42310907",
+  "source": "MED",
+  "pmid": "42310907",
+  "doi": "10.1177/15491684261462413",
+  "title": "Impact of Metformin on Healthspan-Related Outcomes and Incidence of Diseases of Aging in People with Type 2 Diabetes Mellitus: A Systematic Review.",
+  "authorString": "Chan AHY, Beyene K, Lai B, Kim S, Wu I, Al-Jawadi R, Wu M, Foot H, Cheung G, Walker X, Barak Y.",
+  "authorList": {
+   "author": [
+    {
+     "fullName": "Chan AHY",
+     "firstName": "Amy Hai Yan",
+     "lastName": "Chan",
+     "initials": "AHY",
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Faculty of Medical and Health Sciences, School of Pharmacy, the University of Auckland, Auckland, New Zealand."
+       }
+      ]
+     }
+    },
+    {
+     "fullName": "Beyene K",
+     "firstName": "Kebede",
+     "lastName": "Beyene",
+     "initials": "K",
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Faculty of Medical and Health Sciences, School of Pharmacy, the University of Auckland, Auckland, New Zealand."
+       }
+      ]
+     }
+    },
+    {
+     "fullName": "Lai B",
+     "firstName": "Bertha",
+     "lastName": "Lai",
+     "initials": "B",
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Faculty of Medical and Health Sciences, School of Pharmacy, the University of Auckland, Auckland, New Zealand."
+       }
+      ]
+     }
+    },
+    {
+     "fullName": "Kim S",
+     "firstName": "Sarah",
+     "lastName": "Kim",
+     "initials": "S",
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Faculty of Medical and Health Sciences, School of Pharmacy, the University of Auckland, Auckland, New Zealand."
+       }
+      ]
+     }
+    },
+    {
+     "fullName": "Wu I",
+     "firstName": "Ivy",
+     "lastName": "Wu",
+     "initials": "I",
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Faculty of Medical and Health Sciences, School of Pharmacy, the University of Auckland, Auckland, New Zealand."
+       }
+      ]
+     }
+    },
+    {
+     "fullName": "Al-Jawadi R",
+     "firstName": "Rana",
+     "lastName": "Al-Jawadi",
+     "initials": "R",
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Faculty of Medical and Health Sciences, School of Pharmacy, the University of Auckland, Auckland, New Zealand."
+       }
+      ]
+     }
+    },
+    {
+     "fullName": "Wu M",
+     "firstName": "Margaret",
+     "lastName": "Wu",
+     "initials": "M",
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Faculty of Medical and Health Sciences, School of Pharmacy, the University of Auckland, Auckland, New Zealand."
+       }
+      ]
+     }
+    },
+    {
+     "fullName": "Foot H",
+     "firstName": "Holly",
+     "lastName": "Foot",
+     "initials": "H",
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Faculty of Medical and Health Sciences, School of Pharmacy, the University of Auckland, Auckland, New Zealand."
+       }
+      ]
+     }
+    },
+    {
+     "fullName": "Cheung G",
+     "firstName": "Gary",
+     "lastName": "Cheung",
+     "initials": "G",
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Department of Psychological Medicine, the University of Auckland, Auckland, New Zealand."
+       }
+      ]
+     }
+    },
+    {
+     "fullName": "Walker X",
+     "firstName": "Xaviour",
+     "lastName": "Walker",
+     "initials": "X",
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Department of Medicine, Older Persons Health, University of Otago, Dunedin, New Zealand."
+       }
+      ]
+     }
+    },
+    {
+     "fullName": "Barak Y",
+     "firstName": "Yoram",
+     "lastName": "Barak",
+     "initials": "Y",
+     "authorId": {
+      "type": "ORCID",
+      "value": "0000-0002-8271-4255"
+     },
+     "authorAffiliationDetailsList": {
+      "authorAffiliation": [
+       {
+        "affiliation": "Department of Psychological Medicine, University of Otago, Dunedin, New Zealand."
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "authorIdList": {
+   "authorId": [
+    {
+     "type": "ORCID",
+     "value": "0000-0002-8271-4255"
+    }
+   ]
+  },
+  "dataLinksTagsList": {
+   "dataLinkstag": [
+    "altmetrics"
+   ]
+  },
+  "journalInfo": {
+   "journalIssueId": 4212268,
+   "dateOfPublication": "2026 Jun",
+   "monthOfPublication": 6,
+   "yearOfPublication": 2026,
+   "printPublicationDate": "2026-06-01",
+   "journal": {
+    "title": "Rejuvenation research",
+    "medlineAbbreviation": "Rejuvenation Res",
+    "essn": "1557-8577",
+    "issn": "1549-1684",
+    "isoabbreviation": "Rejuvenation Res",
+    "nlmid": "101213381"
+   }
+  },
+  "pubYear": "2026",
+  "pageInfo": "15491684261462413",
+  "abstractText": "Metformin use may be associated with reduced risk of all-cause mortality as well as prevent the onset of diseases of aging, namely cardiovascular diseases (CVD), cancer, and dementia. We systematically reviewed recent studies to determine whether metformin can promote healthspan in people with type 2 diabetes mellitus (T2DM). A comprehensive literature search was conducted using Medline, Embase, and Scopus for randomized controlled trials (RCTs) and cohort studies evaluating the effect of metformin on the incidence of all-cause mortality. Publications investigating metformin's effects on CVD, cancer or dementia were included. Search was restricted to English-only publications between 2016 and 2021. Full-text review, data extraction, and assessment of risk of bias using the Newcastle-Ottawa Scale were undertaken. Of 130 articles reviewed, 27 met the inclusion criteria. All 27 studies are observational cohorts, and no RCTs met the inclusion criteria, so causality cannot be inferred. No RCTs met the inclusion criteria. Five studies investigated the effects of metformin on all-cause mortality, 17 on the incidence of cancer, 3 on CVD, and 4 on dementia. Data heterogeneity precluded meta-analysis. Included studies were of high quality with NOS scores of 6-9. Metformin use in individuals with T2DM was associated with reduced risk of all-cause mortality, incidence of CVDs, and dementia. Metformin was associated with a reduced risk of prostate cancer but otherwise effects varied with cancer type and remain inconclusive.",
+  "affiliation": "Faculty of Medical and Health Sciences, School of Pharmacy, the University of Auckland, Auckland, New Zealand.",
+  "publicationStatus": "aheadofprint",
+  "language": "eng",
+  "pubModel": "Print-Electronic",
+  "pubTypeList": {
+   "pubType": [
+    "Review",
+    "Journal Article"
+   ]
+  },
+  "grantsList": {
+   "grant": [
+    {
+     "grantId": "Bachelor of Pharmacy dissertation project",
+     "agency": "Faculty of Medical and Health Sciences, University of Auckland",
+     "orderIn": 0
+    }
+   ]
+  },
+  "keywordList": {
+   "keyword": [
+    "Cancer",
+    "Mortality",
+    "Metformin",
+    "Dementia",
+    "cardiovascular"
+   ]
+  },
+  "subsetList": {
+   "subset": [
+    {
+     "code": "IM",
+     "name": "Index Medicus"
+    }
+   ]
+  },
+  "fullTextUrlList": {
+   "fullTextUrl": [
+    {
+     "availability": "Subscription required",
+     "availabilityCode": "S",
+     "documentStyle": "doi",
+     "site": "DOI",
+     "url": "https://doi.org/10.1177/15491684261462413"
+    }
+   ]
+  },
+  "isOpenAccess": "N",
+  "inEPMC": "N",
+  "inPMC": "N",
+  "hasPDF": "N",
+  "hasBook": "N",
+  "hasSuppl": "N",
+  "citedByCount": 0,
+  "hasData": "N",
+  "hasReferences": "Y",
+  "hasTextMinedTerms": "Y",
+  "hasDbCrossReferences": "N",
+  "hasLabsLinks": "Y",
+  "hasEvaluations": "N",
+  "authMan": "N",
+  "epmcAuthMan": "N",
+  "nihAuthMan": "N",
+  "hasTMAccessionNumbers": "N",
+  "dateOfCreation": "2026-06-18",
+  "firstIndexDate": "2026-06-18",
+  "dateOfRevision": "2026-06-18",
+  "electronicPublicationDate": "2026-06-17",
+  "firstPublicationDate": "2026-06-17"
+ }
+]

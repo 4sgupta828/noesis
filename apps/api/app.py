@@ -41,7 +41,8 @@ class Citation(BaseModel):
 
 class ResearchOut(BaseModel):
     grounded: bool
-    claims: list[Citation]
+    answer: str = ""                 # synthesized prose answer, grounded in findings
+    claims: list[Citation]           # the verified findings (evidence for the answer)
     coverage_gaps: list[str]
     rejected: int
     source_stats: dict = {}          # source -> {retrieved, cited}
@@ -165,6 +166,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
         return ResearchOut(
             grounded=res.grounded,
+            answer=res.composed_answer,
             claims=[Citation(text=c.text, quote=c.quote, atom_id=c.atom_id,
                              source=c.source_key, title=c.document_title)
                     for c in res.verified_claims],

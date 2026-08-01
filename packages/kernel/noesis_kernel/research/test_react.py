@@ -178,3 +178,30 @@ def test_tenant_isolation_end_to_end() -> None:
     res = _run(llm, _source(tenant="A"), tenant="B")
     assert res.atoms_gathered == 0
     assert res.rejected_claims[0].reason == "unknown_atom"
+
+
+def test_composed_answer_grounded_in_findings():
+    # After gathering verified findings, the agent composes a prose answer that
+    # references them [n] — grounded by construction (composer sees only findings).
+    src = _source()
+    class _SearchAnswerCompose:
+        def __init__(self): self.calls = 0
+        async def complete(self, *, system, messages, response_format, max_tokens=2048, temperature=None):
+            self.calls += 1
+            content = messages[0]["content"]
+            if "VERIFIED FINDINGS" in content:            # the compose step
+                from noesis_kernel.research.react import ComposedAnswer
+                return LLMResult(parsed=ComposedAnswer(
+                    answer="The approved metric value was 9.8 percent [1]."), output_tokens=5)
+            if "no evidence yet" in content or self.calls == 1:
+                return LLMResult(parsed=AgentStep(action="search", query="term metric value"), output_tokens=5)
+            return LLMResult(parsed=AgentStep(action="answer", claims=[
+                ClaimOut(text="the metric value was 9.8 percent", atom_id="a1",
+                         quote="the approved metric value was 9.8 percent")]), output_tokens=5)
+    res = asyncio.run(run_react(
+        question="what was the metric value?", llm=_SearchAnswerCompose(),
+        embedder=FakeEmbedder(dim=8), source=src, tenant_id="A",
+        budget=BudgetState(max_calls=20)))
+    assert res.grounded and len(res.verified_claims) == 1
+    assert res.composed_answer == "The approved metric value was 9.8 percent [1]."
+    assert "[1]" in res.composed_answer                  # references the finding

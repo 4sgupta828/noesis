@@ -65,8 +65,20 @@
   .summary .ok{color:var(--verified);font-weight:600;}
   .summary .no{color:var(--gap);font-weight:600;}
 
+  /* synthesized answer (grounded in findings) */
+  .answer{font-size:1.08rem;line-height:1.62;letter-spacing:-.01em;
+    white-space:pre-wrap;margin:.2rem 0 1.4rem;}
+  .answer .ref{color:var(--verified);font-weight:640;cursor:pointer;
+    font-size:.72em;padding:0 .05em;}
+  .evhead{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--slate);margin:.2rem 0 .8rem;border-top:1px solid var(--hair);padding-top:1rem;}
+  .fnum{display:inline-flex;align-items:center;justify-content:center;min-width:1.3rem;
+    height:1.3rem;border-radius:6px;background:var(--verified);color:var(--paper);
+    font-family:var(--mono);font-size:.72rem;font-weight:640;margin-right:.5rem;}
+  .claim.flash{outline:2px solid var(--verified);outline-offset:2px;}
+
   /* signature: the claim → evidence rail */
-  .claim{background:var(--card);border:1px solid var(--hair);border-radius:12px;
+  .claim{background:var(--card);border:1px solid var(--hair);border-radius:12px;scroll-margin-top:1rem;
     padding:1rem 1.05rem;margin-bottom:.85rem;
     animation:rise .38s cubic-bezier(.2,.7,.2,1) both;}
   .claim .txt{font-weight:520;letter-spacing:-.01em;}
@@ -158,19 +170,32 @@ function render(data){
     }).join(" ");
     parts.push(`<div class="summary" style="border:none;padding-top:.2rem"><span>Sources used:</span>${chips}</div>`);
   }
-  for(const c of data.claims){
+  // synthesized answer (grounded in the findings) — the hero; [n] refs → findings
+  if(data.answer){
+    const withRefs = esc(data.answer).replace(/\[(\d+)\]/g,
+      '<sup class="ref" data-n="$1">[$1]</sup>');
+    parts.push(`<div class="answer">${withRefs}</div>`);
+    parts.push(`<h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}</h4>`);
+  }
+  data.claims.forEach((c,idx)=>{
     const src = c.source ? `<span class="src">${esc(c.source)}${c.title?" · "+esc(c.title):""}</span>` : "";
-    parts.push(`<article class="claim">
-      <div class="txt">${esc(c.text)}</div>
+    parts.push(`<article class="claim" id="f${idx+1}">
+      <div class="txt"><span class="fnum">${idx+1}</span>${esc(c.text)}</div>
       <div class="rail"><q>${esc(c.quote)}</q>
         <div class="meta"><span class="verified">✓ Verified in source</span>${src}</div>
       </div>
     </article>`);
-  }
+  });
   if(!n && !(data.coverage_gaps||[]).length){
     parts.push(`<div class="empty">No grounded answer for that question with the chosen sources.</div>`);
   }
   out.innerHTML = parts.join("");
+  // clicking a [n] reference scrolls to and highlights its finding
+  out.querySelectorAll(".ref").forEach(r=>r.addEventListener("click",()=>{
+    const el = document.getElementById("f"+r.dataset.n);
+    if(el){ el.scrollIntoView({behavior:"smooth",block:"center"});
+      el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1200); }
+  }));
 }
 
 function renderEvidence(data, note){

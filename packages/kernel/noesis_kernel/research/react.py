@@ -41,6 +41,12 @@ class AgentStep(BaseModel):
     claims: list[ClaimOut] = []
 
 
+class ComposedAnswer(BaseModel):
+    """A synthesized prose answer built ONLY from the verified findings, with
+    inline [n] references to them so every statement stays traceable."""
+    answer: str
+
+
 # ---- results -------------------------------------------------------------
 
 @dataclass
@@ -62,6 +68,9 @@ class RejectedClaim:
 
 @dataclass
 class AnswerResult:
+    # The synthesized prose answer (factra "living answer" model) — grounded in
+    # the verified findings below; references them inline as [1], [2], …
+    composed_answer: str = ""
     verified_claims: list[VerifiedClaim] = field(default_factory=list)
     rejected_claims: list[RejectedClaim] = field(default_factory=list)
     coverage_gaps: list[str] = field(default_factory=list)   # vertical-signalled gaps
@@ -190,6 +199,34 @@ async def run_react(
                 pass
 
     result.atoms_gathered = len(atoms.all())
+
+    # Compose a synthesized prose answer FROM the verified findings only (factra
+    # "living answer" model). Grounded by construction: the composer sees only the
+    # verified findings and must reference them [n]; it may not add outside facts.
+    if result.verified_claims and not budget.exhausted:
+        try:
+            budget.reserve()
+            findings = "\n".join(
+                f"[{i}] {vc.text}  (quote: \"{vc.quote}\" — source: {vc.source_key})"
+                for i, vc in enumerate(result.verified_claims, 1))
+            compose_user = (
+                f"Question: {question}\n\nVERIFIED FINDINGS (the ONLY facts you may use):\n"
+                f"{findings}\n\n"
+                "Write a clear, well-organized answer to the question that synthesizes "
+                "these findings into coherent prose. Reference each finding inline as "
+                "[n] where you use it. Use ONLY the findings above — do not add facts, "
+                "figures, or claims not present in them. If they only partially answer "
+                "the question, say what is and isn't supported.")
+            comp = await llm.complete(
+                system=system_prompt,
+                messages=[{"role": "user", "content": compose_user}],
+                response_format=ComposedAnswer)
+            budget.charge(calls=1, tokens=comp.output_tokens)
+            result.composed_answer = comp.parsed.answer.strip()
+        except Exception:
+            # Composition is best-effort enrichment over already-verified findings;
+            # its failure must never drop the grounded answer/findings.
+            pass
 
     # per-source contribution: retrieved (atoms) vs. cited (verified claims)
     stats: dict[str, dict[str, int]] = {}

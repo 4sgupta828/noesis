@@ -6,6 +6,7 @@ from noesis_kernel.contract.manifest import VerticalManifest
 from . import entities
 from .authority import MedicalAuthorityPolicy
 from .connector import ClinicalTrialsConnector
+from .openfda import OpenFdaConnector
 from .eval_gold import GOLD
 from .fixtures import sample_studies
 from .gating import MedicalGatingPolicy
@@ -20,7 +21,10 @@ def build_manifest() -> VerticalManifest:
         name="medical",
         entity_types=entities.ENTITY_TYPES,
         scope_dimensions=(SCOPE_DIMENSION, "phase", "status"),
-        connectors={"clinicaltrials": ClinicalTrialsConnector(studies=sample_studies())},
+        connectors={
+            "clinicaltrials": ClinicalTrialsConnector(studies=sample_studies()),
+            "openfda": OpenFdaConnector(),
+        },
         retrieval_sources={"clinicaltrials": MedicalRetrievalSource()},
         gating_policy=MedicalGatingPolicy(),
         citation_verifier=None,       # block_span handled by the kernel

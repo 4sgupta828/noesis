@@ -11,7 +11,7 @@ from noesis_kernel.contract.protocols import Connector
 from noesis_kernel.corpus.parsers import ParserRegistry, default_registry
 from noesis_kernel.corpus.repository import InMemoryCorpusRepository
 from noesis_kernel.ingestion.pipeline import index_document, ingest_source
-from noesis_kernel.ingestion.storage import InMemoryObjectStore
+from noesis_kernel.ingestion.storage import InMemoryObjectStore, ObjectStore
 from noesis_kernel.providers.embeddings import Embedder
 from noesis_kernel.retrieval.materialize import materialize_to_postgres
 
@@ -25,9 +25,15 @@ async def ingest_connector_to_postgres(
     workspace_id: str | None = None,
     parsers: ParserRegistry | None = None,
     window: dict | None = None,
+    object_store: ObjectStore | None = None,
 ) -> int:
-    """Ingest one connector into the pg corpus. Returns blocks materialized."""
-    store, repo = InMemoryObjectStore(), InMemoryCorpusRepository()
+    """Ingest one connector into the pg corpus. Returns blocks materialized.
+
+    Raw fetched artifacts land in `object_store` (pass an S3ObjectStore to persist
+    them to R2/S3; defaults to in-memory). The searchable index goes to `pg_source`.
+    """
+    store = object_store or InMemoryObjectStore()
+    repo = InMemoryCorpusRepository()
     parsers = parsers or default_registry()
 
     await ingest_source(connector, store, repo, tenant_id=tenant_id,

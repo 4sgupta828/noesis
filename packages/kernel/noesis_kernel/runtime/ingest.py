@@ -10,7 +10,7 @@ from __future__ import annotations
 from noesis_kernel.contract.protocols import Connector
 from noesis_kernel.corpus.parsers import ParserRegistry, default_registry
 from noesis_kernel.corpus.repository import InMemoryCorpusRepository
-from noesis_kernel.ingestion.pipeline import index_document, ingest_source
+from noesis_kernel.ingestion.pipeline import embed_pending, index_document, ingest_source
 from noesis_kernel.ingestion.storage import InMemoryObjectStore, ObjectStore
 from noesis_kernel.providers.embeddings import Embedder
 from noesis_kernel.retrieval.materialize import materialize_to_postgres
@@ -26,6 +26,7 @@ async def ingest_connector_to_postgres(
     parsers: ParserRegistry | None = None,
     window: dict | None = None,
     object_store: ObjectStore | None = None,
+    embed_batch_size: int = 256,
 ) -> int:
     """Ingest one connector into the pg corpus. Returns blocks materialized.
 
@@ -38,8 +39,11 @@ async def ingest_connector_to_postgres(
 
     await ingest_source(connector, store, repo, tenant_id=tenant_id,
                         workspace_id=workspace_id, window=window)
+    # parse + block every doc (defer embedding), then embed the whole corpus in
+    # ONE batched pass — O(blocks/batch) API calls instead of one per document.
     for doc in repo.iter_documents():
-        index_document(doc, store.get(doc.sha256), parsers=parsers, embedder=embedder, repo=repo)
+        index_document(doc, store.get(doc.sha256), parsers=parsers, repo=repo)
+    embed_pending(repo, embedder, batch_size=embed_batch_size)
 
     await pg_source.ensure_schema()
     return await materialize_to_postgres(repo, pg_source)

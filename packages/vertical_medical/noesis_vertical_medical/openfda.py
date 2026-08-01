@@ -88,11 +88,25 @@ class OpenFdaConnector:
     async def _fetch(self, term: str, limit: int) -> list[dict]:
         import httpx
         key = os.environ.get("OPENFDA_API_KEY", "")
-        q = f'?search={term}&limit={min(limit, self._page_size)}' if term else f'?limit={min(limit, self._page_size)}'
-        url = API + q + (f"&api_key={key}" if key else "")
+        out: list[dict] = []
+        skip = 0
         async with httpx.AsyncClient(timeout=30.0) as c:
-            r = await c.get(url); r.raise_for_status()
-            return r.json().get("results", [])
+            while len(out) < limit:
+                n = min(1000, limit - len(out))          # openFDA max limit = 1000
+                base = f"search={term}&" if term else ""
+                url = f"{API}?{base}limit={n}&skip={skip}" + (f"&api_key={key}" if key else "")
+                r = await c.get(url)
+                if r.status_code == 404:                 # openFDA returns 404 past the last page
+                    break
+                r.raise_for_status()
+                results = r.json().get("results", [])
+                if not results:
+                    break
+                out.extend(results)
+                skip += len(results)
+                if len(results) < n or skip >= 25000:    # openFDA skip cap
+                    break
+        return out[:limit]
 
     async def discover_entities(self, window: dict):
         from noesis_kernel.contract.dto import EntityRef

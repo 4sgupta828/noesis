@@ -19,6 +19,7 @@ class CorpusRepository(Protocol):
     def add_blocks(self, blocks: list[Block]) -> None: ...
     def upsert_block_content(self, bc: BlockContent) -> bool: ...  # True if newly stored
     def set_block_embedding(self, content_key: str, embedding: tuple[float, ...]) -> None: ...
+    def pending_embeddings(self) -> list[tuple[str, str]]: ...  # (content_key, text) w/o embedding
 
 
 class InMemoryCorpusRepository:
@@ -55,6 +56,9 @@ class InMemoryCorpusRepository:
 
     def set_block_embedding(self, content_key: str, embedding: tuple[float, ...]) -> None:
         self._block_content[content_key].embedding = embedding
+
+    def pending_embeddings(self) -> list[tuple[str, str]]:
+        return [(ck, bc.text) for ck, bc in self._block_content.items() if bc.embedding is None]
 
     # accessors
     def iter_documents(self) -> list[Document]:

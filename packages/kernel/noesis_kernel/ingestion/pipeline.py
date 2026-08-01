@@ -71,15 +71,16 @@ def index_document(
     raw: bytes,
     *,
     parsers: ParserRegistry,
-    embedder: Embedder,
     repo: CorpusRepository,
+    embedder: Embedder | None = None,
 ) -> IndexSummary:
-    """parse → block → embed → persist for one already-stored Document.
+    """parse → block → (optionally embed) → persist for one Document.
 
     Separable from ingest_source so fetch and index can run on different workers.
-    Embedding goes through the Embedder port (fake/local/OpenAI/cassette), and
-    only NEW block contents (by content_key) are embedded — identical passages
-    across documents are embedded once.
+    Only NEW block contents (by content_key) are registered/embedded — identical
+    passages across documents are stored once. Pass embedder=None to DEFER
+    embedding and run it as one batched pass later via `embed_pending` (far fewer
+    API calls when ingesting many documents).
     """
     summary = IndexSummary()
 
@@ -92,13 +93,28 @@ def index_document(
     repo.add_blocks(blocks)
     summary.blocks = len(blocks)
 
-    # Embed only block-contents not already stored (dedup by content_key).
     fresh = {b.content_key: b.text for b in blocks if repo.upsert_block_content(
         BlockContent(content_key=b.content_key, text=b.text))}
-    if fresh:
+    summary.block_contents_stored = len(fresh)
+
+    if embedder is not None and fresh:
         keys = list(fresh)
         vecs = embedder.embed([fresh[k] for k in keys])
         for k, vec in zip(keys, vecs):
             repo.set_block_embedding(k, tuple(vec))
-    summary.block_contents_stored = len(fresh)
     return summary
+
+
+def embed_pending(repo: CorpusRepository, embedder: Embedder, *, batch_size: int = 256) -> int:
+    """Embed all block contents lacking an embedding, in batches. Returns count.
+
+    One batched pass over the whole corpus → O(n/batch) API calls instead of one
+    per document. Deterministic order so runs are reproducible.
+    """
+    pending = repo.pending_embeddings()          # [(content_key, text)]
+    for i in range(0, len(pending), batch_size):
+        chunk = pending[i:i + batch_size]
+        vecs = embedder.embed([t for _, t in chunk])
+        for (ck, _), vec in zip(chunk, vecs):
+            repo.set_block_embedding(ck, tuple(vec))
+    return len(pending)

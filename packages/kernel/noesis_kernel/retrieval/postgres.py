@@ -99,6 +99,31 @@ class PostgresRetrievalSource:
                 json.dumps(facets or {}), document_title, content_type, source_key,
             )
 
+    async def upsert_blocks(self, rows: list[dict]) -> None:
+        """Batch upsert many blocks in one round-trip (executemany). Each row dict:
+        tenant_id, document_id, block_id, text, embedding, facets, workspace_id,
+        document_title, content_type, source_key."""
+        if not rows:
+            return
+        import json
+        pool = await self._get_pool()
+        args = [(
+            r["tenant_id"], r.get("workspace_id"), r["document_id"], r["block_id"],
+            r["text"], r.get("embedding"), json.dumps(r.get("facets") or {}),
+            r.get("document_title", ""), r.get("content_type", ""), r.get("source_key", ""),
+        ) for r in rows]
+        async with pool.acquire() as conn:
+            await conn.executemany(
+                f"""INSERT INTO {self._table}
+                    (tenant_id, workspace_id, document_id, block_id, text, embedding,
+                     facets, document_title, content_type, source_key)
+                    VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10)
+                    ON CONFLICT (tenant_id, document_id, block_id) DO UPDATE
+                    SET text=EXCLUDED.text, embedding=EXCLUDED.embedding,
+                        facets=EXCLUDED.facets""",
+                args,
+            )
+
     # --- port ---
     def capabilities(self) -> frozenset[Capability]:
         return frozenset({Capability.RETRIEVAL, Capability.PRECISION})

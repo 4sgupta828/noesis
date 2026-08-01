@@ -40,12 +40,26 @@ class ClinicalTrialsConnector:
 
     async def _fetch_studies(self, term: str, limit: int) -> list[dict]:
         import httpx
-        url = (f"{API_BASE}/studies?query.term={term}"
-               f"&pageSize={min(limit, self._page_size)}&countTotal=false")
+        studies: list[dict] = []
+        token: str | None = None
         async with httpx.AsyncClient(timeout=30.0) as client:
-            r = await client.get(url)
-            r.raise_for_status()
-            return r.json().get("studies", [])
+            while len(studies) < limit:
+                page = min(100, limit - len(studies))   # v2 max pageSize = 100
+                url = (f"{API_BASE}/studies?query.term={term}"
+                       f"&pageSize={page}&countTotal=false")
+                if token:
+                    url += f"&pageToken={token}"
+                r = await client.get(url)
+                r.raise_for_status()
+                data = r.json()
+                batch = data.get("studies", [])
+                if not batch:
+                    break
+                studies.extend(batch)
+                token = data.get("nextPageToken")
+                if not token:
+                    break
+        return studies[:limit]
 
     async def discover_entities(self, window: dict) -> list[EntityRef]:
         # offline / injected fixture: use whatever was preloaded

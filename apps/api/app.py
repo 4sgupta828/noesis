@@ -106,6 +106,24 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "search_facets": ui.search_facets() if ui else [],
         }
 
+    @app.post("/search")
+    async def search(body: ResearchIn) -> dict:
+        """Retrieval only (no LLM) — ranked evidence over the chosen sources.
+        Always available (needs only the embedder), so the UI can show real
+        evidence even when the answer model is unavailable."""
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        try:
+            hits = await app.state.service.search(
+                question=body.question, tenant_id=body.tenant_id,
+                workspace_id=body.workspace_id, source_keys=body.sources, k=8)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"retrieval error: {e}") from e
+        return {"evidence": [{
+            "text": h.text[:600], "source": h.source_key or "corpus",
+            "title": h.document_title, "score": round(h.score, 4),
+        } for h in hits]}
+
     @app.post("/ingest")
     async def ingest(tenant_id: str = "demo") -> dict:
         """Populate the pg-backed corpus from the active vertical's connectors.

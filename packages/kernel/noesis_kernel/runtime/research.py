@@ -29,6 +29,11 @@ class ResearchService:
     connectors: dict[str, Connector] = field(default_factory=dict)  # for /ingest
     corpus_source_key: str = ""             # the pg-backed corpus key (if any)
 
+    def _retriever(self, source_keys: list[str] | None) -> MultiSourceRetriever:
+        chosen = {k: v for k, v in self.sources.items()
+                  if source_keys is None or k in source_keys} or self.sources
+        return MultiSourceRetriever(chosen)
+
     async def ask(
         self,
         *,
@@ -38,12 +43,27 @@ class ResearchService:
         source_keys: list[str] | None = None,
         max_steps: int = 8,
     ) -> AnswerResult:
-        chosen = {k: v for k, v in self.sources.items()
-                  if source_keys is None or k in source_keys} or self.sources
-        retriever = MultiSourceRetriever(chosen)
         return await run_react(
-            question=question, llm=self.llm, embedder=self.embedder, source=retriever,
+            question=question, llm=self.llm, embedder=self.embedder,
+            source=self._retriever(source_keys),
             tenant_id=tenant_id, workspace_id=workspace_id,
             budget=BudgetState(max_calls=self.max_calls), gating=self.gating,
             system_prompt=self.persona_prompt, max_steps=max_steps,
         )
+
+    async def search(
+        self,
+        *,
+        question: str,
+        tenant_id: str,
+        workspace_id: str | None = None,
+        source_keys: list[str] | None = None,
+        k: int = 8,
+    ):
+        """Retrieval only — no LLM. Returns ranked evidence blocks. Works with just
+        the embedder (OpenAI), so it's available even when the answer LLM isn't."""
+        from noesis_kernel.contract.dto import RetrievalRequest
+        qv = list(self.embedder.embed([question])[0])
+        return await self._retriever(source_keys).search(RetrievalRequest(
+            query=question, tenant_id=tenant_id, workspace_id=workspace_id,
+            query_embedding=qv, k=k))

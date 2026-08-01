@@ -164,19 +164,36 @@ function render(data){
   out.innerHTML = parts.join("");
 }
 
+function renderEvidence(data, note){
+  const rows = (data.evidence||[]).map(e=>`<article class="claim">
+    <div class="rail"><q>${esc(e.text)}</q>
+      <div class="meta"><span class="src">${esc(e.source)}${e.title?" · "+esc(e.title):""}</span></div>
+    </div></article>`).join("");
+  out.innerHTML = `<div class="gaps"><h4>Retrieved evidence</h4><ul><li>${esc(note)}</li></ul></div>` +
+    (rows || `<div class="empty">No matching evidence for that query.</div>`);
+}
+
 $("#ask").addEventListener("submit", async e=>{
   e.preventDefault();
   const question = q.value.trim();
   if(!question) return;
+  const body = JSON.stringify({question, tenant_id:"demo", sources: chosen()});
   go.disabled = true; go.textContent = "Researching…";
   out.innerHTML = `<div class="status">Searching sources and verifying evidence…</div>`;
   try{
-    const resp = await fetch("/research",{method:"POST",headers:{"content-type":"application/json"},
-      body:JSON.stringify({question, tenant_id:"demo", sources: chosen()})});
-    if(!resp.ok) throw new Error("request failed");
-    render(await resp.json());
+    const resp = await fetch("/research",{method:"POST",headers:{"content-type":"application/json"},body});
+    if(resp.ok){ render(await resp.json()); return; }
+    // model unavailable (no credits / replay) → fall back to evidence retrieval
+    const detail = (await resp.json().catch(()=>({}))).detail || `HTTP ${resp.status}`;
+    if(resp.status===503 || resp.status===502){
+      out.innerHTML = `<div class="status">Answer model unavailable — retrieving evidence…</div>`;
+      const s = await fetch("/search",{method:"POST",headers:{"content-type":"application/json"},body});
+      if(s.ok){ renderEvidence(await s.json(),
+        "Answer synthesis is unavailable ("+detail.replace(/\.$/,'')+"). Showing ranked evidence from your sources."); return; }
+    }
+    out.innerHTML = `<div class="empty">${esc(detail)}</div>`;
   }catch(err){
-    out.innerHTML = `<div class="empty">Something went wrong reaching the research service. Try again.</div>`;
+    out.innerHTML = `<div class="empty">Couldn't reach the research service. Is the server running?</div>`;
   }finally{
     go.disabled = false; go.textContent = "Research";
   }

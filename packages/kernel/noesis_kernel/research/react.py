@@ -90,8 +90,8 @@ async def run_react(
     k: int = 10,
 ) -> AnswerResult:
     atoms = AtomStore()
-    transcript: list[dict] = [{"role": "user", "content": question}]
     result = AnswerResult()
+    notes: list[str] = []          # running coverage-gap / step notes for the agent
 
     for _ in range(max_steps):
         if budget.exhausted:
@@ -104,8 +104,16 @@ async def run_react(
             break
 
         obs = "\n".join(f"{a.atom_id}: {a.text}" for a in atoms.all()) or "(no evidence yet)"
-        step_msgs = transcript + [{"role": "system", "content": f"EVIDENCE:\n{obs}"}]
-        llm_res = await llm.complete(system=system_prompt, messages=step_msgs, response_format=AgentStep)
+        # One fresh user message per step (all evidence so far). Ends with a user
+        # turn — required by chat LLMs — and keeps the agent stateless per step.
+        user = (f"Question: {question}\n\nEVIDENCE GATHERED SO FAR:\n{obs}\n\n"
+                + ("NOTES:\n" + "\n".join(notes) + "\n\n" if notes else "")
+                + "Either action='search' with a query (and optional reformulations in "
+                  "'queries') to gather more, or action='answer' with claims — each claim "
+                  "citing an atom_id and a verbatim 'quote' from that atom.")
+        llm_res = await llm.complete(system=system_prompt,
+                                     messages=[{"role": "user", "content": user}],
+                                     response_format=AgentStep)
         budget.charge(calls=1, tokens=llm_res.output_tokens)
         result.steps += 1
         step: AgentStep = llm_res.parsed
@@ -125,13 +133,11 @@ async def run_react(
 
             # vertical gating: surface a real coverage gap so the agent reaches for
             # other sources or answers honestly instead of guessing.
-            note = ""
             if gating is not None:
                 gap = gating.coverage_gap(q, hits)
                 if gap:
                     result.coverage_gaps.append(gap)
-                    note = f"\nCOVERAGE GAP: {gap} — use another source or say so; do not guess."
-            transcript.append({"role": "assistant", "content": f"searched: {q}{note}"})
+                    notes.append(f"COVERAGE GAP: {gap} — use another source or say so; do not guess.")
             continue
 
         # action == "answer": provenance hard gate on every claim

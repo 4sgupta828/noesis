@@ -17,6 +17,19 @@ class MedicalUI:
     def source_url(self, document_id, quote=None):
         return _links.source_url(document_id, quote)
 
+    def console(self):
+        """Research-console copy for this vertical (heading + input placeholder +
+        example prompts). Keeps domain wording out of the shared web shell."""
+        return {
+            "heading": "What does the evidence show?",
+            "placeholder": "e.g. What treatments are being studied for type 2 diabetes, and what did they find?",
+            "examples": [
+                "What treatments are being studied for rheumatoid arthritis?",
+                "What are the labeled warnings for metformin?",
+                "What trials are studying GLP-1 agonists for weight loss?",
+            ],
+        }
+
     def navigation(self):
         return [
             {"key": "trials", "label": "Trials", "entity_type": "trial"},

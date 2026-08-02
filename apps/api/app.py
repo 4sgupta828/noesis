@@ -143,11 +143,13 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         svc = app.state.service
         ui = getattr(svc, "ui", None)
         from api.video import video_enabled
+        console = ui.console() if ui and hasattr(ui, "console") else {}
         return {
             "vertical": getattr(svc, "vertical_name", ""),
             "sources": list(svc.sources.keys()),
             "navigation": ui.navigation() if ui else [],
             "search_facets": ui.search_facets() if ui else [],
+            "console": console,
             "video_enabled": video_enabled(),
             "structured_answers": structured_answers(),
         }
@@ -190,6 +192,14 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     def index() -> str:
         page = _WEB_DIR / "index.html"
         return page.read_text() if page.exists() else "<h1>Noesis</h1>"
+
+    @app.get("/noesis-logo.png")
+    def logo():
+        from fastapi.responses import FileResponse
+        f = _WEB_DIR / "noesis-logo.png"
+        if not f.exists():
+            raise HTTPException(status_code=404, detail="no logo")
+        return FileResponse(str(f), media_type="image/png")
 
     @app.post("/research", response_model=ResearchOut)
     async def research(body: ResearchIn) -> ResearchOut:

@@ -26,8 +26,9 @@
   .wrap{max-width:44rem;margin:0 auto;padding:1.25rem 1.15rem 5rem;}
 
   /* ---- masthead ---- */
-  header{display:flex;align-items:baseline;gap:.6rem;padding:.4rem 0 1.4rem;
-    border-bottom:1px solid var(--hair);margin-bottom:1.6rem;}
+  header{display:flex;align-items:center;gap:.55rem;padding:.4rem 0 1.2rem;flex-wrap:wrap;
+    border-bottom:1px solid var(--hair);margin-bottom:1.4rem;}
+  .logo{height:30px;width:30px;border-radius:7px;object-fit:contain;flex:none;}
   .mark{font-weight:640;letter-spacing:-.02em;font-size:1.15rem;}
   .mark b{color:var(--verified)}
   .vertical{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;
@@ -169,13 +170,31 @@
   .history .hg{color:var(--verified);}
   .history .hempty{padding:.7rem;color:var(--slate);font-size:.85rem;}
 
+  /* answer tables scroll horizontally on narrow screens (never break the page) */
+  .answer.md .tw{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:.75rem 0 1.05rem;}
+  .answer.md .tw .mdt{margin:0;}
+
   @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   @media (prefers-reduced-motion:reduce){.claim{animation:none}}
+
+  /* mobile: keep it minimal + legible on a phone */
+  @media (max-width:560px){
+    .wrap{padding:1rem .9rem 4rem;}
+    .tagline{display:none;}                 /* free up the masthead row */
+    h1{font-size:1.28rem;}
+    .answer.md .mdh:first-child + .mdp{font-size:1.12rem;}
+    .field{flex-wrap:wrap;}
+    textarea{min-width:0;}
+    button.go{align-self:stretch;width:100%;}
+    .hllegend{gap:.6rem;}
+    .answer.md video,.vid video{width:100%;}
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
+    <img class="logo" src="/noesis-logo.png" alt="" />
     <span class="mark">No<b>e</b>sis</span>
     <span class="vertical" id="vertical">…</span>
     <span class="tagline">Every claim, pinned to its source.</span>
@@ -184,10 +203,10 @@
 
   <section class="history" id="history" hidden></section>
 
-  <h1>Ask a research question.</h1>
+  <h1 id="heading">What does the evidence show?</h1>
   <form id="ask">
     <div class="field">
-      <textarea id="q" rows="1" placeholder="e.g. What return on equity was approved, and who set it?"
+      <textarea id="q" rows="1" placeholder="e.g. What treatments are being studied for type 2 diabetes?"
                 aria-label="Research question"></textarea>
       <button class="go" id="go" type="submit">Research</button>
     </div>
@@ -218,6 +237,10 @@ async function loadConfig(){
     SOURCES = c.sources || [];
     VIDEO_ENABLED = !!c.video_enabled;
     STRUCTURED = !!c.structured_answers;
+    // vertical-supplied console copy (heading + placeholder) — keeps the shell domain-neutral
+    const con = c.console || {};
+    if(con.heading) $("#heading").textContent = con.heading;
+    if(con.placeholder) q.setAttribute("placeholder", con.placeholder);
     const box = $("#sources");
     for(const k of SOURCES){
       const b = document.createElement("button");
@@ -258,9 +281,9 @@ function mdToHtml(raw){
     if(/^\s*\|.*\|\s*$/.test(line) && i+1<lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i+1])){
       const head = cells(line); i += 2; const rows = [];
       while(i<lines.length && /^\s*\|.*\|\s*$/.test(lines[i])){ rows.push(cells(lines[i])); i++; }
-      out.push('<table class="mdt"><thead><tr>'+head.map(c=>`<th>${mdInline(c)}</th>`).join("")+
+      out.push('<div class="tw"><table class="mdt"><thead><tr>'+head.map(c=>`<th>${mdInline(c)}</th>`).join("")+
         '</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>`<td>${mdInline(c)}</td>`).join("")+'</tr>').join("")+
-        '</tbody></table>');
+        '</tbody></table></div>');
       continue;
     }
     const hm = line.match(/^(#{1,4})\s+(.*)$/);

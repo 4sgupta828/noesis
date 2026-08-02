@@ -129,11 +129,14 @@ export async function renderAnswerVideo(opts: RenderAnswerVideoOpts): Promise<An
   try {
     // 2. Per scene: infographic frames + TTS voiceover → a scene clip.
     const sceneFiles: string[] = [];
+    const durations: number[] = [];
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i]!;
+      const isFirst = i === 0, isLast = i === scenes.length - 1;
       const mp3 = path.join(tmp, `s${i}.mp3`);
       fs.writeFileSync(mp3, await synthesizeSpeech(scene.narration, { voice, model: opts.voiceModel, instructions: opts.voiceInstructions, speed: opts.speed }));
       const dur = Math.min(MAX_SCENE, Math.max(MIN_SCENE, (await probeDuration(mp3)) + TAIL_SEC));
+      durations.push(dur);
 
       const frameDir = path.join(tmp, `s${i}`);
       fs.mkdirSync(frameDir, { recursive: true });
@@ -146,8 +149,11 @@ export async function renderAnswerVideo(opts: RenderAnswerVideoOpts): Promise<An
       const holdSec = Math.max(0, dur - (animFrames + 1) / FPS);
       const fadeOut = Math.max(0, dur - 0.4);
 
+      // NO per-scene dip-to-black between scenes — crossfades (xfade) join them smoothly.
+      // Keep only a fade-IN on the first scene (intro) and fade-OUT on the last (outro).
       let vf = `[0:v]fps=${FPS},tpad=stop_mode=clone:stop_duration=${holdSec.toFixed(3)}`;
-      vf += `,fade=t=in:st=0:d=0.4,fade=t=out:st=${fadeOut}:d=0.4`;
+      if (isFirst) vf += `,fade=t=in:st=0:d=0.4`;
+      if (isLast) vf += `,fade=t=out:st=${fadeOut}:d=0.4`;
       if (captions) {
         const srt = path.join(tmp, `s${i}.srt`);
         fs.writeFileSync(srt, `1\n${srtTime(0)} --> ${srtTime(dur)}\n${scene.narration.replace(/\r?\n/g, ' ').trim()}\n`);
@@ -165,12 +171,35 @@ export async function renderAnswerVideo(opts: RenderAnswerVideoOpts): Promise<An
       sceneFiles.push(clip);
     }
 
-    // 3. Assemble (dip-to-black per scene → concat demuxer, identical params → stream copy).
+    // 3. Assemble with smooth CROSSFADES (xfade video + acrossfade audio), chained with
+    // accumulating offsets — no dip-to-black between scenes. A single scene is just remuxed.
     const outName = `${randomBytes(9).toString('hex')}.mp4`;
     const outFile = path.join(OUT_DIR, outName);
-    const listFile = path.join(tmp, 'list.txt');
-    fs.writeFileSync(listFile, sceneFiles.map((f) => `file '${f}'`).join('\n') + '\n');
-    await exec('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', '-movflags', '+faststart', outFile], { maxBuffer: 1 << 27 });
+    const XFADE = 0.5;   // crossfade overlap (seconds)
+    if (sceneFiles.length === 1) {
+      await exec('ffmpeg', ['-y', '-i', sceneFiles[0]!, '-c', 'copy', '-movflags', '+faststart', outFile],
+        { maxBuffer: 1 << 27 });
+    } else {
+      const inputs: string[] = [];
+      for (const f of sceneFiles) inputs.push('-i', f);
+      const vparts: string[] = [];
+      const aparts: string[] = [];
+      let vlabel = '[0:v]';
+      let alabel = '[0:a]';
+      let prevLen = durations[0]!;
+      for (let k = 1; k < sceneFiles.length; k++) {
+        const offset = Math.max(0, prevLen - XFADE);
+        const vout = k === sceneFiles.length - 1 ? '[v]' : `[v${k}]`;
+        const aout = k === sceneFiles.length - 1 ? '[a]' : `[a${k}]`;
+        vparts.push(`${vlabel}[${k}:v]xfade=transition=fade:duration=${XFADE}:offset=${offset.toFixed(3)}${vout}`);
+        aparts.push(`${alabel}[${k}:a]acrossfade=d=${XFADE}${aout}`);
+        vlabel = vout; alabel = aout;
+        prevLen = prevLen + durations[k]! - XFADE;
+      }
+      await exec('ffmpeg', ['-y', ...inputs, '-filter_complex', [...vparts, ...aparts].join(';'),
+        '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-movflags', '+faststart', outFile], { maxBuffer: 1 << 27 });
+    }
 
     const durationSec = await probeDuration(outFile);
     const size = fs.statSync(outFile).size;

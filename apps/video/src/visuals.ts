@@ -87,11 +87,32 @@ function roundRect(ctx: SKRSContext2D, x: number, y: number, w: number, h: numbe
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
 }
+// Break a single token that is itself wider than maxW into character chunks that fit,
+// so long drug names / trial IDs / slashed terms never run off the frame edge.
+function breakLongWord(ctx: SKRSContext2D, word: string, maxW: number): string[] {
+  if (ctx.measureText(word).width <= maxW || word.length <= 1) return [word];
+  const out: string[] = [];
+  let cur = '';
+  for (const ch of word) {
+    if (cur && ctx.measureText(cur + ch).width > maxW) { out.push(cur); cur = ch; } else cur += ch;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
 function wrap(ctx: SKRSContext2D, text: string, maxW: number): string[] {
   const words = (text || '').split(/\s+/);
   const lines: string[] = [];
   let cur = '';
   for (const word of words) {
+    // a single over-long token: flush the current line, then hard-break the token
+    if (ctx.measureText(word).width > maxW) {
+      if (cur) { lines.push(cur); cur = ''; }
+      const chunks = breakLongWord(ctx, word, maxW);
+      for (let i = 0; i < chunks.length - 1; i++) lines.push(chunks[i]!);
+      cur = chunks[chunks.length - 1] || '';
+      continue;
+    }
     const test = cur ? `${cur} ${word}` : word;
     if (ctx.measureText(test).width > maxW && cur) { lines.push(cur); cur = word; } else cur = test;
   }

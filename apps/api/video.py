@@ -1,17 +1,18 @@
 """Answer-video add-on — a COMPLETELY SEPARATE, flag-gated router.
 
 It turns a delivered {question, answer} into a short narrated explainer mp4 by shelling
-out to the standalone NovelFusion bridge (`bin/answer-video.ts`). It does NOT import or
-touch the kernel research core, retrieval, or providers — the research path runs
-identically whether this add-on is present or not.
+out to the IN-REPO, self-contained video generator (`apps/video/bin/answer-video.ts`).
+There is NO cross-repo dependency. It does NOT import or touch the kernel research core,
+retrieval, or providers — the research path runs identically whether this add-on is present
+or not.
 
 Default OFF (Rule 20): enable with NOESIS_VIDEO_ENABLED=true. Generation spends OpenAI/
 Anthropic credits (storyboard LLM + TTS), so it is opt-in and never on the answer path.
 
 Config (env):
   NOESIS_VIDEO_ENABLED   "true" to mount the router (default off).
-  NOESIS_VIDEO_NF_DIR    NovelFusion repo dir (default ~/novelfusion).
-  NOESIS_VIDEO_TSX       tsx binary (default <nf>/node_modules/.bin/tsx).
+  NOESIS_VIDEO_DIR       the in-repo video app dir (default <repo>/apps/video).
+  NOESIS_VIDEO_TSX       tsx binary (default <video_dir>/node_modules/.bin/tsx).
 
 Generation is async (a job runs in the background ~2 min); the UI polls status then
 streams the file.
@@ -34,12 +35,17 @@ def video_enabled() -> bool:
     return os.environ.get("NOESIS_VIDEO_ENABLED", "").lower() in ("1", "true", "yes")
 
 
-def _nf_dir() -> Path:
-    return Path(os.environ.get("NOESIS_VIDEO_NF_DIR", str(Path.home() / "novelfusion")))
+def _video_dir() -> Path:
+    default = Path(__file__).resolve().parent.parent / "video"   # <repo>/apps/video
+    return Path(os.environ.get("NOESIS_VIDEO_DIR", str(default)))
+
+
+def _out_dir() -> Path:
+    return _video_dir() / "out"
 
 
 def _tsx() -> str:
-    return os.environ.get("NOESIS_VIDEO_TSX", str(_nf_dir() / "node_modules" / ".bin" / "tsx"))
+    return os.environ.get("NOESIS_VIDEO_TSX", str(_video_dir() / "node_modules" / ".bin" / "tsx"))
 
 
 class VideoIn(BaseModel):
@@ -64,14 +70,17 @@ _JOBS: dict[str, _Job] = {}
 
 async def _run_bridge(job_id: str, payload: dict) -> None:
     job = _JOBS[job_id]
-    nf, tsx = _nf_dir(), _tsx()
-    if not (nf / "bin" / "answer-video.ts").exists():
-        job.status, job.error = "error", f"bridge not found at {nf}/bin/answer-video.ts"
+    vdir, tsx = _video_dir(), _tsx()
+    if not (vdir / "bin" / "answer-video.ts").exists():
+        job.status, job.error = "error", f"video generator not found at {vdir}/bin/answer-video.ts"
         return
     try:
+        # Force the generator to write into <video_dir>/out so the file endpoint can serve it.
+        env = {**os.environ, "NOESIS_VIDEO_OUT_DIR": str(_out_dir())}
         proc = await asyncio.create_subprocess_exec(
             tsx, "bin/answer-video.ts",
-            cwd=str(nf),
+            cwd=str(vdir),
+            env=env,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -118,7 +127,7 @@ def build_video_router() -> APIRouter:
         name = os.path.basename(filename)
         if not name.endswith(".mp4"):
             raise HTTPException(status_code=400, detail="bad filename")
-        path = _nf_dir() / "data" / "fusion" / name
+        path = _out_dir() / name
         if not path.exists():
             raise HTTPException(status_code=404, detail="video not found")
         return FileResponse(str(path), media_type="video/mp4", filename=name)

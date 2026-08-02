@@ -1,0 +1,26 @@
+{
+  "name": "noesis-video",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-contained answer-video generator (storyboard → canvas infographics + TTS → ffmpeg mp4). No cross-repo dependency.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "answer-video": "tsx bin/answer-video.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
+    "@napi-rs/canvas": "^0.1.80",
+    "dotenv": "^16.4.7",
+    "openai": "^6.48.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20.10"
+  }
+}

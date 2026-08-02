@@ -306,4 +306,53 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="session not found")
         return row
 
+    @app.get("/admin/coverage")
+    async def admin_coverage() -> dict:
+        """Live corpus coverage: what's ingested (per source/kind + per-download runs) and
+        the declared roadmap (covered vs remaining conditions) from the active vertical."""
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        ui = getattr(svc, "ui", None)
+        plan = ui.coverage_plan() if ui and hasattr(ui, "coverage_plan") else {}
+        live: dict = {"by_source": {}, "by_kind": {}, "total_blocks": 0,
+                      "total_docs": 0, "runs": []}
+        dsn = os.environ.get("NOESIS_CORPUS_DSN")
+        if dsn:
+            import json
+            import asyncpg
+            conn = await asyncpg.connect(dsn)
+            try:
+                for r in await conn.fetch(
+                    "SELECT source_key, count(*) blocks, count(DISTINCT document_id) docs "
+                    "FROM rs_block GROUP BY source_key"):
+                    live["by_source"][r["source_key"] or "?"] = {"blocks": r["blocks"], "docs": r["docs"]}
+                for r in await conn.fetch(
+                    "SELECT facets->>'source_kind' kind, count(*) blocks FROM rs_block GROUP BY 1"):
+                    if r["kind"]:
+                        live["by_kind"][r["kind"]] = r["blocks"]
+                live["total_blocks"] = await conn.fetchval("SELECT count(*) FROM rs_block") or 0
+                live["total_docs"] = await conn.fetchval("SELECT count(DISTINCT document_id) FROM rs_block") or 0
+                if await conn.fetchval("SELECT to_regclass('rs_ingest_run')"):
+                    for r in await conn.fetch(
+                        "SELECT condition, by_source, total_blocks, created_at FROM rs_ingest_run "
+                        "ORDER BY created_at DESC LIMIT 200"):
+                        bs = r["by_source"]
+                        live["runs"].append({
+                            "condition": r["condition"],
+                            "by_source": json.loads(bs) if isinstance(bs, str) else (bs or {}),
+                            "total_blocks": r["total_blocks"],
+                            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                        })
+            except Exception as e:  # noqa: BLE001
+                live["error"] = str(e)
+            finally:
+                await conn.close()
+        return {"vertical": getattr(svc, "vertical_name", ""), "plan": plan, "live": live}
+
+    @app.get("/admin", response_class=HTMLResponse)
+    def admin_page() -> str:
+        page = _WEB_DIR / "admin.html"
+        return page.read_text() if page.exists() else "<h1>Noesis admin</h1>"
+
     return app

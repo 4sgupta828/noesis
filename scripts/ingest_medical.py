@@ -44,41 +44,62 @@ async def main() -> None:
     store = S3ObjectStore.from_env(prefix="medical")
 
     total = 0
+    by_source: dict[str, int] = {}
     if args.trials:
         ct = ClinicalTrialsConnector(page_size=min(args.trials, 100))
         n = await ingest_connector_to_postgres(
             ct, pg, tenant_id=args.tenant, embedder=embedder, object_store=store,
             window={"query": args.condition, "limit": args.trials})
         print(f"[trials] condition={args.condition!r}: {n} blocks indexed")
-        total += n
+        total += n; by_source["clinicaltrials"] = n
     if args.drugs:
         fda = OpenFdaConnector(page_size=min(args.drugs, 100))
         n = await ingest_connector_to_postgres(
             fda, pg, tenant_id=args.tenant, embedder=embedder, object_store=store,
             window={"query": args.drug_query, "limit": args.drugs})
         print(f"[drugs] {n} blocks indexed")
-        total += n
+        total += n; by_source["openfda"] = n
     if args.papers:
         n = await ingest_connector_to_postgres(
             EuropePmcConnector(), pg, tenant_id=args.tenant, embedder=embedder, object_store=store,
             window={"query": args.condition, "limit": args.papers})
         print(f"[papers] europepmc: {n} blocks indexed")
-        total += n
+        total += n; by_source["europepmc"] = n
     if args.faers:
         n = await ingest_connector_to_postgres(
             FaersConnector(), pg, tenant_id=args.tenant, embedder=embedder, object_store=store,
             window={"query": args.faers_drug or args.condition, "limit": args.faers})
         print(f"[faers] {n} blocks indexed")
-        total += n
+        total += n; by_source["faers"] = n
     if args.cdc:
         n = await ingest_connector_to_postgres(
             CdcConnector(), pg, tenant_id=args.tenant, embedder=embedder, object_store=store,
             window={"query": args.condition, "limit": args.cdc})
         print(f"[cdc] {n} blocks indexed")
-        total += n
+        total += n; by_source["cdc"] = n
 
     print(f"raw artifacts stored to R2: {store.put_count} | total blocks: {total}")
+    await _record_run(pg, condition=args.condition, by_source=by_source, total=total, tenant=args.tenant)
     await pg.close()
+
+
+async def _record_run(pg, *, condition, by_source, total, tenant) -> None:
+    """Record this run to rs_ingest_run so the admin coverage page shows exactly what was
+    downloaded, per source, per condition. Best-effort — never fail the ingest."""
+    import json
+    try:
+        pool = await pg._get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS rs_ingest_run (
+                    id serial PRIMARY KEY, condition text, by_source jsonb,
+                    total_blocks int, tenant text, created_at timestamptz DEFAULT now())""")
+            await conn.execute(
+                "INSERT INTO rs_ingest_run (condition, by_source, total_blocks, tenant) "
+                "VALUES ($1,$2::jsonb,$3,$4)",
+                condition, json.dumps(by_source), total, tenant)
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] could not record ingest run: {e}")
 
 
 if __name__ == "__main__":

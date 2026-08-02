@@ -17,6 +17,12 @@ class MedicalUI:
     def source_url(self, document_id, quote=None):
         return _links.source_url(document_id, quote)
 
+    def coverage_plan(self):
+        """Declared source inventory + condition roadmap (covered vs remaining) for the
+        admin coverage page. Paired with live corpus counts by the admin endpoint."""
+        from .coverage import coverage_plan
+        return coverage_plan()
+
     def console(self):
         """Research-console copy for this vertical (heading + input placeholder +
         example prompts). Keeps domain wording out of the shared web shell."""

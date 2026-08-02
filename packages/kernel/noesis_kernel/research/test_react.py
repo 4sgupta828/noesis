@@ -177,7 +177,7 @@ def test_extract_retry_recovers_empty_answer() -> None:
             if "VERIFIED FINDINGS" in content:                    # compose step
                 from noesis_kernel.research.react import ComposedAnswer
                 return LLMResult(parsed=ComposedAnswer(answer="Metric was 9.8 percent [1]."), output_tokens=5)
-            if "You returned no grounded claims" in content:      # the extract retry
+            if "empty answer is INVALID" in content:              # the extract retry
                 return LLMResult(parsed=AgentStep(action="answer", claims=[
                     ClaimOut(text="the metric value was 9.8 percent", atom_id="a1",
                              quote="the approved metric value was 9.8 percent")]), output_tokens=5)

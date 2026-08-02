@@ -207,11 +207,21 @@ async def run_react(
         _shown = _all[-planner_atom_window:] if len(_all) > planner_atom_window else _all
         obs = "\n".join(f"{a.atom_id}: {a.text}" for a in _shown) or "(no evidence yet)"
         if mode == "extract":
-            # Recovery re-ask: the agent answered with NO grounded claims even though it
-            # gathered relevant evidence. Push it to extract what the evidence supports
-            # (counters LLM sampling variance where the same question sometimes abstains).
-            instr = ("You returned no grounded claims, but you HAVE gathered evidence "
-                     "above. Re-examine it and action='answer'. Do NOT search.")
+            # DEDICATED extraction recovery: the agent answered with NO claims even though relevant
+            # evidence exists. This prompt does NOT reuse the permissive discipline below — when
+            # evidence exists an empty answer is INVALID here (the #1 abstention cause). Provenance
+            # is unchanged: every emitted claim still passes the verbatim span-check.
+            instr = (
+                "You returned an EMPTY claims list, but relevant evidence IS gathered above. When "
+                "relevant evidence exists, an empty answer is INVALID — you MUST extract the facts it "
+                "directly supports. Emit at least one claim for EACH directly-relevant atom you can "
+                "(more is better); a PARTIAL answer is correct and expected — do not withhold because "
+                "the question asks for a ranking/recommendation/completeness the evidence can't fully "
+                "settle. For each claim: cite the atom_id and copy a 'quote' EXACTLY, character-for-"
+                "character, from that atom's text (no paraphrase/summary/reformatting). action MUST be "
+                "'answer'; do NOT search. Format example (STRUCTURE ONLY — do not reuse these words): "
+                '{"action":"answer","claims":[{"text":"A trial evaluates drug X for condition Y.",'
+                '"atom_id":"a3","quote":"a verbatim span copied from atom a3"}]}')
         elif mode == "force":
             instr = ("You have reached the evidence-gathering limit. You MUST now "
                      "action='answer'. Do NOT search.")
@@ -231,7 +241,10 @@ async def run_react(
             "character-for-character, from that atom — do NOT paraphrase, summarize, or reformat "
             "numbers/units. Return an empty claims list ONLY if NONE of the gathered evidence is "
             "relevant to the question.")
-        instr = instr + discipline
+        # extract mode is self-contained + forceful — do NOT append the permissive discipline (its
+        # "empty ONLY if NONE relevant" clause is the loophole the recovery must override).
+        if mode != "extract":
+            instr = instr + discipline
         # One fresh user message per step (all evidence so far). Ends with a user
         # turn — required by chat LLMs — and keeps the agent stateless per step.
         # img_ctx (if any) frames the search but is never merged into `question` (so it
@@ -249,22 +262,28 @@ async def run_react(
         return res.parsed
 
     async def _finalize_answer(step: AgentStep) -> None:
-        """Apply the answer's claims through the provenance gate, then — if the agent
-        emitted NOTHING (0 verified AND 0 rejected) while it had gathered evidence —
-        re-ask once to extract what the evidence supports before giving up. This targets
-        the observed variance where the same question sometimes abstains despite good
-        evidence; it never fires when the agent already produced or attempted claims."""
+        """Apply the answer's claims through the provenance gate, then — if the agent emitted NOTHING
+        (0 verified AND 0 rejected) while it had gathered evidence — retry a DEDICATED forceful
+        extraction up to a few times before giving up. This is the fix for run-to-run abstention:
+        the model sometimes samples an empty answer despite relevant evidence; a single re-ask (the
+        old behavior) reproduced it. The guard only ever runs in the already-failing 0-verified/
+        0-rejected path — it never touches a run that produced verified or rejected claims, never
+        weakens the span gate (claims still pass verify()), and is bounded by attempts + budget."""
         _apply_answer(step)
-        if (not result.verified_claims and not result.rejected_claims
-                and atoms.all() and not budget.exhausted):
+        attempts = 0
+        while (not result.verified_claims and not result.rejected_claims
+               and atoms.all() and not budget.exhausted and attempts < 3):
+            attempts += 1
             try:
                 budget.reserve()
-                result.retried_empty = True          # observability: the recovery fired
-                retry = await _ask(mode="extract")
-                if retry.action == "answer":
-                    _apply_answer(retry)
             except BudgetExceeded:
-                pass
+                break
+            result.retried_empty = True              # observability: the recovery fired
+            retry = await _ask(mode="extract")
+            if retry.action == "answer":
+                _apply_answer(retry)
+            # if it returned action="search" (ignoring the extract instruction), loop and re-ask
+            # extract — bounded by `attempts`/budget so a stubborn model can't spin forever.
 
     stale_searches = 0          # consecutive searches that added NO new atoms (spinning detector)
     for step_i in range(max_steps):

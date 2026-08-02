@@ -164,7 +164,8 @@ def build_default_service() -> ResearchService:
         connectors = dict(manifest.connectors)
     else:
         sources = dict(manifest.retrieval_sources)      # fixture (in-memory) corpus
-    sources["web"] = WebRetrievalSource(build_web(mode=mode))
+    sources["web"] = WebRetrievalSource(
+        build_web(mode=mode, domains=getattr(manifest, "web_domains", ())))
 
     persona = manifest.persona.system_prompt() if manifest.persona else \
         "You are an evidence-grounded research agent."

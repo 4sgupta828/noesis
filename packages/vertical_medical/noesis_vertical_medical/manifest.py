@@ -9,6 +9,7 @@ from .vision import MEDICAL_VISION_PROMPT
 from .layman import MEDICAL_LAYMAN_PROMPT
 from .gaps import MEDICAL_GAP_PROMPT
 from .suggest import MEDICAL_SUGGEST_PROMPT
+from .web_domains import TRUSTED_WEB_DOMAINS
 from .authority import MedicalAuthorityPolicy
 from .connector import ClinicalTrialsConnector
 from .openfda import OpenFdaConnector
@@ -49,5 +50,6 @@ def build_manifest() -> VerticalManifest:
         layman_prompt=MEDICAL_LAYMAN_PROMPT,
         gap_prompt=MEDICAL_GAP_PROMPT,
         suggest_prompt=MEDICAL_SUGGEST_PROMPT,
+        web_domains=TRUSTED_WEB_DOMAINS,
         eval_gold=dict(GOLD),
     )

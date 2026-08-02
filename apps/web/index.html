@@ -622,8 +622,9 @@ async function loadConfig(){
     for(const k of SOURCES){
       const b = document.createElement("button");
       b.type="button"; b.className="pill"; b.dataset.key=k;
-      // corpus on by default; web (Tavily, slow) is OPT-IN so corpus questions stay fast
-      b.setAttribute("aria-pressed", k==="web" ? "false" : "true"); b.textContent = label(k);
+      // all sources on by default (web = Exa, restricted to trusted medical domains, runs in
+      // parallel so latency is bounded). Toggle web off for max speed on pure-corpus questions.
+      b.setAttribute("aria-pressed","true"); b.textContent = label(k);
       b.onclick = () => b.setAttribute("aria-pressed", b.getAttribute("aria-pressed")==="true"?"false":"true");
       box.appendChild(b);
     }

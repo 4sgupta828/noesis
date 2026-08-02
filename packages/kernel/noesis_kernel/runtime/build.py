@@ -44,9 +44,18 @@ def build_embedder(*, mode: ProviderMode | str | None = None, cassette_root: Pat
 
 
 def build_web(*, mode: ProviderMode | str | None = None,
-              cassette_root: Path | None = None) -> WebSearchClient:
+              cassette_root: Path | None = None,
+              domains: tuple[str, ...] | list[str] | None = None) -> WebSearchClient:
     m = resolve_mode(mode)
-    inner = None if m is ProviderMode.REPLAY else TavilyWebSearch()
+    # Prefer Exa (neural search) when its key is set; else Tavily. Same WebSearchClient port.
+    # `domains` (from the vertical) restricts Exa to a trusted-sources whitelist.
+    inner = None
+    if m is not ProviderMode.REPLAY:
+        if os.environ.get("EXA_API_KEY"):
+            from noesis_kernel.providers.exa_web import ExaWebSearch
+            inner = ExaWebSearch(include_domains=list(domains or []))
+        else:
+            inner = TavilyWebSearch()
     return CassetteWebSearch(inner, cassette_root=cassette_root or default_cassette_root(),
                              namespace="web", mode=m)
 

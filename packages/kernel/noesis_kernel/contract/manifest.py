@@ -74,6 +74,10 @@ class VerticalManifest:
     # a few next questions that deepen discovery, understanding, and action for this domain. Opaque
     # prose; the kernel only threads it into the suggest call. None → no suggestions surfaced.
     suggest_prompt: str | None = None
+    # Optional whitelist of TRUSTED web-search domains (peer-reviewed journals, guideline bodies,
+    # authoritative gov/db sources). When set, web search is restricted to these — the corpus is
+    # augmented only with high-quality sources, never the open web. Empty → open web.
+    web_domains: tuple[str, ...] = ()
 
     # Held-out eval gold + vocab
     eval_gold: dict[str, object] = field(default_factory=dict)

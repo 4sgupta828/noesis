@@ -73,6 +73,10 @@ Rules:
 - The narration is ONE CONTINUOUS briefing read start-to-finish: write it so each scene's narration flows naturally into the next with light connective phrasing (e.g. "First… ", "The evidence also… ", "Taken together… "). It must read as a single cohesive spoken piece, NOT disconnected fragments — this keeps the voiceover smooth across scene changes.
 - Build the arc: topic → substance scenes → conclusion. VARY the visual types across the arc; don't repeat one type back-to-back.
 - Narration is spoken: natural, warm, and clear — engaged but precise. On-screen text is terse: headlines and keywords, never paragraphs.
+- KEEP ON-SCREEN TEXT SHORT so it fits the frame (the narration carries the detail, the slide carries the gist):
+  · title: ≤ 8 words. · bullets: ≤ 5 items, each ≤ 9 words (a phrase, not a sentence).
+  · comparison: heading ≤ 3 words; ≤ 3 items per side, each ≤ 7 words. · timeline: step label ≤ 5 words.
+  · stat/donut label ≤ 12 words; bignumbers label ≤ 4 words. Put full explanation in the NARRATION, not the slide.
 - Ground it in the source material — use its real claims, numbers, and language. Do NOT invent statistics; only use stat/chart/donut/bignumbers values the material actually supports. If there are no real numbers, prefer bullets/comparison/timeline/quote over inventing figures.
 - 5–8 scenes. Every scene must have narration and a title, plus the field for its chosen visual type.`;
 

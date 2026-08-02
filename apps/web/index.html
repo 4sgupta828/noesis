@@ -185,10 +185,17 @@
   .hllegend i{width:.72rem;height:.72rem;border-radius:3px;display:inline-block;}
   .hllegend .lf{background:rgba(var(--hl-f),.95);} .hllegend .lr{background:rgba(var(--hl-r),.95);}
   .hllegend .lk{background:rgba(var(--hl-k),.95);}
+  /* evidence dossier — collapsed by default; summary is the disclosure control */
+  .evblock{margin:1.8rem 0 0;border-top:1px solid var(--hair);}
+  .evblock>summary{list-style:none;cursor:pointer;}
+  .evblock>summary::-webkit-details-marker{display:none;}
   .evhead{font-family:var(--sans);font-size:.68rem;text-transform:uppercase;letter-spacing:.14em;color:var(--gold);
-    font-weight:680;margin:1.8rem 0 1rem;border-top:1px solid var(--hair);padding-top:1.3rem;
-    display:flex;align-items:center;gap:.55rem;}
+    font-weight:680;margin:0;padding:1.3rem 0 .2rem;display:flex;align-items:center;gap:.55rem;}
   .evhead::before{content:"";width:15px;height:2px;border-radius:2px;background:var(--gold);}
+  .evhead::after{content:"▸";margin-left:auto;font-size:.7rem;color:var(--muted);transition:transform .18s;}
+  .evblock[open]>summary .evhead::after{transform:rotate(90deg);}
+  .evblock>summary:hover .evhead{color:#E7CE9A;}
+  .evbody{padding-top:1rem;}
   .fnum{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:1.4rem;height:1.4rem;
     border-radius:8px;background:var(--gold);color:#1A1206;font-family:var(--mono);font-size:.72rem;
     font-weight:700;margin-top:.05rem;}
@@ -212,8 +219,19 @@
   .plain .vbtn:disabled{opacity:.55;cursor:default;}
   .plain .plain-hint{font-size:.76rem;color:var(--muted);margin-top:.55rem;}
   .plain .plain-h{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;
-    color:var(--verified);margin-bottom:.5rem;}
+    color:var(--verified);margin-bottom:.5rem;display:flex;align-items:center;gap:.5rem;}
+  /* collapsible variant: .plain-d is a <details>, .plain-h its <summary> */
+  details.plain-d>summary.plain-h{list-style:none;cursor:pointer;margin-bottom:0;}
+  details.plain-d>summary.plain-h::-webkit-details-marker{display:none;}
+  details.plain-d>summary.plain-h::after{content:"▸";margin-left:auto;font-size:.7rem;color:var(--muted);transition:transform .18s;}
+  details.plain-d[open]>summary.plain-h::after{transform:rotate(90deg);}
+  details.plain-d[open]>summary.plain-h{margin-bottom:.7rem;}
+  details.plain-d>summary.plain-h:hover{color:#7FD3AE;}
   .plain .plain-b{font-size:.98rem;line-height:1.66;color:var(--ink);}
+  /* markdown inside the plain-language body — tighter than the hero answer */
+  .plain .plain-b.md .mdp{margin:.55rem 0;} .plain .plain-b.md .mdp:first-child{margin-top:0;}
+  .plain .plain-b.md .mdl{margin:.5rem 0 .5rem 1.1rem;} .plain .plain-b.md .mdh{font-size:.82rem;margin:.7rem 0 .35rem;}
+  .plain .plain-b.md strong{color:var(--ink);font-weight:640;}
 
   /* grounding header band */
   .ansmeta{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:0 0 1.3rem;padding-bottom:.9rem;
@@ -634,27 +652,33 @@ function render(data, target){
     }
     // plain-language explanation — saved copy if present, else an on-demand button
     if(data.layman_answer){
-      parts.push(`<div class="plain"><div class="plain-h">◍ In plain language</div>
-        <div class="plain-b">${esc(data.layman_answer).replace(/\n/g,"<br>")}</div></div>`);
+      parts.push(`<details class="plain plain-d"><summary class="plain-h">◍ In plain language</summary>
+        <div class="plain-b md">${mdToHtml(data.layman_answer)}</div></details>`);
     } else if(LAYMAN_ENABLED && data.grounded){
       parts.push(`<div class="plain" id="plain">
         <button type="button" class="vbtn" id="plaingo">◍ Explain in plain language</button>
         <div class="plain-hint">The same answer, re-explained for a patient — plain words, same essence, no new claims.</div>
       </div>`);
     }
-    parts.push(`<h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}</h4>`);
   }
-  data.claims.forEach((c,idx)=>{
-    const label = esc(c.source) + (c.title ? " · " + esc(c.title) : "");
-    const src = c.url
-      ? `<a class="src srclink" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer" title="Open source in a new tab">${label} ↗</a>`
-      : (c.source ? `<span class="src">${label}</span>` : "");
-    parts.push(`<article class="claim" id="f${idx+1}">
-      <div class="chead"><span class="fnum">${idx+1}</span><div class="ctext">${esc(c.text)}</div></div>
-      <blockquote class="cquote">${esc(c.quote)}</blockquote>
-      <div class="cfoot"><span class="verified">✓ Verified in source</span>${src}</div>
-    </article>`);
-  });
+  // Evidence dossier — collapsed by default; a [n] ref click or the summary opens it.
+  if(n){
+    const cards = data.claims.map((c,idx)=>{
+      const label = esc(c.source) + (c.title ? " · " + esc(c.title) : "");
+      const src = c.url
+        ? `<a class="src srclink" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer" title="Open source in a new tab">${label} ↗</a>`
+        : (c.source ? `<span class="src">${label}</span>` : "");
+      return `<article class="claim" id="f${idx+1}">
+        <div class="chead"><span class="fnum">${idx+1}</span><div class="ctext">${esc(c.text)}</div></div>
+        <blockquote class="cquote">${esc(c.quote)}</blockquote>
+        <div class="cfoot"><span class="verified">✓ Verified in source</span>${src}</div>
+      </article>`;
+    }).join("");
+    parts.push(`<details class="evblock" id="evblock">
+      <summary><h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}</h4></summary>
+      <div class="evbody">${cards}</div>
+    </details>`);
+  }
   if(!n && !(data.coverage_gaps||[]).length){
     const atoms = data.atoms_gathered || 0;
     if(atoms > 0){
@@ -670,9 +694,10 @@ function render(data, target){
   target.innerHTML = parts.join("");
   // clicking a [n] reference scrolls to and highlights its finding (within this pane)
   target.querySelectorAll(".ref").forEach(r=>r.addEventListener("click",()=>{
+    const ev = target.querySelector("#evblock"); if(ev) ev.open = true;   // reveal the dossier
     const el = target.querySelector("#f"+r.dataset.n);
-    if(el){ el.scrollIntoView({behavior:"smooth",block:"center"});
-      el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1200); }
+    if(el){ requestAnimationFrame(()=>{ el.scrollIntoView({behavior:"smooth",block:"center"});
+      el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1200); }); }
   }));
   const vgo = target.querySelector("#vgo");
   if(vgo) vgo.addEventListener("click", ()=>generateVideo(target));
@@ -694,8 +719,9 @@ async function generatePlain(root){
     if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
     const {explanation} = await r.json();
     if(!explanation) throw new Error("no explanation produced");
-    panel.innerHTML = `<div class="plain-h">◍ In plain language</div>
-      <div class="plain-b">${esc(explanation).replace(/\n/g,"<br>")}</div>`;
+    // just requested → render formatted and OPEN; reopening the saved session shows it collapsed.
+    panel.outerHTML = `<details class="plain plain-d" open><summary class="plain-h">◍ In plain language</summary>
+      <div class="plain-b md">${mdToHtml(explanation)}</div></details>`;
   }catch(e){
     btn.disabled = false; btn.textContent = "◍ Explain in plain language";
     if(hint) hint.textContent = "Couldn't generate: "+(e.message||e);

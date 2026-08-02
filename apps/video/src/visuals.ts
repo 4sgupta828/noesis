@@ -100,6 +100,15 @@ function breakLongWord(ctx: SKRSContext2D, word: string, maxW: number): string[]
   return out;
 }
 
+// Largest font size in [floor, base] at which `measure(size)` (the block's rendered height in px)
+// fits within `budget`. Keeps scene text INSIDE the frame instead of flowing off the bottom edge.
+function bestFit(base: number, floor: number, measure: (sz: number) => number, budget: number): number {
+  let size = Math.round(base);
+  const lo = Math.round(floor);
+  while (size > lo && measure(size) > budget) size -= 1;
+  return size;
+}
+
 function wrap(ctx: SKRSContext2D, text: string, maxW: number): string[] {
   const words = (text || '').split(/\s+/);
   const lines: string[] = [];
@@ -189,9 +198,20 @@ export function renderSceneFrame(scene: StoryboardScene, sc: SceneCtx, tSec: num
 
   // title (staggered per line) + accent underline (draws its width)
   ctx.textBaseline = 'top';
-  const titleSize = Math.round(w * (scene.visual === 'title' ? 0.062 : 0.048));
+  // Fit the title into a bounded band so a long title shrinks — and cap its line count — instead
+  // of pushing body content off the bottom. Hero 'title' scenes get 3 lines + a bigger band;
+  // dense body scenes (bullets/comparison/…) cap at 2 lines so the body keeps its room.
+  const isHero = scene.visual === 'title';
+  const titleCap = isHero ? 3 : 2;
+  const titleMaxH = h * (isHero ? 0.42 : 0.22);
+  const titleSize = bestFit(
+    w * (isHero ? 0.062 : 0.048),
+    w * (isHero ? 0.044 : 0.034),
+    (s) => { ctx.font = `${th.titleWeight} ${s}px ${th.titleFace}`; return wrap(ctx, scene.title, contentW).slice(0, titleCap).length * s * 1.14; },
+    titleMaxH,
+  );
   ctx.font = `${th.titleWeight} ${titleSize}px ${th.titleFace}`;
-  const titleLines = wrap(ctx, scene.title, contentW).slice(0, 3);
+  const titleLines = wrap(ctx, scene.title, contentW).slice(0, titleCap);
   let y = pad + titleSize * 1.3;
   titleLines.forEach((line, i) => {
     withReveal(ctx, reveal(t, 0.05 + i * 0.07, 0.45), slide, () => {
@@ -209,13 +229,28 @@ export function renderSceneFrame(scene: StoryboardScene, sc: SceneCtx, tSec: num
 
   const BODY_START = 0.5, STAGGER = 0.13, ITEM_DUR = 0.42;
 
-  // animated staggered list (bullets / comparison columns)
-  const drawList = (items: string[], top: number, x: number, colW: number, accentColor: string, start: number, max = 5) => {
-    const size = Math.round(w * 0.024);
+  // animated staggered list (bullets / comparison columns). Auto-shrinks the body size so the
+  // whole list fits within `budget` px below `top` — text never runs off the bottom of the frame.
+  const drawList = (items: string[], top: number, x: number, colW: number, accentColor: string, start: number, max = 5, budget?: number) => {
+    const list = (items ?? []).slice(0, max).filter(Boolean);
+    const avail = budget ?? (h - top - pad * 1.4);
+    const size = bestFit(w * 0.024, w * 0.014, (sz) => {
+      ctx.font = `500 ${sz}px ${th.bodyFace}`;
+      let tot = 0;
+      for (const b of list) tot += wrap(ctx, b, colW - sz * 1.5).length * sz * 1.3 + sz * 0.5;
+      return tot;
+    }, avail);
+    ctx.font = `500 ${size}px ${th.bodyFace}`;
     let yy = top;
-    (items ?? []).slice(0, max).forEach((b, i) => {
-      const r = reveal(t, start + i * STAGGER, ITEM_DUR);
+    for (let i = 0; i < list.length; i++) {
+      const b = list[i]!;
+      ctx.font = `500 ${size}px ${th.bodyFace}`;
       const lines = wrap(ctx, b, colW - size * 1.5);
+      const itemH = lines.length * size * 1.3 + size * 0.5;
+      // Safety net: if even the shrunk text would spill past the budget, stop here rather than
+      // draw off-frame (the narration still speaks the remaining points). Prompt caps keep this rare.
+      if (i > 0 && (yy - top) + itemH > avail) break;
+      const r = reveal(t, start + i * STAGGER, ITEM_DUR);
       const blockY = yy;
       withReveal(ctx, r, slide, () => {
         ctx.font = `500 ${size}px ${th.bodyFace}`;
@@ -228,19 +263,24 @@ export function renderSceneFrame(scene: StoryboardScene, sc: SceneCtx, tSec: num
         let ly = blockY;
         for (const line of lines) { ctx.fillText(line, x + size * 1.3, ly); ly += size * 1.3; }
       });
-      yy += lines.length * size * 1.3 + size * 0.5;
-    });
+      yy += itemH;
+    }
   };
 
   switch (scene.visual) {
     case 'title':
       if (scene.subtitle) {
+        const avail = h - bodyTop - pad * 1.2;
+        const sz = bestFit(w * 0.03, w * 0.02, (s) => {
+          ctx.font = `400 ${s}px ${th.bodyFace}`;
+          return wrap(ctx, scene.subtitle!, bodyW).slice(0, 4).length * s * 1.4;
+        }, avail);
         withReveal(ctx, reveal(t, 0.5, 0.5), slide, () => {
           ctx.fillStyle = th.muted;
-          ctx.font = `400 ${Math.round(w * 0.03)}px ${th.bodyFace}`;
+          ctx.font = `400 ${sz}px ${th.bodyFace}`;
           ctx.textBaseline = 'top';
           let yy = bodyTop;
-          for (const line of wrap(ctx, scene.subtitle!, bodyW).slice(0, 4)) { ctx.fillText(line, pad, yy); yy += w * 0.042; }
+          for (const line of wrap(ctx, scene.subtitle!, bodyW).slice(0, 4)) { ctx.fillText(line, pad, yy); yy += sz * 1.4; }
         });
       }
       break;
@@ -260,11 +300,17 @@ export function renderSceneFrame(scene: StoryboardScene, sc: SceneCtx, tSec: num
         });
       });
       withReveal(ctx, reveal(t, 0.7, 0.5), slide, () => {
+        const labelTop = bodyTop + Math.round(w * 0.14) * 1.05;
+        const avail = h - labelTop - pad * 1.2;
+        const sz = bestFit(w * 0.028, w * 0.019, (s) => {
+          ctx.font = `400 ${s}px ${th.bodyFace}`;
+          return wrap(ctx, scene.stat?.label ?? '', bodyW).slice(0, 3).length * s * 1.42;
+        }, avail);
         ctx.fillStyle = th.muted;
-        ctx.font = `400 ${Math.round(w * 0.028)}px ${th.bodyFace}`;
+        ctx.font = `400 ${sz}px ${th.bodyFace}`;
         ctx.textBaseline = 'top';
-        let yy = bodyTop + Math.round(w * 0.14) * 1.05;
-        for (const line of wrap(ctx, scene.stat?.label ?? '', bodyW).slice(0, 3)) { ctx.fillText(line, pad, yy); yy += w * 0.04; }
+        let yy = labelTop;
+        for (const line of wrap(ctx, scene.stat?.label ?? '', bodyW).slice(0, 3)) { ctx.fillText(line, pad, yy); yy += sz * 1.42; }
       });
       break;
     }
@@ -275,17 +321,24 @@ export function renderSceneFrame(scene: StoryboardScene, sc: SceneCtx, tSec: num
         ctx.textBaseline = 'top';
         ctx.fillText('“', pad, bodyTop - w * 0.02);
       });
+      const quoteTop = bodyTop + w * 0.06;
+      const avail = h - quoteTop - pad * 1.3 - (scene.quote?.attribution ? w * 0.05 : 0);
+      const qsz = bestFit(w * 0.038, w * 0.024, (s) => {
+        ctx.font = `italic 600 ${s}px Georgia`;
+        return wrap(ctx, scene.quote?.text ?? '', bodyW).slice(0, 5).length * s * 1.36;
+      }, avail);
+      ctx.font = `italic 600 ${qsz}px Georgia`;
       const lines = wrap(ctx, scene.quote?.text ?? '', bodyW).slice(0, 5);
-      let yy = bodyTop + w * 0.06;
+      let yy = quoteTop;
       lines.forEach((line, i) => {
         const ly = yy;
         withReveal(ctx, reveal(t, 0.5 + i * 0.1, 0.4), slide, () => {
           ctx.fillStyle = th.ink;
-          ctx.font = `italic 600 ${Math.round(w * 0.038)}px Georgia`;
+          ctx.font = `italic 600 ${qsz}px Georgia`;
           ctx.textBaseline = 'top';
           ctx.fillText(line, pad, ly);
         });
-        yy += w * 0.052;
+        yy += qsz * 1.36;
       });
       if (scene.quote?.attribution) {
         withReveal(ctx, reveal(t, 0.5 + lines.length * 0.1 + 0.15, 0.4), slide, () => {
@@ -333,7 +386,7 @@ export function renderSceneFrame(scene: StoryboardScene, sc: SceneCtx, tSec: num
       const c = scene.comparison;
       const colW = (bodyW - w * 0.04) / 2;
       const cols = [{ d: c?.left, x: pad, ac: th.palette[0]!, s: 0.4 }, { d: c?.right, x: pad + colW + w * 0.04, ac: th.palette[2 % th.palette.length]!, s: 0.55 }];
-      const panelH = h - bodyTop - pad * 1.4;
+      const panelH = h - bodyTop - pad * 0.9;   // extend panels closer to the bottom edge for item room
       for (const col of cols) {
         withReveal(ctx, reveal(t, col.s, 0.45), slide, () => {
           ctx.fillStyle = th.panel;
@@ -343,7 +396,7 @@ export function renderSceneFrame(scene: StoryboardScene, sc: SceneCtx, tSec: num
           ctx.textBaseline = 'top';
           ctx.fillText((col.d?.heading ?? '').slice(0, 24), col.x + w * 0.025, bodyTop + w * 0.028);
         });
-        drawList(col.d?.items ?? [], bodyTop + w * 0.09, col.x + w * 0.025, colW - w * 0.05, col.ac, col.s + 0.25, 4);
+        drawList(col.d?.items ?? [], bodyTop + w * 0.09, col.x + w * 0.025, colW - w * 0.05, col.ac, col.s + 0.25, 4, panelH - w * 0.11);
       }
       break;
     }

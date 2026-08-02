@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -115,6 +116,11 @@ async def _run_bridge(job_id: str, payload: dict, session_id: str | None = None,
         job.status, job.error = "error", str(e)[-800:]
 
 
+# Strip structured-answer highlight markers ([[F]]…[[/F]] etc.) so they never leak into
+# the video narration/storyboard. Content between markers is kept; only the tags are removed.
+_HL_MARKERS = re.compile(r"\[\[/?[FRK]\]\]")
+
+
 def build_video_router(attach_video: AttachVideo | None = None) -> APIRouter:
     router = APIRouter(prefix="/video", tags=["video"])
 
@@ -122,7 +128,8 @@ def build_video_router(attach_video: AttachVideo | None = None) -> APIRouter:
     async def generate(body: VideoIn) -> dict:
         job_id = uuid.uuid4().hex
         _JOBS[job_id] = _Job(title=body.title or body.question[:80])
-        payload = {"question": body.question, "answer": body.answer,
+        clean_answer = _HL_MARKERS.sub("", body.answer)
+        payload = {"question": body.question, "answer": clean_answer,
                    "title": body.title or body.question[:80]}
         asyncio.create_task(_run_bridge(job_id, payload, body.session_id, attach_video))
         return {"job_id": job_id, "status": "running"}

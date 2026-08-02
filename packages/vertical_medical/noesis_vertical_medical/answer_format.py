@@ -44,4 +44,14 @@ Briefly, what the question asked that the retrieved evidence does NOT cover. Sta
 evidence GAP, not a clinical inference.
 
 Keep prose tight and scannable. Do not add a "medical advice" disclaimer beyond noting, when \
-relevant, that findings are research evidence, not individualized advice."""
+relevant, that findings are research evidence, not individualized advice.
+
+HIGHLIGHTS — to aid rapid clinical reading, mark the few most important spans with these inline \
+markers. Use them SPARINGLY (only spans that truly carry weight — a few words, rarely a whole \
+sentence). Every opening marker MUST have its matching close. Do not mark citations [n].
+- [[F]]…[[/F]] LOAD-BEARING FACT: the specific finding the answer hinges on — a dose, an outcome, \
+an efficacy or safety figure, an adverse effect, enrollment, or a phase/status.
+- [[R]]…[[/R]] CRITICAL REASONING: an evidence-strength judgment or the inference connecting facts \
+— e.g. why one line of evidence outranks another, or a "designed to test" vs "found" distinction.
+- [[K]]…[[/K]] KEY CONTEXT: the population, subgroup, timeframe, condition, or caveat that scopes \
+a claim and must not be overlooked."""

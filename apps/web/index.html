@@ -9,13 +9,15 @@
   :root{
     --paper:#FCFBF8; --card:#FFFFFF; --ink:#16202E; --slate:#5B6773;
     --verified:#0B7A5B; --gap:#A65A0B; --hair:#E8E4DB; --rail:#0B7A5B;
+    --hl-f:11,122,91; --hl-r:166,90,11; --hl-k:42,107,176;   /* fact / reasoning / context */
     --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
     --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
     --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
   }
   @media (prefers-color-scheme:dark){
     :root{--paper:#10151C;--card:#161C25;--ink:#EDEAE3;--slate:#8A96A3;
-      --verified:#35B98F;--gap:#D08A3C;--hair:#263140;--rail:#35B98F;}
+      --verified:#35B98F;--gap:#D08A3C;--hair:#263140;--rail:#35B98F;
+      --hl-f:53,185,143;--hl-r:208,138,60;--hl-k:96,158,224;}
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
@@ -100,6 +102,19 @@
   .answer.md .mdt tbody tr:last-child td{border-bottom:none;}
   .answer.md .ref{color:var(--verified);font-weight:640;cursor:pointer;font-size:.68em;
     padding:0 .06em;vertical-align:super;}
+  /* typed highlights: subtle tint + underline accent (clinical, not highlighter-garish) */
+  .answer.md mark.hl{background:transparent;color:inherit;border-radius:2px;padding:.02em .1em;
+    box-decoration-break:clone;-webkit-box-decoration-break:clone;}
+  .answer.md .hl-f{background:rgba(var(--hl-f),.13);box-shadow:inset 0 -1.5px 0 rgba(var(--hl-f),.6);}
+  .answer.md .hl-r{background:rgba(var(--hl-r),.13);box-shadow:inset 0 -1.5px 0 rgba(var(--hl-r),.6);}
+  .answer.md .hl-k{background:rgba(var(--hl-k),.13);box-shadow:inset 0 -1.5px 0 rgba(var(--hl-k),.6);}
+  /* legend */
+  .hllegend{display:flex;flex-wrap:wrap;gap:.9rem;margin:-.4rem 0 1.3rem;
+    font-size:.72rem;color:var(--slate);}
+  .hllegend span{display:inline-flex;align-items:center;gap:.35rem;}
+  .hllegend i{width:.72rem;height:.72rem;border-radius:3px;display:inline-block;}
+  .hllegend .lf{background:rgba(var(--hl-f),.9);} .hllegend .lr{background:rgba(var(--hl-r),.9);}
+  .hllegend .lk{background:rgba(var(--hl-k),.9);}
   .evhead{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;
     color:var(--slate);margin:.2rem 0 .8rem;border-top:1px solid var(--hair);padding-top:1rem;}
   .fnum{display:inline-flex;align-items:center;justify-content:center;min-width:1.3rem;
@@ -218,10 +233,16 @@ const chosen = () => [...document.querySelectorAll('.pill[aria-pressed="true"]')
 
 function esc(s){const d=document.createElement("div");d.textContent=s??"";return d.innerHTML;}
 
-// Inline: bold + clickable [n] refs. Operates on ALREADY-ESCAPED text (XSS-safe).
+// Inline: bold, clickable [n] refs, and typed highlight marks. Operates on
+// ALREADY-ESCAPED text (XSS-safe) — the [[F]]/[[R]]/[[K]] markers survive esc()
+// (literal brackets) and never collide with [n] refs (F/R/K aren't digits).
 function mdInline(s){
-  return s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
-          .replace(/\[(\d+)\]/g,'<sup class="ref" data-n="$1">[$1]</sup>');
+  s = s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+       .replace(/\[(\d+)\]/g,'<sup class="ref" data-n="$1">[$1]</sup>');
+  s = s.replace(/\[\[F\]\]([\s\S]*?)\[\[\/F\]\]/g,'<mark class="hl hl-f">$1</mark>')
+       .replace(/\[\[R\]\]([\s\S]*?)\[\[\/R\]\]/g,'<mark class="hl hl-r">$1</mark>')
+       .replace(/\[\[K\]\]([\s\S]*?)\[\[\/K\]\]/g,'<mark class="hl hl-k">$1</mark>');
+  return s;
 }
 // Minimal, self-contained, XSS-safe markdown → HTML. We esc() the whole source FIRST,
 // so any HTML in the model output is neutralized before we add known-safe tags. Handles
@@ -286,6 +307,12 @@ function render(data){
       ? mdToHtml(data.answer)
       : esc(data.answer).replace(/\[(\d+)\]/g, '<sup class="ref" data-n="$1">[$1]</sup>');
     parts.push(`<div class="answer${STRUCTURED?" md":""}">${html}</div>`);
+    if(STRUCTURED && /<mark class="hl/.test(html)){
+      parts.push(`<div class="hllegend">
+        <span><i class="lf"></i>Load-bearing fact</span>
+        <span><i class="lr"></i>Critical reasoning</span>
+        <span><i class="lk"></i>Key context</span></div>`);
+    }
     // answer-video add-on. A saved session may already have a video → show it inline;
     // otherwise offer to generate one (only when enabled AND the answer is grounded).
     LAST = {question:(data.question||CURRENT_Q), answer:data.answer,

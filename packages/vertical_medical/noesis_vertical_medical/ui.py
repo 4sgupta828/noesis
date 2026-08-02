@@ -28,11 +28,26 @@ class MedicalUI:
         example prompts). Keeps domain wording out of the shared web shell."""
         return {
             "heading": "What does the evidence show?",
-            "placeholder": "e.g. What treatments are being studied for type 2 diabetes, and what did they find?",
+            "placeholder": "Ask a clinical research question…",
+            # A picker of real, current questions the corpus can answer — the web shell shows a
+            # random one as the intake prompt each load (kept here so wording stays domain-owned).
             "examples": [
-                "What treatments are being studied for rheumatoid arthritis?",
-                "What are the labeled warnings for metformin?",
-                "What trials are studying GLP-1 agonists for weight loss?",
+                "What is the evidence for lecanemab in early Alzheimer disease, and how large is the benefit?",
+                "How effective is tirzepatide for weight loss, and what are its main adverse effects?",
+                "What do trials show for CAR-T therapy in relapsed or refractory multiple myeloma?",
+                "How do SGLT2 inhibitors affect heart-failure and kidney outcomes?",
+                "What is the cardiovascular benefit of semaglutide in patients with obesity?",
+                "How do IL-23 inhibitors compare with IL-17 inhibitors for plaque psoriasis?",
+                "What is the evidence for resmetirom in MASH (NASH), and which patients benefit?",
+                "How effective are direct-acting antivirals for hepatitis C, and what are the cure rates?",
+                "What treatments are being studied for glioblastoma, and have any improved survival?",
+                "How does osimertinib perform in EGFR-mutated non-small-cell lung cancer?",
+                "What is the evidence for pembrolizumab in advanced melanoma?",
+                "Which biologics are studied for inflammatory bowel disease, and how effective are they?",
+                "What do trials show for mavacamten in hypertrophic cardiomyopathy?",
+                "How effective are antifibrotics like pirfenidone and nintedanib in pulmonary fibrosis?",
+                "What is the evidence for bispecific antibodies in relapsed lymphoma?",
+                "How well do JAK inhibitors work for rheumatoid arthritis, and what are the safety concerns?",
             ],
         }
 

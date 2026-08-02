@@ -58,7 +58,7 @@
   button.go.loading svg{display:none;}
   button.go.loading::after{content:"";width:17px;height:17px;border-radius:50%;
     border:2px solid rgba(26,18,6,.35);border-top-color:#1A1206;animation:spin .7s linear infinite;}
-  button.go:focus-visible,.pill:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+  button.go:focus-visible,.pill:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
 
   .sources{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center;padding-left:.15rem;}
   .sources .lbl{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;
@@ -568,12 +568,18 @@ let CONV_ENABLED = false;   // multi-turn conversation (follow-ups carry context
 let SUGGEST_ENABLED = false;// suggested follow-up questions after each answer
 let THREAD = {session_id:null, turns:[]};   // the active conversation
 let BASE_PLACEHOLDER = "";                   // vertical console placeholder (restored on New)
+let EXAMPLES = [];                            // vertical example questions → random intake prompt
 let ATTACHMENTS = [];       // [{name, media_type, data(base64)}]
 let USER = null;            // {name, email} captured at landing, saved per session
 let LAST = null;            // {question, answer} for the answer-video add-on
 let CURRENT_Q = "";        // the question of the answer currently rendered
 
 const label = k => k === "web" ? "Web" : k === "workspace" ? "Workspace" : "Corpus";
+
+// A random real example question for the intake prompt (or the plain placeholder if none).
+function pickPlaceholder(){
+  return EXAMPLES.length ? EXAMPLES[Math.floor(Math.random()*EXAMPLES.length)] : BASE_PLACEHOLDER;
+}
 
 async function loadConfig(){
   try{
@@ -593,7 +599,11 @@ async function loadConfig(){
     // vertical-supplied console copy (heading + placeholder) — keeps the shell domain-neutral
     const con = c.console || {};
     if(con.heading) $("#heading").textContent = con.heading;
-    if(con.placeholder){ q.setAttribute("placeholder", con.placeholder); BASE_PLACEHOLDER = con.placeholder; }
+    // seed the intake prompt with a RANDOM real question from the vertical's picker (falls back
+    // to the plain placeholder). Refreshed on each New chat for variety.
+    EXAMPLES = Array.isArray(con.examples) ? con.examples : [];
+    BASE_PLACEHOLDER = con.placeholder || "Ask a research question…";
+    q.setAttribute("placeholder", pickPlaceholder());
     const box = $("#sources");
     for(const k of SOURCES){
       const b = document.createElement("button");
@@ -657,6 +667,10 @@ function mdToHtml(raw){
 function render(data, target, opts){
   target = target || out;
   opts = opts || {};
+  if(data._pending){   // conversation: the question shows immediately with a spinner while it runs
+    target.innerHTML = `<div class="status">Searching sources and verifying evidence…</div>`;
+    return;
+  }
   const parts = [];
   const n = data.claims.length;
   const sid = data.session_id || data.id || null;   // saved session → shareable permalink
@@ -1117,7 +1131,7 @@ async function askQuestion(question){
     return;
   }
   CURRENT_Q = question;
-  const conv = CONV_ENABLED, follow = conv && THREAD.turns.length>0;
+  const conv = CONV_ENABLED;
   const payload = {question, tenant_id:"demo", sources: chosen()};
   if(ATTACHMENTS.length) payload.attachments = ATTACHMENTS.slice();
   if(USER){ payload.user_name = USER.name; payload.user_email = USER.email; }
@@ -1128,17 +1142,17 @@ async function askQuestion(question){
   const body = JSON.stringify(payload);
   go.disabled = true; go.classList.add("loading");
   const sg = out.querySelector("#suggest"); if(sg) sg.remove();
-  let statusEl = null;
-  if(follow){                                    // keep the thread; append a thinking indicator
-    statusEl = document.createElement("div"); statusEl.className = "status turnstatus";
-    statusEl.textContent = "Searching sources and verifying evidence…";
-    out.appendChild(statusEl); statusEl.scrollIntoView({behavior:"smooth", block:"center"});
+  if(conv){
+    // Show the question IMMEDIATELY as a pending turn — it never vanishes during the wait.
+    q.value = ""; q.style.height = "auto";
+    THREAD.turns.push({question, _pending:true});
+    renderThread();
   } else {
     out.innerHTML = `<div class="status">Searching sources and verifying evidence…</div>`;
   }
-  if(conv){ q.value = ""; q.style.height = "auto"; }
-  const pushTurn = (data) => { THREAD.session_id = data.session_id || THREAD.session_id;
-    THREAD.turns.push(data); renderThread(); loadSuggestions(); };
+  // finishTurn REPLACES the pending turn with the real (or error) result.
+  const finishTurn = (data) => { THREAD.session_id = data.session_id || THREAD.session_id;
+    THREAD.turns[THREAD.turns.length-1] = data; renderThread(); loadSuggestions(); };
   const errTurn = (note) => ({question, answer:"", grounded:false, claims:[],
     coverage_gaps:[], source_stats:{}, _note:note});
   const ctrl = new AbortController();
@@ -1154,10 +1168,9 @@ async function askQuestion(question){
     const resp = await fetch("/research",{method:"POST",headers:{"content-type":"application/json"},body,signal:ctrl.signal});
     clearTimeout(timer);
     if(resp.ok){ const data = await resp.json(); ATTACHMENTS=[]; renderAttachments();
-      if(conv) pushTurn(data); else render(data); return; }
+      if(conv) finishTurn(data); else render(data); return; }
     const detail = (await resp.json().catch(()=>({}))).detail || `HTTP ${resp.status}`;
-    if(statusEl) statusEl.remove();
-    if(conv){ pushTurn(errTurn(detail)); return; }
+    if(conv){ finishTurn(errTurn(detail)); return; }
     if(resp.status===503 || resp.status===502){
       out.innerHTML = `<div class="status">Answer model unavailable — retrieving evidence…</div>`;
       if(await evidenceFallback("Answer synthesis is unavailable ("+detail.replace(/\.$/,'')+"). Showing ranked evidence — and you can queue more sources below.")) return;
@@ -1165,9 +1178,9 @@ async function askQuestion(question){
     out.innerHTML = `<div class="empty">${esc(detail)}</div>`;
     appendGapFallback(question);
   }catch(err){
-    clearTimeout(timer); if(statusEl) statusEl.remove();
+    clearTimeout(timer);
     const timedOut = err && err.name === "AbortError";
-    if(conv){ pushTurn(errTurn(timedOut
+    if(conv){ finishTurn(errTurn(timedOut
         ? "The full answer timed out — try a narrower follow-up, or fill the gaps below."
         : "Couldn't reach the research service.")); return; }
     if(await evidenceFallback(timedOut
@@ -1193,7 +1206,7 @@ function newConversation(){
   THREAD = {session_id:null, turns:[]};
   out.innerHTML = "";
   try{ history.replaceState(null, "", location.pathname + location.search); }catch(e){}
-  q.value=""; q.style.height="auto"; if(BASE_PLACEHOLDER) q.setAttribute("placeholder", BASE_PLACEHOLDER);
+  q.value=""; q.style.height="auto"; q.setAttribute("placeholder", pickPlaceholder());  // fresh question each New chat
   window.scrollTo({top:0}); q.focus();
 }
 function renderThread(){

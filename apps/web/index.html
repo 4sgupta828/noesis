@@ -34,6 +34,8 @@
     cursor:pointer;background:transparent;border:1px solid var(--hair);border-radius:8px;
     padding:.34rem .7rem;color:var(--muted);text-transform:uppercase;}
   .histbtn:hover{color:var(--ink);border-color:var(--muted);}
+  .newbtn{color:var(--gold);border-color:rgba(211,179,124,.5);}
+  .newbtn:hover{color:#1A1206;background:var(--gold);border-color:var(--gold);}
 
   /* ---- hero + intake ---- */
   h1{font-family:var(--serif);font-size:2rem;line-height:1.14;letter-spacing:-.015em;
@@ -45,7 +47,7 @@
   .field:focus-within{border-color:rgba(211,179,124,.55);
     box-shadow:0 8px 30px -16px rgba(0,0,0,.7), 0 0 0 3px rgba(211,179,124,.14);}
   textarea{flex:1;border:0;background:transparent;color:var(--ink);font:inherit;font-size:1.06rem;
-    line-height:1.5;resize:none;outline:none;padding:.15rem 0;min-height:3rem;max-height:12rem;}
+    line-height:1.5;resize:none;outline:none;padding:.15rem 0;min-height:2.6rem;max-height:20rem;overflow-y:auto;}
   textarea::placeholder{color:var(--muted);}
   button.go{flex:none;width:44px;height:44px;border:0;border-radius:50%;cursor:pointer;
     background:var(--gold);color:#1A1206;display:grid;place-items:center;
@@ -444,7 +446,8 @@
 <div class="wrap">
   <header>
     <img class="logo" src="/noesis-mark.png" alt="Noesis" />
-    <a class="histbtn" href="/admin" style="margin-left:auto;text-decoration:none;">Coverage</a>
+    <button type="button" class="histbtn newbtn" id="newbtn" style="margin-left:auto;">＋ New chat</button>
+    <a class="histbtn" href="/admin" style="margin-left:0;text-decoration:none;">Coverage</a>
     <button type="button" class="histbtn" id="vidbtn" style="margin-left:0;">Videos</button>
     <button type="button" class="histbtn" id="histbtn" style="margin-left:0;">Past Sessions</button>
   </header>
@@ -958,7 +961,7 @@ async function loadSharedSession(id){
       q.value=""; q.style.height="auto"; q.setAttribute("placeholder","Ask a follow-up…");
       renderThread(); loadSuggestions();
     } else {
-      q.value = row.question; q.style.height="auto"; q.style.height=Math.min(q.scrollHeight,180)+"px";
+      q.value = row.question; autoGrow();
       render(row, out);
     }
     window.scrollTo({top:0});
@@ -1207,7 +1210,11 @@ async function loadSuggestions(){
   }catch(e){ holder.remove(); }
 }
 
-q.addEventListener("input", ()=>{ q.style.height="auto"; q.style.height=Math.min(q.scrollHeight,180)+"px"; });
+// ChatGPT-style auto-grow: the intake box grows with content up to a generous max, then scrolls.
+function autoGrow(){ q.style.height = "auto"; q.style.height = Math.min(q.scrollHeight, 320) + "px"; }
+q.addEventListener("input", autoGrow);
+window.addEventListener("load", autoGrow);
+$("#newbtn").addEventListener("click", newConversation);   // masthead: start a fresh chat
 
 // ---- Past Sessions: full-page master/detail ----
 const sessionsEl = $("#sessions"), slist = $("#slist"), sdetail = $("#sdetail");

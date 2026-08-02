@@ -142,11 +142,13 @@
   .empty .k{color:var(--ink);font-weight:560;}
 
   /* mission — the resting state */
-  .motto{display:flex;align-items:center;justify-content:center;gap:1.1rem;flex-wrap:wrap;
+  .motto{display:flex;align-items:flex-start;justify-content:center;gap:1.4rem;flex-wrap:wrap;
     margin-top:3.5rem;font-family:var(--mono);font-size:.82rem;letter-spacing:.32em;
     text-transform:uppercase;color:var(--gold);opacity:.9;}
+  .mstep{display:flex;flex-direction:column;align-items:center;gap:.7rem;}
   .motto b{font-weight:600;color:var(--ink);letter-spacing:.32em;}
-  .motto i{width:5px;height:5px;border-radius:50%;background:var(--gold);opacity:.7;flex:none;}
+  .micon{width:30px;height:30px;color:var(--gold);opacity:.85;}
+  .motto i{width:5px;height:5px;border-radius:50%;background:var(--gold);opacity:.7;flex:none;margin-top:.35rem;}
 
   .summary{font-size:.82rem;color:var(--muted);display:flex;gap:.9rem;flex-wrap:wrap;
     padding-bottom:.6rem;border-bottom:1px solid var(--hair);margin-bottom:1.2rem;}
@@ -483,7 +485,16 @@
   </form>
 
   <section id="out" aria-live="polite">
-    <div class="motto"><b>Discover</b><i></i><b>Understand</b><i></i><b>Act</b></div>
+    <div class="motto">
+      <div class="mstep"><b>Discover</b>
+        <svg class="micon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
+      <i></i>
+      <div class="mstep"><b>Understand</b>
+        <svg class="micon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.8 1 1.6 1 2.5h6c0-.9.3-1.7 1-2.5A6 6 0 0 0 12 3z"/></svg></div>
+      <i></i>
+      <div class="mstep"><b>Act</b>
+        <svg class="micon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/><circle cx="12" cy="12" r="0.7" fill="currentColor"/></svg></div>
+    </div>
   </section>
 </div>
 

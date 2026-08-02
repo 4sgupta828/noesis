@@ -5,8 +5,9 @@
 > `rs_block` (port 5434); raw artifacts in Cloudflare R2 (`medicaldata/medical/`);
 > embeddings OpenAI text-embedding-3-small (1536-d).
 
-**Last updated:** 2026-08-01 (head deep-ingest in progress)
-**Corpus size:** ~37k blocks / ~4.1k docs *before* the head batch (growing).
+**Last updated:** 2026-08-01 (head deep-ingest COMPLETE — 16 top conditions)
+**Corpus size:** **98,422 blocks / 10,266 docs.** By source: clinicaltrials 88,159 ·
+europepmc 5,990 · openfda 4,147 · faers 99 · cdc 27.
 
 ## Sources (connectors)
 
@@ -23,23 +24,27 @@
 
 ## Conditions — covered
 
+**Head deep-ingest (✅ 2026-08-01, ~300 trials + 150 papers each):**
+
+| Group | Conditions | Depth |
+|---|---|---|
+| Oncology | lung · prostate · colorectal · leukemia · lymphoma · melanoma | deep (~4.6–5.4k blocks/condition) |
+| Cardiovascular | coronary artery disease · atrial fibrillation · stroke | deep |
+| Infectious | HIV · hepatitis C | deep |
+| Respiratory/Immuno | asthma · rheumatoid arthritis | deep |
+| Neuro/Psych | Alzheimer disease · depression · Parkinson disease | deep |
+
+**Earlier batch:**
+
 | Condition | Trials | Papers | Depth |
 |---|---|---|---|
-| Type 2 diabetes | ~1,000 | ~200 | deep |
+| Type 2 diabetes | ~1,000 | ~200 | deep (reference) |
 | Breast cancer | ~100 | ~120 | medium |
 | Obesity | ~85 | ~120 | medium |
 | COPD | ~90 | ~120 | medium |
 | Hypertension | ~48 | ~120 | shallow |
 | Heart failure | ~41 | ~120 | shallow |
 | Chronic kidney disease | ~? | ~120 | shallow |
-
-## Conditions — IN PROGRESS (head deep-ingest, 300 trials + 150 papers each)
-
-Oncology: lung · prostate · colorectal · leukemia · lymphoma · melanoma
-Cardiovascular: coronary artery disease · atrial fibrillation · stroke
-Infectious: HIV · hepatitis C
-Respiratory/Immuno: asthma · rheumatoid arthritis
-Neuro/Psych: Alzheimer disease · depression · Parkinson disease
 
 ## Conditions — TO COVER (next head, then long tail)
 
@@ -63,5 +68,10 @@ Neuro/Psych: Alzheimer disease · depression · Parkinson disease
 
 ## Notes
 - Diabetes stays the deepest (reference build). Cost so far trivial (~$0.5 OpenAI total).
-- Retrieval + grounded answers verified live across diabetes, heart failure, breast cancer.
+- Retrieval + grounded answers verified live across diabetes, heart failure, breast cancer,
+  RA, and the new head conditions.
 - Per-source citation tagging + source-utility stats (`retrieved`/`cited`) live.
+- **Opioid/controlled-substance safety questions are refused by the MODEL itself** (Claude
+  safety behavior), not by our pipeline — verified: "adverse effects of hydrocodone" grounds
+  0/3, while "treatments studied for RA/T2D" ground ~3/3. Not a verifier/retrieval bug; the
+  UI now shows an honest metadata-driven abstention notice (retrieved-N-passages) in these cases.

@@ -26,7 +26,7 @@
   /* ---- masthead ---- */
   header{display:flex;align-items:center;gap:.8rem;padding:.1rem 0 1.3rem;flex-wrap:wrap;
     border-bottom:1px solid var(--hair);margin-bottom:1.9rem;}
-  .logo{height:46px;width:auto;object-fit:contain;flex:none;}
+  .logo{height:64px;width:auto;object-fit:contain;flex:none;}
   .vertical{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;
     letter-spacing:.14em;color:var(--gold);border:1px solid var(--hair);
     border-radius:999px;padding:.16rem .6rem;background:rgba(211,179,124,.06);}
@@ -156,16 +156,40 @@
   .gaps h4{margin:0 0 .3rem;font-size:.7rem;text-transform:uppercase;letter-spacing:.09em;color:var(--gap);}
   .gaps li{font-size:.9rem;color:var(--ink);margin-left:1rem;}
 
-  /* history */
-  .history{border:1px solid var(--hair);border-radius:14px;background:var(--panel);padding:.45rem;
-    margin-bottom:1.4rem;max-height:min(46vh,420px);overflow-y:auto;}
-  .history .hrow{display:flex;gap:.6rem;align-items:baseline;padding:.55rem .65rem;border-radius:9px;
-    cursor:pointer;border:none;background:transparent;width:100%;text-align:left;}
-  .history .hrow:hover{background:var(--panel2);}
-  .history .hq{flex:1;color:var(--ink);font-size:.9rem;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .history .hmeta{font-family:var(--mono);font-size:.68rem;color:var(--muted);white-space:nowrap;}
-  .history .hg{color:var(--verified);}
-  .history .hempty{padding:.7rem;color:var(--muted);font-size:.85rem;}
+  /* past-sessions — full-page master/detail panel */
+  .sessions[hidden]{display:none;}   /* author display:flex would otherwise beat the UA [hidden] rule */
+  .sessions{position:fixed;inset:0;z-index:50;background:var(--bg);
+    background-image:radial-gradient(120% 60% at 85% -10%, rgba(211,179,124,.06), transparent 60%);
+    display:flex;flex-direction:column;}
+  .sessions .shead{display:flex;align-items:center;gap:1rem;padding:1rem 1.3rem;
+    border-bottom:1px solid var(--hair);flex:none;}
+  .sessions .sback{font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;
+    cursor:pointer;background:transparent;border:1px solid var(--hair);border-radius:8px;
+    padding:.42rem .8rem;color:var(--ink);display:inline-flex;align-items:center;gap:.4rem;}
+  .sessions .sback:hover{border-color:var(--gold);color:var(--gold);}
+  .sessions .stitle{font-family:var(--serif);font-size:1.2rem;color:var(--ink);}
+  .sessions .sbody{flex:1;display:flex;min-height:0;}
+  .sessions .slist{width:34%;max-width:380px;min-width:250px;border-right:1px solid var(--hair);
+    overflow-y:auto;padding:.7rem;}
+  .sessions .sdetail{flex:1;overflow-y:auto;padding:1.7rem 2rem;}
+  .sessions .sdetail .summary:first-child{margin-top:0;}
+  .sessions .srow{display:block;width:100%;text-align:left;border:none;background:transparent;cursor:pointer;
+    border-radius:11px;padding:.75rem .8rem;margin-bottom:.25rem;border-left:2px solid transparent;}
+  .sessions .srow:hover{background:var(--panel);}
+  .sessions .srow[aria-current="true"]{background:var(--panel);border-left-color:var(--gold);}
+  .sessions .srow .sq{color:var(--ink);font-size:.92rem;line-height:1.4;display:-webkit-box;
+    -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .sessions .srow .sm{font-family:var(--mono);font-size:.65rem;letter-spacing:.03em;color:var(--muted);margin-top:.35rem;}
+  .sessions .srow .sg{color:var(--verified);}
+  .sessions .splaceholder{color:var(--muted);font-size:.95rem;margin-top:2.5rem;text-align:center;}
+  .sessions .sempty{color:var(--muted);padding:1rem;font-size:.9rem;}
+  @media (max-width:640px){
+    .sessions .shead{padding:.85rem 1rem;}
+    .sessions .sbody{flex-direction:column;}
+    .sessions .slist{width:auto;max-width:none;min-width:0;max-height:40vh;
+      border-right:none;border-bottom:1px solid var(--hair);}
+    .sessions .sdetail{padding:1.2rem 1rem;}
+  }
 
   .answer.md .tw{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:.75rem 0 1.05rem;}
   .answer.md .tw .mdt{margin:0;}
@@ -178,7 +202,7 @@
   @media (max-width:560px){
     .wrap{padding:1.15rem .9rem 4rem;}
     h1{font-size:1.6rem;}
-    .logo{height:40px;}
+    .logo{height:52px;}
     .answer.md .mdh:first-child + .mdp{font-size:1.14rem;}
     .motto{gap:.8rem;letter-spacing:.2em;font-size:.74rem;}
     .motto b{letter-spacing:.2em;}
@@ -191,10 +215,8 @@
   <header>
     <img class="logo" src="/noesis-mark.png" alt="Noesis" />
     <span class="vertical" id="vertical">…</span>
-    <button type="button" class="histbtn" id="histbtn" aria-expanded="false">Recent</button>
+    <button type="button" class="histbtn" id="histbtn">Past Sessions</button>
   </header>
-
-  <section class="history" id="history" hidden></section>
 
   <h1 id="heading">What does the evidence show?</h1>
   <form id="ask">
@@ -215,6 +237,18 @@
     <div class="motto"><b>Discover</b><i></i><b>Understand</b><i></i><b>Act</b></div>
   </section>
 </div>
+
+<!-- Past Sessions: full-page master/detail (questions left, answer right) -->
+<section class="sessions" id="sessions" hidden aria-label="Past sessions">
+  <div class="shead">
+    <button type="button" class="sback" id="sback">← Back</button>
+    <span class="stitle">Past Sessions</span>
+  </div>
+  <div class="sbody">
+    <div class="slist" id="slist"></div>
+    <div class="sdetail" id="sdetail"><div class="splaceholder">Select a question to view its answer.</div></div>
+  </div>
+</section>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -298,7 +332,8 @@ function mdToHtml(raw){
   return out.join("");
 }
 
-function render(data){
+function render(data, target){
+  target = target || out;
   const parts = [];
   const n = data.claims.length;
   parts.push(`<div class="summary">
@@ -372,23 +407,24 @@ function render(data){
       parts.push(`<div class="empty">No grounded answer for that question with the chosen sources.</div>`);
     }
   }
-  out.innerHTML = parts.join("");
-  // clicking a [n] reference scrolls to and highlights its finding
-  out.querySelectorAll(".ref").forEach(r=>r.addEventListener("click",()=>{
-    const el = document.getElementById("f"+r.dataset.n);
+  target.innerHTML = parts.join("");
+  // clicking a [n] reference scrolls to and highlights its finding (within this pane)
+  target.querySelectorAll(".ref").forEach(r=>r.addEventListener("click",()=>{
+    const el = target.querySelector("#f"+r.dataset.n);
     if(el){ el.scrollIntoView({behavior:"smooth",block:"center"});
       el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1200); }
   }));
-  const vgo = document.getElementById("vgo");
-  if(vgo) vgo.addEventListener("click", generateVideo);
+  const vgo = target.querySelector("#vgo");
+  if(vgo) vgo.addEventListener("click", ()=>generateVideo(target));
 }
 
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 
-async function generateVideo(){
+async function generateVideo(root){
   if(!LAST) return;
-  const panel = document.getElementById("vid");
-  const btn = document.getElementById("vgo");
+  root = root || document;
+  const panel = root.querySelector("#vid");
+  const btn = root.querySelector("#vgo");
   const hint = panel.querySelector(".vhint");
   btn.disabled = true; btn.textContent = "Generating…";
   hint.textContent = "Storyboarding, narrating, and assembling the video… (~2 min)";
@@ -434,7 +470,7 @@ $("#ask").addEventListener("submit", async e=>{
   out.innerHTML = `<div class="status">Searching sources and verifying evidence…</div>`;
   try{
     const resp = await fetch("/research",{method:"POST",headers:{"content-type":"application/json"},body});
-    if(resp.ok){ render(await resp.json()); if(!$("#history").hidden) loadHistory(); return; }
+    if(resp.ok){ render(await resp.json()); return; }
     // model unavailable (no credits / replay) → fall back to evidence retrieval
     const detail = (await resp.json().catch(()=>({}))).detail || `HTTP ${resp.status}`;
     if(resp.status===503 || resp.status===502){
@@ -453,37 +489,51 @@ $("#ask").addEventListener("submit", async e=>{
 
 q.addEventListener("input", ()=>{ q.style.height="auto"; q.style.height=Math.min(q.scrollHeight,180)+"px"; });
 
-// ---- history (saved Q&A) ----
-async function loadHistory(){
-  const panel = $("#history");
+// ---- Past Sessions: full-page master/detail ----
+const sessionsEl = $("#sessions"), slist = $("#slist"), sdetail = $("#sdetail");
+
+function openSessions(){
+  sessionsEl.hidden = false;
+  document.body.style.overflow = "hidden";
+  sdetail.innerHTML = `<div class="splaceholder">Select a question to view its answer.</div>`;
+  loadSessionList();
+}
+function closeSessions(){
+  sessionsEl.hidden = true;
+  document.body.style.overflow = "";
+}
+async function loadSessionList(){
+  slist.innerHTML = `<div class="sempty">Loading…</div>`;
   try{
-    const {sessions} = await (await fetch("/sessions?tenant_id=demo&limit=50")).json();
-    if(!sessions || !sessions.length){ panel.innerHTML = `<div class="hempty">No saved questions yet.</div>`; return; }
-    panel.innerHTML = sessions.map(s=>`
-      <button class="hrow" data-id="${esc(s.id)}">
-        <span class="hq">${esc(s.question)}</span>
-        <span class="hmeta">${s.has_video?"🎬 ":""}${s.grounded?'<span class="hg">✓</span> ':""}${new Date(s.created_at).toLocaleDateString()}</span>
+    const {sessions} = await (await fetch("/sessions?tenant_id=demo&limit=100")).json();
+    if(!sessions || !sessions.length){ slist.innerHTML = `<div class="sempty">No saved questions yet.</div>`; return; }
+    slist.innerHTML = sessions.map(s=>`
+      <button class="srow" data-id="${esc(s.id)}">
+        <div class="sq">${esc(s.question)}</div>
+        <div class="sm">${s.has_video?"🎬 ":""}${s.grounded?'<span class="sg">✓ grounded</span> · ':""}${new Date(s.created_at).toLocaleDateString()}</div>
       </button>`).join("");
-    panel.querySelectorAll(".hrow").forEach(b=>b.addEventListener("click",()=>loadSession(b.dataset.id)));
-  }catch(e){ panel.innerHTML = `<div class="hempty">Couldn't load history.</div>`; }
+    slist.querySelectorAll(".srow").forEach(b=>b.addEventListener("click",()=>selectSession(b)));
+    const first = slist.querySelector(".srow");    // show the most recent by default
+    if(first) selectSession(first);
+  }catch(e){ slist.innerHTML = `<div class="sempty">Couldn't load sessions.</div>`; }
 }
-async function loadSession(id){
-  out.innerHTML = `<div class="status">Loading…</div>`;
+async function selectSession(rowEl){
+  slist.querySelectorAll(".srow").forEach(r=>r.removeAttribute("aria-current"));
+  rowEl.setAttribute("aria-current","true");
+  sdetail.innerHTML = `<div class="status">Loading…</div>`;
   try{
-    const row = await (await fetch("/sessions/"+encodeURIComponent(id))).json();
-    CURRENT_Q = row.question; q.value = row.question;
-    render(row);                      // saved row matches render()'s expected shape
-    $("#history").hidden = true; $("#histbtn").setAttribute("aria-expanded","false");
-    window.scrollTo({top:0,behavior:"smooth"});
-  }catch(e){ out.innerHTML = `<div class="empty">Couldn't load that session.</div>`; }
+    const row = await (await fetch("/sessions/"+encodeURIComponent(rowEl.dataset.id))).json();
+    CURRENT_Q = row.question;
+    render(row, sdetail);             // saved row matches render()'s expected shape
+    sdetail.scrollTop = 0;
+  }catch(e){ sdetail.innerHTML = `<div class="empty">Couldn't load that session.</div>`; }
 }
-$("#histbtn").addEventListener("click",()=>{
-  const p = $("#history");
-  if(p.hidden){ p.hidden = false; $("#histbtn").setAttribute("aria-expanded","true"); loadHistory(); }
-  else { p.hidden = true; $("#histbtn").setAttribute("aria-expanded","false"); }
-});
+$("#histbtn").addEventListener("click", openSessions);
+$("#sback").addEventListener("click", closeSessions);
+document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !sessionsEl.hidden) closeSessions(); });
 
 loadConfig();
+if(location.hash === "#sessions") openSessions();   // deep-link to the sessions panel
 </script>
 </body>
 </html>

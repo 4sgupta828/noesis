@@ -193,12 +193,15 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         page = _WEB_DIR / "index.html"
         return page.read_text() if page.exists() else "<h1>Noesis</h1>"
 
-    @app.get("/noesis-logo.png")
-    def logo():
+    @app.get("/{name}.png")
+    def web_png(name: str):
+        """Serve a PNG asset from apps/web (logo, brand mark). Basename-only + .png
+        guard → no path traversal; only files that exist in the web dir are served."""
         from fastapi.responses import FileResponse
-        f = _WEB_DIR / "noesis-logo.png"
+        safe = os.path.basename(name) + ".png"
+        f = _WEB_DIR / safe
         if not f.exists():
-            raise HTTPException(status_code=404, detail="no logo")
+            raise HTTPException(status_code=404, detail="not found")
         return FileResponse(str(f), media_type="image/png")
 
     @app.post("/research", response_model=ResearchOut)

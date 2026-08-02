@@ -39,6 +39,13 @@ def vision_enabled() -> bool:
     return os.environ.get("NOESIS_VISION", "").lower() in ("1", "true", "yes")
 
 
+def gap_healing_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, an under-evidenced answer can surface a gap-fill
+    plan (LLM-proposed connector ingest jobs) that the user queues, and a background processor
+    ingests them into the corpus — self-healing. OFF → no gap plan, endpoints 404, no processor."""
+    return os.environ.get("NOESIS_GAP_HEALING", "").lower() in ("1", "true", "yes")
+
+
 class Attachment(BaseModel):
     data: str                              # base64-encoded file bytes
     media_type: str = ""                   # e.g. image/png, application/pdf, application/dicom
@@ -59,6 +66,18 @@ class ExplainIn(BaseModel):
     question: str
     answer: str
     session_id: str | None = None
+
+
+class GapPlanIn(BaseModel):
+    question: str
+    answer: str = ""
+    coverage_gaps: list[str] = []
+
+
+class GapQueueIn(BaseModel):
+    question: str = ""
+    tenant_id: str = "demo"
+    jobs: list[dict] = []                  # [{connector, query, limit, kind, rationale, quality}]
 
 
 class Citation(BaseModel):
@@ -121,11 +140,12 @@ def build_default_service() -> ResearchService:
     # OFF → None → the kernel's flat-prose compose path, byte-identical to pre-flag.
     answer_format = manifest.answer_format if structured_answers() else None
     vision_prompt = manifest.vision_prompt if vision_enabled() else None
+    gap_prompt = manifest.gap_prompt if gap_healing_enabled() else None
     return ResearchService(
         llm=build_llm(mode=mode), embedder=embedder,
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
         answer_format=answer_format, vision_prompt=vision_prompt,
-        layman_prompt=manifest.layman_prompt,
+        layman_prompt=manifest.layman_prompt, gap_prompt=gap_prompt,
         vertical_name=manifest.name, ui=manifest.ui,
         connectors=connectors, corpus_source_key=corpus_key,
     )
@@ -151,6 +171,54 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         store = _store()
         if store is not None:
             await store.attach_video(session_id, **kw)
+
+    def _gap_queue():
+        """Vertical-isolated corpus gap-fill queue (Postgres). None unless a corpus DSN is set
+        AND gap-healing is enabled — so OFF is a true no-op."""
+        if getattr(app.state, "gap_queue", "unset") == "unset":
+            dsn = os.environ.get("NOESIS_CORPUS_DSN")
+            if dsn and gap_healing_enabled():
+                from api.gap_queue import GapQueue
+                app.state.gap_queue = GapQueue(dsn, vertical=load_active_vertical().name)
+            else:
+                app.state.gap_queue = None
+        return app.state.gap_queue
+
+    async def _gap_processor() -> None:
+        """Background loop: claim a pending gap-fill job, ingest its connector query into the
+        corpus, mark it done/failed. One job at a time; atomic claim → replica-safe. Errors on a
+        single job never stop the loop (Rule 13: observable failure, keep serving)."""
+        q = _gap_queue()
+        if q is None:
+            return
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        if not svc.connectors or not svc.corpus_source_key:
+            return
+        pg = svc.sources[svc.corpus_source_key]
+        while True:
+            try:
+                job = await q.claim_one()
+            except Exception:
+                await asyncio.sleep(10); continue
+            if job is None:
+                await asyncio.sleep(8); continue
+            conn = svc.connectors.get(job["connector"])
+            if conn is None:
+                await q.fail(job["id"], f"unknown connector {job['connector']}"); continue
+            try:
+                n = await ingest_connector_to_postgres(
+                    conn, pg, tenant_id=job["tenant_id"], embedder=svc.embedder,
+                    window={"query": job["query"], "limit": job["limit"]})
+                await q.complete(job["id"], n)
+            except Exception as e:   # noqa: BLE001 — record + move on
+                await q.fail(job["id"], str(e))
+
+    @app.on_event("startup")
+    async def _start_gap_processor() -> None:
+        if gap_healing_enabled() and os.environ.get("NOESIS_CORPUS_DSN"):
+            app.state._gap_task = asyncio.create_task(_gap_processor())
 
     # Answer-video add-on — separate, flag-gated router (default OFF). Kept fully out of
     # the research path: mounting it changes nothing about how answers are produced.
@@ -181,6 +249,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "structured_answers": structured_answers(),
             "vision_enabled": vision_enabled(),
             "layman_enabled": bool(getattr(svc, "layman_prompt", None)),
+            "gap_healing_enabled": gap_healing_enabled() and bool(getattr(svc, "gap_prompt", None)),
         }
 
     @app.post("/search")
@@ -321,6 +390,77 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 except Exception:
                     pass
         return {"explanation": text}
+
+    @app.post("/corpus/gap-plan")
+    async def corpus_gap_plan(body: GapPlanIn) -> dict:
+        """On-demand: what to ADD to the corpus so an under-evidenced question could be answered.
+        LLM-proposed ingest jobs (over this deployment's connectors) + gold-source recommendations.
+        Read-only — proposes; it does not queue or ingest anything."""
+        if not gap_healing_enabled():
+            raise HTTPException(status_code=404, detail="gap healing not enabled")
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        try:
+            plan = await svc.plan_gaps(
+                question=body.question, answer=body.answer, coverage_gaps=body.coverage_gaps)
+        except CassetteMiss as e:
+            raise HTTPException(status_code=503, detail="No model available in replay mode.") from e
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
+        if plan is None:
+            raise HTTPException(status_code=404, detail="gap healing not available for this vertical")
+        return {
+            "summary": plan.summary,
+            "jobs": [j.model_dump() for j in plan.jobs],
+            "recommendations": [r.model_dump() for r in plan.recommendations],
+            "connectors": list(svc.connectors.keys()),
+        }
+
+    @app.post("/corpus/queue")
+    async def corpus_queue_add(body: GapQueueIn) -> dict:
+        """Queue user-approved gap-fill jobs. Validates every job against the real connector set
+        and caps the limit (code owns structure) before persisting for the background processor."""
+        if not gap_healing_enabled():
+            raise HTTPException(status_code=404, detail="gap healing not enabled")
+        q = _gap_queue()
+        if q is None:
+            raise HTTPException(status_code=404, detail="no corpus queue configured")
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        allowed = set(app.state.service.connectors.keys())
+        clean = []
+        for j in body.jobs or []:
+            c = (j.get("connector") or "").strip()
+            query = (j.get("query") or "").strip()
+            if c not in allowed or not query:
+                continue
+            clean.append({
+                "connector": c, "query": query,
+                "limit": max(1, min(int(j.get("limit") or 200), 400)),
+                "kind": (j.get("kind") or "")[:80],
+                "rationale": (j.get("rationale") or "")[:400],
+                "quality": (j.get("quality") or "")[:120],
+            })
+        if not clean:
+            raise HTTPException(status_code=400, detail="no valid jobs (unknown connector or empty query)")
+        try:
+            ids = await q.enqueue(tenant_id=body.tenant_id, question=body.question, jobs=clean)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"queue error: {e}") from e
+        return {"queued": len(ids), "ids": ids}
+
+    @app.get("/corpus/queue")
+    async def corpus_queue_status(limit: int = 50) -> dict:
+        """Gap-fill queue status (pending/running/done/failed + blocks added) — self-healing progress."""
+        q = _gap_queue()
+        if q is None:
+            return {"enabled": gap_healing_enabled(), "jobs": [], "summary": {}}
+        try:
+            return {"enabled": True, "jobs": await q.list(limit=min(limit, 200)),
+                    "summary": await q.summary()}
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"queue error: {e}") from e
 
     @app.get("/sessions")
     async def list_sessions(tenant_id: str = "demo", limit: int = 100, q: str = "") -> dict:

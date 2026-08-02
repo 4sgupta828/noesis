@@ -233,6 +233,35 @@
   .plain .plain-b.md .mdl{margin:.5rem 0 .5rem 1.1rem;} .plain .plain-b.md .mdh{font-size:.82rem;margin:.7rem 0 .35rem;}
   .plain .plain-b.md strong{color:var(--ink);font-weight:640;}
 
+  /* self-healing corpus — fill-the-gaps panel */
+  .gapfix{margin:1.4rem 0 .4rem;padding:1rem 1.15rem;border:1px solid var(--hair);border-left:3px solid var(--gold);
+    border-radius:14px;background:var(--panel2);}
+  .gapfix .vbtn{font-family:var(--mono);font-size:.78rem;font-weight:600;letter-spacing:.03em;cursor:pointer;
+    border:1px solid var(--gold);color:var(--gold);background:transparent;border-radius:9px;padding:.55rem .9rem;margin-top:.2rem;}
+  .gapfix .vbtn:hover{background:var(--gold);color:#1A1206;} .gapfix .vbtn:disabled{opacity:.55;cursor:default;}
+  .gapfix-h{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:.4rem;}
+  .gapfix-hint{font-size:.8rem;color:var(--muted);margin-bottom:.7rem;line-height:1.5;}
+  .gapfix-sum{font-size:.92rem;color:var(--ink);margin:.1rem 0 .8rem;line-height:1.55;}
+  .gaplbl{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:.3rem 0 .55rem;}
+  .gaplbl2{margin-top:1.1rem;border-top:1px solid var(--hair);padding-top:.9rem;}
+  .gapjobs{display:flex;flex-direction:column;gap:.5rem;margin-bottom:.9rem;}
+  .gapjob{display:flex;gap:.6rem;align-items:flex-start;padding:.6rem .7rem;border:1px solid var(--hair);
+    border-radius:10px;background:var(--panel);cursor:pointer;transition:border-color .15s;}
+  .gapjob:hover{border-color:rgba(211,179,124,.4);}
+  .gapjob input{margin-top:.25rem;flex:none;accent-color:var(--gold);width:1rem;height:1rem;}
+  .gapj-body{display:flex;flex-direction:column;gap:.25rem;min-width:0;}
+  .gapj-top{display:flex;gap:.5rem;align-items:baseline;flex-wrap:wrap;}
+  .gapj-top b{font-family:var(--mono);font-size:.72rem;color:var(--gold);text-transform:uppercase;letter-spacing:.03em;}
+  .gapj-q{font-size:.9rem;color:var(--ink);line-height:1.4;}
+  .gapj-meta{display:flex;gap:.5rem;flex-wrap:wrap;font-size:.7rem;color:var(--muted);}
+  .gapj-kind,.gapj-qual,.gapj-lim{background:var(--panel2);border:1px solid var(--hair);border-radius:6px;padding:.08rem .4rem;}
+  .gapj-why{font-size:.78rem;color:var(--muted);line-height:1.45;}
+  .gapstatus{display:block;font-size:.8rem;color:var(--muted);margin-top:.6rem;line-height:1.5;}
+  .gapstatus a{color:var(--gold);}
+  .gapprog{font-family:var(--mono);font-size:.72rem;color:var(--muted);margin-top:.4rem;}
+  .gaprecs{margin:.2rem 0 0;padding-left:1.1rem;font-size:.86rem;color:var(--ink);line-height:1.5;}
+  .gaprecs li{margin-bottom:.4rem;} .gapr-why{display:block;font-size:.76rem;color:var(--muted);}
+
   /* grounding header band */
   .ansmeta{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:0 0 1.3rem;padding-bottom:.9rem;
     border-bottom:1px solid var(--hair);}
@@ -497,6 +526,7 @@ let VIDEO_ENABLED = false;
 let STRUCTURED = false;     // render the answer as markdown sections (server-authoritative)
 let VISION_ENABLED = false; // image/PDF/DICOM upload → visual-context research
 let LAYMAN_ENABLED = false; // on-demand plain-language re-explanation
+let GAP_ENABLED = false;    // self-healing: suggest + queue sources to fill evidence gaps
 let ATTACHMENTS = [];       // [{name, media_type, data(base64)}]
 let USER = null;            // {name, email} captured at landing, saved per session
 let LAST = null;            // {question, answer} for the answer-video add-on
@@ -511,6 +541,7 @@ async function loadConfig(){
     VIDEO_ENABLED = !!c.video_enabled;
     STRUCTURED = !!c.structured_answers;
     LAYMAN_ENABLED = !!c.layman_enabled;
+    GAP_ENABLED = !!c.gap_healing_enabled;
     VISION_ENABLED = !!c.vision_enabled;
     if(VISION_ENABLED){
       $("#attach").hidden = false;
@@ -691,6 +722,15 @@ function render(data, target){
       parts.push(`<div class="empty">No grounded answer for that question with the chosen sources.</div>`);
     }
   }
+  // Self-healing corpus — when the question is under-evidenced (stated gaps or not fully grounded),
+  // offer to find + queue high-quality sources to add. On-demand (one LLM call only when asked).
+  if(GAP_ENABLED && ((data.coverage_gaps||[]).length || !data.grounded)){
+    parts.push(`<div class="gapfix" id="gapfix">
+      <div class="gapfix-h">◈ Fill the evidence gaps</div>
+      <div class="gapfix-hint">This question is under-evidenced. Find high-quality sources to add to the corpus so it can be answered next time — the corpus heals itself.</div>
+      <button type="button" class="vbtn" id="gapgo">◈ Suggest sources to add</button>
+    </div>`);
+  }
   target.innerHTML = parts.join("");
   // clicking a [n] reference scrolls to and highlights its finding (within this pane)
   target.querySelectorAll(".ref").forEach(r=>r.addEventListener("click",()=>{
@@ -705,6 +745,83 @@ function render(data, target){
   if(cb) cb.addEventListener("click", ()=>copyAnswer(data, cb));
   const pg = target.querySelector("#plaingo");
   if(pg) pg.addEventListener("click", ()=>generatePlain(target));
+  const gg = target.querySelector("#gapgo");
+  if(gg) gg.addEventListener("click", ()=>generateGapPlan(target, data));
+}
+
+// Self-healing: ask the backend which sources would fill this question's gaps, render them
+// with checkboxes, and let the user queue the selected ones for download + processing.
+async function generateGapPlan(root, data){
+  const panel = root.querySelector("#gapfix");
+  const btn = root.querySelector("#gapgo");
+  const hint = panel.querySelector(".gapfix-hint");
+  btn.disabled = true; btn.textContent = "Finding sources…";
+  try{
+    const r = await fetch("/corpus/gap-plan",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({question:(data.question||CURRENT_Q), answer:(data.answer||""),
+        coverage_gaps:(data.coverage_gaps||[])})});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+    const plan = await r.json();
+    const jobs = plan.jobs||[];
+    if(!jobs.length && !(plan.recommendations||[]).length){
+      hint.textContent = "No additional sources would help — "+(plan.summary||"the gap isn't fillable by more data.");
+      btn.remove(); return;
+    }
+    const rows = jobs.map((j,i)=>`<label class="gapjob">
+        <input type="checkbox" class="gapjchk" data-i="${i}" checked>
+        <span class="gapj-body">
+          <span class="gapj-top"><b>${esc(j.connector)}</b><span class="gapj-q">${esc(j.query)}</span></span>
+          <span class="gapj-meta">${j.kind?`<span class="gapj-kind">${esc(j.kind)}</span>`:""}${j.quality?`<span class="gapj-qual">${esc(j.quality)}</span>`:""}<span class="gapj-lim">${j.limit} items</span></span>
+          ${j.rationale?`<span class="gapj-why">${esc(j.rationale)}</span>`:""}
+        </span></label>`).join("");
+    const recs = (plan.recommendations||[]).map(rc=>`<li><b>${esc(rc.source)}</b>${rc.what?" — "+esc(rc.what):""}${rc.why?`<span class="gapr-why">${esc(rc.why)}</span>`:""}</li>`).join("");
+    panel.innerHTML = `<div class="gapfix-h">◈ Fill the evidence gaps</div>
+      ${plan.summary?`<div class="gapfix-sum">${esc(plan.summary)}</div>`:""}
+      <div class="gaplbl">Queueable now — high-quality sources to fetch into the corpus:</div>
+      <div class="gapjobs">${rows||'<div class="gapfix-hint">No auto-fetchable sources for this gap.</div>'}</div>
+      ${jobs.length?`<button type="button" class="vbtn" id="gapqueue">⇩ Queue for download & process</button>
+        <span class="gapstatus" id="gapstatus"></span>`:""}
+      ${recs?`<div class="gaplbl gaplbl2">Gold-standard sources to add later (need access — not auto-fetchable):</div>
+        <ul class="gaprecs">${recs}</ul>`:""}`;
+    // stash jobs for the queue action
+    panel._jobs = jobs; panel._q = (data.question||CURRENT_Q);
+    const qb = panel.querySelector("#gapqueue");
+    if(qb) qb.addEventListener("click", ()=>queueGapJobs(panel));
+  }catch(e){
+    btn.disabled=false; btn.textContent="◈ Suggest sources to add";
+    if(hint) hint.textContent = "Couldn't suggest sources: "+(e.message||e);
+  }
+}
+
+async function queueGapJobs(panel){
+  const chosen = [...panel.querySelectorAll(".gapjchk")].filter(c=>c.checked).map(c=>panel._jobs[+c.dataset.i]);
+  const status = panel.querySelector("#gapstatus");
+  const qb = panel.querySelector("#gapqueue");
+  if(!chosen.length){ status.textContent = "Select at least one source."; return; }
+  qb.disabled = true; qb.textContent = "Queuing…";
+  try{
+    const r = await fetch("/corpus/queue",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({question:panel._q, jobs:chosen})});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+    const res = await r.json();
+    qb.textContent = `✓ Queued ${res.queued}`;
+    status.innerHTML = `Queued ${res.queued} source${res.queued===1?"":"s"} — the corpus will download & index them in the background. <a href="#" id="gapref">Check progress</a>`;
+    const rl = status.querySelector("#gapref");
+    if(rl) rl.addEventListener("click",async(e)=>{e.preventDefault(); await showGapProgress(status);});
+    await showGapProgress(status);
+  }catch(e){
+    qb.disabled=false; qb.textContent="⇩ Queue for download & process";
+    status.textContent = "Couldn't queue: "+(e.message||e);
+  }
+}
+
+async function showGapProgress(status){
+  try{
+    const s = await (await fetch("/corpus/queue?limit=8")).json();
+    const sm = s.summary||{};
+    status.insertAdjacentHTML("beforeend",
+      `<div class="gapprog">Queue: ${sm.pending||0} pending · ${sm.running||0} running · ${sm.done||0} done${sm.failed?` · ${sm.failed} failed`:""} · +${sm.blocks_added||0} blocks added</div>`);
+  }catch(e){ /* best-effort */ }
 }
 
 async function generatePlain(root){

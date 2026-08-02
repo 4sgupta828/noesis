@@ -26,6 +26,7 @@ class ResearchService:
     answer_format: str | None = None        # vertical answer-structure directive (opaque)
     vision_prompt: str | None = None        # vertical image-description directive (opaque)
     layman_prompt: str | None = None        # vertical layman-rephrasing directive (opaque)
+    gap_prompt: str | None = None           # vertical gap-fill-planner directive (opaque)
     max_calls: int = 40
     vertical_name: str = ""
     ui: object | None = None                # the vertical's UIContract (for /config)
@@ -90,6 +91,17 @@ class ResearchService:
         from noesis_kernel.research.explain import explain_for_layperson
         return await explain_for_layperson(
             llm=self.llm, layman_prompt=self.layman_prompt, question=question, answer=answer)
+
+    async def plan_gaps(self, *, question: str, answer: str, coverage_gaps: list[str]):
+        """On-demand plan of what to ADD to the corpus so an under-evidenced question could be
+        answered — actionable ingest jobs (over THIS deployment's connectors) + gold-source
+        recommendations. Returns None when gap-healing isn't configured for the vertical."""
+        if not self.gap_prompt or not self.connectors:
+            return None
+        from noesis_kernel.research.gap_planner import plan_gap_fill
+        return await plan_gap_fill(
+            llm=self.llm, gap_prompt=self.gap_prompt, question=question, answer=answer,
+            coverage_gaps=coverage_gaps, available_connectors=list(self.connectors.keys()))
 
     async def search(
         self,

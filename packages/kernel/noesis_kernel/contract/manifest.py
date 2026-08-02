@@ -64,6 +64,12 @@ class VerticalManifest:
     # Optional vertical-supplied instruction for the on-demand LAYMAN re-explanation (rephrase
     # a grounded answer for a non-expert, adding no new facts). None → feature unavailable.
     layman_prompt: str | None = None
+    # Optional vertical-supplied instruction for the GAP-FILL planner: given a question the corpus
+    # could not fully answer + its coverage gaps + the available connector KEYS, propose concrete
+    # ingest jobs ({connector, query, limit}) plus gold-standard sources to recommend. Describes
+    # what each connector fetches + what high-quality evidence looks like in this domain. Opaque
+    # prose; the kernel only threads it into the planner call. None → self-healing unavailable.
+    gap_prompt: str | None = None
 
     # Held-out eval gold + vocab
     eval_gold: dict[str, object] = field(default_factory=dict)

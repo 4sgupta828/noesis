@@ -2,7 +2,11 @@
 
 import OpenAI from 'openai';
 
-export type TtsVoice = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
+// gpt-4o-mini-tts adds warmer, steerable voices (ash/ballad/coral/sage/verse) and, unlike
+// tts-1/tts-1-hd, actually HONORS `instructions` (tone/pacing/warmth).
+export type TtsVoice =
+  | 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer'
+  | 'ash' | 'ballad' | 'coral' | 'sage' | 'verse';
 export type TtsModel = 'tts-1' | 'tts-1-hd' | 'gpt-4o-mini-tts';
 
 let client: OpenAI | null = null;

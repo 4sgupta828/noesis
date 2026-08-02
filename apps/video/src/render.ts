@@ -68,10 +68,13 @@ The on-screen visual TYPES available — use a RICH VARIETY, pick each for its c
 - quote: a punchy line + who said it.
 
 Rules:
-- Open with a 'title' hook and build an arc → substance scenes → a closing takeaway ('title'). VARY the visual types across the arc; don't repeat one type back-to-back.
-- Narration is spoken: natural, clear, concise. On-screen text is terse: headlines and keywords, never paragraphs.
+- STATE THE TOPIC UP FRONT. The opening 'title' scene must clearly say what this briefing is about — name the specific question/subject in the first sentence, so the viewer immediately knows the topic. Do not open with a vague hook.
+- END WITH A CLEAR CONCLUSION. The FINAL scene must be a 'title' that delivers the bottom-line takeaway — what to conclude from the evidence and its limitations. Never end mid-topic or trail off.
+- The narration is ONE CONTINUOUS briefing read start-to-finish: write it so each scene's narration flows naturally into the next with light connective phrasing (e.g. "First… ", "The evidence also… ", "Taken together… "). It must read as a single cohesive spoken piece, NOT disconnected fragments — this keeps the voiceover smooth across scene changes.
+- Build the arc: topic → substance scenes → conclusion. VARY the visual types across the arc; don't repeat one type back-to-back.
+- Narration is spoken: natural, warm, and clear — engaged but precise. On-screen text is terse: headlines and keywords, never paragraphs.
 - Ground it in the source material — use its real claims, numbers, and language. Do NOT invent statistics; only use stat/chart/donut/bignumbers values the material actually supports. If there are no real numbers, prefer bullets/comparison/timeline/quote over inventing figures.
-- 4–9 scenes. Every scene must have narration and a title, plus the field for its chosen visual type.`;
+- 5–8 scenes. Every scene must have narration and a title, plus the field for its chosen visual type.`;
 
 export interface RenderAnswerVideoOpts {
   material: string;
@@ -127,14 +130,18 @@ export async function renderAnswerVideo(opts: RenderAnswerVideoOpts): Promise<An
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'noesis-vid-'));
   try {
-    // 2. Per scene: infographic frames + TTS voiceover → a scene clip.
+    // 2. Per scene: infographic frames + TTS voiceover → a VIDEO-ONLY scene clip. The
+    // narration is assembled separately into one continuous track (below) so the voiceover
+    // never fades/swells at scene changes.
     const sceneFiles: string[] = [];
+    const mp3Files: string[] = [];
     const durations: number[] = [];
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i]!;
       const isFirst = i === 0, isLast = i === scenes.length - 1;
       const mp3 = path.join(tmp, `s${i}.mp3`);
       fs.writeFileSync(mp3, await synthesizeSpeech(scene.narration, { voice, model: opts.voiceModel, instructions: opts.voiceInstructions, speed: opts.speed }));
+      mp3Files.push(mp3);
       const dur = Math.min(MAX_SCENE, Math.max(MIN_SCENE, (await probeDuration(mp3)) + TAIL_SEC));
       durations.push(dur);
 
@@ -163,43 +170,60 @@ export async function renderAnswerVideo(opts: RenderAnswerVideoOpts): Promise<An
 
       const clip = path.join(tmp, `s${i}.mp4`);
       await exec('ffmpeg', [
-        '-y', '-framerate', String(FPS), '-i', path.join(frameDir, 'f_%05d.png'), '-i', mp3,
+        '-y', '-framerate', String(FPS), '-i', path.join(frameDir, 'f_%05d.png'),
         '-filter_complex', vf,
-        '-map', '[v]', '-map', '1:a', '-af', 'apad', '-t', String(dur),
-        '-r', String(FPS), '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ar', '44100', clip,
+        '-map', '[v]', '-t', String(dur),
+        '-r', String(FPS), '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', clip,
       ], { maxBuffer: 1 << 27 });
       sceneFiles.push(clip);
     }
 
-    // 3. Assemble with smooth CROSSFADES (xfade video + acrossfade audio), chained with
-    // accumulating offsets — no dip-to-black between scenes. A single scene is just remuxed.
+    // 3. Assemble: smooth video CROSSFADES (xfade) + one CONTINUOUS narration track. Each
+    // scene's narration is placed at that scene's start time (adelay) over a shared bed and
+    // mixed — so the voiceover plays gapless at full volume across scene changes (no swell/cut).
     const outName = `${randomBytes(9).toString('hex')}.mp4`;
     const outFile = path.join(OUT_DIR, outName);
-    const XFADE = 0.5;   // crossfade overlap (seconds)
-    if (sceneFiles.length === 1) {
-      await exec('ffmpeg', ['-y', '-i', sceneFiles[0]!, '-c', 'copy', '-movflags', '+faststart', outFile],
-        { maxBuffer: 1 << 27 });
-    } else {
+    const XFADE = 0.5;   // video crossfade overlap (seconds)
+
+    // continuous audio: narration k starts where scene k begins on the video timeline.
+    const audioFile = path.join(tmp, 'vo.m4a');
+    const aInputs: string[] = [];
+    for (const m of mp3Files) aInputs.push('-i', m);
+    const aParts: string[] = [];
+    const aLabels: string[] = [];
+    let startMs = 0;
+    for (let k = 0; k < mp3Files.length; k++) {
+      const d = Math.round(startMs);
+      aParts.push(`[${k}:a]adelay=${d}|${d}[ad${k}]`);
+      aLabels.push(`[ad${k}]`);
+      startMs += (durations[k]! - XFADE) * 1000;   // next scene's start on the timeline
+    }
+    const aFilter = mp3Files.length === 1
+      ? '[0:a]anull[a]'
+      : `${aParts.join(';')};${aLabels.join('')}amix=inputs=${mp3Files.length}:normalize=0:dropout_transition=0[a]`;
+    await exec('ffmpeg', ['-y', ...aInputs, '-filter_complex', aFilter, '-map', '[a]',
+      '-c:a', 'aac', '-ar', '44100', audioFile], { maxBuffer: 1 << 27 });
+
+    // video track (xfade), then mux the continuous narration over it
+    const videoOnly = sceneFiles.length === 1 ? sceneFiles[0]! : path.join(tmp, 'video.mp4');
+    if (sceneFiles.length > 1) {
       const inputs: string[] = [];
       for (const f of sceneFiles) inputs.push('-i', f);
       const vparts: string[] = [];
-      const aparts: string[] = [];
       let vlabel = '[0:v]';
-      let alabel = '[0:a]';
       let prevLen = durations[0]!;
       for (let k = 1; k < sceneFiles.length; k++) {
         const offset = Math.max(0, prevLen - XFADE);
         const vout = k === sceneFiles.length - 1 ? '[v]' : `[v${k}]`;
-        const aout = k === sceneFiles.length - 1 ? '[a]' : `[a${k}]`;
         vparts.push(`${vlabel}[${k}:v]xfade=transition=fade:duration=${XFADE}:offset=${offset.toFixed(3)}${vout}`);
-        aparts.push(`${alabel}[${k}:a]acrossfade=d=${XFADE}${aout}`);
-        vlabel = vout; alabel = aout;
+        vlabel = vout;
         prevLen = prevLen + durations[k]! - XFADE;
       }
-      await exec('ffmpeg', ['-y', ...inputs, '-filter_complex', [...vparts, ...aparts].join(';'),
-        '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
-        '-c:a', 'aac', '-movflags', '+faststart', outFile], { maxBuffer: 1 << 27 });
+      await exec('ffmpeg', ['-y', ...inputs, '-filter_complex', vparts.join(';'), '-map', '[v]',
+        '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', videoOnly], { maxBuffer: 1 << 27 });
     }
+    await exec('ffmpeg', ['-y', '-i', videoOnly, '-i', audioFile, '-map', '0:v', '-map', '1:a',
+      '-c:v', 'copy', '-c:a', 'aac', '-shortest', '-movflags', '+faststart', outFile], { maxBuffer: 1 << 27 });
 
     const durationSec = await probeDuration(outFile);
     const size = fs.statSync(outFile).size;

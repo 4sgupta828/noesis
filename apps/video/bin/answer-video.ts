@@ -48,13 +48,16 @@ async function main() {
   const video = await renderAnswerVideo({
     material: briefingMaterial(question, answer),
     title: title || question.slice(0, 80),
-    tone: 'a precise, analytical clinical evidence briefing delivered peer-to-peer to a physician '
-      + 'or researcher — measured, authoritative, and evidence-focused (not patient-facing)',
-    voice: 'onyx',
+    tone: 'a warm, engaging clinical evidence briefing delivered peer-to-peer to a physician or '
+      + 'researcher — knowledgeable and precise, but human and approachable (not patient-facing)',
+    voice: 'sage',                    // warm, natural voice
+    voiceModel: 'gpt-4o-mini-tts',    // the ONLY model that honors `voiceInstructions`
     voiceInstructions:
-      'Speak as a knowledgeable clinical colleague briefing a physician or researcher: measured, '
-      + 'precise, confident and analytical. Professional and peer-to-peer — no bedside reassurance, '
-      + 'no talking down. Convey the evidence and its limitations crisply.',
+      'Speak as a warm, engaging senior clinical colleague briefing a peer: friendly and human, '
+      + 'with genuine warmth and an even, unhurried pace — never robotic, clipped, or cold. Precise '
+      + 'and credible, but relaxed and conversational, like explaining findings to a respected '
+      + 'colleague over coffee. Let sentences breathe; connect ideas smoothly.',
+    speed: 0.98,
     captions: false,
     format: '16:9',
     theme: 'midnight',

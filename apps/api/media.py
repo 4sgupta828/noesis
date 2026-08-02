@@ -134,6 +134,11 @@ def attachments_to_media(attachments: list[dict]) -> tuple[list[dict], list[dict
     def _label(att):
         return att.get("name") or att.get("media_type") or "file"
 
+    def _tag(ims, name):
+        for im in ims:
+            im["name"] = name
+        return ims
+
     for att in attachments or []:
         if len(images) >= _MAX_IMAGES and _kind(att) != "pdf":
             notes.append("some attachments skipped (max 4 images per request)")
@@ -141,15 +146,15 @@ def attachments_to_media(attachments: list[dict]) -> tuple[list[dict], list[dict
         kind = _kind(att)
         try:
             if kind == "image":
-                images.extend(_image(att))
+                images.extend(_tag(_image(att), _label(att)))
             elif kind == "dicom":
-                images.extend(_dicom(att))
+                images.extend(_tag(_dicom(att), _label(att)))
             elif kind == "pdf":
                 text = _pdf_text(att)
                 if len(text) >= _PDF_TEXT_MIN:            # a real text document
                     docs.append({"name": _label(att), "text": text})
                 else:                                     # scanned/image PDF → vision
-                    images.extend(_pdf_images(att))
+                    images.extend(_tag(_pdf_images(att), _label(att)))
             else:
                 notes.append(f"unsupported attachment '{_label(att)}'")
         except ModuleNotFoundError as e:
@@ -157,3 +162,27 @@ def attachments_to_media(attachments: list[dict]) -> tuple[list[dict], list[dict
         except Exception as e:  # noqa: BLE001 — never break the request on a bad file
             notes.append(f"couldn't read {kind} attachment ({type(e).__name__})")
     return images[:_MAX_IMAGES], docs, notes
+
+
+def _thumb(b64_png: str, edge: int = 220) -> str:
+    """A tiny base64 PNG data-URI thumbnail of an already-decoded image (for session display)."""
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(base64.b64decode(b64_png)))
+        img.thumbnail((edge, edge))
+        buf = io.BytesIO()
+        (img.convert("RGB") if img.mode not in ("RGB", "L") else img).save(buf, format="PNG", optimize=True)
+        return "data:image/png;base64," + _b64(buf.getvalue())
+    except Exception:
+        return ""
+
+
+def session_previews(images: list[dict], docs: list[dict]) -> list[dict]:
+    """Lightweight, displayable record of what the user uploaded — image thumbnails + doc
+    names — small enough to store inline on the session (shown in Past Sessions)."""
+    prev: list[dict] = []
+    for im in images:
+        prev.append({"name": im.get("name") or "image", "kind": "image", "thumb": _thumb(im["data"])})
+    for d in docs:
+        prev.append({"name": d.get("name") or "document", "kind": "document"})
+    return prev

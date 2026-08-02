@@ -34,11 +34,17 @@ CREATE TABLE IF NOT EXISTS noesis_research_session (
     video_duration DOUBLE PRECISION,
     user_name      TEXT,
     user_email     TEXT,
+    visual_observation TEXT,
+    attachments    JSONB NOT NULL DEFAULT '[]'::jsonb,
+    deleted        BOOLEAN NOT NULL DEFAULT FALSE,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 -- additive columns for pre-existing tables (expand-only; safe to re-run)
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS user_name  TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS user_email TEXT;
+ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS visual_observation TEXT;
+ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS deleted BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_nrs_vertical_tenant_created
     ON noesis_research_session (vertical, tenant_id, created_at DESC);
 """
@@ -74,7 +80,9 @@ class SessionStore:
     async def save(self, *, tenant_id: str, workspace_id: str | None, question: str,
                    answer: str, grounded: bool, claims: list[dict], source_stats: dict,
                    coverage_gaps: list[str], rejected: int, sources: list[str] | None,
-                   user_name: str | None = None, user_email: str | None = None) -> str:
+                   user_name: str | None = None, user_email: str | None = None,
+                   visual_observation: str | None = None,
+                   attachments: list[dict] | None = None) -> str:
         await self._ensure()
         sid = uuid.uuid4().hex
         pool = await self._get_pool()
@@ -82,14 +90,26 @@ class SessionStore:
             await conn.execute(
                 """INSERT INTO noesis_research_session
                    (id, vertical, tenant_id, workspace_id, question, answer, grounded, claims,
-                    source_stats, coverage_gaps, rejected, sources, user_name, user_email)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12::jsonb,$13,$14)""",
+                    source_stats, coverage_gaps, rejected, sources, user_name, user_email,
+                    visual_observation, attachments)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12::jsonb,
+                           $13,$14,$15,$16::jsonb)""",
                 sid, self._vertical, tenant_id, workspace_id, question, answer, grounded,
                 json.dumps(claims), json.dumps(source_stats), json.dumps(coverage_gaps),
                 rejected, json.dumps(sources or []),
                 (user_name or None), (user_email or None),
+                (visual_observation or None), json.dumps(attachments or []),
             )
         return sid
+
+    async def soft_delete(self, session_id: str) -> bool:
+        await self._ensure()
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            res = await conn.execute(
+                "UPDATE noesis_research_session SET deleted=TRUE WHERE id=$1 AND vertical=$2",
+                session_id, self._vertical)
+        return res.endswith("1")
 
     async def attach_video(self, session_id: str, *, filename: str, title: str,
                            duration: float) -> bool:
@@ -108,7 +128,7 @@ class SessionStore:
         await self._ensure()
         pool = await self._get_pool()
         # optional full-text-ish search over the question + asker (name/email)
-        where = "vertical=$1 AND tenant_id=$2"
+        where = "vertical=$1 AND tenant_id=$2 AND NOT deleted"
         params: list[Any] = [self._vertical, tenant_id]
         if q and q.strip():
             params.append(f"%{q.strip()}%")
@@ -117,13 +137,14 @@ class SessionStore:
         params.append(limit)
         async with pool.acquire() as conn:
             rows = await conn.fetch(
-                f"""SELECT id, question, grounded, video_filename, user_name, user_email, created_at
+                f"""SELECT id, question, grounded, video_filename, user_name, user_email,
+                           jsonb_array_length(attachments) AS n_attach, created_at
                     FROM noesis_research_session
                     WHERE {where} ORDER BY created_at DESC LIMIT ${len(params)}""",
                 *params)
         return [{
             "id": r["id"], "question": r["question"], "grounded": r["grounded"],
-            "has_video": bool(r["video_filename"]),
+            "has_video": bool(r["video_filename"]), "n_attach": r["n_attach"] or 0,
             "user_name": r["user_name"], "user_email": r["user_email"],
             "created_at": r["created_at"].isoformat(),
         } for r in rows]
@@ -133,7 +154,7 @@ class SessionStore:
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             r = await conn.fetchrow(
-                "SELECT * FROM noesis_research_session WHERE id=$1 AND vertical=$2",
+                "SELECT * FROM noesis_research_session WHERE id=$1 AND vertical=$2 AND NOT deleted",
                 session_id, self._vertical)
         if r is None:
             return None
@@ -151,5 +172,7 @@ class SessionStore:
             "video_filename": r["video_filename"], "video_title": r["video_title"],
             "video_duration": r["video_duration"],
             "user_name": r["user_name"], "user_email": r["user_email"],
+            "visual_observation": r["visual_observation"],
+            "attachments": _j(r["attachments"], []),
             "created_at": r["created_at"].isoformat(),
         }

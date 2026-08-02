@@ -229,11 +229,12 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if app.state.service is None:
             app.state.service = build_default_service()
         # Attachments → vision images + document text (flag-gated). Failures degrade to notes.
-        images, docs, attach_notes = None, None, []
+        images, docs, attach_notes, previews = None, None, [], []
         if body.attachments and vision_enabled():
-            from api.media import attachments_to_media
+            from api.media import attachments_to_media, session_previews
             images, docs, attach_notes = attachments_to_media(
                 [a.model_dump() for a in body.attachments])
+            previews = session_previews(images or [], docs or [])   # thumbnails + doc names
         try:
             res = await app.state.service.ask(
                 question=body.question, tenant_id=body.tenant_id,
@@ -269,7 +270,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     grounded=res.grounded, claims=[c.model_dump() for c in claims],
                     source_stats=res.source_stats, coverage_gaps=res.coverage_gaps,
                     rejected=len(res.rejected_claims), sources=body.sources,
-                    user_name=body.user_name, user_email=body.user_email)
+                    user_name=body.user_name, user_email=body.user_email,
+                    visual_observation=res.visual_observation, attachments=previews)
             except Exception:
                 session_id = None
         return ResearchOut(
@@ -308,6 +310,16 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if row is None:
             raise HTTPException(status_code=404, detail="session not found")
         return row
+
+    @app.delete("/sessions/{session_id}")
+    async def delete_session(session_id: str) -> dict:
+        """Soft-delete a session (hidden from list/get; row retained)."""
+        store = _store()
+        if store is None:
+            raise HTTPException(status_code=404, detail="no session store")
+        if not await store.soft_delete(session_id):
+            raise HTTPException(status_code=404, detail="session not found")
+        return {"deleted": True}
 
     @app.get("/admin/coverage")
     async def admin_coverage() -> dict:

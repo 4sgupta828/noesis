@@ -1,5 +1,5 @@
-// Self-contained bridge CLI: {question, answer} JSON → a narrated explainer mp4, spoken as an
-// experienced physician giving calm, grounded guidance. No cross-repo dependency, no DB.
+// Self-contained bridge CLI: {question, answer} JSON → a narrated explainer mp4 — a concise
+// CLINICAL EVIDENCE BRIEFING for a physician / researcher audience. No cross-repo dependency, no DB.
 //
 //   echo '{"question":"...","answer":"...","title":"..."}' | tsx bin/answer-video.ts
 //   tsx bin/answer-video.ts --file /tmp/qa.json
@@ -23,32 +23,38 @@ function readInput(): { question: string; answer: string; title?: string } {
   return obj;
 }
 
-/** Frame the Q&A as material a physician-narrator turns into spoken guidance. The doctor
- *  PERSONA lives in the tone + voice instructions; the material is the grounded content. */
-function physicianMaterial(question: string, answer: string): string {
+/** Frame the Q&A as material for a CLINICAL EVIDENCE BRIEFING aimed at a physician /
+ *  researcher audience (not a patient). The peer-to-peer persona lives in the tone + voice
+ *  instructions; the material is the grounded content. */
+function briefingMaterial(question: string, answer: string): string {
   return [
-    `PATIENT QUESTION: ${question}`,
+    `RESEARCH QUESTION: ${question}`,
     ``,
-    `EVIDENCE-BASED ANSWER (the ONLY facts to convey — do not add medical claims beyond these):`,
+    `EVIDENCE-BASED ANSWER (the ONLY facts to convey — do not add claims beyond these):`,
     answer,
     ``,
-    `Turn this into guidance an experienced physician would give a patient: explain what the`,
-    `evidence says in plain, reassuring language, what it means for them, and sensible next`,
-    `steps (including "discuss with your own doctor"). Do not invent statistics, drugs, doses,`,
-    `or outcomes that are not in the answer above.`,
+    `Turn this into a concise CLINICAL EVIDENCE BRIEFING for a PHYSICIAN or RESEARCHER audience`,
+    `(doctors doing research and analysis — NOT patients). Frame it analytically: what the`,
+    `studies show, the STRENGTH and LIMITATIONS of the evidence (study design, phase, whether`,
+    `outcomes are reported vs. only intended), and the implications for clinical practice or`,
+    `further research. Peer-to-peer, precise and evidence-focused. Do NOT address a patient, do`,
+    `NOT give individualized medical advice or bedside reassurance, and do NOT invent`,
+    `statistics, drugs, doses, or outcomes beyond the answer above.`,
   ].join('\n');
 }
 
 async function main() {
   const { question, answer, title } = readInput();
   const video = await renderAnswerVideo({
-    material: physicianMaterial(question, answer),
+    material: briefingMaterial(question, answer),
     title: title || question.slice(0, 80),
-    tone: 'an experienced, warm physician giving calm, clear, reassuring guidance to a patient',
+    tone: 'a precise, analytical clinical evidence briefing delivered peer-to-peer to a physician '
+      + 'or researcher — measured, authoritative, and evidence-focused (not patient-facing)',
     voice: 'onyx',
     voiceInstructions:
-      'Speak as a seasoned, empathetic doctor talking directly to a patient: measured, warm, '
-      + 'clear and unhurried. Reassuring but honest; never alarmist, never salesy.',
+      'Speak as a knowledgeable clinical colleague briefing a physician or researcher: measured, '
+      + 'precise, confident and analytical. Professional and peer-to-peer — no bedside reassurance, '
+      + 'no talking down. Convey the evidence and its limitations crisply.',
     captions: false,
     format: '16:9',
     theme: 'midnight',

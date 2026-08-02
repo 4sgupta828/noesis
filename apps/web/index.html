@@ -116,6 +116,20 @@
   .vobs .vobs-b{font-size:.94rem;color:var(--ink);line-height:1.6;}
   .vobs .vobs-note{font-size:.72rem;color:var(--muted);margin-top:.45rem;}
 
+  /* uploaded attachments strip (session shows what was uploaded) */
+  .attstrip{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.1rem 0 1.3rem;}
+  .attstrip .attlbl{font-family:var(--mono);font-size:.64rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);}
+  .athumb{height:54px;width:54px;object-fit:cover;border-radius:8px;border:1px solid var(--hair);
+    cursor:pointer;overflow:hidden;font-size:0;background:var(--panel);}
+  .adoc{display:inline-flex;align-items:center;gap:.35rem;font-family:var(--mono);font-size:.72rem;color:var(--ink);
+    background:var(--panel);border:1px solid var(--hair);border-radius:8px;padding:.32rem .55rem;overflow-wrap:anywhere;}
+  /* session delete */
+  .sessions .qhrow{display:flex;align-items:flex-start;gap:1rem;}
+  .sessions .sdel{margin-left:auto;flex:none;font-family:var(--mono);font-size:.64rem;text-transform:uppercase;
+    letter-spacing:.04em;cursor:pointer;background:transparent;border:1px solid var(--hair);border-radius:8px;
+    padding:.35rem .6rem;color:var(--muted);}
+  .sessions .sdel:hover{color:var(--gap);border-color:rgba(214,151,90,.6);}
+
   /* ---- results ---- */
   #out{margin-top:2.4rem;}
   .status{font-size:.9rem;color:var(--muted);display:flex;align-items:center;gap:.6rem;}
@@ -505,6 +519,13 @@ function render(data, target){
   if(data.attachment_notes && data.attachment_notes.length){
     parts.push(`<div class="vobs-note" style="margin:-.9rem 0 1.2rem">${data.attachment_notes.map(esc).join(" · ")}</div>`);
   }
+  // what the user uploaded with this question (shown when reopening a saved session)
+  if(data.attachments && data.attachments.length){
+    const items = data.attachments.map(a=> (a.kind==="image" && a.thumb)
+      ? `<img class="athumb" src="${esc(a.thumb)}" alt="${esc(a.name)}" title="${esc(a.name)}" />`
+      : `<span class="adoc">📄 ${esc(a.name)}</span>`).join("");
+    parts.push(`<div class="attstrip"><span class="attlbl">Uploaded</span>${items}</div>`);
+  }
   // synthesized answer (grounded in the findings) — the hero; [n] refs → findings.
   if(data.answer){
     const html = STRUCTURED
@@ -522,15 +543,16 @@ function render(data, target){
     LAST = {question:(data.question||CURRENT_Q), answer:data.answer,
             session_id:(data.session_id||data.id||null)};
     if(data.video_filename){
-      parts.push(`<div class="vid">
-        <div class="vhint">🎬 ${esc(data.video_title||"Guidance video")}${data.video_duration?" · "+Math.round(data.video_duration)+"s":""}</div>
+      parts.push(`<div class="vid" id="vid">
+        <div class="vhint" id="vhint">🎬 ${esc(data.video_title||"Briefing video")}${data.video_duration?" · "+Math.round(data.video_duration)+"s":""}</div>
         <video controls preload="metadata" src="/video/file/${encodeURIComponent(data.video_filename)}"
           onerror="this.insertAdjacentHTML('afterend','<div class=&quot;vhint&quot;>This video is no longer available.</div>');this.remove();"></video>
+        ${VIDEO_ENABLED?`<button type="button" class="vbtn" id="vgo" style="margin-top:.75rem">↻ Regenerate briefing video</button>`:""}
       </div>`);
     } else if(VIDEO_ENABLED && data.grounded){
       parts.push(`<div class="vid" id="vid">
-        <button type="button" class="vbtn" id="vgo">▶ Generate guidance video</button>
-        <div class="vhint">A ~60-second narrated explainer of this answer, spoken as an experienced physician. Takes ~2 minutes.</div>
+        <button type="button" class="vbtn" id="vgo">▶ Generate briefing video</button>
+        <div class="vhint" id="vhint">A ~60-second clinical evidence briefing on this answer — for clinicians and researchers, not patients. Takes ~2 minutes.</div>
       </div>`);
     }
     parts.push(`<h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}</h4>`);
@@ -576,9 +598,10 @@ async function generateVideo(root){
   root = root || document;
   const panel = root.querySelector("#vid");
   const btn = root.querySelector("#vgo");
-  const hint = panel.querySelector(".vhint");
+  const hint = panel.querySelector("#vhint") || panel.querySelector(".vhint");
+  const prevLabel = btn.textContent;
   btn.disabled = true; btn.textContent = "Generating…";
-  hint.textContent = "Storyboarding, narrating, and assembling the video… (~2 min)";
+  hint.textContent = "Storyboarding, narrating, and assembling the briefing… (~2 min)";
   try{
     const r = await fetch("/video/generate",{method:"POST",headers:{"content-type":"application/json"},
       body:JSON.stringify(LAST)});
@@ -588,16 +611,19 @@ async function generateVideo(root){
       await sleep(2000);
       const s = await (await fetch("/video/status/"+job_id)).json();
       if(s.status==="done"){
-        hint.textContent = (s.title||"Guidance video")+" · "+Math.round(s.duration_sec)+"s";
+        hint.textContent = "🎬 "+(s.title||"Briefing video")+" · "+Math.round(s.duration_sec)+"s";
+        panel.querySelectorAll("video").forEach(v=>v.remove());     // replace any existing
         const v = document.createElement("video");
-        v.controls = true; v.src = "/video/file/"+encodeURIComponent(s.filename);
-        panel.appendChild(v); btn.remove(); return;
+        v.controls = true; v.preload = "metadata"; v.src = "/video/file/"+encodeURIComponent(s.filename);
+        btn.insertAdjacentElement("beforebegin", v);                // video sits just above the button
+        btn.disabled = false; btn.textContent = "↻ Regenerate briefing video";
+        return;
       }
       if(s.status==="error") throw new Error(s.error||"generation failed");
     }
     throw new Error("timed out waiting for the video");
   }catch(e){
-    btn.disabled = false; btn.textContent = "▶ Generate guidance video";
+    btn.disabled = false; btn.textContent = prevLabel.includes("Regenerate") ? "↻ Regenerate briefing video" : "▶ Generate briefing video";
     hint.textContent = "Couldn't generate the video: "+(e.message||e);
   }
 }
@@ -735,6 +761,7 @@ async function loadSessionList(){
           ${who?`<span class="swho">${esc(who)}</span>`:""}
           ${s.grounded?'<span class="sg">✓ grounded</span>':'<span>ungrounded</span>'}
           ${s.has_video?"<span>🎬 video</span>":""}
+          ${s.n_attach?`<span>📎 ${s.n_attach}</span>`:""}
           <span>${new Date(s.created_at).toLocaleDateString()}</span>
         </div></button>`;
     }).join("");
@@ -751,14 +778,27 @@ async function selectSession(rowEl){
     const row = await (await fetch("/sessions/"+encodeURIComponent(rowEl.dataset.id))).json();
     CURRENT_Q = row.question;
     const who = row.user_name || row.user_email;
-    // question stated at the TOP of the answer, with who asked + when
+    // question stated at the TOP of the answer, with who asked + when + delete
     sdetail.innerHTML = `<div class="sqhead">
-        <div class="qq">${esc(row.question)}</div>
+        <div class="qhrow"><div class="qq">${esc(row.question)}</div>
+          <button type="button" class="sdel" id="sdel" title="Delete session">🗑 Delete</button></div>
         <div class="qm">${who?`Asked by <b>${esc(row.user_name||"")}</b>${row.user_email?" · "+esc(row.user_email):""} · `:""}${fmtDate(row.created_at)}</div>
       </div><div id="sdbody"></div>`;
     render(row, $("#sdbody"));         // saved row matches render()'s expected shape
+    const del = $("#sdel"); if(del) del.addEventListener("click", ()=>deleteSession(row.id, rowEl));
     sdetail.scrollTop = 0;
   }catch(e){ sdetail.innerHTML = `<div class="empty">Couldn't load that session.</div>`; }
+}
+async function deleteSession(id, rowEl){
+  if(!confirm("Delete this session? It will be removed from your history.")) return;
+  try{
+    const r = await fetch("/sessions/"+encodeURIComponent(id), {method:"DELETE"});
+    if(!r.ok) throw new Error();
+    if(rowEl) rowEl.remove();
+    const next = slist.querySelector(".srow");
+    if(next) selectSession(next);
+    else sdetail.innerHTML = `<div class="splaceholder">No sessions.</div>`;
+  }catch(e){ alert("Couldn't delete that session."); }
 }
 // search (debounced)
 let searchT;

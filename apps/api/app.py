@@ -175,10 +175,11 @@ def build_default_service() -> ResearchService:
     vision_prompt = manifest.vision_prompt if vision_enabled() else None
     gap_prompt = manifest.gap_prompt if gap_healing_enabled() else None
     suggest_prompt = manifest.suggest_prompt if conversation_enabled() else None
-    # Fast, cheap model for the ReAct PLANNING steps (they emit short structured directives);
-    # the compose step keeps the stronger `llm`. Big per-step latency cut. Override via env.
-    planner_model = os.environ.get("NOESIS_PLANNER_MODEL", "claude-haiku-4-5-20251001")
-    planner_llm = build_llm(mode=mode, model=planner_model)
+    # Use the BEST model for EVERY research step (planning + claim extraction + compose). A cheaper
+    # planner (haiku) paraphrased quotes → span-verification rejected them (grounding regression),
+    # so planner_llm is left unset and run_react uses `llm` throughout. Optional explicit override.
+    planner_model = os.environ.get("NOESIS_PLANNER_MODEL", "")   # empty → same strong model as compose
+    planner_llm = build_llm(mode=mode, model=planner_model) if planner_model else None
     return ResearchService(
         llm=build_llm(mode=mode), embedder=embedder, planner_llm=planner_llm,
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,

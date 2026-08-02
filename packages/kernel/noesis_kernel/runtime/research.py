@@ -34,11 +34,24 @@ class ResearchService:
     ui: object | None = None                # the vertical's UIContract (for /config)
     connectors: dict[str, Connector] = field(default_factory=dict)  # for /ingest
     corpus_source_key: str = ""             # the pg-backed corpus key (if any)
+    aux_source_keys: tuple[str, ...] = ("web",)   # queried once/step (no variant fan-out) — e.g. web
 
     def _retriever(self, source_keys: list[str] | None) -> MultiSourceRetriever:
         chosen = {k: v for k, v in self.sources.items()
                   if source_keys is None or k in source_keys} or self.sources
         return MultiSourceRetriever(chosen)
+
+    def _split_retriever(self, source_keys):
+        """Corpus (vector, multi-query) and AUX (web, single-query per step) retrievers. Web is
+        split out so it's queried ONCE per step on the original query — not fanned out per
+        reformulation — which keeps web latency bounded while still adding breadth."""
+        chosen = {k: v for k, v in self.sources.items()
+                  if source_keys is None or k in source_keys} or self.sources
+        aux = {k: v for k, v in chosen.items() if k in self.aux_source_keys}
+        corpus = {k: v for k, v in chosen.items() if k not in self.aux_source_keys}
+        if not corpus:                       # web-only selection → treat it as the primary source
+            return MultiSourceRetriever(chosen), None
+        return MultiSourceRetriever(corpus), (MultiSourceRetriever(aux) if aux else None)
 
     async def ask(
         self,
@@ -51,7 +64,7 @@ class ResearchService:
         documents: list[dict] | None = None,
         history: list[dict] | None = None,
         on_event=None,                       # async callback(dict) for live progress (SSE)
-        max_steps: int = 5,
+        max_steps: int = 8,
     ) -> AnswerResult:
         budget = BudgetState(max_calls=self.max_calls)
         # Attachment context (never corpus evidence, never a verified claim):
@@ -89,9 +102,10 @@ class ResearchService:
                     turns.append(f"Q: {qy}\nA: {an[:1200]}" if an else f"Q: {qy}")
             history_context = "\n\n".join(turns) or None
 
+        corpus_src, web_src = self._split_retriever(source_keys)
         res = await run_react(
             question=question, llm=self.llm, embedder=self.embedder,
-            source=self._retriever(source_keys),
+            source=corpus_src, aux_source=web_src,
             tenant_id=tenant_id, workspace_id=workspace_id,
             budget=budget, gating=self.gating,
             system_prompt=self.persona_prompt, answer_format=self.answer_format,

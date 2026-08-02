@@ -135,15 +135,27 @@ async def run_react(
     history_context: str | None = None,
     planner_llm: LLMClient | None = None,     # fast model for search-planning steps (compose uses `llm`)
     on_event=None,                            # optional async callback(dict) for live progress (SSE)
-    max_steps: int = 5,
+    aux_source: RetrievalSource | None = None,  # e.g. web: queried ONCE per step (no variant fan-out)
+    max_steps: int = 8,
     k: int = 10,
-    planner_atom_window: int = 24,            # atoms SHOWN to the planner per step (store keeps all)
+    planner_atom_window: int = 60,            # atoms SHOWN to the planner per step (store keeps all)
 ) -> AnswerResult:
     import asyncio
     atoms = AtomStore()
     result = AnswerResult()
     notes: list[str] = []          # running coverage-gap / step notes for the agent
-    verifier = BlockSpanVerifier(source.make_block_loader(tenant_id, workspace_id))
+    # The span-verifier's block loader must cover EVERY source a claim can cite — corpus AND aux
+    # (web). Since search is split (corpus multi-query + aux single-query), combine their loaders
+    # so a web-cited quote is still verifiable (else all web claims would be rejected).
+    _corpus_loader = source.make_block_loader(tenant_id, workspace_id)
+    if aux_source is not None:
+        _aux_loader = aux_source.make_block_loader(tenant_id, workspace_id)
+        def _combined_loader(document_id: str, block_id: str):
+            t = _corpus_loader(document_id, block_id)
+            return t if t is not None else _aux_loader(document_id, block_id)
+        verifier = BlockSpanVerifier(_combined_loader)
+    else:
+        verifier = BlockSpanVerifier(_corpus_loader)
     planner = planner_llm or llm   # planning steps can use a cheaper/faster model than compose
 
     async def emit(ev: dict) -> None:
@@ -280,11 +292,19 @@ async def run_react(
                 query=q, tenant_id=tenant_id, workspace_id=workspace_id,
                 query_embedding=qvec, k=k,
             )
-            # agent reformulations → multi-query fusion (recall); else a single search
-            if step.queries:
-                hits = await multi_query_retrieve(source, base_req, step.queries, embedder=embedder)
+            # Corpus: agent reformulations → multi-query fusion (recall); else a single search.
+            # aux (web): ONE call per step on the ORIGINAL query (no per-variant fan-out) — runs
+            # CONCURRENTLY with the corpus so it adds breadth without multiplying latency.
+            corpus_co = (multi_query_retrieve(source, base_req, step.queries, embedder=embedder)
+                         if step.queries else source.search(base_req))
+            if aux_source is not None:
+                got = await asyncio.gather(corpus_co, aux_source.search(base_req), return_exceptions=True)
+                hits = []
+                for r in got:
+                    if not isinstance(r, Exception):
+                        hits += r
             else:
-                hits = await source.search(base_req)
+                hits = await corpus_co
             before = len(atoms.all())
             atoms.add_hits(hits)
             added = len(atoms.all()) - before

@@ -61,6 +61,9 @@ class VerticalManifest:
     # visual observation — never a diagnosis. Opaque prose; the kernel only threads it into
     # the vision call. None → no vision pre-step (images ignored).
     vision_prompt: str | None = None
+    # Optional vertical-supplied instruction for the on-demand LAYMAN re-explanation (rephrase
+    # a grounded answer for a non-expert, adding no new facts). None → feature unavailable.
+    layman_prompt: str | None = None
 
     # Held-out eval gold + vocab
     eval_gold: dict[str, object] = field(default_factory=dict)

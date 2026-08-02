@@ -203,6 +203,18 @@
   .vid .vhint{font-size:.76rem;color:var(--muted);margin-top:.55rem;}
   .vid video{width:100%;max-width:640px;border-radius:12px;margin-top:.75rem;display:block;}
 
+  /* plain-language (layman) explanation */
+  .plain{margin:.2rem 0 1.4rem;padding:.95rem 1.1rem;border:1px solid var(--hair);border-left:3px solid var(--verified);
+    border-radius:14px;background:var(--panel2);}
+  .plain .vbtn{font-family:var(--mono);font-size:.78rem;font-weight:600;letter-spacing:.03em;cursor:pointer;
+    border:1px solid var(--verified);color:var(--verified);background:transparent;border-radius:9px;padding:.55rem .9rem;}
+  .plain .vbtn:hover{background:var(--verified);color:#0A1F16;}
+  .plain .vbtn:disabled{opacity:.55;cursor:default;}
+  .plain .plain-hint{font-size:.76rem;color:var(--muted);margin-top:.55rem;}
+  .plain .plain-h{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;
+    color:var(--verified);margin-bottom:.5rem;}
+  .plain .plain-b{font-size:.98rem;line-height:1.66;color:var(--ink);}
+
   /* grounding header band */
   .ansmeta{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:0 0 1.3rem;padding-bottom:.9rem;
     border-bottom:1px solid var(--hair);}
@@ -466,6 +478,7 @@ let SOURCES = [];
 let VIDEO_ENABLED = false;
 let STRUCTURED = false;     // render the answer as markdown sections (server-authoritative)
 let VISION_ENABLED = false; // image/PDF/DICOM upload → visual-context research
+let LAYMAN_ENABLED = false; // on-demand plain-language re-explanation
 let ATTACHMENTS = [];       // [{name, media_type, data(base64)}]
 let USER = null;            // {name, email} captured at landing, saved per session
 let LAST = null;            // {question, answer} for the answer-video add-on
@@ -479,6 +492,7 @@ async function loadConfig(){
     SOURCES = c.sources || [];
     VIDEO_ENABLED = !!c.video_enabled;
     STRUCTURED = !!c.structured_answers;
+    LAYMAN_ENABLED = !!c.layman_enabled;
     VISION_ENABLED = !!c.vision_enabled;
     if(VISION_ENABLED){
       $("#attach").hidden = false;
@@ -618,6 +632,16 @@ function render(data, target){
         <div class="vhint" id="vhint">A ~60-second clinical evidence briefing on this answer — for clinicians and researchers, not patients. Takes ~2 minutes.</div>
       </div>`);
     }
+    // plain-language explanation — saved copy if present, else an on-demand button
+    if(data.layman_answer){
+      parts.push(`<div class="plain"><div class="plain-h">◍ In plain language</div>
+        <div class="plain-b">${esc(data.layman_answer).replace(/\n/g,"<br>")}</div></div>`);
+    } else if(LAYMAN_ENABLED && data.grounded){
+      parts.push(`<div class="plain" id="plain">
+        <button type="button" class="vbtn" id="plaingo">◍ Explain in plain language</button>
+        <div class="plain-hint">The same answer, re-explained for a patient — plain words, same essence, no new claims.</div>
+      </div>`);
+    }
     parts.push(`<h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}</h4>`);
   }
   data.claims.forEach((c,idx)=>{
@@ -654,6 +678,28 @@ function render(data, target){
   if(vgo) vgo.addEventListener("click", ()=>generateVideo(target));
   const cb = target.querySelector("#copybtn");
   if(cb) cb.addEventListener("click", ()=>copyAnswer(data, cb));
+  const pg = target.querySelector("#plaingo");
+  if(pg) pg.addEventListener("click", ()=>generatePlain(target));
+}
+
+async function generatePlain(root){
+  if(!LAST) return;
+  const panel = root.querySelector("#plain");
+  const btn = root.querySelector("#plaingo");
+  const hint = panel.querySelector(".plain-hint");
+  btn.disabled = true; btn.textContent = "Explaining…";
+  try{
+    const r = await fetch("/explain",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify(LAST)});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+    const {explanation} = await r.json();
+    if(!explanation) throw new Error("no explanation produced");
+    panel.innerHTML = `<div class="plain-h">◍ In plain language</div>
+      <div class="plain-b">${esc(explanation).replace(/\n/g,"<br>")}</div>`;
+  }catch(e){
+    btn.disabled = false; btn.textContent = "◍ Explain in plain language";
+    if(hint) hint.textContent = "Couldn't generate: "+(e.message||e);
+  }
 }
 
 // Build clean Markdown of the answer + its evidence (verbatim quotes + sources).

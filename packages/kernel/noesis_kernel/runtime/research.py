@@ -25,6 +25,7 @@ class ResearchService:
     persona_prompt: str = "You are an evidence-grounded research agent."
     answer_format: str | None = None        # vertical answer-structure directive (opaque)
     vision_prompt: str | None = None        # vertical image-description directive (opaque)
+    layman_prompt: str | None = None        # vertical layman-rephrasing directive (opaque)
     max_calls: int = 40
     vertical_name: str = ""
     ui: object | None = None                # the vertical's UIContract (for /config)
@@ -81,6 +82,14 @@ class ResearchService:
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)
         return res
+
+    async def explain(self, *, question: str, answer: str) -> str:
+        """On-demand plain-language rephrasing of a grounded answer (adds no new facts)."""
+        if not self.layman_prompt:
+            return ""
+        from noesis_kernel.research.explain import explain_for_layperson
+        return await explain_for_layperson(
+            llm=self.llm, layman_prompt=self.layman_prompt, question=question, answer=answer)
 
     async def search(
         self,

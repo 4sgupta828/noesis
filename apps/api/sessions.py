@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS noesis_research_session (
     user_email     TEXT,
     visual_observation TEXT,
     attachments    JSONB NOT NULL DEFAULT '[]'::jsonb,
+    layman_answer  TEXT,
     deleted        BOOLEAN NOT NULL DEFAULT FALSE,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -44,6 +45,7 @@ ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS user_name  TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS user_email TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS visual_observation TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS layman_answer TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS deleted BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_nrs_vertical_tenant_created
     ON noesis_research_session (vertical, tenant_id, created_at DESC);
@@ -101,6 +103,15 @@ class SessionStore:
                 (visual_observation or None), json.dumps(attachments or []),
             )
         return sid
+
+    async def save_layman(self, session_id: str, text: str) -> bool:
+        await self._ensure()
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            res = await conn.execute(
+                "UPDATE noesis_research_session SET layman_answer=$3 WHERE id=$1 AND vertical=$2",
+                session_id, self._vertical, text)
+        return res.endswith("1")
 
     async def soft_delete(self, session_id: str) -> bool:
         await self._ensure()
@@ -194,5 +205,6 @@ class SessionStore:
             "user_name": r["user_name"], "user_email": r["user_email"],
             "visual_observation": r["visual_observation"],
             "attachments": _j(r["attachments"], []),
+            "layman_answer": r["layman_answer"],
             "created_at": r["created_at"].isoformat(),
         }

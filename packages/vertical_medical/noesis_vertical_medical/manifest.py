@@ -6,6 +6,7 @@ from noesis_kernel.contract.manifest import VerticalManifest
 from . import entities
 from .answer_format import MEDICAL_ANSWER_FORMAT
 from .vision import MEDICAL_VISION_PROMPT
+from .layman import MEDICAL_LAYMAN_PROMPT
 from .authority import MedicalAuthorityPolicy
 from .connector import ClinicalTrialsConnector
 from .openfda import OpenFdaConnector
@@ -43,5 +44,6 @@ def build_manifest() -> VerticalManifest:
         ui=MedicalUI(),
         answer_format=MEDICAL_ANSWER_FORMAT,
         vision_prompt=MEDICAL_VISION_PROMPT,
+        layman_prompt=MEDICAL_LAYMAN_PROMPT,
         eval_gold=dict(GOLD),
     )

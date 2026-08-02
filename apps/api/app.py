@@ -55,6 +55,12 @@ class ResearchIn(BaseModel):
     user_email: str | None = None
 
 
+class ExplainIn(BaseModel):
+    question: str
+    answer: str
+    session_id: str | None = None
+
+
 class Citation(BaseModel):
     text: str
     quote: str
@@ -119,6 +125,7 @@ def build_default_service() -> ResearchService:
         llm=build_llm(mode=mode), embedder=embedder,
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
         answer_format=answer_format, vision_prompt=vision_prompt,
+        layman_prompt=manifest.layman_prompt,
         vertical_name=manifest.name, ui=manifest.ui,
         connectors=connectors, corpus_source_key=corpus_key,
     )
@@ -173,6 +180,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "video_enabled": video_enabled(),
             "structured_answers": structured_answers(),
             "vision_enabled": vision_enabled(),
+            "layman_enabled": bool(getattr(svc, "layman_prompt", None)),
         }
 
     @app.post("/search")
@@ -289,6 +297,30 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             visual_observation=res.visual_observation,
             attachment_notes=attach_notes,
         )
+
+    @app.post("/explain")
+    async def explain(body: ExplainIn) -> dict:
+        """On-demand plain-language re-explanation of a grounded answer (same doctor →
+        patient). Saved on the session when a session_id is given."""
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        if not getattr(svc, "layman_prompt", None):
+            raise HTTPException(status_code=404, detail="plain-language explanation not available")
+        try:
+            text = await svc.explain(question=body.question, answer=body.answer)
+        except CassetteMiss as e:
+            raise HTTPException(status_code=503, detail="No model available in replay mode.") from e
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
+        if body.session_id and text:
+            store = _store()
+            if store is not None:
+                try:
+                    await store.save_layman(body.session_id, text)
+                except Exception:
+                    pass
+        return {"explanation": text}
 
     @app.get("/sessions")
     async def list_sessions(tenant_id: str = "demo", limit: int = 100, q: str = "") -> dict:

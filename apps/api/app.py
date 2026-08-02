@@ -10,7 +10,7 @@ import asyncio
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -78,6 +78,16 @@ class GapQueueIn(BaseModel):
     question: str = ""
     tenant_id: str = "demo"
     jobs: list[dict] = []                  # [{connector, query, limit, kind, rationale, quality}]
+
+
+class CorpusIngestIn(BaseModel):
+    """Bulk prod-direct ingest — the replacement for local download + push. Enqueues connector
+    jobs into the corpus queue that the prod processor drains straight into the prod corpus."""
+    conditions: list[str] = []             # each → a clinicaltrials + a europepmc job
+    trials: int = 300                      # per-condition trial limit
+    papers: int = 150                      # per-condition literature limit
+    faers_drugs: list[str] = []            # each → a faers adverse-event job
+    jobs: list[dict] = []                  # explicit passthrough {connector, query, limit, ...}
 
 
 class Citation(BaseModel):
@@ -151,6 +161,46 @@ def build_default_service() -> ResearchService:
     )
 
 
+def _run_gap_processor(dsn: str, vertical: str) -> None:
+    """Entry point for the DEDICATED ingest thread. Runs its own event loop so the heavy work
+    (connector fetch + blocking OpenAI embed + index) never blocks the API's serving loop — this
+    is what makes prod-direct ingestion, at bulk scale, safe to run inside the API process."""
+    import asyncio as _a
+    _a.run(_gap_processor_loop(dsn, vertical))
+
+
+async def _gap_processor_loop(dsn: str, vertical: str) -> None:
+    """One-at-a-time queue drain, on the ingest thread's own loop with its own pg pool + embedder +
+    connectors. Atomic claim → replica-safe; a single job's error is recorded and the loop continues
+    (Rule 13). Connectors open a fresh httpx client per call, so they are safe on this loop."""
+    import asyncio
+    from api.gap_queue import GapQueue
+    from noesis_kernel.providers.base import resolve_mode
+    from noesis_kernel.retrieval.postgres import PostgresRetrievalSource
+    from noesis_kernel.runtime.build import build_embedder, load_active_vertical
+    q = GapQueue(dsn, vertical=vertical)
+    embedder = build_embedder(mode=resolve_mode())
+    pg = PostgresRetrievalSource(dsn, dim=embedder.dim, table="rs_block")
+    connectors = dict(load_active_vertical().connectors)
+    while True:
+        try:
+            job = await q.claim_one()
+        except Exception:
+            await asyncio.sleep(10); continue
+        if job is None:
+            await asyncio.sleep(8); continue
+        conn = connectors.get(job["connector"])
+        if conn is None:
+            await q.fail(job["id"], f"unknown connector {job['connector']}"); continue
+        try:
+            n = await ingest_connector_to_postgres(
+                conn, pg, tenant_id=job["tenant_id"], embedder=embedder,
+                window={"query": job["query"], "limit": job["limit"]})
+            await q.complete(job["id"], n)
+        except Exception as e:   # noqa: BLE001 — record + move on
+            await q.fail(job["id"], str(e))
+
+
 def create_app(service: ResearchService | None = None) -> FastAPI:
     app = FastAPI(title="Noesis Research", version="0")
     app.state.service = service   # lazily built on first request if None
@@ -184,41 +234,19 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 app.state.gap_queue = None
         return app.state.gap_queue
 
-    async def _gap_processor() -> None:
-        """Background loop: claim a pending gap-fill job, ingest its connector query into the
-        corpus, mark it done/failed. One job at a time; atomic claim → replica-safe. Errors on a
-        single job never stop the loop (Rule 13: observable failure, keep serving)."""
-        q = _gap_queue()
-        if q is None:
-            return
-        if app.state.service is None:
-            app.state.service = build_default_service()
-        svc = app.state.service
-        if not svc.connectors or not svc.corpus_source_key:
-            return
-        pg = svc.sources[svc.corpus_source_key]
-        while True:
-            try:
-                job = await q.claim_one()
-            except Exception:
-                await asyncio.sleep(10); continue
-            if job is None:
-                await asyncio.sleep(8); continue
-            conn = svc.connectors.get(job["connector"])
-            if conn is None:
-                await q.fail(job["id"], f"unknown connector {job['connector']}"); continue
-            try:
-                n = await ingest_connector_to_postgres(
-                    conn, pg, tenant_id=job["tenant_id"], embedder=svc.embedder,
-                    window={"query": job["query"], "limit": job["limit"]})
-                await q.complete(job["id"], n)
-            except Exception as e:   # noqa: BLE001 — record + move on
-                await q.fail(job["id"], str(e))
-
     @app.on_event("startup")
     async def _start_gap_processor() -> None:
-        if gap_healing_enabled() and os.environ.get("NOESIS_CORPUS_DSN"):
-            app.state._gap_task = asyncio.create_task(_gap_processor())
+        """Launch the corpus-ingest processor in a DEDICATED daemon thread (own loop + pools), so
+        prod-direct ingestion (gap-fill AND bulk batches) never blocks the API's serving loop.
+        Replica-safe: each replica's thread claims jobs atomically, so N replicas share the drain."""
+        dsn = os.environ.get("NOESIS_CORPUS_DSN")
+        if gap_healing_enabled() and dsn and not getattr(app.state, "_gap_thread", None):
+            import threading
+            vertical = load_active_vertical().name
+            t = threading.Thread(target=_run_gap_processor, args=(dsn, vertical),
+                                 daemon=True, name="corpus-ingest")
+            t.start()
+            app.state._gap_thread = t
 
     # Answer-video add-on — separate, flag-gated router (default OFF). Kept fully out of
     # the research path: mounting it changes nothing about how answers are produced.
@@ -461,6 +489,54 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     "summary": await q.summary()}
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"queue error: {e}") from e
+
+    @app.post("/admin/corpus/ingest")
+    async def admin_corpus_ingest(body: CorpusIngestIn, x_admin_token: str = Header(default="")) -> dict:
+        """Bulk prod-direct ingest — replaces 'download locally + push to prod'. Expands conditions
+        into clinicaltrials + europepmc jobs (and FAERS drugs into adverse-event jobs), validates
+        against the real connector set, and enqueues them for the prod processor. Guarded by
+        NOESIS_ADMIN_TOKEN when set (this endpoint spends credits + mutates the corpus)."""
+        if not gap_healing_enabled():
+            raise HTTPException(status_code=404, detail="corpus ingestion not enabled")
+        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
+        if want and x_admin_token != want:
+            raise HTTPException(status_code=401, detail="admin token required")
+        q = _gap_queue()
+        if q is None:
+            raise HTTPException(status_code=404, detail="no corpus queue configured")
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        allowed = set(app.state.service.connectors.keys())
+        cap = lambda n, d: max(1, min(int(n or d), 400))
+        jobs: list[dict] = []
+        for cond in body.conditions:
+            c = (cond or "").strip()
+            if not c:
+                continue
+            if "clinicaltrials" in allowed:
+                jobs.append({"connector": "clinicaltrials", "query": c, "limit": cap(body.trials, 300),
+                             "kind": "trials", "quality": "batch"})
+            if "europepmc" in allowed:
+                jobs.append({"connector": "europepmc", "query": c, "limit": cap(body.papers, 150),
+                             "kind": "literature", "quality": "batch"})
+        for drug in body.faers_drugs:
+            d = (drug or "").strip()
+            if d and "faers" in allowed:
+                jobs.append({"connector": "faers", "query": d, "limit": 200,
+                             "kind": "adverse events", "quality": "batch"})
+        for j in body.jobs or []:
+            c = (j.get("connector") or "").strip()
+            query = (j.get("query") or "").strip()
+            if c in allowed and query:
+                jobs.append({"connector": c, "query": query, "limit": cap(j.get("limit"), 200),
+                             "kind": (j.get("kind") or "")[:80], "quality": (j.get("quality") or "")[:120]})
+        if not jobs:
+            raise HTTPException(status_code=400, detail="no valid jobs (unknown connector or empty inputs)")
+        try:
+            ids = await q.enqueue(tenant_id="demo", question="admin bulk ingest", jobs=jobs)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"queue error: {e}") from e
+        return {"queued": len(ids), "jobs": len(jobs)}
 
     @app.get("/sessions")
     async def list_sessions(tenant_id: str = "demo", limit: int = 100, q: str = "") -> dict:

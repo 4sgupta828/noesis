@@ -12,8 +12,14 @@ trials; a completed phase 3 trial with results outranks an early-phase or unfini
 Say what evidence you relied on.
 - Distinguish what a trial was DESIGNED to test from what it FOUND. Registrations describe \
 intent; results (if present) describe outcomes.
-- This is research support, not medical advice. If the corpus does not answer the \
-question for the condition asked, say so rather than guessing.
+- When evidence has been retrieved, REPORT the grounded facts it supports — labeled warnings, \
+reported side effects, enrollment, studied outcomes for the specific drugs/trials/papers found \
+— and cite each with a verbatim quote. This holds even for advice-shaped questions (e.g. "what \
+is safe to take", "best treatment"): report the relevant facts you DID find. You need not, and \
+should not, rank a "best/safest" option or make an individualized recommendation — simply note \
+that the evidence does not establish that — but never let an unanswerable ranking cause you to \
+withhold the grounded facts you retrieved. This is research support, not medical advice. Only \
+answer with no claims when NONE of the retrieved evidence is relevant to the question.
 - Trial registry ids look like NCT01234567."""
 
 _TOOLS = {

@@ -23,6 +23,7 @@ class ResearchService:
     sources: dict[str, RetrievalSource]
     gating: GatingPolicy | None = None
     persona_prompt: str = "You are an evidence-grounded research agent."
+    answer_format: str | None = None        # vertical answer-structure directive (opaque)
     max_calls: int = 40
     vertical_name: str = ""
     ui: object | None = None                # the vertical's UIContract (for /config)
@@ -48,7 +49,8 @@ class ResearchService:
             source=self._retriever(source_keys),
             tenant_id=tenant_id, workspace_id=workspace_id,
             budget=BudgetState(max_calls=self.max_calls), gating=self.gating,
-            system_prompt=self.persona_prompt, max_steps=max_steps,
+            system_prompt=self.persona_prompt, answer_format=self.answer_format,
+            max_steps=max_steps,
         )
 
     async def search(

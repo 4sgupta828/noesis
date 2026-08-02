@@ -23,12 +23,17 @@ import asyncio
 import json
 import os
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+
+# Optional async hook to link a finished video back to its saved Q&A session:
+#   attach(session_id, filename=..., title=..., duration=...) -> None
+AttachVideo = Callable[..., Awaitable[None]]
 
 
 def video_enabled() -> bool:
@@ -52,6 +57,7 @@ class VideoIn(BaseModel):
     question: str
     answer: str
     title: str | None = None
+    session_id: str | None = None      # optional: link the video to a saved Q&A session
 
 
 @dataclass
@@ -68,7 +74,8 @@ class _Job:
 _JOBS: dict[str, _Job] = {}
 
 
-async def _run_bridge(job_id: str, payload: dict) -> None:
+async def _run_bridge(job_id: str, payload: dict, session_id: str | None = None,
+                      attach: AttachVideo | None = None) -> None:
     job = _JOBS[job_id]
     vdir, tsx = _video_dir(), _tsx()
     if not (vdir / "bin" / "answer-video.ts").exists():
@@ -97,11 +104,18 @@ async def _run_bridge(job_id: str, payload: dict) -> None:
         job.filename = os.path.basename(result["filename"])   # basename only — no path traversal
         job.title = result.get("title", "")
         job.duration_sec = float(result.get("durationSec", 0) or 0)
+        # Best-effort: link the finished video to its saved Q&A (never fails the job).
+        if session_id and attach is not None:
+            try:
+                await attach(session_id, filename=job.filename, title=job.title,
+                             duration=job.duration_sec)
+            except Exception:
+                pass
     except Exception as e:   # noqa: BLE001 — surface any failure to the poller
         job.status, job.error = "error", str(e)[-800:]
 
 
-def build_video_router() -> APIRouter:
+def build_video_router(attach_video: AttachVideo | None = None) -> APIRouter:
     router = APIRouter(prefix="/video", tags=["video"])
 
     @router.post("/generate")
@@ -110,7 +124,7 @@ def build_video_router() -> APIRouter:
         _JOBS[job_id] = _Job(title=body.title or body.question[:80])
         payload = {"question": body.question, "answer": body.answer,
                    "title": body.title or body.question[:80]}
-        asyncio.create_task(_run_bridge(job_id, payload))
+        asyncio.create_task(_run_bridge(job_id, payload, body.session_id, attach_video))
         return {"job_id": job_id, "status": "running"}
 
     @router.get("/status/{job_id}")

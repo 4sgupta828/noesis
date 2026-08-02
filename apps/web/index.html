@@ -70,6 +70,36 @@
     white-space:pre-wrap;margin:.2rem 0 1.4rem;}
   .answer .ref{color:var(--verified);font-weight:640;cursor:pointer;
     font-size:.72em;padding:0 .05em;}
+  /* structured answer — a clinical brief (journal-grade type & rhythm) */
+  .answer.md{white-space:normal;font-size:1rem;}
+  /* section headers: tracked small-caps eyebrow, accent tick, hairline separation */
+  .answer.md .mdh{font-family:var(--sans);font-size:.7rem;font-weight:680;
+    text-transform:uppercase;letter-spacing:.13em;color:var(--verified);
+    margin:1.9rem 0 .7rem;padding-top:1.4rem;border-top:1px solid var(--hair);
+    display:flex;align-items:center;gap:.55rem;}
+  .answer.md .mdh::before{content:"";width:15px;height:2px;border-radius:2px;
+    background:var(--verified);flex:none;}
+  .answer.md .mdh:first-child{margin-top:0;padding-top:0;border-top:none;}
+  /* lead: first paragraph after the opening section reads like a journal abstract lead */
+  .answer.md .mdh:first-child + .mdp{font-family:var(--serif);font-size:1.3rem;
+    line-height:1.5;letter-spacing:-.011em;color:var(--ink);margin:.1rem 0 .5rem;}
+  .answer.md .mdp{margin:.55rem 0;line-height:1.7;color:var(--ink);}
+  /* refined bullets: accent dot, no default list glyph */
+  .answer.md .mdl{margin:.55rem 0 .85rem;padding:0;list-style:none;}
+  .answer.md .mdl li{position:relative;padding-left:1.2rem;margin:.42rem 0;line-height:1.62;}
+  .answer.md .mdl li::before{content:"";position:absolute;left:.05rem;top:.62em;
+    width:6px;height:6px;border-radius:50%;background:var(--verified);}
+  .answer.md strong{font-weight:660;color:var(--ink);}
+  /* journal-style table: hairline rules, small-caps header, no boxy borders */
+  .answer.md .mdt{border-collapse:collapse;width:100%;margin:.75rem 0 1.05rem;font-size:.93rem;}
+  .answer.md .mdt th{font-family:var(--sans);font-size:.67rem;text-transform:uppercase;
+    letter-spacing:.08em;color:var(--slate);font-weight:660;text-align:left;
+    padding:.5rem .75rem;border-bottom:1.5px solid var(--ink);}
+  .answer.md .mdt td{padding:.6rem .75rem;border-bottom:1px solid var(--hair);
+    vertical-align:top;line-height:1.55;}
+  .answer.md .mdt tbody tr:last-child td{border-bottom:none;}
+  .answer.md .ref{color:var(--verified);font-weight:640;cursor:pointer;font-size:.68em;
+    padding:0 .06em;vertical-align:super;}
   .evhead{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;
     color:var(--slate);margin:.2rem 0 .8rem;border-top:1px solid var(--hair);padding-top:1rem;}
   .fnum{display:inline-flex;align-items:center;justify-content:center;min-width:1.3rem;
@@ -108,6 +138,22 @@
   .gaps h4{margin:0 0 .3rem;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--gap);}
   .gaps li{font-size:.9rem;color:var(--ink);margin-left:1rem;}
 
+  /* history */
+  .histbtn{margin-left:auto;font-family:var(--mono);font-size:.72rem;cursor:pointer;
+    background:transparent;border:1px solid var(--hair);border-radius:7px;
+    padding:.32rem .6rem;color:var(--slate);}
+  .histbtn:hover{color:var(--ink);border-color:var(--slate);}
+  .history{border:1px solid var(--hair);border-radius:12px;background:var(--card);
+    padding:.4rem;margin-bottom:1.2rem;max-height:min(46vh,420px);overflow-y:auto;}
+  .history .hrow{display:flex;gap:.6rem;align-items:baseline;padding:.5rem .6rem;
+    border-radius:8px;cursor:pointer;border:none;background:transparent;width:100%;text-align:left;}
+  .history .hrow:hover{background:var(--paper);}
+  .history .hq{flex:1;color:var(--ink);font-size:.9rem;line-height:1.35;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .history .hmeta{font-family:var(--mono);font-size:.68rem;color:var(--slate);white-space:nowrap;}
+  .history .hg{color:var(--verified);}
+  .history .hempty{padding:.7rem;color:var(--slate);font-size:.85rem;}
+
   @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   @media (prefers-reduced-motion:reduce){.claim{animation:none}}
 </style>
@@ -118,7 +164,10 @@
     <span class="mark">No<b>e</b>sis</span>
     <span class="vertical" id="vertical">…</span>
     <span class="tagline">Every claim, pinned to its source.</span>
+    <button type="button" class="histbtn" id="histbtn" aria-expanded="false">Recent ▾</button>
   </header>
+
+  <section class="history" id="history" hidden></section>
 
   <h1>Ask a research question.</h1>
   <form id="ask">
@@ -141,6 +190,7 @@ const $ = s => document.querySelector(s);
 const out = $("#out"), go = $("#go"), q = $("#q");
 let SOURCES = [];
 let VIDEO_ENABLED = false;
+let STRUCTURED = false;     // render the answer as markdown sections (server-authoritative)
 let LAST = null;            // {question, answer} for the answer-video add-on
 let CURRENT_Q = "";        // the question of the answer currently rendered
 
@@ -152,6 +202,7 @@ async function loadConfig(){
     $("#vertical").textContent = c.vertical || "vertical";
     SOURCES = c.sources || [];
     VIDEO_ENABLED = !!c.video_enabled;
+    STRUCTURED = !!c.structured_answers;
     const box = $("#sources");
     for(const k of SOURCES){
       const b = document.createElement("button");
@@ -166,6 +217,45 @@ async function loadConfig(){
 const chosen = () => [...document.querySelectorAll('.pill[aria-pressed="true"]')].map(b=>b.dataset.key);
 
 function esc(s){const d=document.createElement("div");d.textContent=s??"";return d.innerHTML;}
+
+// Inline: bold + clickable [n] refs. Operates on ALREADY-ESCAPED text (XSS-safe).
+function mdInline(s){
+  return s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+          .replace(/\[(\d+)\]/g,'<sup class="ref" data-n="$1">[$1]</sup>');
+}
+// Minimal, self-contained, XSS-safe markdown → HTML. We esc() the whole source FIRST,
+// so any HTML in the model output is neutralized before we add known-safe tags. Handles
+// headings (##/###), bullet lists, simple tables, bold, and [n] refs. No external lib.
+function mdToHtml(raw){
+  const lines = esc(raw).split(/\r?\n/);
+  const cells = r => r.replace(/^\s*\|/,"").replace(/\|\s*$/,"").split("|").map(c=>c.trim());
+  const out = []; let i = 0;
+  while(i < lines.length){
+    const line = lines[i];
+    if(/^\s*$/.test(line)){ i++; continue; }
+    // table: header row + |---| separator + body rows
+    if(/^\s*\|.*\|\s*$/.test(line) && i+1<lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i+1])){
+      const head = cells(line); i += 2; const rows = [];
+      while(i<lines.length && /^\s*\|.*\|\s*$/.test(lines[i])){ rows.push(cells(lines[i])); i++; }
+      out.push('<table class="mdt"><thead><tr>'+head.map(c=>`<th>${mdInline(c)}</th>`).join("")+
+        '</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>`<td>${mdInline(c)}</td>`).join("")+'</tr>').join("")+
+        '</tbody></table>');
+      continue;
+    }
+    const hm = line.match(/^(#{1,4})\s+(.*)$/);
+    if(hm){ const lvl = Math.min(6, hm[1].length+2); out.push(`<h${lvl} class="mdh">${mdInline(hm[2])}</h${lvl}>`); i++; continue; }
+    if(/^\s*[-*]\s+/.test(line)){
+      const items = [];
+      while(i<lines.length && /^\s*[-*]\s+/.test(lines[i])){ items.push(mdInline(lines[i].replace(/^\s*[-*]\s+/,""))); i++; }
+      out.push('<ul class="mdl">'+items.map(x=>`<li>${x}</li>`).join("")+'</ul>');
+      continue;
+    }
+    const para = [line]; i++;
+    while(i<lines.length && !/^\s*$/.test(lines[i]) && !/^(#{1,4})\s|^\s*[-*]\s|^\s*\|/.test(lines[i])){ para.push(lines[i]); i++; }
+    out.push(`<p class="mdp">${mdInline(para.join(" "))}</p>`);
+  }
+  return out.join("");
+}
 
 function render(data){
   const parts = [];
@@ -188,14 +278,24 @@ function render(data){
     }).join(" ");
     parts.push(`<div class="summary" style="border:none;padding-top:.2rem"><span>Sources used:</span>${chips}</div>`);
   }
-  // synthesized answer (grounded in the findings) — the hero; [n] refs → findings
+  // synthesized answer (grounded in the findings) — the hero; [n] refs → findings.
+  // Server-authoritative: render markdown sections when structured_answers is on,
+  // else the flat-prose path (byte-identical to pre-flag).
   if(data.answer){
-    const withRefs = esc(data.answer).replace(/\[(\d+)\]/g,
-      '<sup class="ref" data-n="$1">[$1]</sup>');
-    parts.push(`<div class="answer">${withRefs}</div>`);
-    // answer-video add-on: only when enabled AND there is a grounded answer to narrate
-    if(VIDEO_ENABLED && data.grounded){
-      LAST = {question:CURRENT_Q, answer:data.answer};
+    const html = STRUCTURED
+      ? mdToHtml(data.answer)
+      : esc(data.answer).replace(/\[(\d+)\]/g, '<sup class="ref" data-n="$1">[$1]</sup>');
+    parts.push(`<div class="answer${STRUCTURED?" md":""}">${html}</div>`);
+    // answer-video add-on. A saved session may already have a video → show it inline;
+    // otherwise offer to generate one (only when enabled AND the answer is grounded).
+    LAST = {question:(data.question||CURRENT_Q), answer:data.answer,
+            session_id:(data.session_id||data.id||null)};
+    if(data.video_filename){
+      parts.push(`<div class="vid">
+        <div class="vhint">🎬 ${esc(data.video_title||"Guidance video")}${data.video_duration?" · "+Math.round(data.video_duration)+"s":""}</div>
+        <video controls preload="metadata" src="/video/file/${encodeURIComponent(data.video_filename)}"></video>
+      </div>`);
+    } else if(VIDEO_ENABLED && data.grounded){
       parts.push(`<div class="vid" id="vid">
         <button type="button" class="vbtn" id="vgo">▶ Generate guidance video</button>
         <div class="vhint">A ~60-second narrated explainer of this answer, spoken as an experienced physician. Takes ~2 minutes.</div>
@@ -216,7 +316,16 @@ function render(data){
     </article>`);
   });
   if(!n && !(data.coverage_gaps||[]).length){
-    parts.push(`<div class="empty">No grounded answer for that question with the chosen sources.</div>`);
+    const atoms = data.atoms_gathered || 0;
+    if(atoms > 0){
+      const summ = Object.entries(ss).map(([k,v])=>`${v.retrieved} from ${esc(k)}`).join(", ");
+      parts.push(`<div class="empty"><span class="k">No span-verified answer.</span> Retrieved
+        ${atoms} relevant passage${atoms>1?"s":""}${summ?" ("+summ+")":""}, but the agent couldn't
+        ground a direct answer — often because the question asks for a ranking or recommendation
+        the sources don't establish. Try asking about a specific drug, trial, condition, or side effect.</div>`);
+    } else {
+      parts.push(`<div class="empty">No grounded answer for that question with the chosen sources.</div>`);
+    }
   }
   out.innerHTML = parts.join("");
   // clicking a [n] reference scrolls to and highlights its finding
@@ -280,7 +389,7 @@ $("#ask").addEventListener("submit", async e=>{
   out.innerHTML = `<div class="status">Searching sources and verifying evidence…</div>`;
   try{
     const resp = await fetch("/research",{method:"POST",headers:{"content-type":"application/json"},body});
-    if(resp.ok){ render(await resp.json()); return; }
+    if(resp.ok){ render(await resp.json()); if(!$("#history").hidden) loadHistory(); return; }
     // model unavailable (no credits / replay) → fall back to evidence retrieval
     const detail = (await resp.json().catch(()=>({}))).detail || `HTTP ${resp.status}`;
     if(resp.status===503 || resp.status===502){
@@ -298,6 +407,37 @@ $("#ask").addEventListener("submit", async e=>{
 });
 
 q.addEventListener("input", ()=>{ q.style.height="auto"; q.style.height=Math.min(q.scrollHeight,144)+"px"; });
+
+// ---- history (saved Q&A) ----
+async function loadHistory(){
+  const panel = $("#history");
+  try{
+    const {sessions} = await (await fetch("/sessions?tenant_id=demo&limit=50")).json();
+    if(!sessions || !sessions.length){ panel.innerHTML = `<div class="hempty">No saved questions yet.</div>`; return; }
+    panel.innerHTML = sessions.map(s=>`
+      <button class="hrow" data-id="${esc(s.id)}">
+        <span class="hq">${esc(s.question)}</span>
+        <span class="hmeta">${s.has_video?"🎬 ":""}${s.grounded?'<span class="hg">✓</span> ':""}${new Date(s.created_at).toLocaleDateString()}</span>
+      </button>`).join("");
+    panel.querySelectorAll(".hrow").forEach(b=>b.addEventListener("click",()=>loadSession(b.dataset.id)));
+  }catch(e){ panel.innerHTML = `<div class="hempty">Couldn't load history.</div>`; }
+}
+async function loadSession(id){
+  out.innerHTML = `<div class="status">Loading…</div>`;
+  try{
+    const row = await (await fetch("/sessions/"+encodeURIComponent(id))).json();
+    CURRENT_Q = row.question; q.value = row.question;
+    render(row);                      // saved row matches render()'s expected shape
+    $("#history").hidden = true; $("#histbtn").setAttribute("aria-expanded","false");
+    window.scrollTo({top:0,behavior:"smooth"});
+  }catch(e){ out.innerHTML = `<div class="empty">Couldn't load that session.</div>`; }
+}
+$("#histbtn").addEventListener("click",()=>{
+  const p = $("#history");
+  if(p.hidden){ p.hidden = false; $("#histbtn").setAttribute("aria-expanded","true"); loadHistory(); }
+  else { p.hidden = true; $("#histbtn").setAttribute("aria-expanded","false"); }
+});
+
 loadConfig();
 </script>
 </body>

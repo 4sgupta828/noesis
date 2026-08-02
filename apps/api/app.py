@@ -24,6 +24,13 @@ from noesis_kernel.runtime.research import ResearchService
 _WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
+def structured_answers() -> bool:
+    """Flag (default OFF, Rule 20): when ON, the active vertical's answer_format
+    directive shapes the synthesized answer (markdown sections). OFF = flat prose,
+    byte-identical to the pre-flag path."""
+    return os.environ.get("NOESIS_STRUCTURED_ANSWERS", "").lower() in ("1", "true", "yes")
+
+
 class ResearchIn(BaseModel):
     question: str
     tenant_id: str
@@ -49,6 +56,10 @@ class ResearchOut(BaseModel):
     rejected: int
     source_stats: dict = {}          # source -> {retrieved, cited}
     degraded_sources: dict = {}      # sources that failed this request
+    session_id: str | None = None    # saved Q&A id (for history + linking a video)
+    stopped_reason: str = ""         # answered | budget | max_steps (observability)
+    atoms_gathered: int = 0          # evidence blocks the agent saw (observability)
+    retried_empty: bool = False      # the abstention-recovery re-ask fired (observability)
 
 
 def build_default_service() -> ResearchService:
@@ -81,9 +92,13 @@ def build_default_service() -> ResearchService:
 
     persona = manifest.persona.system_prompt() if manifest.persona else \
         "You are an evidence-grounded research agent."
+    # Flag-gated (Rule 20): only pass the vertical's answer-structure directive when ON.
+    # OFF → None → the kernel's flat-prose compose path, byte-identical to pre-flag.
+    answer_format = manifest.answer_format if structured_answers() else None
     return ResearchService(
         llm=build_llm(mode=mode), embedder=embedder,
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
+        answer_format=answer_format,
         vertical_name=manifest.name, ui=manifest.ui,
         connectors=connectors, corpus_source_key=corpus_key,
     )
@@ -93,11 +108,28 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     app = FastAPI(title="Noesis Research", version="0")
     app.state.service = service   # lazily built on first request if None
 
+    def _store():
+        """Vertical-isolated research-session store (Postgres-backed). Built once when a
+        corpus DSN is configured; None (no persistence) against the fixture corpus."""
+        if getattr(app.state, "session_store", "unset") == "unset":
+            dsn = os.environ.get("NOESIS_CORPUS_DSN")
+            if dsn:
+                from api.sessions import SessionStore
+                app.state.session_store = SessionStore(dsn, vertical=load_active_vertical().name)
+            else:
+                app.state.session_store = None
+        return app.state.session_store
+
+    async def _attach_video(session_id: str, **kw) -> None:
+        store = _store()
+        if store is not None:
+            await store.attach_video(session_id, **kw)
+
     # Answer-video add-on — separate, flag-gated router (default OFF). Kept fully out of
     # the research path: mounting it changes nothing about how answers are produced.
     from api.video import build_video_router, video_enabled
     if video_enabled():
-        app.include_router(build_video_router())
+        app.include_router(build_video_router(attach_video=_attach_video))
 
     @app.get("/health")
     def health() -> dict:
@@ -117,6 +149,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "navigation": ui.navigation() if ui else [],
             "search_facets": ui.search_facets() if ui else [],
             "video_enabled": video_enabled(),
+            "structured_answers": structured_answers(),
         }
 
     @app.post("/search")
@@ -181,16 +214,56 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 return fn(c.document_id, c.quote) if fn and c.document_id else None
             except Exception:
                 return None
+        claims = [Citation(text=c.text, quote=c.quote, atom_id=c.atom_id,
+                           source=c.source_key, title=c.document_title,
+                           url=_url(c), document_id=c.document_id)
+                  for c in res.verified_claims]
+        # Persist the Q&A (best-effort, vertical-isolated) — never fail the response.
+        session_id = None
+        store = _store()
+        if store is not None:
+            try:
+                session_id = await store.save(
+                    tenant_id=body.tenant_id, workspace_id=body.workspace_id,
+                    question=body.question, answer=res.composed_answer,
+                    grounded=res.grounded, claims=[c.model_dump() for c in claims],
+                    source_stats=res.source_stats, coverage_gaps=res.coverage_gaps,
+                    rejected=len(res.rejected_claims), sources=body.sources)
+            except Exception:
+                session_id = None
         return ResearchOut(
             grounded=res.grounded,
             answer=res.composed_answer,
-            claims=[Citation(text=c.text, quote=c.quote, atom_id=c.atom_id,
-                             source=c.source_key, title=c.document_title,
-                             url=_url(c), document_id=c.document_id)
-                    for c in res.verified_claims],
+            claims=claims,
             coverage_gaps=res.coverage_gaps,
             rejected=len(res.rejected_claims),
             source_stats=res.source_stats,
+            session_id=session_id,
+            stopped_reason=res.stopped_reason,
+            atoms_gathered=res.atoms_gathered,
+            retried_empty=res.retried_empty,
         )
+
+    @app.get("/sessions")
+    async def list_sessions(tenant_id: str = "demo", limit: int = 50) -> dict:
+        """Recent saved Q&A for this vertical + tenant (history)."""
+        store = _store()
+        if store is None:
+            return {"sessions": []}
+        try:
+            return {"sessions": await store.list(tenant_id=tenant_id, limit=min(limit, 200))}
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"session store error: {e}") from e
+
+    @app.get("/sessions/{session_id}")
+    async def get_session(session_id: str) -> dict:
+        """Full saved Q&A (answer, claims, and any linked video)."""
+        store = _store()
+        if store is None:
+            raise HTTPException(status_code=404, detail="no session store")
+        row = await store.get(session_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="session not found")
+        return row
 
     return app

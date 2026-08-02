@@ -11,6 +11,7 @@ in P3; here the mechanics are proven offline with a scripted FakeLLM.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -47,6 +48,20 @@ class ComposedAnswer(BaseModel):
     answer: str
 
 
+def _refs_valid(text: str, n_findings: int) -> bool:
+    """Domain-free provenance check on a composed answer: it must cite at least one
+    finding and every inline [n] must resolve to a real finding (1..n_findings).
+
+    This is structural validation of citation FORMAT (Rule 18: parsing/validating a
+    format is code's job, not a semantic heuristic) — it guards against a structured
+    directive tempting the model to over-cite or invent a reference number.
+    """
+    refs = [int(m) for m in re.findall(r"\[(\d+)\]", text)]
+    if not refs:
+        return False
+    return all(1 <= r <= n_findings for r in refs)
+
+
 # ---- results -------------------------------------------------------------
 
 @dataclass
@@ -80,6 +95,7 @@ class AnswerResult:
     source_stats: dict[str, dict[str, int]] = field(default_factory=dict)
     steps: int = 0
     atoms_gathered: int = 0
+    retried_empty: bool = False          # the extract recovery re-ask fired (observability)
     stopped_reason: str = "answered"     # "answered" | "budget" | "max_steps"
 
     @property
@@ -105,6 +121,7 @@ async def run_react(
     budget: BudgetState,
     gating: GatingPolicy | None = None,
     system_prompt: str = "You are an evidence-grounded research agent.",
+    answer_format: str | None = None,
     max_steps: int = 8,
     k: int = 10,
 ) -> AnswerResult:
@@ -125,26 +142,65 @@ async def run_react(
             else:
                 result.rejected_claims.append(RejectedClaim(c.text, c.atom_id, c.quote, "quote_not_grounded"))
 
-    async def _ask(force_answer: bool) -> AgentStep:
+    async def _ask(mode: str = "step") -> AgentStep:
         obs = "\n".join(f"{a.atom_id}: {a.text}" for a in atoms.all()) or "(no evidence yet)"
-        instr = ("You have reached the evidence-gathering limit. You MUST now "
-                 "action='answer': give claims citing atom_ids + verbatim quotes for "
-                 "what the evidence supports, or answer with an empty claims list if "
-                 "the evidence does not address the question. Do NOT search."
-                 if force_answer else
-                 "Either action='search' with a query (and optional reformulations in "
-                 "'queries') to gather more, or action='answer' with claims — each claim "
-                 "citing an atom_id and a verbatim 'quote' from that atom.")
+        if mode == "extract":
+            # Recovery re-ask: the agent answered with NO grounded claims even though it
+            # gathered relevant evidence. Push it to extract what the evidence supports
+            # (counters LLM sampling variance where the same question sometimes abstains).
+            instr = ("You returned no grounded claims, but you HAVE gathered evidence "
+                     "above. Re-examine it and action='answer'. Do NOT search.")
+        elif mode == "force":
+            instr = ("You have reached the evidence-gathering limit. You MUST now "
+                     "action='answer'. Do NOT search.")
+        else:
+            instr = ("Either action='search' with a query (and optional reformulations in "
+                     "'queries') to gather more, or action='answer' with claims.")
+        # Shared answering discipline: report what the evidence DIRECTLY supports (partial is
+        # fine — the synthesis notes what isn't), and copy quotes VERBATIM so the span-check
+        # passes. This is the fix for advice/ranking questions where the model would otherwise
+        # abstain wholesale despite holding relevant evidence.
+        discipline = (
+            " When you answer, report EVERY fact the evidence DIRECTLY supports — even if it "
+            "only PARTIALLY answers the question, or cannot satisfy a ranking, recommendation, "
+            "or 'which is best/safest' the question implies (report the supported facts; the "
+            "synthesis will note what is not supported). A partial grounded answer is far better "
+            "than none. Each claim must cite an atom_id and a 'quote' copied EXACTLY, "
+            "character-for-character, from that atom — do NOT paraphrase, summarize, or reformat "
+            "numbers/units. Return an empty claims list ONLY if NONE of the gathered evidence is "
+            "relevant to the question.")
+        instr = instr + discipline
         # One fresh user message per step (all evidence so far). Ends with a user
         # turn — required by chat LLMs — and keeps the agent stateless per step.
         user = (f"Question: {question}\n\nEVIDENCE GATHERED SO FAR:\n{obs}\n\n"
                 + ("NOTES:\n" + "\n".join(notes) + "\n\n" if notes else "") + instr)
+        # NOTE: temperature is intentionally NOT set — the current model rejects it
+        # ("deprecated for this model"). Variance is countered by the answering
+        # discipline above + the extract recovery re-ask, not by sampling controls.
         res = await llm.complete(system=system_prompt,
                                  messages=[{"role": "user", "content": user}],
                                  response_format=AgentStep)
         budget.charge(calls=1, tokens=res.output_tokens)
         result.steps += 1
         return res.parsed
+
+    async def _finalize_answer(step: AgentStep) -> None:
+        """Apply the answer's claims through the provenance gate, then — if the agent
+        emitted NOTHING (0 verified AND 0 rejected) while it had gathered evidence —
+        re-ask once to extract what the evidence supports before giving up. This targets
+        the observed variance where the same question sometimes abstains despite good
+        evidence; it never fires when the agent already produced or attempted claims."""
+        _apply_answer(step)
+        if (not result.verified_claims and not result.rejected_claims
+                and atoms.all() and not budget.exhausted):
+            try:
+                budget.reserve()
+                result.retried_empty = True          # observability: the recovery fired
+                retry = await _ask(mode="extract")
+                if retry.action == "answer":
+                    _apply_answer(retry)
+            except BudgetExceeded:
+                pass
 
     for step_i in range(max_steps):
         if budget.exhausted:
@@ -157,7 +213,7 @@ async def run_react(
             break
 
         # On the final allowed step, force an answer instead of another search.
-        step: AgentStep = await _ask(force_answer=(step_i == max_steps - 1))
+        step: AgentStep = await _ask(mode="force" if step_i == max_steps - 1 else "step")
 
         if step.action == "search":
             q = step.query or question
@@ -181,8 +237,8 @@ async def run_react(
                     notes.append(f"COVERAGE GAP: {gap} — use another source or say so; do not guess.")
             continue
 
-        # action == "answer": provenance hard gate on every claim
-        _apply_answer(step)
+        # action == "answer": provenance hard gate (+ recovery re-ask if it abstained)
+        await _finalize_answer(step)
         result.stopped_reason = "answered"
         break
     else:
@@ -193,24 +249,30 @@ async def run_react(
         if not budget.exhausted:
             try:
                 budget.reserve()
-                final = await _ask(force_answer=True)
+                final = await _ask(mode="force")
                 if final.action == "answer":
-                    _apply_answer(final)
+                    await _finalize_answer(final)
                     result.stopped_reason = "answered"
             except BudgetExceeded:
                 pass
 
     result.atoms_gathered = len(atoms.all())
 
-    # Compose a synthesized prose answer FROM the verified findings only (factra
-    # "living answer" model). Grounded by construction: the composer sees only the
-    # verified findings and must reference them [n]; it may not add outside facts.
+    # Compose a synthesized answer FROM the verified findings only (factra "living
+    # answer" model). Grounded by construction: the composer sees only the verified
+    # findings and must reference them [n]; it may not add outside facts. A vertical
+    # may supply an optional `answer_format` directive (domain-owned) that shapes the
+    # structure — the kernel stays domain-free and only threads the string through.
     if result.verified_claims and not budget.exhausted:
-        try:
-            budget.reserve()
-            findings = "\n".join(
-                f"[{i}] {vc.text}  (quote: \"{vc.quote}\" — source: {vc.source_key})"
-                for i, vc in enumerate(result.verified_claims, 1))
+        n_findings = len(result.verified_claims)
+        findings = "\n".join(
+            f"[{i}] {vc.text}  (quote: \"{vc.quote}\" — source: {vc.source_key})"
+            for i, vc in enumerate(result.verified_claims, 1))
+
+        async def _compose(directive: str | None) -> str:
+            # Base instruction kept BYTE-IDENTICAL to the original so that the
+            # directive-free path (answer_format=None) is an exact no-op. The vertical
+            # directive, when present, is appended AFTER it.
             compose_user = (
                 f"Question: {question}\n\nVERIFIED FINDINGS (the ONLY facts you may use):\n"
                 f"{findings}\n\n"
@@ -218,13 +280,25 @@ async def run_react(
                 "these findings into coherent prose. Reference each finding inline as "
                 "[n] where you use it. Use ONLY the findings above — do not add facts, "
                 "figures, or claims not present in them. If they only partially answer "
-                "the question, say what is and isn't supported.")
+                "the question, say what is and isn't supported."
+                + (("\n\n" + directive) if directive else ""))
             comp = await llm.complete(
                 system=system_prompt,
                 messages=[{"role": "user", "content": compose_user}],
                 response_format=ComposedAnswer)
             budget.charge(calls=1, tokens=comp.output_tokens)
-            result.composed_answer = comp.parsed.answer.strip()
+            return comp.parsed.answer.strip()
+
+        try:
+            budget.reserve()
+            text = await _compose(answer_format)
+            # Domain-free provenance check: if a structured directive produced an
+            # answer with a bad/absent [n] reference, fall back once to the plain
+            # (directive-free) compose — the proven-safe path — when budget allows.
+            if answer_format and not _refs_valid(text, n_findings) and not budget.exhausted:
+                budget.reserve()
+                text = await _compose(None)
+            result.composed_answer = text
         except Exception:
             # Composition is best-effort enrichment over already-verified findings;
             # its failure must never drop the grounded answer/findings.

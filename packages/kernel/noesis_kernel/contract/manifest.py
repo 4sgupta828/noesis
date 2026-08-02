@@ -51,6 +51,11 @@ class VerticalManifest:
     # Presentation (P4)
     ui: UIContract | None = None
     deliverable_kinds: dict[str, object] = field(default_factory=dict)
+    # Optional vertical-supplied directive that shapes the synthesized answer's
+    # STRUCTURE (e.g. markdown sections a domain audience expects). Generic, opaque
+    # prose — the kernel only threads it into the grounded-compose step; all domain
+    # wording lives in the vertical. None → the kernel's default flat-prose answer.
+    answer_format: str | None = None
 
     # Held-out eval gold + vocab
     eval_gold: dict[str, object] = field(default_factory=dict)

@@ -166,6 +166,45 @@ def test_forced_answer_can_honestly_refuse() -> None:
     assert not res.grounded and not res.verified_claims   # honest refusal
 
 
+def test_extract_retry_recovers_empty_answer() -> None:
+    # Rule 4 held-out case: the agent abstains (empty-claims answer) on its first
+    # answer DESPITE having gathered relevant evidence; the recovery re-ask
+    # (mode="extract") must extract the grounded claim rather than return nothing.
+    src = _source()
+    class _SearchEmptyThenExtract:
+        async def complete(self, *, system, messages, response_format, max_tokens=2048, temperature=None):
+            content = messages[0]["content"]
+            if "VERIFIED FINDINGS" in content:                    # compose step
+                from noesis_kernel.research.react import ComposedAnswer
+                return LLMResult(parsed=ComposedAnswer(answer="Metric was 9.8 percent [1]."), output_tokens=5)
+            if "You returned no grounded claims" in content:      # the extract retry
+                return LLMResult(parsed=AgentStep(action="answer", claims=[
+                    ClaimOut(text="the metric value was 9.8 percent", atom_id="a1",
+                             quote="the approved metric value was 9.8 percent")]), output_tokens=5)
+            if "no evidence yet" in content:                      # first step: gather
+                return LLMResult(parsed=AgentStep(action="search", query="term metric value"), output_tokens=5)
+            return LLMResult(parsed=AgentStep(action="answer", claims=[]), output_tokens=5)  # abstain
+    res = asyncio.run(run_react(
+        question="what was the metric value?", llm=_SearchEmptyThenExtract(),
+        embedder=FakeEmbedder(dim=8), source=src, tenant_id="A",
+        budget=BudgetState(max_calls=20)))
+    assert res.retried_empty                                      # the recovery fired
+    assert res.grounded and len(res.verified_claims) == 1         # and it recovered a claim
+
+
+def test_no_retry_when_evidence_truly_absent() -> None:
+    # The recovery must NOT fire (or loop) when the agent honestly refuses with no
+    # evidence gathered — otherwise a genuine no-answer would burn extra calls.
+    src = _source()
+    class _AnswerEmptyNoSearch:
+        async def complete(self, *, system, messages, response_format, max_tokens=2048, temperature=None):
+            return LLMResult(parsed=AgentStep(action="answer", claims=[]), output_tokens=5)
+    res = asyncio.run(run_react(
+        question="?", llm=_AnswerEmptyNoSearch(), embedder=FakeEmbedder(dim=8),
+        source=src, tenant_id="A", budget=BudgetState(max_calls=20)))
+    assert not res.retried_empty and not res.grounded            # no atoms → no retry
+
+
 def test_tenant_isolation_end_to_end() -> None:
     # Source has only tenant-A data; a tenant-B run retrieves nothing, so a claim
     # citing a1 is rejected as unknown (B can never reach A's evidence).

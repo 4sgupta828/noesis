@@ -4,6 +4,7 @@ from __future__ import annotations
 from noesis_kernel.contract.manifest import VerticalManifest
 
 from . import entities
+from .answer_format import MEDICAL_ANSWER_FORMAT
 from .authority import MedicalAuthorityPolicy
 from .connector import ClinicalTrialsConnector
 from .openfda import OpenFdaConnector
@@ -39,5 +40,6 @@ def build_manifest() -> VerticalManifest:
         persona=MedicalPersona(),
         authority_policy=MedicalAuthorityPolicy(),
         ui=MedicalUI(),
+        answer_format=MEDICAL_ANSWER_FORMAT,
         eval_gold=dict(GOLD),
     )

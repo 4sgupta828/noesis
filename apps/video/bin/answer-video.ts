@@ -49,7 +49,7 @@ async function main() {
     voiceInstructions:
       'Speak as a seasoned, empathetic doctor talking directly to a patient: measured, warm, '
       + 'clear and unhurried. Reassuring but honest; never alarmist, never salesy.',
-    captions: true,
+    captions: false,
     format: '16:9',
     theme: 'midnight',
   });

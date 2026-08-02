@@ -264,6 +264,26 @@
   .gaprecs{margin:.2rem 0 0;padding-left:1.1rem;font-size:.86rem;color:var(--ink);line-height:1.5;}
   .gaprecs li{margin-bottom:.4rem;} .gapr-why{display:block;font-size:.76rem;color:var(--muted);}
 
+  /* conversation thread */
+  .threadbar{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin:0 0 1.1rem;padding-bottom:.7rem;border-bottom:1px solid var(--hair);}
+  .threadlbl{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
+  .turn{margin:0 0 1.6rem;}
+  .turn + .turn{padding-top:1.6rem;border-top:1px solid var(--hair);}
+  .turn-q{display:flex;gap:.6rem;align-items:flex-start;margin:0 0 1rem;}
+  .turn-qmark{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:1.7rem;height:1.7rem;
+    border-radius:8px;background:var(--gold);color:#1A1206;font-family:var(--mono);font-size:.68rem;font-weight:700;margin-top:.1rem;}
+  .turn-qtext{font-family:var(--serif,Georgia,serif);font-size:1.18rem;line-height:1.4;color:var(--ink);font-weight:500;letter-spacing:-.01em;}
+  .turnstatus{margin-top:1.2rem;}
+  /* suggested follow-ups */
+  .suggest{margin:.6rem 0 .4rem;padding:1rem 1.15rem;border:1px solid var(--hair);border-radius:14px;background:var(--panel2);}
+  .suggest-h{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:.7rem;}
+  .suggest-loading{font-size:.82rem;color:var(--muted);}
+  .suggest-chips{display:flex;flex-direction:column;gap:.5rem;}
+  .chip-q{text-align:left;font-family:inherit;font-size:.92rem;line-height:1.4;color:var(--ink);cursor:pointer;
+    background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:.6rem .8rem;transition:border-color .15s,color .15s;}
+  .chip-q::before{content:"→ ";color:var(--gold);font-weight:700;}
+  .chip-q:hover{border-color:rgba(211,179,124,.45);color:#fff;}
+
   /* grounding header band */
   .ansmeta{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:0 0 1.3rem;padding-bottom:.9rem;
     border-bottom:1px solid var(--hair);}
@@ -530,6 +550,10 @@ let STRUCTURED = false;     // render the answer as markdown sections (server-au
 let VISION_ENABLED = false; // image/PDF/DICOM upload → visual-context research
 let LAYMAN_ENABLED = false; // on-demand plain-language re-explanation
 let GAP_ENABLED = false;    // self-healing: suggest + queue sources to fill evidence gaps
+let CONV_ENABLED = false;   // multi-turn conversation (follow-ups carry context)
+let SUGGEST_ENABLED = false;// suggested follow-up questions after each answer
+let THREAD = {session_id:null, turns:[]};   // the active conversation
+let BASE_PLACEHOLDER = "";                   // vertical console placeholder (restored on New)
 let ATTACHMENTS = [];       // [{name, media_type, data(base64)}]
 let USER = null;            // {name, email} captured at landing, saved per session
 let LAST = null;            // {question, answer} for the answer-video add-on
@@ -545,6 +569,8 @@ async function loadConfig(){
     STRUCTURED = !!c.structured_answers;
     LAYMAN_ENABLED = !!c.layman_enabled;
     GAP_ENABLED = !!c.gap_healing_enabled;
+    CONV_ENABLED = !!c.conversation_enabled;
+    SUGGEST_ENABLED = !!c.suggest_enabled;
     VISION_ENABLED = !!c.vision_enabled;
     if(VISION_ENABLED){
       $("#attach").hidden = false;
@@ -553,7 +579,7 @@ async function loadConfig(){
     // vertical-supplied console copy (heading + placeholder) — keeps the shell domain-neutral
     const con = c.console || {};
     if(con.heading) $("#heading").textContent = con.heading;
-    if(con.placeholder) q.setAttribute("placeholder", con.placeholder);
+    if(con.placeholder){ q.setAttribute("placeholder", con.placeholder); BASE_PLACEHOLDER = con.placeholder; }
     const box = $("#sources");
     for(const k of SOURCES){
       const b = document.createElement("button");
@@ -614,17 +640,19 @@ function mdToHtml(raw){
   return out.join("");
 }
 
-function render(data, target){
+function render(data, target, opts){
   target = target || out;
+  opts = opts || {};
   const parts = [];
   const n = data.claims.length;
   const sid = data.session_id || data.id || null;   // saved session → shareable permalink
+  const showLink = sid && !opts.noLink;             // thread turns suppress per-turn link (one per thread)
   parts.push(`<div class="ansmeta">
     <span class="gpill ${data.grounded?"on":"off"}">${data.grounded?"✓ Grounded":"◦ Not fully grounded"}</span>
     <span class="mstat"><b>${n}</b> verified finding${n===1?"":"s"}</span>
     ${data.rejected ? `<span class="mstat dim">${data.rejected} rejected</span>`:""}
     <span class="metabtns">
-      ${sid?`<button type="button" class="copybtn" id="linkbtn">🔗 Copy link</button>`:""}
+      ${showLink?`<button type="button" class="copybtn" id="linkbtn">🔗 Copy link</button>`:""}
       ${(data.answer||n)?`<button type="button" class="copybtn" id="copybtn">⧉ Copy</button>`:""}
     </span>
   </div>`);
@@ -726,7 +754,7 @@ function render(data, target){
         ground a direct answer — often because the question asks for a ranking or recommendation
         the sources don't establish. Try asking about a specific drug, trial, condition, or side effect.</div>`);
     } else {
-      parts.push(`<div class="empty">No grounded answer for that question with the chosen sources.</div>`);
+      parts.push(`<div class="empty">${data._note?esc(data._note):"No grounded answer for that question with the chosen sources."}</div>`);
     }
   }
   // Self-healing corpus — ALWAYS offer to find + queue sources when enabled (a grounded answer
@@ -749,7 +777,7 @@ function render(data, target){
   const cb = target.querySelector("#copybtn");
   if(cb) cb.addEventListener("click", ()=>copyAnswer(data, cb));
   const lb = target.querySelector("#linkbtn");
-  if(lb && sid){ if(target===out) setShareHash(sid); lb.addEventListener("click", ()=>copyLink(sid, lb)); }
+  if(lb && showLink){ if(target===out) setShareHash(sid); lb.addEventListener("click", ()=>copyLink(sid, lb)); }
   const pg = target.querySelector("#plaingo");
   if(pg) pg.addEventListener("click", ()=>generatePlain(target));
   const gg = target.querySelector("#gapgo");
@@ -916,16 +944,23 @@ async function copyLink(id, btn){
     try{ document.execCommand("copy"); done(); }catch(_){ } ta.remove();
   }
 }
-// Open a shared session as a permalink: render its answer in the main view.
+// Open a shared session as a permalink: render its answer (or whole conversation thread).
 async function loadSharedSession(id){
   out.innerHTML = `<div class="status">Loading shared answer…</div>`;
   try{
     const r = await fetch("/sessions/"+encodeURIComponent(id));
     if(!r.ok) throw new Error("not found");
     const row = await r.json();
-    CURRENT_Q = row.question; q.value = row.question;
-    q.style.height="auto"; q.style.height=Math.min(q.scrollHeight,180)+"px";
-    render(row, out);
+    CURRENT_Q = row.question;
+    const thread = row.thread || [];
+    if(CONV_ENABLED && thread.length){          // resume the shared conversation (continuable)
+      THREAD = {session_id:id, turns:thread.slice()};
+      q.value=""; q.style.height="auto"; q.setAttribute("placeholder","Ask a follow-up…");
+      renderThread(); loadSuggestions();
+    } else {
+      q.value = row.question; q.style.height="auto"; q.style.height=Math.min(q.scrollHeight,180)+"px";
+      render(row, out);
+    }
     window.scrollTo({top:0});
   }catch(e){
     out.innerHTML = `<div class="empty">That shared answer is no longer available.</div>`;
@@ -1038,24 +1073,47 @@ $("#camshot").addEventListener("click", capturePhoto);
 $("#camflip").addEventListener("click", async ()=>{ camFacing = camFacing==="environment"?"user":"environment"; try{ await startCam(); }catch(e){} });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !$("#cammodal").hidden) closeCamera(); });
 
-$("#ask").addEventListener("submit", async e=>{
+$("#ask").addEventListener("submit", e=>{
   e.preventDefault();
   const question = q.value.trim();
-  if(!question) return;
+  if(question) askQuestion(question);
+});
+
+// The one path for asking. In CONVERSATION mode it appends a turn to the running thread (carrying
+// prior turns as context + the thread id); otherwise it renders a single answer (unchanged).
+async function askQuestion(question){
   if(ATTACHMENTS.length && !($("#consent")||{}).checked){
     const c = $("#consent"); if(c){ c.focus(); c.parentElement.style.color = "var(--gap)"; }
     return;
   }
   CURRENT_Q = question;
+  const conv = CONV_ENABLED, follow = conv && THREAD.turns.length>0;
   const payload = {question, tenant_id:"demo", sources: chosen()};
   if(ATTACHMENTS.length) payload.attachments = ATTACHMENTS.slice();
   if(USER){ payload.user_name = USER.name; payload.user_email = USER.email; }
+  if(conv){
+    if(THREAD.turns.length) payload.history = threadHistoryPayload();
+    if(THREAD.session_id) payload.session_id = THREAD.session_id;
+  }
   const body = JSON.stringify(payload);
   go.disabled = true; go.classList.add("loading");
-  out.innerHTML = `<div class="status">Searching sources and verifying evidence…</div>`;
+  const sg = out.querySelector("#suggest"); if(sg) sg.remove();
+  let statusEl = null;
+  if(follow){                                    // keep the thread; append a thinking indicator
+    statusEl = document.createElement("div"); statusEl.className = "status turnstatus";
+    statusEl.textContent = "Searching sources and verifying evidence…";
+    out.appendChild(statusEl); statusEl.scrollIntoView({behavior:"smooth", block:"center"});
+  } else {
+    out.innerHTML = `<div class="status">Searching sources and verifying evidence…</div>`;
+  }
+  if(conv){ q.value = ""; q.style.height = "auto"; }
+  const pushTurn = (data) => { THREAD.session_id = data.session_id || THREAD.session_id;
+    THREAD.turns.push(data); renderThread(); loadSuggestions(); };
+  const errTurn = (note) => ({question, answer:"", grounded:false, claims:[],
+    coverage_gaps:[], source_stats:{}, _note:note});
   const ctrl = new AbortController();
-  const timer = setTimeout(()=>ctrl.abort(), 120000);   // hard client cap → degrade to evidence + gap-fill
-  const evidenceFallback = async (note) => {             // ranked evidence + the fill-the-gaps panel
+  const timer = setTimeout(()=>ctrl.abort(), 120000);   // hard client cap → degrade gracefully
+  const evidenceFallback = async (note) => {             // single-mode: ranked evidence + gap-fill
     try{
       const s = await fetch("/search",{method:"POST",headers:{"content-type":"application/json"},body});
       if(s.ok){ renderEvidence(await s.json(), note); appendGapFallback(question); return true; }
@@ -1065,9 +1123,11 @@ $("#ask").addEventListener("submit", async e=>{
   try{
     const resp = await fetch("/research",{method:"POST",headers:{"content-type":"application/json"},body,signal:ctrl.signal});
     clearTimeout(timer);
-    if(resp.ok){ render(await resp.json()); ATTACHMENTS=[]; renderAttachments(); return; }
-    // model unavailable (no credits / replay) → fall back to evidence retrieval + gap-fill
+    if(resp.ok){ const data = await resp.json(); ATTACHMENTS=[]; renderAttachments();
+      if(conv) pushTurn(data); else render(data); return; }
     const detail = (await resp.json().catch(()=>({}))).detail || `HTTP ${resp.status}`;
+    if(statusEl) statusEl.remove();
+    if(conv){ pushTurn(errTurn(detail)); return; }
     if(resp.status===503 || resp.status===502){
       out.innerHTML = `<div class="status">Answer model unavailable — retrieving evidence…</div>`;
       if(await evidenceFallback("Answer synthesis is unavailable ("+detail.replace(/\.$/,'')+"). Showing ranked evidence — and you can queue more sources below.")) return;
@@ -1075,9 +1135,11 @@ $("#ask").addEventListener("submit", async e=>{
     out.innerHTML = `<div class="empty">${esc(detail)}</div>`;
     appendGapFallback(question);
   }catch(err){
-    clearTimeout(timer);
+    clearTimeout(timer); if(statusEl) statusEl.remove();
     const timedOut = err && err.name === "AbortError";
-    out.innerHTML = `<div class="status">${timedOut?"The full answer is taking too long — retrieving evidence instead…":"Couldn't reach the research service…"}</div>`;
+    if(conv){ pushTurn(errTurn(timedOut
+        ? "The full answer timed out — try a narrower follow-up, or fill the gaps below."
+        : "Couldn't reach the research service.")); return; }
     if(await evidenceFallback(timedOut
         ? "The full answer timed out for this question. Showing ranked evidence — and you can queue high-quality sources below to fill the gap."
         : "Showing ranked evidence from your sources.")) return;
@@ -1085,13 +1147,64 @@ $("#ask").addEventListener("submit", async e=>{
     appendGapFallback(question);
   }finally{
     go.disabled = false; go.classList.remove("loading");
+    if(conv) q.setAttribute("placeholder", "Ask a follow-up…");
   }
-});
+}
 // Append the reusable fill-the-gaps panel to the main view (degraded/no-evidence paths).
 function appendGapFallback(question){
   if(!GAP_ENABLED) return;
   out.insertAdjacentHTML("beforeend", gapPanelMarkup(true));   // fallback = under-evidenced
   wireGap(out, {question, answer:"", coverage_gaps:[]});
+}
+
+// ---- conversation (multi-turn thread) ----
+function threadHistoryPayload(){ return THREAD.turns.map(t=>({question:t.question, answer:t.answer||""})); }
+function newConversation(){
+  THREAD = {session_id:null, turns:[]};
+  out.innerHTML = "";
+  try{ history.replaceState(null, "", location.pathname + location.search); }catch(e){}
+  q.value=""; q.style.height="auto"; if(BASE_PLACEHOLDER) q.setAttribute("placeholder", BASE_PLACEHOLDER);
+  window.scrollTo({top:0}); q.focus();
+}
+function renderThread(){
+  out.innerHTML = "";
+  if(THREAD.session_id){                          // one shareable link + reset, per thread
+    const bar = document.createElement("div"); bar.className = "threadbar";
+    bar.innerHTML = `<span class="threadlbl">Conversation · ${THREAD.turns.length} turn${THREAD.turns.length===1?"":"s"}</span>
+      <span class="metabtns"><button type="button" class="copybtn" id="tlink">🔗 Copy link</button>
+      <button type="button" class="copybtn" id="tnew">＋ New conversation</button></span>`;
+    out.appendChild(bar);
+    setShareHash(THREAD.session_id);
+    bar.querySelector("#tlink").addEventListener("click", e=>copyLink(THREAD.session_id, e.currentTarget));
+    bar.querySelector("#tnew").addEventListener("click", newConversation);
+  }
+  THREAD.turns.forEach((t,i)=>{
+    const block = document.createElement("div"); block.className = "turn";
+    const qh = document.createElement("div"); qh.className = "turn-q";
+    qh.innerHTML = `<span class="turn-qmark">Q${i+1}</span><div class="turn-qtext">${esc(t.question||"")}</div>`;
+    block.appendChild(qh);
+    const ans = document.createElement("div"); block.appendChild(ans);
+    out.appendChild(block);
+    render(t, ans, {noLink:true});
+  });
+  const last = out.querySelector(".turn:last-child"); if(last) last.scrollIntoView({behavior:"smooth", block:"start"});
+}
+async function loadSuggestions(){
+  if(!SUGGEST_ENABLED || !THREAD.turns.length) return;
+  const last = THREAD.turns[THREAD.turns.length-1];
+  const holder = document.createElement("div"); holder.className = "suggest"; holder.id = "suggest";
+  holder.innerHTML = `<div class="suggest-h">◇ Go deeper</div><div class="suggest-loading">Finding good next questions…</div>`;
+  out.appendChild(holder);
+  try{
+    const r = await fetch("/suggest",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({question:last.question, answer:last.answer||"", history:threadHistoryPayload()})});
+    if(!r.ok) throw new Error();
+    const {suggestions} = await r.json();
+    if(!suggestions || !suggestions.length){ holder.remove(); return; }
+    holder.innerHTML = `<div class="suggest-h">◇ Go deeper</div><div class="suggest-chips">` +
+      suggestions.map(s=>`<button type="button" class="chip-q">${esc(s)}</button>`).join("") + `</div>`;
+    holder.querySelectorAll(".chip-q").forEach(b=>b.addEventListener("click",()=>askQuestion(b.textContent.trim())));
+  }catch(e){ holder.remove(); }
 }
 
 q.addEventListener("input", ()=>{ q.style.height="auto"; q.style.height=Math.min(q.scrollHeight,180)+"px"; });
@@ -1248,14 +1361,14 @@ $("#idgo").addEventListener("click", ()=>{
 });
 $("#idmodal").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#idgo").click(); });
 
-loadConfig();
 initIdentity();
-// deep-link routing: #s/<id> → open a shared answer as a permalink; #sessions → the panel
-(function routeHash(){
+function routeHash(){    // #s/<id> → open a shared answer/thread; #sessions → the panel
   const m = location.hash.match(/^#s\/(.+)$/);
   if(m){ loadSharedSession(decodeURIComponent(m[1])); }
   else if(location.hash === "#sessions"){ openSessions(); }
-})();
+}
+// route only AFTER config loads, so CONV_ENABLED is known (shared threads render as conversations)
+loadConfig().then(routeHash);
 // pasted link / back-forward within the tab (our own writes use replaceState → no event)
 window.addEventListener("hashchange", ()=>{
   const m = location.hash.match(/^#s\/(.+)$/);

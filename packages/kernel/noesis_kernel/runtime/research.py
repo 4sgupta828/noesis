@@ -27,6 +27,7 @@ class ResearchService:
     vision_prompt: str | None = None        # vertical image-description directive (opaque)
     layman_prompt: str | None = None        # vertical layman-rephrasing directive (opaque)
     gap_prompt: str | None = None           # vertical gap-fill-planner directive (opaque)
+    suggest_prompt: str | None = None       # vertical suggested-follow-ups directive (opaque)
     max_calls: int = 40
     vertical_name: str = ""
     ui: object | None = None                # the vertical's UIContract (for /config)
@@ -47,6 +48,7 @@ class ResearchService:
         source_keys: list[str] | None = None,
         images: list[dict] | None = None,
         documents: list[dict] | None = None,
+        history: list[dict] | None = None,
         max_steps: int = 8,
     ) -> AnswerResult:
         budget = BudgetState(max_calls=self.max_calls)
@@ -73,13 +75,26 @@ class ResearchService:
                 parts.append(f"DOCUMENT — {name} (user-provided text):\n{txt}")
         attachment_context = "\n\n".join(parts) or None
 
+        # Prior conversation turns → a compact context block (a follow-up can be elliptical). This
+        # only frames search/interpretation; it never becomes a grounded claim (like attachments).
+        history_context = None
+        if history:
+            turns = []
+            for t in history:
+                qy = (t.get("question") or "").strip()
+                an = (t.get("answer") or "").strip()
+                if qy:
+                    turns.append(f"Q: {qy}\nA: {an[:1200]}" if an else f"Q: {qy}")
+            history_context = "\n\n".join(turns) or None
+
         res = await run_react(
             question=question, llm=self.llm, embedder=self.embedder,
             source=self._retriever(source_keys),
             tenant_id=tenant_id, workspace_id=workspace_id,
             budget=budget, gating=self.gating,
             system_prompt=self.persona_prompt, answer_format=self.answer_format,
-            attachment_context=attachment_context, max_steps=max_steps,
+            attachment_context=attachment_context, history_context=history_context,
+            max_steps=max_steps,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)
         return res
@@ -102,6 +117,15 @@ class ResearchService:
         return await plan_gap_fill(
             llm=self.llm, gap_prompt=self.gap_prompt, question=question, answer=answer,
             coverage_gaps=coverage_gaps, available_connectors=list(self.connectors.keys()))
+
+    async def suggest(self, *, question: str, answer: str, history: str = "") -> list[str]:
+        """On-demand suggested follow-up questions that deepen discovery. [] when unavailable."""
+        if not self.suggest_prompt:
+            return []
+        from noesis_kernel.research.suggest import suggest_followups
+        return await suggest_followups(
+            llm=self.llm, suggest_prompt=self.suggest_prompt,
+            question=question, answer=answer, history=history)
 
     async def search(
         self,

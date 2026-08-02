@@ -46,6 +46,11 @@ class ComposedAnswer(BaseModel):
     """A synthesized prose answer built ONLY from the verified findings, with
     inline [n] references to them so every statement stays traceable."""
     answer: str
+    # Honesty signal (LLM-owned): does the evidence DIRECTLY address the asked question, or is it
+    # only analogue/tangential? When false, `gap_note` names what direct evidence is missing — the
+    # kernel surfaces it as a coverage gap so a "grounded-on-analogues" answer still flags the gap.
+    directly_addresses: bool = True
+    gap_note: str = ""
 
 
 def _refs_valid(text: str, n_findings: int) -> bool:
@@ -127,6 +132,7 @@ async def run_react(
     system_prompt: str = "You are an evidence-grounded research agent.",
     answer_format: str | None = None,
     attachment_context: str | None = None,
+    history_context: str | None = None,
     max_steps: int = 8,
     k: int = 10,
 ) -> AnswerResult:
@@ -146,6 +152,16 @@ async def run_react(
         f"findings; NEVER cite it as a source or a verified claim):\n"
         f"{att}\n\n"
         if att else ""
+    )
+    # Prior conversation turns (for a FOLLOW-UP question). Context ONLY — it lets the agent resolve
+    # an elliptical follow-up ("what about in children?") against what was already discussed. Like
+    # image/doc context, it NEVER becomes a grounded claim and never enters the compose step.
+    conv = (history_context or "").strip()
+    conv_ctx = (
+        f"CONVERSATION SO FAR (prior questions and answers in this thread; context to interpret "
+        f"the CURRENT question — NOT corpus evidence, NEVER cite it as a source or verified claim):\n"
+        f"{conv}\n\n"
+        if conv else ""
     )
 
     def _apply_answer(step: AgentStep) -> None:
@@ -192,7 +208,7 @@ async def run_react(
         # turn — required by chat LLMs — and keeps the agent stateless per step.
         # img_ctx (if any) frames the search but is never merged into `question` (so it
         # stays out of the compose step and can't read as a grounded finding).
-        user = (img_ctx + f"Question: {question}\n\nEVIDENCE GATHERED SO FAR:\n{obs}\n\n"
+        user = (conv_ctx + img_ctx + f"Question: {question}\n\nEVIDENCE GATHERED SO FAR:\n{obs}\n\n"
                 + ("NOTES:\n" + "\n".join(notes) + "\n\n" if notes else "") + instr)
         # NOTE: temperature is intentionally NOT set — the current model rejects it
         # ("deprecated for this model"). Variance is countered by the answering
@@ -222,6 +238,7 @@ async def run_react(
             except BudgetExceeded:
                 pass
 
+    stale_searches = 0          # consecutive searches that added NO new atoms (spinning detector)
     for step_i in range(max_steps):
         if budget.exhausted:
             result.stopped_reason = "budget"
@@ -232,8 +249,11 @@ async def run_react(
             result.stopped_reason = "budget"
             break
 
-        # On the final allowed step, force an answer instead of another search.
-        step: AgentStep = await _ask(mode="force" if step_i == max_steps - 1 else "step")
+        # Force an answer on the final step, OR early when the agent is spinning — two searches in
+        # a row that surfaced NO new evidence means more searching won't help; answer over what we
+        # have instead of burning the full step budget (latency fix for no-evidence questions).
+        force = step_i == max_steps - 1 or (stale_searches >= 2 and bool(atoms.all()))
+        step: AgentStep = await _ask(mode="force" if force else "step")
 
         if step.action == "search":
             q = step.query or question
@@ -246,7 +266,9 @@ async def run_react(
                 hits = await multi_query_retrieve(source, base_req, step.queries, embedder=embedder)
             else:
                 hits = await source.search(base_req)
+            before = len(atoms.all())
             atoms.add_hits(hits)
+            stale_searches = stale_searches + 1 if len(atoms.all()) == before else 0
 
             # vertical gating: surface a real coverage gap so the agent reaches for
             # other sources or answers honestly instead of guessing.
@@ -289,10 +311,11 @@ async def run_react(
             f"[{i}] {vc.text}  (quote: \"{vc.quote}\" — source: {vc.source_key})"
             for i, vc in enumerate(result.verified_claims, 1))
 
-        async def _compose(directive: str | None) -> str:
-            # Base instruction kept BYTE-IDENTICAL to the original so that the
-            # directive-free path (answer_format=None) is an exact no-op. The vertical
-            # directive, when present, is appended AFTER it.
+        async def _compose(directive: str | None) -> ComposedAnswer:
+            # Base ANSWER instruction kept identical to the original (directive-free path stays a
+            # near-exact no-op). A trailing META judgment (directly_addresses/gap_note) is appended
+            # AFTER it — it asks only for extra metadata, not a different answer, so answer text is
+            # unaffected. The vertical directive, when present, is appended AFTER that.
             compose_user = (
                 f"Question: {question}\n\nVERIFIED FINDINGS (the ONLY facts you may use):\n"
                 f"{findings}\n\n"
@@ -301,24 +324,35 @@ async def run_react(
                 "[n] where you use it. Use ONLY the findings above — do not add facts, "
                 "figures, or claims not present in them. If they only partially answer "
                 "the question, say what is and isn't supported."
+                "\n\nSEPARATELY (metadata, not part of the answer prose): set directly_addresses=false "
+                "if the findings only address the question by analogy/adjacent topic rather than "
+                "DIRECTLY (e.g. no evidence on the exact intervention/population/outcome asked); then "
+                "put ONE short line in gap_note naming the direct evidence that is missing. Otherwise "
+                "directly_addresses=true and gap_note empty."
                 + (("\n\n" + directive) if directive else ""))
             comp = await llm.complete(
                 system=system_prompt,
                 messages=[{"role": "user", "content": compose_user}],
                 response_format=ComposedAnswer)
             budget.charge(calls=1, tokens=comp.output_tokens)
-            return comp.parsed.answer.strip()
+            return comp.parsed
 
         try:
             budget.reserve()
-            text = await _compose(answer_format)
+            parsed = await _compose(answer_format)
+            text = parsed.answer.strip()
             # Domain-free provenance check: if a structured directive produced an
             # answer with a bad/absent [n] reference, fall back once to the plain
             # (directive-free) compose — the proven-safe path — when budget allows.
             if answer_format and not _refs_valid(text, n_findings) and not budget.exhausted:
                 budget.reserve()
-                text = await _compose(None)
+                parsed = await _compose(None)
+                text = parsed.answer.strip()
             result.composed_answer = text
+            # Honesty signal → coverage gap: a "grounded-on-analogues" answer still flags the gap,
+            # so the UI shows the prominent fill-the-gaps affordance (LLM-owned judgment, no regex).
+            if parsed.directly_addresses is False and (parsed.gap_note or "").strip():
+                result.coverage_gaps.append(parsed.gap_note.strip())
         except Exception:
             # Composition is best-effort enrichment over already-verified findings;
             # its failure must never drop the grounded answer/findings.

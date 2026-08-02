@@ -70,6 +70,10 @@ class VerticalManifest:
     # what each connector fetches + what high-quality evidence looks like in this domain. Opaque
     # prose; the kernel only threads it into the planner call. None → self-healing unavailable.
     gap_prompt: str | None = None
+    # Optional vertical-supplied instruction for SUGGESTED FOLLOW-UP questions: given a Q&A, propose
+    # a few next questions that deepen discovery, understanding, and action for this domain. Opaque
+    # prose; the kernel only threads it into the suggest call. None → no suggestions surfaced.
+    suggest_prompt: str | None = None
 
     # Held-out eval gold + vocab
     eval_gold: dict[str, object] = field(default_factory=dict)

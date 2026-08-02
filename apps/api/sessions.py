@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS noesis_research_session (
     attachments    JSONB NOT NULL DEFAULT '[]'::jsonb,
     layman_answer  TEXT,
     deleted        BOOLEAN NOT NULL DEFAULT FALSE,
+    thread         JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 -- additive columns for pre-existing tables (expand-only; safe to re-run)
@@ -47,6 +48,7 @@ ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS visual_observation 
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS layman_answer TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS thread JSONB NOT NULL DEFAULT '[]'::jsonb;
 CREATE INDEX IF NOT EXISTS idx_nrs_vertical_tenant_created
     ON noesis_research_session (vertical, tenant_id, created_at DESC);
 """
@@ -87,22 +89,39 @@ class SessionStore:
                    attachments: list[dict] | None = None) -> str:
         await self._ensure()
         sid = uuid.uuid4().hex
+        # turn 0 also lives in `thread` so a conversation is one shareable row; the flat columns
+        # keep the first turn for the list view + backward compatibility.
+        turn0 = {"question": question, "answer": answer, "grounded": grounded, "claims": claims,
+                 "source_stats": source_stats, "coverage_gaps": coverage_gaps, "rejected": rejected,
+                 "visual_observation": visual_observation, "attachments": attachments or []}
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             await conn.execute(
                 """INSERT INTO noesis_research_session
                    (id, vertical, tenant_id, workspace_id, question, answer, grounded, claims,
                     source_stats, coverage_gaps, rejected, sources, user_name, user_email,
-                    visual_observation, attachments)
+                    visual_observation, attachments, thread)
                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12::jsonb,
-                           $13,$14,$15,$16::jsonb)""",
+                           $13,$14,$15,$16::jsonb,$17::jsonb)""",
                 sid, self._vertical, tenant_id, workspace_id, question, answer, grounded,
                 json.dumps(claims), json.dumps(source_stats), json.dumps(coverage_gaps),
                 rejected, json.dumps(sources or []),
                 (user_name or None), (user_email or None),
                 (visual_observation or None), json.dumps(attachments or []),
+                json.dumps([turn0]),
             )
         return sid
+
+    async def append_turn(self, session_id: str, turn: dict) -> bool:
+        """Append a follow-up turn to a conversation thread (in place). Returns True if it matched."""
+        await self._ensure()
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            res = await conn.execute(
+                "UPDATE noesis_research_session SET thread = thread || $3::jsonb "
+                "WHERE id=$1 AND vertical=$2 AND NOT deleted",
+                session_id, self._vertical, json.dumps([turn]))
+        return res.endswith("1")
 
     async def save_layman(self, session_id: str, text: str) -> bool:
         await self._ensure()
@@ -206,5 +225,6 @@ class SessionStore:
             "visual_observation": r["visual_observation"],
             "attachments": _j(r["attachments"], []),
             "layman_answer": r["layman_answer"],
+            "thread": _j(r["thread"], []),
             "created_at": r["created_at"].isoformat(),
         }

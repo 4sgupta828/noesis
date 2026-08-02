@@ -46,6 +46,13 @@ def gap_healing_enabled() -> bool:
     return os.environ.get("NOESIS_GAP_HEALING", "").lower() in ("1", "true", "yes")
 
 
+def conversation_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, answers become a multi-turn thread — follow-up
+    questions carry prior turns as context, the thread persists on one session, and suggested
+    follow-ups are offered. OFF → single-answer behavior (each ask is a fresh session)."""
+    return os.environ.get("NOESIS_CONVERSATION", "").lower() in ("1", "true", "yes")
+
+
 class Attachment(BaseModel):
     data: str                              # base64-encoded file bytes
     media_type: str = ""                   # e.g. image/png, application/pdf, application/dicom
@@ -60,6 +67,14 @@ class ResearchIn(BaseModel):
     attachments: list[Attachment] | None = None   # images/PDF/DICOM → vision context
     user_name: str | None = None          # asker identity (captured at landing)
     user_email: str | None = None
+    history: list[dict] | None = None     # prior turns [{question, answer}] → follow-up context
+    session_id: str | None = None         # thread to append this turn to (conversation)
+
+
+class SuggestIn(BaseModel):
+    question: str
+    answer: str = ""
+    history: list[dict] | None = None
 
 
 class ExplainIn(BaseModel):
@@ -151,11 +166,13 @@ def build_default_service() -> ResearchService:
     answer_format = manifest.answer_format if structured_answers() else None
     vision_prompt = manifest.vision_prompt if vision_enabled() else None
     gap_prompt = manifest.gap_prompt if gap_healing_enabled() else None
+    suggest_prompt = manifest.suggest_prompt if conversation_enabled() else None
     return ResearchService(
         llm=build_llm(mode=mode), embedder=embedder,
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
         answer_format=answer_format, vision_prompt=vision_prompt,
         layman_prompt=manifest.layman_prompt, gap_prompt=gap_prompt,
+        suggest_prompt=suggest_prompt,
         vertical_name=manifest.name, ui=manifest.ui,
         connectors=connectors, corpus_source_key=corpus_key,
     )
@@ -278,6 +295,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "vision_enabled": vision_enabled(),
             "layman_enabled": bool(getattr(svc, "layman_prompt", None)),
             "gap_healing_enabled": gap_healing_enabled() and bool(getattr(svc, "gap_prompt", None)),
+            "conversation_enabled": conversation_enabled(),
+            "suggest_enabled": conversation_enabled() and bool(getattr(svc, "suggest_prompt", None)),
         }
 
     @app.post("/search")
@@ -341,11 +360,13 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             images, docs, attach_notes = attachments_to_media(
                 [a.model_dump() for a in body.attachments])
             previews = session_previews(images or [], docs or [])   # thumbnails + doc names
+        # conversation: prior turns carry as context (only when the flag is on)
+        history = body.history if conversation_enabled() else None
         try:
             res = await app.state.service.ask(
                 question=body.question, tenant_id=body.tenant_id,
                 workspace_id=body.workspace_id, source_keys=body.sources,
-                images=images, documents=docs,
+                images=images, documents=docs, history=history,
             )
         except CassetteMiss as e:
             raise HTTPException(status_code=503, detail=(
@@ -366,18 +387,30 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                            url=_url(c), document_id=c.document_id)
                   for c in res.verified_claims]
         # Persist the Q&A (best-effort, vertical-isolated) — never fail the response.
+        # Conversation: a follow-up (session_id given + flag on) APPENDS a turn to that thread and
+        # keeps the same id; otherwise a fresh session is created (single-answer behavior).
         session_id = None
         store = _store()
+        claim_dicts = [c.model_dump() for c in claims]
         if store is not None:
+            turn = {"question": body.question, "answer": res.composed_answer,
+                    "grounded": res.grounded, "claims": claim_dicts,
+                    "source_stats": res.source_stats, "coverage_gaps": res.coverage_gaps,
+                    "rejected": len(res.rejected_claims),
+                    "visual_observation": res.visual_observation, "attachments": previews}
             try:
-                session_id = await store.save(
-                    tenant_id=body.tenant_id, workspace_id=body.workspace_id,
-                    question=body.question, answer=res.composed_answer,
-                    grounded=res.grounded, claims=[c.model_dump() for c in claims],
-                    source_stats=res.source_stats, coverage_gaps=res.coverage_gaps,
-                    rejected=len(res.rejected_claims), sources=body.sources,
-                    user_name=body.user_name, user_email=body.user_email,
-                    visual_observation=res.visual_observation, attachments=previews)
+                if conversation_enabled() and body.session_id and \
+                        await store.append_turn(body.session_id, turn):
+                    session_id = body.session_id
+                else:
+                    session_id = await store.save(
+                        tenant_id=body.tenant_id, workspace_id=body.workspace_id,
+                        question=body.question, answer=res.composed_answer,
+                        grounded=res.grounded, claims=claim_dicts,
+                        source_stats=res.source_stats, coverage_gaps=res.coverage_gaps,
+                        rejected=len(res.rejected_claims), sources=body.sources,
+                        user_name=body.user_name, user_email=body.user_email,
+                        visual_observation=res.visual_observation, attachments=previews)
             except Exception:
                 session_id = None
         return ResearchOut(
@@ -418,6 +451,29 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 except Exception:
                     pass
         return {"explanation": text}
+
+    @app.post("/suggest")
+    async def suggest(body: SuggestIn) -> dict:
+        """On-demand suggested follow-up questions for deeper discovery (conversation feature).
+        Called after an answer renders, so it never adds latency to the answer itself."""
+        if not conversation_enabled():
+            raise HTTPException(status_code=404, detail="suggestions not enabled")
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        if not getattr(svc, "suggest_prompt", None):
+            raise HTTPException(status_code=404, detail="suggestions not available for this vertical")
+        hist = ""
+        if body.history:
+            hist = "\n\n".join(
+                f"Q: {(t.get('question') or '').strip()}" for t in body.history if t.get("question"))
+        try:
+            qs = await svc.suggest(question=body.question, answer=body.answer, history=hist)
+        except CassetteMiss as e:
+            raise HTTPException(status_code=503, detail="No model available in replay mode.") from e
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
+        return {"suggestions": qs}
 
     @app.post("/corpus/gap-plan")
     async def corpus_gap_plan(body: GapPlanIn) -> dict:

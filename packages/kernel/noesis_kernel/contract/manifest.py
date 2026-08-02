@@ -56,6 +56,11 @@ class VerticalManifest:
     # prose — the kernel only threads it into the grounded-compose step; all domain
     # wording lives in the vertical. None → the kernel's default flat-prose answer.
     answer_format: str | None = None
+    # Optional vertical-supplied instruction for the VISION pre-step: how to DESCRIBE a
+    # user-uploaded image (color/shape/borders/texture/distribution), producing a labeled
+    # visual observation — never a diagnosis. Opaque prose; the kernel only threads it into
+    # the vision call. None → no vision pre-step (images ignored).
+    vision_prompt: str | None = None
 
     # Held-out eval gold + vocab
     eval_gold: dict[str, object] = field(default_factory=dict)

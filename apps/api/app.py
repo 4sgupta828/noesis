@@ -31,11 +31,25 @@ def structured_answers() -> bool:
     return os.environ.get("NOESIS_STRUCTURED_ANSWERS", "").lower() in ("1", "true", "yes")
 
 
+def vision_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, uploaded image/PDF/DICOM attachments are
+    described by the vision pre-step and used as CONTEXT for the grounded research. The
+    description is never a verified claim. OFF → attachments are ignored."""
+    return os.environ.get("NOESIS_VISION", "").lower() in ("1", "true", "yes")
+
+
+class Attachment(BaseModel):
+    data: str                              # base64-encoded file bytes
+    media_type: str = ""                   # e.g. image/png, application/pdf, application/dicom
+    name: str = ""
+
+
 class ResearchIn(BaseModel):
     question: str
     tenant_id: str
     workspace_id: str | None = None
     sources: list[str] | None = None      # subset of source keys; None = all
+    attachments: list[Attachment] | None = None   # images/PDF/DICOM → vision context
 
 
 class Citation(BaseModel):
@@ -60,6 +74,8 @@ class ResearchOut(BaseModel):
     stopped_reason: str = ""         # answered | budget | max_steps (observability)
     atoms_gathered: int = 0          # evidence blocks the agent saw (observability)
     retried_empty: bool = False      # the abstention-recovery re-ask fired (observability)
+    visual_observation: str = ""     # labeled AI image description (context, NOT a finding)
+    attachment_notes: list[str] = [] # anything skipped when reading attachments
 
 
 def build_default_service() -> ResearchService:
@@ -95,10 +111,11 @@ def build_default_service() -> ResearchService:
     # Flag-gated (Rule 20): only pass the vertical's answer-structure directive when ON.
     # OFF → None → the kernel's flat-prose compose path, byte-identical to pre-flag.
     answer_format = manifest.answer_format if structured_answers() else None
+    vision_prompt = manifest.vision_prompt if vision_enabled() else None
     return ResearchService(
         llm=build_llm(mode=mode), embedder=embedder,
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
-        answer_format=answer_format,
+        answer_format=answer_format, vision_prompt=vision_prompt,
         vertical_name=manifest.name, ui=manifest.ui,
         connectors=connectors, corpus_source_key=corpus_key,
     )
@@ -152,6 +169,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "console": console,
             "video_enabled": video_enabled(),
             "structured_answers": structured_answers(),
+            "vision_enabled": vision_enabled(),
         }
 
     @app.post("/search")
@@ -208,10 +226,17 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     async def research(body: ResearchIn) -> ResearchOut:
         if app.state.service is None:
             app.state.service = build_default_service()
+        # Attachments → vision images + document text (flag-gated). Failures degrade to notes.
+        images, docs, attach_notes = None, None, []
+        if body.attachments and vision_enabled():
+            from api.media import attachments_to_media
+            images, docs, attach_notes = attachments_to_media(
+                [a.model_dump() for a in body.attachments])
         try:
             res = await app.state.service.ask(
                 question=body.question, tenant_id=body.tenant_id,
                 workspace_id=body.workspace_id, source_keys=body.sources,
+                images=images, documents=docs,
             )
         except CassetteMiss as e:
             raise HTTPException(status_code=503, detail=(
@@ -255,6 +280,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             stopped_reason=res.stopped_reason,
             atoms_gathered=res.atoms_gathered,
             retried_empty=res.retried_empty,
+            visual_observation=res.visual_observation,
+            attachment_notes=attach_notes,
         )
 
     @app.get("/sessions")

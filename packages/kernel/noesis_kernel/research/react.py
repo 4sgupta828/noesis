@@ -87,6 +87,10 @@ class AnswerResult:
     # The synthesized prose answer (factra "living answer" model) — grounded in
     # the verified findings below; references them inline as [1], [2], …
     composed_answer: str = ""
+    # A labeled, DESCRIPTIVE reading of any user-uploaded image (from the vision pre-step).
+    # NOT a diagnosis, NOT a verified claim — surfaced separately so the UI can show it as
+    # context; it only framed the search, it never entered the grounded answer/compose.
+    visual_observation: str = ""
     verified_claims: list[VerifiedClaim] = field(default_factory=list)
     rejected_claims: list[RejectedClaim] = field(default_factory=list)
     coverage_gaps: list[str] = field(default_factory=list)   # vertical-signalled gaps
@@ -122,6 +126,7 @@ async def run_react(
     gating: GatingPolicy | None = None,
     system_prompt: str = "You are an evidence-grounded research agent.",
     answer_format: str | None = None,
+    attachment_context: str | None = None,
     max_steps: int = 8,
     k: int = 10,
 ) -> AnswerResult:
@@ -129,6 +134,19 @@ async def run_react(
     result = AnswerResult()
     notes: list[str] = []          # running coverage-gap / step notes for the agent
     verifier = BlockSpanVerifier(source.make_block_loader(tenant_id, workspace_id))
+
+    # Labeled user-provided context (image reading and/or uploaded-document text) for the
+    # step prompts ONLY (search + reasoning framing). It is deliberately kept OUT of the
+    # question string and the compose step, so attachment content can never surface as if
+    # it were a grounded corpus finding.
+    att = (attachment_context or "").strip()
+    img_ctx = (
+        f"USER-PROVIDED CONTEXT (from an uploaded image and/or document; NOT corpus "
+        f"evidence — use it ONLY to decide what to search for and how to interpret "
+        f"findings; NEVER cite it as a source or a verified claim):\n"
+        f"{att}\n\n"
+        if att else ""
+    )
 
     def _apply_answer(step: AgentStep) -> None:
         for c in step.claims:
@@ -172,7 +190,9 @@ async def run_react(
         instr = instr + discipline
         # One fresh user message per step (all evidence so far). Ends with a user
         # turn — required by chat LLMs — and keeps the agent stateless per step.
-        user = (f"Question: {question}\n\nEVIDENCE GATHERED SO FAR:\n{obs}\n\n"
+        # img_ctx (if any) frames the search but is never merged into `question` (so it
+        # stays out of the compose step and can't read as a grounded finding).
+        user = (img_ctx + f"Question: {question}\n\nEVIDENCE GATHERED SO FAR:\n{obs}\n\n"
                 + ("NOTES:\n" + "\n".join(notes) + "\n\n" if notes else "") + instr)
         # NOTE: temperature is intentionally NOT set — the current model rejects it
         # ("deprecated for this model"). Variance is countered by the answering

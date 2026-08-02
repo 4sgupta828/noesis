@@ -1,0 +1,159 @@
+"""Attachment → vision-ready images.
+
+Turns user uploads (base64) into a small list of downscaled PNG/JPEG images the vision
+pre-step can read. Handles standard images, PDF pages (rendered), and DICOM (windowed to
+8-bit). Heavy deps (PyMuPDF, pydicom, Pillow, numpy) are imported lazily and per-type, so a
+missing decoder degrades that ONE type with a note instead of breaking the API.
+
+Everything is best-effort and defensive: a bad attachment yields a note, never an exception
+that breaks /research. No attachment bytes are logged.
+"""
+from __future__ import annotations
+
+import base64
+import io
+
+_ANTHROPIC_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+_MAX_EDGE = 1400          # longest-edge px cap (Anthropic vision guidance ~1568)
+_MAX_IMAGES = 4
+_MAX_PDF_PAGES = 3
+_MAX_DOC_CHARS = 12000    # cap uploaded-document text fed as context
+_PDF_TEXT_MIN = 200       # a PDF with >= this many extracted chars is treated as a TEXT doc
+
+
+def _b64(data: bytes) -> str:
+    return base64.b64encode(data).decode("ascii")
+
+
+def _png_from_pil(img) -> dict:
+    """Downscale a PIL image to the edge cap and return a base64 PNG attachment dict."""
+    from PIL import Image  # noqa: F401  (ensure PIL present)
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+    w, h = img.size
+    scale = min(1.0, _MAX_EDGE / max(w, h)) if max(w, h) else 1.0
+    if scale < 1.0:
+        img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return {"media_type": "image/png", "data": _b64(buf.getvalue())}
+
+
+def _kind(att: dict) -> str:
+    """Classify an attachment as 'image' | 'pdf' | 'dicom' | 'unknown'."""
+    mt = (att.get("media_type") or "").lower()
+    name = (att.get("name") or "").lower()
+    if mt in _ANTHROPIC_IMAGE_TYPES or mt.startswith("image/"):
+        return "image"
+    if mt == "application/pdf" or name.endswith(".pdf"):
+        return "pdf"
+    if mt in ("application/dicom", "application/dcm") or name.endswith(".dcm"):
+        return "dicom"
+    # magic-byte sniff for DICOM ("DICM" at byte 128) and PDF ("%PDF")
+    try:
+        raw = base64.b64decode(att.get("data", ""), validate=False)
+        if raw[:4] == b"%PDF":
+            return "pdf"
+        if len(raw) > 132 and raw[128:132] == b"DICM":
+            return "dicom"
+        if raw[:3] == b"\xff\xd8\xff" or raw[:8] == b"\x89PNG\r\n\x1a\n":
+            return "image"
+    except Exception:
+        pass
+    return "unknown"
+
+
+def _image(att: dict) -> list[dict]:
+    from PIL import Image
+    raw = base64.b64decode(att["data"], validate=False)
+    img = Image.open(io.BytesIO(raw))
+    img.load()
+    return [_png_from_pil(img)]
+
+
+def _pdf_text(att: dict) -> str:
+    """Extract the PDF's text layer (empty string if it's effectively a scanned image)."""
+    import fitz  # PyMuPDF
+    raw = base64.b64decode(att["data"], validate=False)
+    chunks: list[str] = []
+    with fitz.open(stream=raw, filetype="pdf") as doc:
+        for page in doc:
+            chunks.append(page.get_text())
+            if sum(len(c) for c in chunks) > _MAX_DOC_CHARS:
+                break
+    return "\n".join(chunks).strip()[:_MAX_DOC_CHARS]
+
+
+def _pdf_images(att: dict) -> list[dict]:
+    """Render the first pages of a (scanned/image) PDF to vision images."""
+    import fitz  # PyMuPDF
+    from PIL import Image
+    raw = base64.b64decode(att["data"], validate=False)
+    out: list[dict] = []
+    with fitz.open(stream=raw, filetype="pdf") as doc:
+        for page in doc:
+            if len(out) >= _MAX_PDF_PAGES:
+                break
+            pix = page.get_pixmap(dpi=150)
+            img = Image.open(io.BytesIO(pix.tobytes("png")))
+            out.append(_png_from_pil(img))
+    return out
+
+
+def _dicom(att: dict) -> list[dict]:
+    import numpy as np
+    import pydicom
+    from pydicom.pixel_data_handlers.util import apply_voi_lut
+    from PIL import Image
+    raw = base64.b64decode(att["data"], validate=False)
+    ds = pydicom.dcmread(io.BytesIO(raw), force=True)
+    arr = ds.pixel_array
+    try:
+        arr = apply_voi_lut(arr, ds)      # apply window/level if present
+    except Exception:
+        pass
+    arr = arr.astype("float32")
+    if getattr(ds, "PhotometricInterpretation", "") == "MONOCHROME1":
+        arr = arr.max() - arr             # invert so bone/dense reads bright
+    lo, hi = float(arr.min()), float(arr.max())
+    arr = (arr - lo) / (hi - lo) * 255.0 if hi > lo else arr * 0.0
+    img = Image.fromarray(arr.astype("uint8"))
+    return [_png_from_pil(img)]
+
+
+def attachments_to_media(attachments: list[dict]) -> tuple[list[dict], list[dict], list[str]]:
+    """Route each attachment to the right context channel:
+      - images / scans / image-only PDFs → `images` [{media_type, data(base64 PNG)}] (vision),
+      - text-bearing PDFs → `docs` [{name, text}] (used as document context, not vision).
+    Returns (images, docs, notes); `notes` describe anything skipped. Never raises.
+    """
+    images: list[dict] = []
+    docs: list[dict] = []
+    notes: list[str] = []
+
+    def _label(att):
+        return att.get("name") or att.get("media_type") or "file"
+
+    for att in attachments or []:
+        if len(images) >= _MAX_IMAGES and _kind(att) != "pdf":
+            notes.append("some attachments skipped (max 4 images per request)")
+            break
+        kind = _kind(att)
+        try:
+            if kind == "image":
+                images.extend(_image(att))
+            elif kind == "dicom":
+                images.extend(_dicom(att))
+            elif kind == "pdf":
+                text = _pdf_text(att)
+                if len(text) >= _PDF_TEXT_MIN:            # a real text document
+                    docs.append({"name": _label(att), "text": text})
+                else:                                     # scanned/image PDF → vision
+                    images.extend(_pdf_images(att))
+            else:
+                notes.append(f"unsupported attachment '{_label(att)}'")
+        except ModuleNotFoundError as e:
+            notes.append(f"{kind} support unavailable ({e.name} not installed)")
+        except Exception as e:  # noqa: BLE001 — never break the request on a bad file
+            notes.append(f"couldn't read {kind} attachment ({type(e).__name__})")
+    return images[:_MAX_IMAGES], docs, notes

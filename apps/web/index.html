@@ -66,6 +66,39 @@
     border-radius:999px;padding:.22rem .7rem;user-select:none;transition:.12s;}
   .pill[aria-pressed="true"]{color:#1A1206;background:var(--gold);border-color:var(--gold);}
 
+  /* image/PDF/DICOM attachments (vision) */
+  button.attach{flex:none;width:44px;height:44px;border-radius:50%;cursor:pointer;background:transparent;
+    border:1px solid var(--hair);color:var(--muted);display:grid;place-items:center;transition:.12s;}
+  button.attach:hover{border-color:var(--gold);color:var(--gold);}
+  button.attach svg{width:20px;height:20px;}
+  .attns{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;padding-left:.15rem;}
+  .attns .chip{display:inline-flex;align-items:center;gap:.45rem;font-family:var(--mono);font-size:.72rem;
+    color:var(--ink);background:var(--panel);border:1px solid var(--hair);border-radius:9px;padding:.3rem .55rem;}
+  .attns .chip .x{cursor:pointer;color:var(--muted);border:none;background:none;font-size:1rem;line-height:1;padding:0;}
+  .attns .chip .x:hover{color:var(--gap);}
+  .attns .consent{display:flex;align-items:flex-start;gap:.5rem;font-size:.74rem;color:var(--muted);
+    width:100%;line-height:1.4;margin-top:.1rem;}
+  .attns .consent input{accent-color:var(--gold);margin-top:.15rem;flex:none;}
+
+  /* camera capture modal */
+  .cammodal[hidden]{display:none;}
+  .cammodal{position:fixed;inset:0;z-index:60;background:#000;display:flex;flex-direction:column;}
+  .cammodal video{flex:1;width:100%;object-fit:contain;background:#000;min-height:0;}
+  .cammodal .camctrls{display:flex;align-items:center;justify-content:space-between;
+    padding:1.1rem 1.4rem calc(1.1rem + env(safe-area-inset-bottom));gap:1rem;background:#000;}
+  .cammodal .cambtn{font-family:var(--mono);font-size:.74rem;letter-spacing:.05em;text-transform:uppercase;
+    background:transparent;border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:.5rem .9rem;cursor:pointer;}
+  .cammodal .camshot{width:66px;height:66px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,.4);cursor:pointer;flex:none;}
+  .cammodal .camshot:active{transform:scale(.94);}
+
+  /* labeled visual observation (context, not a diagnosis) */
+  .vobs{border:1px solid var(--hair);border-left:3px solid var(--gold);border-radius:12px;
+    background:var(--panel2);padding:.85rem 1.05rem;margin:.1rem 0 1.4rem;}
+  .vobs .vobs-h{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;
+    color:var(--gold);margin-bottom:.4rem;display:flex;align-items:center;gap:.4rem;}
+  .vobs .vobs-b{font-size:.94rem;color:var(--ink);line-height:1.6;}
+  .vobs .vobs-note{font-size:.72rem;color:var(--muted);margin-top:.45rem;}
+
   /* ---- results ---- */
   #out{margin-top:2.4rem;}
   .status{font-size:.9rem;color:var(--muted);display:flex;align-items:center;gap:.6rem;}
@@ -223,6 +256,19 @@
     <div class="field">
       <textarea id="q" rows="1" placeholder="e.g. What treatments are being studied for type 2 diabetes?"
                 aria-label="Research question"></textarea>
+      <button class="attach" id="camera" type="button" hidden aria-label="Take a photo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+      </button>
+      <button class="attach" id="attach" type="button" hidden aria-label="Attach image, PDF, or DICOM">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/>
+        </svg>
+      </button>
       <button class="go" id="go" type="submit" aria-label="Research">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -230,6 +276,8 @@
         </svg>
       </button>
     </div>
+    <input type="file" id="file" accept="image/*,.pdf,application/pdf,.dcm,application/dicom" multiple hidden />
+    <div class="attns" id="attns" hidden></div>
     <div class="sources" id="sources"><span class="lbl">Sources</span></div>
   </form>
 
@@ -250,12 +298,25 @@
   </div>
 </section>
 
+<!-- camera capture (mobile + laptop webcam) -->
+<div class="cammodal" id="cammodal" hidden aria-label="Camera">
+  <video id="camvideo" autoplay playsinline muted></video>
+  <div class="camctrls">
+    <button type="button" class="cambtn" id="camcancel">Cancel</button>
+    <button type="button" class="camshot" id="camshot" aria-label="Capture photo"></button>
+    <button type="button" class="cambtn" id="camflip">Flip</button>
+  </div>
+</div>
+<canvas id="camcanvas" hidden></canvas>
+
 <script>
 const $ = s => document.querySelector(s);
 const out = $("#out"), go = $("#go"), q = $("#q");
 let SOURCES = [];
 let VIDEO_ENABLED = false;
 let STRUCTURED = false;     // render the answer as markdown sections (server-authoritative)
+let VISION_ENABLED = false; // image/PDF/DICOM upload → visual-context research
+let ATTACHMENTS = [];       // [{name, media_type, data(base64)}]
 let LAST = null;            // {question, answer} for the answer-video add-on
 let CURRENT_Q = "";        // the question of the answer currently rendered
 
@@ -268,6 +329,11 @@ async function loadConfig(){
     SOURCES = c.sources || [];
     VIDEO_ENABLED = !!c.video_enabled;
     STRUCTURED = !!c.structured_answers;
+    VISION_ENABLED = !!c.vision_enabled;
+    if(VISION_ENABLED){
+      $("#attach").hidden = false;
+      if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) $("#camera").hidden = false;
+    }
     // vertical-supplied console copy (heading + placeholder) — keeps the shell domain-neutral
     const con = c.console || {};
     if(con.heading) $("#heading").textContent = con.heading;
@@ -353,6 +419,17 @@ function render(data, target){
       return `<span class="pill" style="cursor:default;${helped?'color:#1A1206;background:var(--verified);border-color:var(--verified)':''}">${esc(k)} · ${s.cited}/${s.retrieved} cited</span>`;
     }).join(" ");
     parts.push(`<div class="summary" style="border:none;padding-top:.2rem"><span>Sources used:</span>${chips}</div>`);
+  }
+  // labeled AI visual observation (context, NOT a diagnosis, NOT part of the evidence)
+  if(data.visual_observation){
+    parts.push(`<div class="vobs">
+      <div class="vobs-h">◐ AI visual observation · not a diagnosis</div>
+      <div class="vobs-b">${esc(data.visual_observation)}</div>
+      <div class="vobs-note">Automated image description used only to guide the evidence search — it is not a clinical finding and is not part of the verified evidence below.</div>
+    </div>`);
+  }
+  if(data.attachment_notes && data.attachment_notes.length){
+    parts.push(`<div class="vobs-note" style="margin:-.9rem 0 1.2rem">${data.attachment_notes.map(esc).join(" · ")}</div>`);
   }
   // synthesized answer (grounded in the findings) — the hero; [n] refs → findings.
   if(data.answer){
@@ -460,17 +537,83 @@ function renderEvidence(data, note){
     (rows || `<div class="empty">No matching evidence for that query.</div>`);
 }
 
+// ---- attachments (image / PDF / DICOM → visual context) ----
+const readAsBase64 = file => new Promise((res,rej)=>{
+  const r = new FileReader();
+  r.onload = () => res(String(r.result).split(",")[1] || "");
+  r.onerror = rej; r.readAsDataURL(file);
+});
+async function addFiles(files){
+  for(const f of files){
+    if(ATTACHMENTS.length >= 4) break;
+    if(f.size > 12*1024*1024){ continue; }          // ~12MB cap
+    try{ ATTACHMENTS.push({name:f.name, media_type:f.type||"", data:await readAsBase64(f)}); }catch(e){}
+  }
+  renderAttachments();
+}
+function renderAttachments(){
+  const box = $("#attns");
+  if(!ATTACHMENTS.length){ box.hidden = true; box.innerHTML = ""; return; }
+  box.hidden = false;
+  box.innerHTML =
+    ATTACHMENTS.map((a,i)=>`<span class="chip">📎 ${esc(a.name||"file")}<button class="x" data-i="${i}" title="Remove" aria-label="Remove">×</button></span>`).join("") +
+    `<label class="consent"><input type="checkbox" id="consent">
+       Images/documents are sent to the AI model for analysis. I confirm they contain <b>no identifying patient information</b> (faces, names, IDs).</label>`;
+  box.querySelectorAll(".x").forEach(b=>b.addEventListener("click",()=>{ ATTACHMENTS.splice(+b.dataset.i,1); renderAttachments(); }));
+}
+$("#attach").addEventListener("click", ()=>$("#file").click());
+$("#file").addEventListener("change", e=>{ addFiles([...e.target.files]); e.target.value=""; });
+
+// ---- camera capture (mobile camera + laptop webcam via getUserMedia) ----
+let camStream = null, camFacing = "environment";
+async function startCam(){
+  if(camStream) camStream.getTracks().forEach(t=>t.stop());
+  camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:camFacing}, audio:false});
+  $("#camvideo").srcObject = camStream;
+}
+async function openCamera(){
+  try{ await startCam(); $("#cammodal").hidden = false; }
+  catch(e){ $("#file").click(); }               // no camera / denied → fall back to file picker
+}
+function closeCamera(){
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream = null; }
+  $("#cammodal").hidden = true;
+}
+async function capturePhoto(){
+  const v = $("#camvideo"), c = $("#camcanvas");
+  if(!v.videoWidth){ return; }
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext("2d").drawImage(v, 0, 0);
+  const blob = await new Promise(r=>c.toBlob(r, "image/jpeg", 0.9));
+  if(blob && ATTACHMENTS.length < 4){
+    ATTACHMENTS.push({name:"camera-photo.jpg", media_type:"image/jpeg", data: await readAsBase64(blob)});
+    renderAttachments();
+  }
+  closeCamera();
+}
+$("#camera").addEventListener("click", openCamera);
+$("#camcancel").addEventListener("click", closeCamera);
+$("#camshot").addEventListener("click", capturePhoto);
+$("#camflip").addEventListener("click", async ()=>{ camFacing = camFacing==="environment"?"user":"environment"; try{ await startCam(); }catch(e){} });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !$("#cammodal").hidden) closeCamera(); });
+
 $("#ask").addEventListener("submit", async e=>{
   e.preventDefault();
   const question = q.value.trim();
   if(!question) return;
+  if(ATTACHMENTS.length && !($("#consent")||{}).checked){
+    const c = $("#consent"); if(c){ c.focus(); c.parentElement.style.color = "var(--gap)"; }
+    return;
+  }
   CURRENT_Q = question;
-  const body = JSON.stringify({question, tenant_id:"demo", sources: chosen()});
+  const payload = {question, tenant_id:"demo", sources: chosen()};
+  if(ATTACHMENTS.length) payload.attachments = ATTACHMENTS.slice();
+  const body = JSON.stringify(payload);
   go.disabled = true; go.classList.add("loading");
   out.innerHTML = `<div class="status">Searching sources and verifying evidence…</div>`;
   try{
     const resp = await fetch("/research",{method:"POST",headers:{"content-type":"application/json"},body});
-    if(resp.ok){ render(await resp.json()); return; }
+    if(resp.ok){ render(await resp.json()); ATTACHMENTS=[]; renderAttachments(); return; }
     // model unavailable (no credits / replay) → fall back to evidence retrieval
     const detail = (await resp.json().catch(()=>({}))).detail || `HTTP ${resp.status}`;
     if(resp.status===503 || resp.status===502){

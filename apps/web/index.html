@@ -863,23 +863,39 @@ async function queueGapJobs(panel){
     if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
     const res = await r.json();
     qb.textContent = `✓ Queued ${res.queued}`;
-    status.innerHTML = `Queued ${res.queued} source${res.queued===1?"":"s"} — the corpus will download & index them in the background. <a href="#" id="gapref">Check progress</a>`;
-    const rl = status.querySelector("#gapref");
-    if(rl) rl.addEventListener("click",async(e)=>{e.preventDefault(); await showGapProgress(status);});
-    await showGapProgress(status);
+    const ids = res.ids || [];
+    status.innerHTML = `Queued ${res.queued} source${res.queued===1?"":"s"} — downloading &amp; indexing in the background. <a href="#" id="gapref">Refresh</a>
+      <div class="gapprog" id="gapprog">Starting…</div>`;
+    status.querySelector("#gapref").addEventListener("click", e=>{e.preventDefault(); showGapProgress(status, ids);});
+    trackGapProgress(status, ids);          // auto-refresh THIS batch's progress until it settles
   }catch(e){
     qb.disabled=false; qb.textContent="⇩ Queue for download & process";
     status.textContent = "Couldn't queue: "+(e.message||e);
   }
 }
 
-async function showGapProgress(status){
+// Progress for JUST the batch the user queued (by job id) — not the queue's all-time totals.
+async function showGapProgress(status, ids){
+  const el = status.querySelector("#gapprog"); if(!el) return null;
   try{
-    const s = await (await fetch("/corpus/queue?limit=8")).json();
-    const sm = s.summary||{};
-    status.insertAdjacentHTML("beforeend",
-      `<div class="gapprog">Queue: ${sm.pending||0} pending · ${sm.running||0} running · ${sm.done||0} done${sm.failed?` · ${sm.failed} failed`:""} · +${sm.blocks_added||0} blocks added</div>`);
-  }catch(e){ /* best-effort */ }
+    const s = await (await fetch("/corpus/queue?limit=200")).json();
+    const idset = new Set(ids), mine = (s.jobs||[]).filter(j=>idset.has(j.id));
+    const by = st => mine.filter(j=>j.status===st).length;
+    const done=by("done"), failed=by("failed"), running=by("running"), pending=by("pending");
+    const blocks = mine.reduce((a,j)=>a+(j.blocks_added||0),0);
+    const total = ids.length || mine.length;
+    el.textContent = `${done}/${total} indexed`
+      + (running?` · ${running} downloading`:"") + (pending?` · ${pending} queued`:"")
+      + (failed?` · ${failed} failed`:"") + ` · +${blocks.toLocaleString()} blocks added`;
+    return {done, failed, total};
+  }catch(e){ return null; }
+}
+async function trackGapProgress(status, ids){   // gap-fill jobs are small + quick; poll until settled
+  for(let i=0;i<30;i++){
+    const p = await showGapProgress(status, ids);
+    if(p && (p.done + p.failed) >= p.total) return;
+    await sleep(4000);
+  }
 }
 
 async function generatePlain(root){

@@ -21,6 +21,7 @@ class ResearchService:
     llm: LLMClient
     embedder: Embedder
     sources: dict[str, RetrievalSource]
+    planner_llm: LLMClient | None = None     # fast model for ReAct planning steps (compose uses llm)
     gating: GatingPolicy | None = None
     persona_prompt: str = "You are an evidence-grounded research agent."
     answer_format: str | None = None        # vertical answer-structure directive (opaque)
@@ -49,7 +50,8 @@ class ResearchService:
         images: list[dict] | None = None,
         documents: list[dict] | None = None,
         history: list[dict] | None = None,
-        max_steps: int = 8,
+        on_event=None,                       # async callback(dict) for live progress (SSE)
+        max_steps: int = 5,
     ) -> AnswerResult:
         budget = BudgetState(max_calls=self.max_calls)
         # Attachment context (never corpus evidence, never a verified claim):
@@ -94,6 +96,7 @@ class ResearchService:
             budget=budget, gating=self.gating,
             system_prompt=self.persona_prompt, answer_format=self.answer_format,
             attachment_context=attachment_context, history_context=history_context,
+            planner_llm=self.planner_llm, on_event=on_event,
             max_steps=max_steps,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)

@@ -133,13 +133,25 @@ async def run_react(
     answer_format: str | None = None,
     attachment_context: str | None = None,
     history_context: str | None = None,
-    max_steps: int = 8,
+    planner_llm: LLMClient | None = None,     # fast model for search-planning steps (compose uses `llm`)
+    on_event=None,                            # optional async callback(dict) for live progress (SSE)
+    max_steps: int = 5,
     k: int = 10,
+    planner_atom_window: int = 24,            # atoms SHOWN to the planner per step (store keeps all)
 ) -> AnswerResult:
+    import asyncio
     atoms = AtomStore()
     result = AnswerResult()
     notes: list[str] = []          # running coverage-gap / step notes for the agent
     verifier = BlockSpanVerifier(source.make_block_loader(tenant_id, workspace_id))
+    planner = planner_llm or llm   # planning steps can use a cheaper/faster model than compose
+
+    async def emit(ev: dict) -> None:
+        if on_event is not None:
+            try:
+                await on_event(ev)
+            except Exception:
+                pass               # progress events are best-effort; never break the research loop
 
     # Labeled user-provided context (image reading and/or uploaded-document text) for the
     # step prompts ONLY (search + reasoning framing). It is deliberately kept OUT of the
@@ -177,7 +189,11 @@ async def run_react(
                 result.rejected_claims.append(RejectedClaim(c.text, c.atom_id, c.quote, "quote_not_grounded"))
 
     async def _ask(mode: str = "step") -> AgentStep:
-        obs = "\n".join(f"{a.atom_id}: {a.text}" for a in atoms.all()) or "(no evidence yet)"
+        # Show the planner only the most-recent window of atoms (the store keeps ALL for grounding /
+        # verification) — keeps late-step prompts from snowballing. Claims can cite only shown atoms.
+        _all = atoms.all()
+        _shown = _all[-planner_atom_window:] if len(_all) > planner_atom_window else _all
+        obs = "\n".join(f"{a.atom_id}: {a.text}" for a in _shown) or "(no evidence yet)"
         if mode == "extract":
             # Recovery re-ask: the agent answered with NO grounded claims even though it
             # gathered relevant evidence. Push it to extract what the evidence supports
@@ -213,9 +229,9 @@ async def run_react(
         # NOTE: temperature is intentionally NOT set — the current model rejects it
         # ("deprecated for this model"). Variance is countered by the answering
         # discipline above + the extract recovery re-ask, not by sampling controls.
-        res = await llm.complete(system=system_prompt,
-                                 messages=[{"role": "user", "content": user}],
-                                 response_format=AgentStep)
+        res = await planner.complete(system=system_prompt,
+                                     messages=[{"role": "user", "content": user}],
+                                     response_format=AgentStep)
         budget.charge(calls=1, tokens=res.output_tokens)
         result.steps += 1
         return res.parsed
@@ -253,13 +269,16 @@ async def run_react(
         # a row that surfaced NO new evidence means more searching won't help; answer over what we
         # have instead of burning the full step budget (latency fix for no-evidence questions).
         force = step_i == max_steps - 1 or (stale_searches >= 2 and bool(atoms.all()))
+        await emit({"type": "step", "step": step_i + 1})
         step: AgentStep = await _ask(mode="force" if force else "step")
 
         if step.action == "search":
             q = step.query or question
+            await emit({"type": "search", "query": q, "variants": list(step.queries or [])})
+            qvec = await asyncio.to_thread(lambda: list(embedder.embed([q])[0]))  # off the loop
             base_req = RetrievalRequest(
                 query=q, tenant_id=tenant_id, workspace_id=workspace_id,
-                query_embedding=list(embedder.embed([q])[0]), k=k,
+                query_embedding=qvec, k=k,
             )
             # agent reformulations → multi-query fusion (recall); else a single search
             if step.queries:
@@ -268,7 +287,10 @@ async def run_react(
                 hits = await source.search(base_req)
             before = len(atoms.all())
             atoms.add_hits(hits)
-            stale_searches = stale_searches + 1 if len(atoms.all()) == before else 0
+            added = len(atoms.all()) - before
+            stale_searches = stale_searches + 1 if added == 0 else 0
+            srcs = sorted({(h.source_key or "corpus") for h in hits})
+            await emit({"type": "found", "added": added, "total": len(atoms.all()), "sources": srcs})
 
             # vertical gating: surface a real coverage gap so the agent reaches for
             # other sources or answers honestly instead of guessing.
@@ -280,7 +302,10 @@ async def run_react(
             continue
 
         # action == "answer": provenance hard gate (+ recovery re-ask if it abstained)
+        await emit({"type": "verifying"})
         await _finalize_answer(step)
+        await emit({"type": "verified", "verified": len(result.verified_claims),
+                    "rejected": len(result.rejected_claims)})
         result.stopped_reason = "answered"
         break
     else:
@@ -306,6 +331,7 @@ async def run_react(
     # may supply an optional `answer_format` directive (domain-owned) that shapes the
     # structure — the kernel stays domain-free and only threads the string through.
     if result.verified_claims and not budget.exhausted:
+        await emit({"type": "composing", "findings": len(result.verified_claims)})
         n_findings = len(result.verified_claims)
         findings = "\n".join(
             f"[{i}] {vc.text}  (quote: \"{vc.quote}\" — source: {vc.source_key})"

@@ -288,6 +288,18 @@
   .chip-q::before{content:"→ ";color:var(--gold);font-weight:700;}
   .chip-q:hover{border-color:rgba(211,179,124,.45);color:#fff;}
 
+  /* live agent trace (streaming) */
+  .agenttrace{display:flex;flex-direction:column;gap:.45rem;padding:.4rem 0 .2rem;}
+  .tstep{font-family:var(--mono);font-size:.82rem;color:var(--muted);line-height:1.5;opacity:.9;
+    display:flex;align-items:baseline;gap:.4rem;flex-wrap:wrap;transition:color .2s;}
+  .tstep b{color:var(--ink);font-weight:640;}
+  .tstep .tq{color:var(--ink);font-family:var(--sans);}
+  .tstep .tvar{font-size:.72rem;color:var(--muted);opacity:.75;border:1px solid var(--hair);border-radius:6px;padding:.02rem .38rem;}
+  .tstep.tlive{color:var(--gold);}
+  .tstep.tlive::after{content:"";width:.7rem;height:.7rem;border-radius:50%;align-self:center;
+    border:2px solid rgba(211,179,124,.3);border-top-color:var(--gold);animation:spin .7s linear infinite;}
+  @media (prefers-reduced-motion:reduce){.tstep.tlive::after{animation:none;}}
+
   /* grounding header band */
   .ansmeta{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:0 0 1.3rem;padding-bottom:.9rem;
     border-bottom:1px solid var(--hair);}
@@ -566,6 +578,7 @@ let LAYMAN_ENABLED = false; // on-demand plain-language re-explanation
 let GAP_ENABLED = false;    // self-healing: suggest + queue sources to fill evidence gaps
 let CONV_ENABLED = false;   // multi-turn conversation (follow-ups carry context)
 let SUGGEST_ENABLED = false;// suggested follow-up questions after each answer
+let STREAM_ENABLED = false; // live agent trace via SSE (/research/stream)
 let THREAD = {session_id:null, turns:[]};   // the active conversation
 let BASE_PLACEHOLDER = "";                   // vertical console placeholder (restored on New)
 let EXAMPLES = [];                            // vertical example questions → random intake prompt
@@ -591,6 +604,7 @@ async function loadConfig(){
     GAP_ENABLED = !!c.gap_healing_enabled;
     CONV_ENABLED = !!c.conversation_enabled;
     SUGGEST_ENABLED = !!c.suggest_enabled;
+    STREAM_ENABLED = !!c.stream_enabled;
     VISION_ENABLED = !!c.vision_enabled;
     if(VISION_ENABLED){
       $("#attach").hidden = false;
@@ -608,7 +622,8 @@ async function loadConfig(){
     for(const k of SOURCES){
       const b = document.createElement("button");
       b.type="button"; b.className="pill"; b.dataset.key=k;
-      b.setAttribute("aria-pressed","true"); b.textContent = label(k);
+      // corpus on by default; web (Tavily, slow) is OPT-IN so corpus questions stay fast
+      b.setAttribute("aria-pressed", k==="web" ? "false" : "true"); b.textContent = label(k);
       b.onclick = () => b.setAttribute("aria-pressed", b.getAttribute("aria-pressed")==="true"?"false":"true");
       box.appendChild(b);
     }
@@ -667,8 +682,10 @@ function mdToHtml(raw){
 function render(data, target, opts){
   target = target || out;
   opts = opts || {};
-  if(data._pending){   // conversation: the question shows immediately with a spinner while it runs
-    target.innerHTML = `<div class="status">Searching sources and verifying evidence…</div>`;
+  if(data._pending){   // conversation: the question shows immediately while it runs
+    target.innerHTML = STREAM_ENABLED
+      ? `<div class="agenttrace"><div class="tstep tlive">Starting…</div></div>`
+      : `<div class="status">Searching sources and verifying evidence…</div>`;
     return;
   }
   const parts = [];
@@ -1123,6 +1140,49 @@ $("#ask").addEventListener("submit", e=>{
   if(question) askQuestion(question);
 });
 
+// ---- live agent trace (SSE) ----
+function traceLine(ev){
+  if(ev.type==="step")      return `<div class="tstep">▸ Step ${ev.step}</div>`;
+  if(ev.type==="search")    return `<div class="tstep">🔎 Searching <span class="tq">${esc(ev.query||"")}</span>${(ev.variants&&ev.variants.length)?` <span class="tvar">+${ev.variants.length} reformulations</span>`:""}</div>`;
+  if(ev.type==="found")     return `<div class="tstep">📥 Found <b>${ev.total}</b> passage${ev.total===1?"":"s"}${(ev.sources&&ev.sources.length)?` <span class="tvar">${ev.sources.map(esc).join(" · ")}</span>`:""}</div>`;
+  if(ev.type==="verifying") return `<div class="tstep">🔬 Verifying evidence…</div>`;
+  if(ev.type==="verified")  return `<div class="tstep">✓ Verified <b>${ev.verified}</b> finding${ev.verified===1?"":"s"}${ev.rejected?` <span class="tvar">${ev.rejected} rejected</span>`:""}</div>`;
+  if(ev.type==="composing") return `<div class="tstep">✍️ Composing answer from <b>${ev.findings}</b> finding${ev.findings===1?"":"s"}…</div>`;
+  return "";
+}
+function pushTrace(tc, ev){
+  if(!tc) return;
+  const html = traceLine(ev); if(!html) return;
+  tc.querySelectorAll(".tlive").forEach(e=>e.classList.remove("tlive"));
+  tc.insertAdjacentHTML("beforeend", html);
+  tc.lastElementChild.classList.add("tlive");
+  tc.lastElementChild.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+// Stream /research/stream, calling onEvent(ev) for each progress event; returns the final result.
+async function streamResearch(payload, onEvent, signal){
+  const resp = await fetch("/research/stream",{method:"POST",
+    headers:{"content-type":"application/json"}, body:JSON.stringify(payload), signal});
+  if(!resp.ok || !resp.body) throw new Error("HTTP "+resp.status);
+  const reader = resp.body.getReader(), dec = new TextDecoder();
+  let buf = "";
+  while(true){
+    const {value, done} = await reader.read();
+    if(done) break;
+    buf += dec.decode(value, {stream:true});
+    let i;
+    while((i = buf.indexOf("\n\n")) >= 0){
+      const frame = buf.slice(0, i); buf = buf.slice(i+2);
+      const dl = frame.split("\n").find(l=>l.startsWith("data:"));
+      if(!dl) continue;                         // ": ping" keepalive / comment
+      const ev = JSON.parse(dl.slice(5).trim());
+      if(ev.type==="final") return ev.result;
+      if(ev.type==="error") throw new Error(ev.detail || "stream error");
+      onEvent(ev);
+    }
+  }
+  throw new Error("stream ended without a final answer");
+}
+
 // The one path for asking. In CONVERSATION mode it appends a turn to the running thread (carrying
 // prior turns as context + the thread id); otherwise it renders a single answer (unchanged).
 async function askQuestion(question){
@@ -1148,15 +1208,19 @@ async function askQuestion(question){
     THREAD.turns.push({question, _pending:true});
     renderThread();
   } else {
-    out.innerHTML = `<div class="status">Searching sources and verifying evidence…</div>`;
+    out.innerHTML = STREAM_ENABLED
+      ? `<div class="agenttrace"><div class="tstep tlive">Starting…</div></div>`
+      : `<div class="status">Searching sources and verifying evidence…</div>`;
   }
   // finishTurn REPLACES the pending turn with the real (or error) result.
   const finishTurn = (data) => { THREAD.session_id = data.session_id || THREAD.session_id;
     THREAD.turns[THREAD.turns.length-1] = data; renderThread(); loadSuggestions(); };
   const errTurn = (note) => ({question, answer:"", grounded:false, claims:[],
     coverage_gaps:[], source_stats:{}, _note:note});
+  const traceEl = () => conv ? out.querySelector(".turn:last-child .agenttrace") : out.querySelector(".agenttrace");
   const ctrl = new AbortController();
-  const timer = setTimeout(()=>ctrl.abort(), 120000);   // hard client cap → degrade gracefully
+  // streaming keeps the connection alive with progress → a generous safety cap; else the hard 120s.
+  const timer = setTimeout(()=>ctrl.abort(), STREAM_ENABLED ? 300000 : 120000);
   const evidenceFallback = async (note) => {             // single-mode: ranked evidence + gap-fill
     try{
       const s = await fetch("/search",{method:"POST",headers:{"content-type":"application/json"},body});
@@ -1165,6 +1229,12 @@ async function askQuestion(question){
     return false;
   };
   try{
+    if(STREAM_ENABLED){                                   // live agent trace → final answer
+      const data = await streamResearch(payload, ev=>pushTrace(traceEl(), ev), ctrl.signal);
+      clearTimeout(timer); ATTACHMENTS=[]; renderAttachments();
+      if(conv) finishTurn(data); else render(data);
+      return;
+    }
     const resp = await fetch("/research",{method:"POST",headers:{"content-type":"application/json"},body,signal:ctrl.signal});
     clearTimeout(timer);
     if(resp.ok){ const data = await resp.json(); ATTACHMENTS=[]; renderAttachments();

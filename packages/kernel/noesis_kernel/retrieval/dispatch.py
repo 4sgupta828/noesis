@@ -29,17 +29,31 @@ async def multi_query_retrieve(
     original_weight: float = ORIGINAL_WEIGHT,
     repeat_bonus: float = REPEAT_BONUS,
 ) -> list[BlockHit]:
-    queries: list[tuple[str, float]] = [(base_req.query, original_weight)]
-    queries += [(v, 1.0) for v in variants if v and v != base_req.query]
+    import asyncio
+    # Reuse the original query's embedding (already computed by the caller) — no double-embed —
+    # and embed ALL variants in ONE batched call, off the event loop. Then search every variant
+    # CONCURRENTLY. Was: an embed + a search serially per variant (N+1 blocking round-trips).
+    variant_qs = [v for v in variants if v and v != base_req.query]
+    weighted: list[tuple[str, float, list[float]]] = [
+        (base_req.query, original_weight, base_req.query_embedding)]
+    if variant_qs:
+        if embedder is not None:
+            vecs = await asyncio.to_thread(embedder.embed, variant_qs)
+            weighted += [(v, 1.0, list(vec)) for v, vec in zip(variant_qs, vecs)]
+        else:
+            # no embedder → reuse the base embedding (may be None; source matches by string in tests)
+            weighted += [(v, 1.0, base_req.query_embedding) for v in variant_qs]
+
+    reqs = [(w, replace(base_req, query=q, query_embedding=emb)) for q, w, emb in weighted]
+    results = await asyncio.gather(
+        *(source.search(r) for _, r in reqs), return_exceptions=True)
 
     hit_by_id: dict[str, BlockHit] = {}
     scores: dict[str, float] = {}
     appears: Counter[str] = Counter()
-
-    for q, w in queries:
-        emb = list(embedder.embed([q])[0]) if embedder is not None else base_req.query_embedding
-        req = replace(base_req, query=q, query_embedding=emb)
-        hits = await source.search(req)
+    for (w, _req), hits in zip(reqs, results):
+        if isinstance(hits, Exception):
+            continue
         for rank, h in enumerate(hits, start=1):
             hit_by_id.setdefault(h.block_id, h)
             scores[h.block_id] = scores.get(h.block_id, 0.0) + w * (1.0 / (RRF_K + rank))

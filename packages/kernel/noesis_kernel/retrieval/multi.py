@@ -50,21 +50,24 @@ class MultiSourceRetriever:
         return _load
 
     async def search(self, req: RetrievalRequest) -> list[BlockHit]:
+        import asyncio
         by_cid: dict[str, BlockHit] = {}
         scores: dict[str, float] = {}
         appears: Counter[str] = Counter()
         self.failed_sources: dict[str, str] = {}   # key -> error, for observability
 
-        for skey, src in self._sources.items():
-            w = self._weights.get(skey, 1.0)
-            try:
-                hits = await src.search(req)
-            except Exception as e:
-                # A flaky source (bad key, timeout, provider outage) must NOT kill a
-                # query the other sources can answer. Skip it and continue.
-                self.failed_sources[skey] = f"{type(e).__name__}: {e}"
+        # Query all sources CONCURRENTLY (fan-out) — a slow source (e.g. web/Tavily's 18s
+        # timeout) overlaps the fast corpus search instead of adding to it serially. A flaky
+        # source must never kill a query the others can answer (return_exceptions=True).
+        keys = list(self._sources)
+        results = await asyncio.gather(
+            *(self._sources[k].search(req) for k in keys), return_exceptions=True)
+        for skey, res in zip(keys, results):
+            if isinstance(res, Exception):
+                self.failed_sources[skey] = f"{type(res).__name__}: {res}"
                 continue
-            for rank, h in enumerate(hits, start=1):
+            w = self._weights.get(skey, 1.0)
+            for rank, h in enumerate(res, start=1):
                 cid = f"{skey}::{h.block_id}"
                 by_cid.setdefault(cid, h)
                 scores[cid] = scores.get(cid, 0.0) + w * (1.0 / (RRF_K + rank))

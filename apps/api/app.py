@@ -7,6 +7,7 @@ serves its sources + gating + persona. Providers run in NOESIS_PROVIDER_MODE
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from pathlib import Path
 
@@ -44,6 +45,12 @@ def gap_healing_enabled() -> bool:
     plan (LLM-proposed connector ingest jobs) that the user queues, and a background processor
     ingests them into the corpus — self-healing. OFF → no gap plan, endpoints 404, no processor."""
     return os.environ.get("NOESIS_GAP_HEALING", "").lower() in ("1", "true", "yes")
+
+
+def stream_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, /research/stream serves live SSE progress events
+    (searching/found/verifying/composing → final). OFF → the endpoint 404s; /research unchanged."""
+    return os.environ.get("NOESIS_STREAM", "").lower() in ("1", "true", "yes")
 
 
 def conversation_enabled() -> bool:
@@ -167,8 +174,12 @@ def build_default_service() -> ResearchService:
     vision_prompt = manifest.vision_prompt if vision_enabled() else None
     gap_prompt = manifest.gap_prompt if gap_healing_enabled() else None
     suggest_prompt = manifest.suggest_prompt if conversation_enabled() else None
+    # Fast, cheap model for the ReAct PLANNING steps (they emit short structured directives);
+    # the compose step keeps the stronger `llm`. Big per-step latency cut. Override via env.
+    planner_model = os.environ.get("NOESIS_PLANNER_MODEL", "claude-haiku-4-5-20251001")
+    planner_llm = build_llm(mode=mode, model=planner_model)
     return ResearchService(
-        llm=build_llm(mode=mode), embedder=embedder,
+        llm=build_llm(mode=mode), embedder=embedder, planner_llm=planner_llm,
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
         answer_format=answer_format, vision_prompt=vision_prompt,
         layman_prompt=manifest.layman_prompt, gap_prompt=gap_prompt,
@@ -297,6 +308,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "gap_healing_enabled": gap_healing_enabled() and bool(getattr(svc, "gap_prompt", None)),
             "conversation_enabled": conversation_enabled(),
             "suggest_enabled": conversation_enabled() and bool(getattr(svc, "suggest_prompt", None)),
+            "stream_enabled": stream_enabled(),
         }
 
     @app.post("/search")
@@ -351,23 +363,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
 
     @app.post("/research", response_model=ResearchOut)
     async def research(body: ResearchIn) -> ResearchOut:
-        if app.state.service is None:
-            app.state.service = build_default_service()
-        # Attachments → vision images + document text (flag-gated). Failures degrade to notes.
-        images, docs, attach_notes, previews = None, None, [], []
-        if body.attachments and vision_enabled():
-            from api.media import attachments_to_media, session_previews
-            images, docs, attach_notes = attachments_to_media(
-                [a.model_dump() for a in body.attachments])
-            previews = session_previews(images or [], docs or [])   # thumbnails + doc names
-        # conversation: prior turns carry as context (only when the flag is on)
-        history = body.history if conversation_enabled() else None
         try:
-            res = await app.state.service.ask(
-                question=body.question, tenant_id=body.tenant_id,
-                workspace_id=body.workspace_id, source_keys=body.sources,
-                images=images, documents=docs, history=history,
-            )
+            return await _do_research(body)
         except CassetteMiss as e:
             raise HTTPException(status_code=503, detail=(
                 "No model available in replay mode. Set NOESIS_PROVIDER_MODE=live "
@@ -375,6 +372,23 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 "cassettes first.")) from e
         except Exception as e:   # provider errors (auth, credits, rate limit, timeout)
             raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
+
+    async def _do_research(body: ResearchIn, on_event=None) -> ResearchOut:
+        """Shared research core: attachments → ask (optional live on_event) → persist → ResearchOut.
+        Raises CassetteMiss / provider errors for the caller to handle."""
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        images, docs, attach_notes, previews = None, None, [], []
+        if body.attachments and vision_enabled():
+            from api.media import attachments_to_media, session_previews
+            images, docs, attach_notes = attachments_to_media(
+                [a.model_dump() for a in body.attachments])
+            previews = session_previews(images or [], docs or [])
+        history = body.history if conversation_enabled() else None
+        res = await app.state.service.ask(
+            question=body.question, tenant_id=body.tenant_id,
+            workspace_id=body.workspace_id, source_keys=body.sources,
+            images=images, documents=docs, history=history, on_event=on_event)
         ui = getattr(app.state.service, "ui", None)
         def _url(c):
             fn = getattr(ui, "source_url", None)
@@ -386,9 +400,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                            source=c.source_key, title=c.document_title,
                            url=_url(c), document_id=c.document_id)
                   for c in res.verified_claims]
-        # Persist the Q&A (best-effort, vertical-isolated) — never fail the response.
-        # Conversation: a follow-up (session_id given + flag on) APPENDS a turn to that thread and
-        # keeps the same id; otherwise a fresh session is created (single-answer behavior).
+        # Persist the Q&A (best-effort). Conversation follow-up (session_id + flag) APPENDS a turn.
         session_id = None
         store = _store()
         claim_dicts = [c.model_dump() for c in claims]
@@ -414,19 +426,57 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             except Exception:
                 session_id = None
         return ResearchOut(
-            grounded=res.grounded,
-            answer=res.composed_answer,
-            claims=claims,
-            coverage_gaps=res.coverage_gaps,
-            rejected=len(res.rejected_claims),
-            source_stats=res.source_stats,
-            session_id=session_id,
-            stopped_reason=res.stopped_reason,
-            atoms_gathered=res.atoms_gathered,
-            retried_empty=res.retried_empty,
-            visual_observation=res.visual_observation,
+            grounded=res.grounded, answer=res.composed_answer, claims=claims,
+            coverage_gaps=res.coverage_gaps, rejected=len(res.rejected_claims),
+            source_stats=res.source_stats, session_id=session_id,
+            stopped_reason=res.stopped_reason, atoms_gathered=res.atoms_gathered,
+            retried_empty=res.retried_empty, visual_observation=res.visual_observation,
             attachment_notes=attach_notes,
         )
+
+    @app.post("/research/stream")
+    async def research_stream(body: ResearchIn):
+        """Live SSE progress for a research request: emits step/search/found/verifying/composing
+        events as the ReAct loop runs, then a `final` event carrying the full ResearchOut. Progress
+        events are read-only (never unverified claims); persistence + the final payload happen once
+        at the end, exactly like /research."""
+        if not stream_enabled():
+            raise HTTPException(status_code=404, detail="streaming not enabled")
+        from fastapi.responses import StreamingResponse
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def on_event(ev: dict) -> None:
+            await queue.put(ev)
+
+        async def run() -> None:
+            try:
+                out = await _do_research(body, on_event=on_event)
+                await queue.put({"type": "final", "result": out.model_dump()})
+            except CassetteMiss:
+                await queue.put({"type": "error", "detail": "No model available in replay mode."})
+            except Exception as e:   # noqa: BLE001
+                await queue.put({"type": "error", "detail": f"provider error: {e}"})
+            finally:
+                await queue.put(None)   # sentinel: stream complete
+
+        async def gen():
+            task = asyncio.create_task(run())
+            try:
+                yield ": open\n\n"                        # flush headers immediately
+                while True:
+                    try:
+                        ev = await asyncio.wait_for(queue.get(), timeout=15)
+                    except asyncio.TimeoutError:
+                        yield ": ping\n\n"; continue      # keepalive so proxies don't cut the stream
+                    if ev is None:
+                        break
+                    yield f"data: {json.dumps(ev)}\n\n"
+            finally:
+                if not task.done():
+                    task.cancel()
+
+        return StreamingResponse(gen(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
 
     @app.post("/explain")
     async def explain(body: ExplainIn) -> dict:

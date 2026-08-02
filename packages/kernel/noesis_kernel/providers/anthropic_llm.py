@@ -49,15 +49,19 @@ class AnthropicLLM:
             "description": "Emit the structured result for this step.",
             "input_schema": response_format.model_json_schema(),
         }
-        resp = self._client.messages.create(
-            model=self._model,
-            max_tokens=max_tokens,
-            system="\n\n".join(p for p in sys_parts if p),
-            messages=convo,
-            tools=[tool],
-            tool_choice={"type": "tool", "name": "emit"},
-            **({"temperature": temperature} if temperature is not None else {}),
-        )
+        import asyncio
+        # The Anthropic SDK client here is SYNCHRONOUS; run it off the event loop so a research
+        # request's LLM round-trip doesn't block the whole API (and SSE heartbeats can flush).
+        resp = await asyncio.to_thread(
+            lambda: self._client.messages.create(
+                model=self._model,
+                max_tokens=max_tokens,
+                system="\n\n".join(p for p in sys_parts if p),
+                messages=convo,
+                tools=[tool],
+                tool_choice={"type": "tool", "name": "emit"},
+                **({"temperature": temperature} if temperature is not None else {}),
+            ))
         parsed = None
         for block in resp.content:
             if getattr(block, "type", None) == "tool_use" and block.name == "emit":

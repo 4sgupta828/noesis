@@ -32,8 +32,13 @@ CREATE TABLE IF NOT EXISTS noesis_research_session (
     video_filename TEXT,
     video_title    TEXT,
     video_duration DOUBLE PRECISION,
+    user_name      TEXT,
+    user_email     TEXT,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- additive columns for pre-existing tables (expand-only; safe to re-run)
+ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS user_name  TEXT;
+ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS user_email TEXT;
 CREATE INDEX IF NOT EXISTS idx_nrs_vertical_tenant_created
     ON noesis_research_session (vertical, tenant_id, created_at DESC);
 """
@@ -68,7 +73,8 @@ class SessionStore:
 
     async def save(self, *, tenant_id: str, workspace_id: str | None, question: str,
                    answer: str, grounded: bool, claims: list[dict], source_stats: dict,
-                   coverage_gaps: list[str], rejected: int, sources: list[str] | None) -> str:
+                   coverage_gaps: list[str], rejected: int, sources: list[str] | None,
+                   user_name: str | None = None, user_email: str | None = None) -> str:
         await self._ensure()
         sid = uuid.uuid4().hex
         pool = await self._get_pool()
@@ -76,11 +82,12 @@ class SessionStore:
             await conn.execute(
                 """INSERT INTO noesis_research_session
                    (id, vertical, tenant_id, workspace_id, question, answer, grounded, claims,
-                    source_stats, coverage_gaps, rejected, sources)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12::jsonb)""",
+                    source_stats, coverage_gaps, rejected, sources, user_name, user_email)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12::jsonb,$13,$14)""",
                 sid, self._vertical, tenant_id, workspace_id, question, answer, grounded,
                 json.dumps(claims), json.dumps(source_stats), json.dumps(coverage_gaps),
                 rejected, json.dumps(sources or []),
+                (user_name or None), (user_email or None),
             )
         return sid
 
@@ -96,18 +103,28 @@ class SessionStore:
                 session_id, self._vertical, filename, title, duration)
         return res.endswith("1")   # "UPDATE 1" when a row matched
 
-    async def list(self, *, tenant_id: str, limit: int = 50) -> list[dict[str, Any]]:
+    async def list(self, *, tenant_id: str, limit: int = 50,
+                   q: str | None = None) -> list[dict[str, Any]]:
         await self._ensure()
         pool = await self._get_pool()
+        # optional full-text-ish search over the question + asker (name/email)
+        where = "vertical=$1 AND tenant_id=$2"
+        params: list[Any] = [self._vertical, tenant_id]
+        if q and q.strip():
+            params.append(f"%{q.strip()}%")
+            where += (f" AND (question ILIKE ${len(params)} OR user_name ILIKE ${len(params)}"
+                      f" OR user_email ILIKE ${len(params)})")
+        params.append(limit)
         async with pool.acquire() as conn:
             rows = await conn.fetch(
-                """SELECT id, question, grounded, video_filename, created_at
-                   FROM noesis_research_session
-                   WHERE vertical=$1 AND tenant_id=$2 ORDER BY created_at DESC LIMIT $3""",
-                self._vertical, tenant_id, limit)
+                f"""SELECT id, question, grounded, video_filename, user_name, user_email, created_at
+                    FROM noesis_research_session
+                    WHERE {where} ORDER BY created_at DESC LIMIT ${len(params)}""",
+                *params)
         return [{
             "id": r["id"], "question": r["question"], "grounded": r["grounded"],
             "has_video": bool(r["video_filename"]),
+            "user_name": r["user_name"], "user_email": r["user_email"],
             "created_at": r["created_at"].isoformat(),
         } for r in rows]
 
@@ -133,5 +150,6 @@ class SessionStore:
             "sources": _j(r["sources"], []),
             "video_filename": r["video_filename"], "video_title": r["video_title"],
             "video_duration": r["video_duration"],
+            "user_name": r["user_name"], "user_email": r["user_email"],
             "created_at": r["created_at"].isoformat(),
         }

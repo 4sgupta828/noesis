@@ -50,6 +50,8 @@ class ResearchIn(BaseModel):
     workspace_id: str | None = None
     sources: list[str] | None = None      # subset of source keys; None = all
     attachments: list[Attachment] | None = None   # images/PDF/DICOM → vision context
+    user_name: str | None = None          # asker identity (captured at landing)
+    user_email: str | None = None
 
 
 class Citation(BaseModel):
@@ -266,7 +268,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     question=body.question, answer=res.composed_answer,
                     grounded=res.grounded, claims=[c.model_dump() for c in claims],
                     source_stats=res.source_stats, coverage_gaps=res.coverage_gaps,
-                    rejected=len(res.rejected_claims), sources=body.sources)
+                    rejected=len(res.rejected_claims), sources=body.sources,
+                    user_name=body.user_name, user_email=body.user_email)
             except Exception:
                 session_id = None
         return ResearchOut(
@@ -285,13 +288,13 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         )
 
     @app.get("/sessions")
-    async def list_sessions(tenant_id: str = "demo", limit: int = 50) -> dict:
-        """Recent saved Q&A for this vertical + tenant (history)."""
+    async def list_sessions(tenant_id: str = "demo", limit: int = 100, q: str = "") -> dict:
+        """Recent saved Q&A for this vertical + tenant (history), optional search `q`."""
         store = _store()
         if store is None:
             return {"sessions": []}
         try:
-            return {"sessions": await store.list(tenant_id=tenant_id, limit=min(limit, 200))}
+            return {"sessions": await store.list(tenant_id=tenant_id, limit=min(limit, 300), q=q or None)}
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"session store error: {e}") from e
 

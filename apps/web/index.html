@@ -16,9 +16,9 @@
     --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
-  html{-webkit-text-size-adjust:100%}
+  html{-webkit-text-size-adjust:100%;font-size:15px}   /* slightly smaller, more professional scale */
   body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
-    line-height:1.55;font-size:16px;-webkit-font-smoothing:antialiased;
+    line-height:1.55;font-size:1rem;-webkit-font-smoothing:antialiased;
     background-image:radial-gradient(120% 60% at 85% -10%, rgba(211,179,124,.06), transparent 60%);
     background-attachment:fixed;}
   .wrap{max-width:44rem;margin:0 auto;padding:1.5rem 1.15rem 5rem;}
@@ -79,6 +79,23 @@
   .attns .consent{display:flex;align-items:flex-start;gap:.5rem;font-size:.74rem;color:var(--muted);
     width:100%;line-height:1.4;margin-top:.1rem;}
   .attns .consent input{accent-color:var(--gold);margin-top:.15rem;flex:none;}
+
+  /* identity gate (name + email at landing) */
+  .idmodal[hidden]{display:none;}
+  .idmodal{position:fixed;inset:0;z-index:70;background:rgba(4,10,20,.82);
+    -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);display:grid;place-items:center;padding:1.2rem;}
+  .idcard{background:var(--panel);border:1px solid var(--hair);border-radius:16px;padding:1.7rem 1.5rem;
+    max-width:25rem;width:100%;box-shadow:0 24px 70px -34px #000;}
+  .idcard img{height:54px;display:block;margin:0 auto .9rem;}
+  .idcard h2{font-family:var(--serif);font-size:1.35rem;text-align:center;margin:0 0 .3rem;}
+  .idcard p{color:var(--muted);font-size:.84rem;text-align:center;margin:0 0 1.2rem;line-height:1.5;}
+  .idcard input{width:100%;background:var(--panel2);border:1px solid var(--hair);border-radius:10px;
+    color:var(--ink);font:inherit;font-size:.94rem;padding:.62rem .8rem;margin-bottom:.6rem;outline:none;}
+  .idcard input:focus{border-color:rgba(211,179,124,.55);box-shadow:0 0 0 2px rgba(211,179,124,.12);}
+  .idcard .idgo{width:100%;background:var(--gold);color:#1A1206;border:none;border-radius:11px;font:inherit;
+    font-weight:600;padding:.7rem;cursor:pointer;margin-top:.35rem;}
+  .idcard .idgo:hover{background:var(--gold-strong);}
+  .idcard .iderr{color:var(--gap);font-size:.75rem;min-height:1rem;margin-top:.35rem;text-align:center;}
 
   /* camera capture modal */
   .cammodal[hidden]{display:none;}
@@ -191,37 +208,52 @@
 
   /* past-sessions — full-page master/detail panel */
   .sessions[hidden]{display:none;}   /* author display:flex would otherwise beat the UA [hidden] rule */
-  .sessions{position:fixed;inset:0;z-index:50;background:var(--bg);
-    background-image:radial-gradient(120% 60% at 85% -10%, rgba(211,179,124,.06), transparent 60%);
-    display:flex;flex-direction:column;}
-  .sessions .shead{display:flex;align-items:center;gap:1rem;padding:1rem 1.3rem;
-    border-bottom:1px solid var(--hair);flex:none;}
-  .sessions .sback{font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;
+  .sessions{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;}
+  .sessions .shead{display:flex;align-items:center;gap:.9rem;padding:.85rem 1.2rem;
+    border-bottom:1px solid var(--hair);flex:none;flex-wrap:wrap;}
+  .sessions .sback{font-family:var(--mono);font-size:.66rem;letter-spacing:.05em;text-transform:uppercase;
     cursor:pointer;background:transparent;border:1px solid var(--hair);border-radius:8px;
-    padding:.42rem .8rem;color:var(--ink);display:inline-flex;align-items:center;gap:.4rem;}
+    padding:.4rem .75rem;color:var(--ink);display:inline-flex;align-items:center;gap:.4rem;}
   .sessions .sback:hover{border-color:var(--gold);color:var(--gold);}
-  .sessions .stitle{font-family:var(--serif);font-size:1.2rem;color:var(--ink);}
+  .sessions .stitle{font-family:var(--serif);font-size:1.1rem;color:var(--ink);}
+  .sessions .ssearch{margin-left:auto;background:var(--panel2);border:1px solid var(--hair);border-radius:9px;
+    color:var(--ink);font:inherit;font-size:.82rem;padding:.42rem .7rem;min-width:min(280px,55vw);outline:none;}
+  .sessions .ssearch:focus{border-color:rgba(211,179,124,.5);box-shadow:0 0 0 2px rgba(211,179,124,.12);}
+  .sessions .ssearch::placeholder{color:var(--muted);}
   .sessions .sbody{flex:1;display:flex;min-height:0;}
-  .sessions .slist{width:34%;max-width:380px;min-width:250px;border-right:1px solid var(--hair);
-    overflow-y:auto;padding:.7rem;}
-  .sessions .sdetail{flex:1;overflow-y:auto;padding:1.7rem 2rem;}
+  /* LEFT list — differentiated surface; width resizable via the drag handle */
+  .sessions .slist{width:34%;max-width:60%;min-width:220px;overflow-y:auto;padding:.6rem;
+    background:var(--panel2);border-right:1px solid var(--hair);flex:none;}
+  /* draggable divider */
+  .sessions .sdrag{flex:none;width:8px;cursor:col-resize;background:transparent;position:relative;}
+  .sessions .sdrag::before{content:"";position:absolute;inset:0 3px;border-radius:2px;background:var(--hair);}
+  .sessions .sdrag:hover::before,.sessions .sdrag.drag::before{background:var(--gold);}
+  /* RIGHT detail — base surface */
+  .sessions .sdetail{flex:1;min-width:0;overflow-y:auto;padding:1.5rem 1.9rem;background:var(--bg);}
   .sessions .sdetail .summary:first-child{margin-top:0;}
+  .sessions .sqhead{border-bottom:1px solid var(--hair);padding-bottom:.9rem;margin-bottom:1.2rem;}
+  .sessions .sqhead .qq{font-family:var(--serif);font-size:1.3rem;line-height:1.35;color:var(--ink);letter-spacing:-.01em;}
+  .sessions .sqhead .qm{font-family:var(--mono);font-size:.68rem;color:var(--muted);margin-top:.5rem;display:flex;gap:.7rem;flex-wrap:wrap;}
+  .sessions .sqhead .qm b{color:var(--gold);font-weight:600;}
   .sessions .srow{display:block;width:100%;text-align:left;border:none;background:transparent;cursor:pointer;
-    border-radius:11px;padding:.75rem .8rem;margin-bottom:.25rem;border-left:2px solid transparent;}
+    border-radius:9px;padding:.7rem .75rem;margin-bottom:.2rem;border-left:2px solid transparent;}
   .sessions .srow:hover{background:var(--panel);}
   .sessions .srow[aria-current="true"]{background:var(--panel);border-left-color:var(--gold);}
-  .sessions .srow .sq{color:var(--ink);font-size:.92rem;line-height:1.4;display:-webkit-box;
-    -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-  .sessions .srow .sm{font-family:var(--mono);font-size:.65rem;letter-spacing:.03em;color:var(--muted);margin-top:.35rem;}
-  .sessions .srow .sg{color:var(--verified);}
-  .sessions .splaceholder{color:var(--muted);font-size:.95rem;margin-top:2.5rem;text-align:center;}
-  .sessions .sempty{color:var(--muted);padding:1rem;font-size:.9rem;}
+  .sessions .srow .sq{color:var(--ink);font-size:.86rem;line-height:1.45;}   /* full text, no truncation */
+  .sessions .srow .sm{font-family:var(--mono);font-size:.62rem;letter-spacing:.02em;color:var(--muted);
+    margin-top:.4rem;display:flex;gap:.55rem;flex-wrap:wrap;align-items:center;}
+  .sessions .srow .sg{color:var(--verified);} .sessions .srow .swho{color:var(--gold);}
+  .sessions .splaceholder{color:var(--muted);font-size:.9rem;margin-top:2.5rem;text-align:center;}
+  .sessions .sempty{color:var(--muted);padding:1rem;font-size:.85rem;}
   @media (max-width:640px){
-    .sessions .shead{padding:.85rem 1rem;}
+    .sessions .shead{padding:.75rem .9rem;}
+    .sessions .ssearch{margin-left:0;order:3;width:100%;min-width:0;}
     .sessions .sbody{flex-direction:column;}
-    .sessions .slist{width:auto;max-width:none;min-width:0;max-height:40vh;
+    .sessions .slist{width:auto !important;max-width:none;min-width:0;max-height:38vh;
       border-right:none;border-bottom:1px solid var(--hair);}
-    .sessions .sdetail{padding:1.2rem 1rem;}
+    .sessions .sdrag{display:none;}
+    .sessions .sdetail{padding:1.1rem 1rem;}
+    .sessions .sqhead .qq{font-size:1.12rem;}
   }
 
   .answer.md .tw{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:.75rem 0 1.05rem;}
@@ -292,12 +324,27 @@
   <div class="shead">
     <button type="button" class="sback" id="sback">← Back</button>
     <span class="stitle">Past Sessions</span>
+    <input type="search" class="ssearch" id="ssearch" placeholder="Search questions or people…" aria-label="Search sessions" />
   </div>
-  <div class="sbody">
+  <div class="sbody" id="sbody">
     <div class="slist" id="slist"></div>
+    <div class="sdrag" id="sdrag" role="separator" aria-label="Resize panels"></div>
     <div class="sdetail" id="sdetail"><div class="splaceholder">Select a question to view its answer.</div></div>
   </div>
 </section>
+
+<!-- identity gate: capture name + email at landing, stored against each session -->
+<div class="idmodal" id="idmodal" hidden>
+  <div class="idcard">
+    <img src="/noesis-mark.png" alt="Noesis" />
+    <h2>Welcome to Noesis</h2>
+    <p>Tell us who you are, so your questions are saved to your name.</p>
+    <input id="idname" type="text" placeholder="Full name" autocomplete="name" />
+    <input id="idemail" type="email" placeholder="Email" autocomplete="email" />
+    <div class="iderr" id="iderr"></div>
+    <button type="button" class="idgo" id="idgo">Continue</button>
+  </div>
+</div>
 
 <!-- camera capture (mobile + laptop webcam) -->
 <div class="cammodal" id="cammodal" hidden aria-label="Camera">
@@ -318,6 +365,7 @@ let VIDEO_ENABLED = false;
 let STRUCTURED = false;     // render the answer as markdown sections (server-authoritative)
 let VISION_ENABLED = false; // image/PDF/DICOM upload → visual-context research
 let ATTACHMENTS = [];       // [{name, media_type, data(base64)}]
+let USER = null;            // {name, email} captured at landing, saved per session
 let LAST = null;            // {question, answer} for the answer-video add-on
 let CURRENT_Q = "";        // the question of the answer currently rendered
 
@@ -609,6 +657,7 @@ $("#ask").addEventListener("submit", async e=>{
   CURRENT_Q = question;
   const payload = {question, tenant_id:"demo", sources: chosen()};
   if(ATTACHMENTS.length) payload.attachments = ATTACHMENTS.slice();
+  if(USER){ payload.user_name = USER.name; payload.user_email = USER.email; }
   const body = JSON.stringify(payload);
   go.disabled = true; go.classList.add("loading");
   out.innerHTML = `<div class="status">Searching sources and verifying evidence…</div>`;
@@ -646,16 +695,24 @@ function closeSessions(){
   sessionsEl.hidden = true;
   document.body.style.overflow = "";
 }
+const fmtDate = s => { try{ return new Date(s).toLocaleString([], {dateStyle:"medium", timeStyle:"short"}); }catch(e){ return ""; } };
 async function loadSessionList(){
+  const q = ($("#ssearch").value||"").trim();
   slist.innerHTML = `<div class="sempty">Loading…</div>`;
   try{
-    const {sessions} = await (await fetch("/sessions?tenant_id=demo&limit=100")).json();
-    if(!sessions || !sessions.length){ slist.innerHTML = `<div class="sempty">No saved questions yet.</div>`; return; }
-    slist.innerHTML = sessions.map(s=>`
-      <button class="srow" data-id="${esc(s.id)}">
+    const {sessions} = await (await fetch("/sessions?tenant_id=demo&limit=200&q="+encodeURIComponent(q))).json();
+    if(!sessions || !sessions.length){ slist.innerHTML = `<div class="sempty">${q?"No matching sessions.":"No saved questions yet."}</div>`; return; }
+    slist.innerHTML = sessions.map(s=>{
+      const who = s.user_name || s.user_email;
+      return `<button class="srow" data-id="${esc(s.id)}">
         <div class="sq">${esc(s.question)}</div>
-        <div class="sm">${s.has_video?"🎬 ":""}${s.grounded?'<span class="sg">✓ grounded</span> · ':""}${new Date(s.created_at).toLocaleDateString()}</div>
-      </button>`).join("");
+        <div class="sm">
+          ${who?`<span class="swho">${esc(who)}</span>`:""}
+          ${s.grounded?'<span class="sg">✓ grounded</span>':'<span>ungrounded</span>'}
+          ${s.has_video?"<span>🎬 video</span>":""}
+          <span>${new Date(s.created_at).toLocaleDateString()}</span>
+        </div></button>`;
+    }).join("");
     slist.querySelectorAll(".srow").forEach(b=>b.addEventListener("click",()=>selectSession(b)));
     const first = slist.querySelector(".srow");    // show the most recent by default
     if(first) selectSession(first);
@@ -668,15 +725,52 @@ async function selectSession(rowEl){
   try{
     const row = await (await fetch("/sessions/"+encodeURIComponent(rowEl.dataset.id))).json();
     CURRENT_Q = row.question;
-    render(row, sdetail);             // saved row matches render()'s expected shape
+    const who = row.user_name || row.user_email;
+    // question stated at the TOP of the answer, with who asked + when
+    sdetail.innerHTML = `<div class="sqhead">
+        <div class="qq">${esc(row.question)}</div>
+        <div class="qm">${who?`Asked by <b>${esc(row.user_name||"")}</b>${row.user_email?" · "+esc(row.user_email):""} · `:""}${fmtDate(row.created_at)}</div>
+      </div><div id="sdbody"></div>`;
+    render(row, $("#sdbody"));         // saved row matches render()'s expected shape
     sdetail.scrollTop = 0;
   }catch(e){ sdetail.innerHTML = `<div class="empty">Couldn't load that session.</div>`; }
 }
+// search (debounced)
+let searchT;
+$("#ssearch").addEventListener("input", ()=>{ clearTimeout(searchT); searchT = setTimeout(loadSessionList, 250); });
+// draggable divider (resize the list pane)
+(function(){
+  const drag = $("#sdrag"), body = $("#sbody");
+  let dragging = false;
+  drag.addEventListener("mousedown", e=>{ dragging = true; drag.classList.add("drag"); e.preventDefault(); document.body.style.userSelect="none"; });
+  window.addEventListener("mousemove", e=>{
+    if(!dragging) return;
+    const rect = body.getBoundingClientRect();
+    const w = Math.max(220, Math.min(rect.width*0.6, e.clientX - rect.left));
+    slist.style.width = w + "px";
+  });
+  window.addEventListener("mouseup", ()=>{ if(dragging){ dragging=false; drag.classList.remove("drag"); document.body.style.userSelect=""; } });
+})();
 $("#histbtn").addEventListener("click", openSessions);
 $("#sback").addEventListener("click", closeSessions);
 document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !sessionsEl.hidden) closeSessions(); });
 
+// ---- identity gate (name + email captured at landing, stored per session) ----
+function initIdentity(){
+  try{ USER = JSON.parse(localStorage.getItem("noesis_user")||"null"); }catch(e){ USER = null; }
+  if(!USER || !USER.email){ $("#idmodal").hidden = false; setTimeout(()=>$("#idname").focus(), 60); }
+}
+$("#idgo").addEventListener("click", ()=>{
+  const name = $("#idname").value.trim(), email = $("#idemail").value.trim();
+  if(name.length < 2){ $("#iderr").textContent = "Please enter your name."; return; }
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ $("#iderr").textContent = "Please enter a valid email."; return; }
+  USER = {name, email}; localStorage.setItem("noesis_user", JSON.stringify(USER));
+  $("#idmodal").hidden = true;
+});
+$("#idmodal").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#idgo").click(); });
+
 loadConfig();
+initIdentity();
 if(location.hash === "#sessions") openSessions();   // deep-link to the sessions panel
 </script>
 </body>

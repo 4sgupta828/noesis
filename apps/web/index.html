@@ -138,16 +138,16 @@
   .summary .no{color:var(--gap);font-weight:600;}
 
   /* synthesized answer */
-  .answer{font-size:1.08rem;line-height:1.66;letter-spacing:-.005em;white-space:pre-wrap;margin:.2rem 0 1.4rem;}
+  .answer{font-size:.96rem;line-height:1.62;letter-spacing:-.005em;white-space:pre-wrap;margin:.2rem 0 1.4rem;}
   .answer .ref{color:var(--gold);font-weight:640;cursor:pointer;font-size:.72em;padding:0 .05em;}
   /* structured answer — a clinical brief */
-  .answer.md{white-space:normal;font-size:1rem;}
+  .answer.md{white-space:normal;font-size:.92rem;}
   .answer.md .mdh{font-family:var(--sans);font-size:.7rem;font-weight:680;text-transform:uppercase;
     letter-spacing:.14em;color:var(--gold);margin:1.9rem 0 .7rem;padding-top:1.4rem;
     border-top:1px solid var(--hair);display:flex;align-items:center;gap:.55rem;}
   .answer.md .mdh::before{content:"";width:15px;height:2px;border-radius:2px;background:var(--gold);flex:none;}
   .answer.md .mdh:first-child{margin-top:0;padding-top:0;border-top:none;}
-  .answer.md .mdh:first-child + .mdp{font-family:var(--serif);font-size:1.32rem;line-height:1.5;
+  .answer.md .mdh:first-child + .mdp{font-family:var(--serif);font-size:1.14rem;line-height:1.5;
     letter-spacing:-.011em;color:var(--ink);margin:.1rem 0 .5rem;}
   .answer.md .mdp{margin:.55rem 0;line-height:1.72;color:var(--ink);}
   .answer.md .mdl{margin:.55rem 0 .85rem;padding:0;list-style:none;}
@@ -171,11 +171,13 @@
   .hllegend i{width:.72rem;height:.72rem;border-radius:3px;display:inline-block;}
   .hllegend .lf{background:rgba(var(--hl-f),.95);} .hllegend .lr{background:rgba(var(--hl-r),.95);}
   .hllegend .lk{background:rgba(var(--hl-k),.95);}
-  .evhead{font-size:.7rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);
-    margin:.2rem 0 .9rem;border-top:1px solid var(--hair);padding-top:1.1rem;}
-  .fnum{display:inline-flex;align-items:center;justify-content:center;min-width:1.35rem;height:1.35rem;
-    border-radius:7px;background:var(--gold);color:#1A1206;font-family:var(--mono);font-size:.72rem;
-    font-weight:700;margin-right:.55rem;}
+  .evhead{font-family:var(--sans);font-size:.68rem;text-transform:uppercase;letter-spacing:.14em;color:var(--gold);
+    font-weight:680;margin:1.8rem 0 1rem;border-top:1px solid var(--hair);padding-top:1.3rem;
+    display:flex;align-items:center;gap:.55rem;}
+  .evhead::before{content:"";width:15px;height:2px;border-radius:2px;background:var(--gold);}
+  .fnum{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:1.4rem;height:1.4rem;
+    border-radius:8px;background:var(--gold);color:#1A1206;font-family:var(--mono);font-size:.72rem;
+    font-weight:700;margin-top:.05rem;}
   .claim.flash{outline:2px solid var(--gold);outline-offset:2px;}
 
   /* answer-video add-on */
@@ -187,16 +189,33 @@
   .vid .vhint{font-size:.76rem;color:var(--muted);margin-top:.55rem;}
   .vid video{width:100%;max-width:640px;border-radius:12px;margin-top:.75rem;display:block;}
 
-  /* signature: the claim → evidence rail */
-  .claim{background:var(--panel);border:1px solid var(--hair);border-radius:14px;scroll-margin-top:1rem;
-    padding:1.05rem 1.1rem;margin-bottom:.9rem;animation:rise .38s cubic-bezier(.2,.7,.2,1) both;}
-  .claim .txt{font-weight:520;letter-spacing:-.005em;}
-  .rail{margin-top:.75rem;border-left:2.5px solid var(--gold);padding:.15rem 0 .15rem .85rem;}
-  .rail q{font-family:var(--serif);font-size:1.05rem;color:var(--ink);quotes:"\201C" "\201D";}
-  .meta{display:flex;align-items:center;gap:.6rem;margin-top:.5rem;flex-wrap:wrap;}
-  .verified{display:inline-flex;align-items:center;gap:.3rem;color:var(--verified);font-size:.7rem;
-    font-weight:700;text-transform:uppercase;letter-spacing:.08em;}
-  .src{font-family:var(--mono);font-size:.72rem;color:var(--muted);}
+  /* grounding header band */
+  .ansmeta{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:0 0 1.3rem;padding-bottom:.9rem;
+    border-bottom:1px solid var(--hair);}
+  .gpill{font-family:var(--mono);font-size:.66rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    border-radius:999px;padding:.24rem .7rem;border:1px solid;}
+  .gpill.on{color:var(--verified);border-color:rgba(87,184,145,.5);background:rgba(87,184,145,.09);}
+  .gpill.off{color:var(--gap);border-color:rgba(214,151,90,.5);background:rgba(214,151,90,.08);}
+  .mstat{font-family:var(--mono);font-size:.72rem;color:var(--muted);letter-spacing:.02em;}
+  .mstat b{color:var(--ink);font-weight:640;}
+  .mstat.dim{opacity:.75;}
+
+  /* signature: the evidence dossier entry */
+  .claim{position:relative;background:var(--panel);border:1px solid var(--hair);border-radius:14px;
+    scroll-margin-top:1rem;padding:1.1rem 1.2rem 1rem;margin-bottom:.85rem;overflow:hidden;
+    animation:rise .38s cubic-bezier(.2,.7,.2,1) both;transition:border-color .15s;}
+  .claim::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--gold);opacity:.55;}
+  .claim:hover{border-color:rgba(211,179,124,.35);}
+  .chead{display:flex;gap:.7rem;align-items:flex-start;}
+  .ctext{font-weight:540;letter-spacing:-.005em;line-height:1.5;color:var(--ink);}
+  .cquote{margin:.75rem 0 .85rem 0;padding:0;font-family:var(--serif);font-size:1rem;line-height:1.55;
+    color:var(--muted);position:relative;padding-left:.9rem;border-left:2px solid var(--hair);}
+  .cquote::before{content:"\201C";color:var(--gold);}.cquote::after{content:"\201D";color:var(--gold);}
+  .cfoot{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;padding-top:.7rem;border-top:1px solid var(--hair);}
+  .verified{display:inline-flex;align-items:center;gap:.32rem;color:var(--verified);font-size:.66rem;
+    font-weight:700;text-transform:uppercase;letter-spacing:.09em;}
+  .src{font-family:var(--mono);font-size:.7rem;color:var(--muted);margin-left:auto;
+    overflow-wrap:anywhere;min-width:0;}
   a.srclink{text-decoration:none;color:var(--verified);border-bottom:1px dotted var(--verified);}
   a.srclink:hover{opacity:.8;}
   a.srclink:focus-visible{outline:2px solid var(--verified);outline-offset:2px;}
@@ -266,12 +285,18 @@
   /* mobile: minimal + legible on a phone */
   @media (max-width:560px){
     .wrap{padding:1.15rem .9rem 4rem;}
-    h1{font-size:1.6rem;}
-    .logo{height:52px;}
-    .answer.md .mdh:first-child + .mdp{font-size:1.14rem;}
+    h1{font-size:1.55rem;}
+    .logo{height:50px;}
+    .answer.md .mdh:first-child + .mdp{font-size:1.06rem;}
     .motto{gap:.8rem;letter-spacing:.2em;font-size:.74rem;}
     .motto b{letter-spacing:.2em;}
     .answer.md video,.vid video{width:100%;}
+    /* elevated answer — keep it comfortable on a phone */
+    .ansmeta{gap:.5rem;}
+    .claim{padding:.9rem 1rem .85rem;}
+    .cquote{font-size:.94rem;}
+    .cfoot{gap:.5rem;} .src{margin-left:0;}
+    .answer.md .mdt{font-size:.82rem;}
   }
 </style>
 </head>
@@ -451,10 +476,10 @@ function render(data, target){
   target = target || out;
   const parts = [];
   const n = data.claims.length;
-  parts.push(`<div class="summary">
-    <span>${n ? `<span class="ok">${n} verified claim${n>1?"s":""}</span>` : `<span class="no">no verified claims</span>`}</span>
-    ${data.rejected ? `<span>${data.rejected} rejected (ungrounded)</span>`:""}
-    ${data.grounded ? "" : `<span class="no">answer not fully grounded</span>`}
+  parts.push(`<div class="ansmeta">
+    <span class="gpill ${data.grounded?"on":"off"}">${data.grounded?"✓ Grounded":"◦ Not fully grounded"}</span>
+    <span class="mstat"><b>${n}</b> verified finding${n===1?"":"s"}</span>
+    ${data.rejected ? `<span class="mstat dim">${data.rejected} rejected</span>`:""}
   </div>`);
   if(data.coverage_gaps && data.coverage_gaps.length){
     parts.push(`<div class="gaps"><h4>Coverage gaps</h4><ul>` +
@@ -499,7 +524,8 @@ function render(data, target){
     if(data.video_filename){
       parts.push(`<div class="vid">
         <div class="vhint">🎬 ${esc(data.video_title||"Guidance video")}${data.video_duration?" · "+Math.round(data.video_duration)+"s":""}</div>
-        <video controls preload="metadata" src="/video/file/${encodeURIComponent(data.video_filename)}"></video>
+        <video controls preload="metadata" src="/video/file/${encodeURIComponent(data.video_filename)}"
+          onerror="this.insertAdjacentHTML('afterend','<div class=&quot;vhint&quot;>This video is no longer available.</div>');this.remove();"></video>
       </div>`);
     } else if(VIDEO_ENABLED && data.grounded){
       parts.push(`<div class="vid" id="vid">
@@ -515,10 +541,9 @@ function render(data, target){
       ? `<a class="src srclink" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer" title="Open source in a new tab">${label} ↗</a>`
       : (c.source ? `<span class="src">${label}</span>` : "");
     parts.push(`<article class="claim" id="f${idx+1}">
-      <div class="txt"><span class="fnum">${idx+1}</span>${esc(c.text)}</div>
-      <div class="rail"><q>${esc(c.quote)}</q>
-        <div class="meta"><span class="verified">✓ Verified in source</span>${src}</div>
-      </div>
+      <div class="chead"><span class="fnum">${idx+1}</span><div class="ctext">${esc(c.text)}</div></div>
+      <blockquote class="cquote">${esc(c.quote)}</blockquote>
+      <div class="cfoot"><span class="verified">✓ Verified in source</span>${src}</div>
     </article>`);
   });
   if(!n && !(data.coverage_gaps||[]).length){

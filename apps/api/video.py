@@ -28,7 +28,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -52,6 +52,46 @@ def _out_dir() -> Path:
 
 def _tsx() -> str:
     return os.environ.get("NOESIS_VIDEO_TSX", str(_video_dir() / "node_modules" / ".bin" / "tsx"))
+
+
+# --- durable video storage (R2) ---------------------------------------------
+# The generator writes to apps/video/out, which is EPHEMERAL in a container (wiped on
+# redeploy). So we also mirror each mp4 to R2 and serve from there when the local file is
+# gone — this keeps past-session videos playable across deploys.
+def _r2():
+    bucket = os.environ.get("R2_BUCKET")
+    if not bucket:
+        return None, None
+    try:
+        import boto3
+        client = boto3.client(
+            "s3", endpoint_url=os.environ.get("R2_ENDPOINT"),
+            aws_access_key_id=os.environ.get("R2_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.environ.get("R2_SECRET_ACCESS_KEY"),
+            region_name="auto")
+        return client, bucket
+    except Exception:
+        return None, None
+
+
+def _r2_put_video(name: str) -> None:
+    client, bucket = _r2()
+    path = _out_dir() / name
+    if not client or not path.exists():
+        return
+    with open(path, "rb") as f:
+        client.put_object(Bucket=bucket, Key=f"videos/{name}", Body=f.read(),
+                          ContentType="video/mp4")
+
+
+def _r2_get_video(name: str) -> bytes | None:
+    client, bucket = _r2()
+    if not client:
+        return None
+    try:
+        return client.get_object(Bucket=bucket, Key=f"videos/{name}")["Body"].read()
+    except Exception:
+        return None
 
 
 class VideoIn(BaseModel):
@@ -105,6 +145,11 @@ async def _run_bridge(job_id: str, payload: dict, session_id: str | None = None,
         job.filename = os.path.basename(result["filename"])   # basename only — no path traversal
         job.title = result.get("title", "")
         job.duration_sec = float(result.get("durationSec", 0) or 0)
+        # Mirror to R2 so the video survives container redeploys (best-effort).
+        try:
+            await asyncio.to_thread(_r2_put_video, job.filename)
+        except Exception:
+            pass
         # Best-effort: link the finished video to its saved Q&A (never fails the job).
         if session_id and attach is not None:
             try:
@@ -143,14 +188,18 @@ def build_video_router(attach_video: AttachVideo | None = None) -> APIRouter:
                 "duration_sec": job.duration_sec, "error": job.error}
 
     @router.get("/file/{filename}")
-    def file(filename: str) -> FileResponse:
+    def file(filename: str):
         # Basename-only + fixed dir → no traversal; must be an .mp4 we produced.
         name = os.path.basename(filename)
         if not name.endswith(".mp4"):
             raise HTTPException(status_code=400, detail="bad filename")
         path = _out_dir() / name
-        if not path.exists():
-            raise HTTPException(status_code=404, detail="video not found")
-        return FileResponse(str(path), media_type="video/mp4", filename=name)
+        if path.exists():                                   # fresh, on this container
+            return FileResponse(str(path), media_type="video/mp4", filename=name)
+        data = _r2_get_video(name)                          # durable copy (survives redeploys)
+        if data is not None:
+            return Response(content=data, media_type="video/mp4",
+                            headers={"Content-Disposition": f'inline; filename="{name}"'})
+        raise HTTPException(status_code=404, detail="video not found")
 
     return router

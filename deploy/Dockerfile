@@ -17,8 +17,8 @@ COPY packages packages
 COPY apps apps
 COPY deploy deploy
 RUN pip install --no-cache-dir "./packages/kernel[serve,postgres]" ./packages/vertical_medical
-# Vision-upload media decoders (images / PDF pages / DICOM) for the answer-image add-on.
-RUN pip install --no-cache-dir Pillow PyMuPDF pydicom numpy
+# Vision-upload media decoders (images / PDF pages / DICOM) + boto3 for durable video (R2).
+RUN pip install --no-cache-dir Pillow PyMuPDF pydicom numpy boto3
 
 # Build the self-contained answer-video generator (Node). tsx is a runtime dep so the
 # generator runs in-container; @napi-rs/canvas ships prebuilt linux-x64 binaries.

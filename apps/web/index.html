@@ -1147,6 +1147,7 @@ function traceLine(ev){
   if(ev.type==="step")      return `<div class="tstep">▸ Step ${ev.step}</div>`;
   if(ev.type==="search")    return `<div class="tstep">🔎 Searching <span class="tq">${esc(ev.query||"")}</span>${(ev.variants&&ev.variants.length)?` <span class="tvar">+${ev.variants.length} reformulations</span>`:""}</div>`;
   if(ev.type==="found")     return `<div class="tstep">📥 Found <b>${ev.total}</b> passage${ev.total===1?"":"s"}${(ev.sources&&ev.sources.length)?` <span class="tvar">${ev.sources.map(esc).join(" · ")}</span>`:""}</div>`;
+  if(ev.type==="grounding") return `<div class="tstep">🧩 Grounding the evidence…</div>`;
   if(ev.type==="verifying") return `<div class="tstep">🔬 Verifying evidence…</div>`;
   if(ev.type==="verified")  return `<div class="tstep">✓ Verified <b>${ev.verified}</b> finding${ev.verified===1?"":"s"}${ev.rejected?` <span class="tvar">${ev.rejected} rejected</span>`:""}</div>`;
   if(ev.type==="composing") return `<div class="tstep">✍️ Composing answer from <b>${ev.findings}</b> finding${ev.findings===1?"":"s"}…</div>`;

@@ -364,6 +364,28 @@ async def run_react(
 
     result.atoms_gathered = len(atoms.all())
 
+    # SECOND-MODEL FALLBACK GROUNDER (factra pattern): the Anthropic agent gathered relevant atoms
+    # but still emitted NO claims (0 verified AND 0 rejected) even after the forceful extract-recovery.
+    # Re-asking the same model is unreliable here — hand the atoms to a second model (OpenAI) to
+    # atomize into cited claims, then run them through the SAME verbatim span gate (_apply_answer).
+    # Provenance is unchanged: only claims whose quote verifies survive. Fail-safe: no key / error /
+    # nothing → 0 claims and the original abstention stands.
+    if (not result.verified_claims and not result.rejected_claims
+            and atoms.all() and not budget.exhausted):
+        await emit({"type": "grounding"})
+        try:
+            from noesis_kernel.research.fallback_grounder import ground_claimless
+            fb = await ground_claimless(
+                question=question, atoms=[(a.atom_id, a.text) for a in atoms.all()])
+            if fb:
+                result.retried_empty = True
+                _apply_answer(AgentStep(action="answer", claims=[
+                    ClaimOut(text=c["text"], atom_id=c["atom_id"], quote=c["quote"]) for c in fb]))
+                await emit({"type": "verified", "verified": len(result.verified_claims),
+                            "rejected": len(result.rejected_claims)})
+        except Exception:   # noqa: BLE001 — fallback is best-effort; never break the answer
+            pass
+
     # Compose a synthesized answer FROM the verified findings only (factra "living
     # answer" model). Grounded by construction: the composer sees only the verified
     # findings and must reference them [n]; it may not add outside facts. A vertical

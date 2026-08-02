@@ -25,9 +25,9 @@ const DIMS: Record<ClipFormat, [number, number]> = { '16:9': [1280, 720], '9:16'
 const OUT_DIR = process.env.NOESIS_VIDEO_OUT_DIR
   || path.join(path.dirname(path.dirname(new URL(import.meta.url).pathname)), 'out');
 const FPS = 30;
-const TAIL_SEC = 0.5;
+const TAIL_SEC = 0.8;   // scene tail after narration; MUST exceed XFADE so narrations never overlap
 const MIN_SCENE = 2.5;
-const MAX_SCENE = 14;
+const MAX_SCENE = 60;   // effectively no cap — never TRUNCATE narration (truncation → overlap → double voice)
 const MAX_INPUT_CHARS = 14000;
 
 export class VideoError extends Error {
@@ -136,13 +136,16 @@ export async function renderAnswerVideo(opts: RenderAnswerVideoOpts): Promise<An
     const sceneFiles: string[] = [];
     const mp3Files: string[] = [];
     const durations: number[] = [];
+    const speechDurs: number[] = [];
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i]!;
       const isFirst = i === 0, isLast = i === scenes.length - 1;
       const mp3 = path.join(tmp, `s${i}.mp3`);
       fs.writeFileSync(mp3, await synthesizeSpeech(scene.narration, { voice, model: opts.voiceModel, instructions: opts.voiceInstructions, speed: opts.speed }));
       mp3Files.push(mp3);
-      const dur = Math.min(MAX_SCENE, Math.max(MIN_SCENE, (await probeDuration(mp3)) + TAIL_SEC));
+      const speech = await probeDuration(mp3);
+      speechDurs.push(speech);
+      const dur = Math.min(MAX_SCENE, Math.max(MIN_SCENE, speech + TAIL_SEC));
       durations.push(dur);
 
       const frameDir = path.join(tmp, `s${i}`);
@@ -196,7 +199,9 @@ export async function renderAnswerVideo(opts: RenderAnswerVideoOpts): Promise<An
       const d = Math.round(startMs);
       aParts.push(`[${k}:a]adelay=${d}|${d}[ad${k}]`);
       aLabels.push(`[ad${k}]`);
-      startMs += (durations[k]! - XFADE) * 1000;   // next scene's start on the timeline
+      // advance to the next narration's start. GUARD: never start before this narration has
+      // fully finished (+0.2s) — otherwise two voiceovers overlap (double-voice bug).
+      startMs += Math.max(durations[k]! - XFADE, speechDurs[k]! + 0.2) * 1000;
     }
     const aFilter = mp3Files.length === 1
       ? '[0:a]anull[a]'

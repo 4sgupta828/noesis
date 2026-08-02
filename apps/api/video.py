@@ -94,6 +94,23 @@ def _r2_get_video(name: str) -> bytes | None:
         return None
 
 
+def video_exists(name: str) -> bool:
+    """True if the mp4 is servable — present locally OR in R2. Used to hide videos whose
+    files are gone (e.g. generated before durable storage) from the catalogue."""
+    if not name:
+        return False
+    if (_out_dir() / os.path.basename(name)).exists():
+        return True
+    client, bucket = _r2()
+    if not client:
+        return False
+    try:
+        client.head_object(Bucket=bucket, Key=f"videos/{os.path.basename(name)}")
+        return True
+    except Exception:
+        return False
+
+
 class VideoIn(BaseModel):
     question: str
     answer: str

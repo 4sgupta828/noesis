@@ -362,7 +362,6 @@
 <div class="wrap">
   <header>
     <img class="logo" src="/noesis-mark.png" alt="Noesis" />
-    <span class="vertical" id="vertical">…</span>
     <a class="histbtn" href="/admin" style="margin-left:auto;text-decoration:none;">Coverage</a>
     <button type="button" class="histbtn" id="vidbtn" style="margin-left:0;">Videos</button>
     <button type="button" class="histbtn" id="histbtn" style="margin-left:0;">Past Sessions</button>
@@ -477,7 +476,6 @@ const label = k => k === "web" ? "Web" : k === "workspace" ? "Workspace" : "Corp
 async function loadConfig(){
   try{
     const c = await (await fetch("/config")).json();
-    $("#vertical").textContent = c.vertical || "vertical";
     SOURCES = c.sources || [];
     VIDEO_ENABLED = !!c.video_enabled;
     STRUCTURED = !!c.structured_answers;
@@ -498,7 +496,7 @@ async function loadConfig(){
       b.onclick = () => b.setAttribute("aria-pressed", b.getAttribute("aria-pressed")==="true"?"false":"true");
       box.appendChild(b);
     }
-  }catch(e){ $("#vertical").textContent = "offline"; }
+  }catch(e){ /* config unavailable — shell still works */ }
 }
 
 const chosen = () => [...document.querySelectorAll('.pill[aria-pressed="true"]')].map(b=>b.dataset.key);
@@ -905,7 +903,8 @@ async function loadVideos(){
       const title = v.video_title || v.question || "Briefing video";
       return `<div class="vcard" data-file="${esc(v.video_filename)}" data-title="${esc(title)}" data-sid="${esc(v.id)}">
         <div class="vposter">
-          <video muted preload="metadata" src="/video/file/${encodeURIComponent(v.video_filename)}#t=1"></video>
+          <video muted preload="metadata" src="/video/file/${encodeURIComponent(v.video_filename)}#t=1"
+            onerror="this.closest('.vcard').remove()"></video>
           <div class="vplay">▶</div>${dur?`<div class="vdur">${dur}</div>`:""}
         </div>
         <div class="vcinfo"><div class="vctitle">${esc(title)}</div>

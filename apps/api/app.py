@@ -6,6 +6,7 @@ serves its sources + gating + persona. Providers run in NOESIS_PROVIDER_MODE
 """
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 
@@ -307,7 +308,12 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if store is None:
             return {"videos": []}
         try:
-            return {"videos": await store.list_videos(tenant_id=tenant_id, limit=min(limit, 300))}
+            vids = await store.list_videos(tenant_id=tenant_id, limit=min(limit, 300))
+            # hide videos whose file is gone (local + R2 both missing)
+            from api.video import video_exists
+            vids = await asyncio.to_thread(
+                lambda: [v for v in vids if video_exists(v["video_filename"])])
+            return {"videos": vids}
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"session store error: {e}") from e
 

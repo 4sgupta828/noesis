@@ -236,6 +236,8 @@
   /* self-healing corpus — fill-the-gaps panel */
   .gapfix{margin:1.4rem 0 .4rem;padding:1rem 1.15rem;border:1px solid var(--hair);border-left:3px solid var(--gold);
     border-radius:14px;background:var(--panel2);}
+  .gapfix.soft{border-left-color:var(--hair);background:transparent;opacity:.86;}
+  .gapfix.soft .gapfix-h{color:var(--muted);}
   .gapfix .vbtn{font-family:var(--mono);font-size:.78rem;font-weight:600;letter-spacing:.03em;cursor:pointer;
     border:1px solid var(--gold);color:var(--gold);background:transparent;border-radius:9px;padding:.55rem .9rem;margin-top:.2rem;}
   .gapfix .vbtn:hover{background:var(--gold);color:#1A1206;} .gapfix .vbtn:disabled{opacity:.55;cursor:default;}
@@ -727,10 +729,12 @@ function render(data, target){
       parts.push(`<div class="empty">No grounded answer for that question with the chosen sources.</div>`);
     }
   }
-  // Self-healing corpus — offer to find + queue sources whenever the answer is under-evidenced:
-  // not fully grounded, stated gaps, OR thin (few verified findings). On-demand (one LLM call).
-  if(GAP_ENABLED && (!data.grounded || (data.coverage_gaps||[]).length || n < 2)){
-    parts.push(gapPanelMarkup());
+  // Self-healing corpus — ALWAYS offer to find + queue sources when enabled (a grounded answer
+  // can still admit "no direct evidence" — the HPB case — so we never hide the affordance). Copy
+  // adapts: prominent when under-evidenced, softer when the answer already looks solid.
+  if(GAP_ENABLED){
+    const weak = !data.grounded || (data.coverage_gaps||[]).length || n < 2;
+    parts.push(gapPanelMarkup(weak));
   }
   target.innerHTML = parts.join("");
   // clicking a [n] reference scrolls to and highlights its finding (within this pane)
@@ -754,10 +758,16 @@ function render(data, target){
 
 // Reusable "Fill the evidence gaps" panel — used by render() AND by the no-answer / error /
 // timeout paths, so the self-healing affordance is ALWAYS available when evidence is missing.
-function gapPanelMarkup(){
-  return `<div class="gapfix" id="gapfix">
-    <div class="gapfix-h">◈ Fill the evidence gaps</div>
-    <div class="gapfix-hint">This question is under-evidenced. Find high-quality sources to add to the corpus so it can be answered next time — the corpus heals itself.</div>
+function gapPanelMarkup(weak){
+  // weak = under-evidenced (not grounded / stated gaps / thin / no direct evidence). When the
+  // answer looks solid we still OFFER gap-fill (an answer can always be strengthened), but with
+  // softer copy so we never wrongly imply a good answer is inadequate.
+  const hint = weak
+    ? "This question is under-evidenced — the answer may not directly address it. Find high-quality sources to add to the corpus so it's answerable next time; the corpus heals itself."
+    : "Want deeper or more authoritative evidence behind this answer? Suggest high-quality sources to add to the corpus.";
+  return `<div class="gapfix${weak?"":" soft"}" id="gapfix">
+    <div class="gapfix-h">◈ ${weak?"Fill the evidence gaps":"Strengthen the evidence"}</div>
+    <div class="gapfix-hint">${hint}</div>
     <button type="button" class="vbtn" id="gapgo">◈ Suggest sources to add</button>
   </div>`;
 }
@@ -1080,7 +1090,7 @@ $("#ask").addEventListener("submit", async e=>{
 // Append the reusable fill-the-gaps panel to the main view (degraded/no-evidence paths).
 function appendGapFallback(question){
   if(!GAP_ENABLED) return;
-  out.insertAdjacentHTML("beforeend", gapPanelMarkup());
+  out.insertAdjacentHTML("beforeend", gapPanelMarkup(true));   // fallback = under-evidenced
   wireGap(out, {question, answer:"", coverage_gaps:[]});
 }
 

@@ -5,9 +5,9 @@
 > `rs_block` (port 5434); raw artifacts in Cloudflare R2 (`medicaldata/medical/`);
 > embeddings OpenAI text-embedding-3-small (1536-d).
 
-**Last updated:** 2026-08-01 (head deep-ingest COMPLETE — 16 top conditions)
-**Corpus size:** **98,422 blocks / 10,266 docs.** By source: clinicaltrials 88,159 ·
-europepmc 5,990 · openfda 4,147 · faers 99 · cdc 27.
+**Last updated:** 2026-08-02 (tier-2 deep-ingest COMPLETE — 31 more conditions; synced to prod)
+**Corpus size:** **208,864 blocks / 21,858 docs.** By source: clinicaltrials 190,159 ·
+europepmc 14,432 · openfda 4,147 · faers 99 · cdc 27.
 
 ## Sources (connectors)
 
@@ -46,15 +46,28 @@ europepmc 5,990 · openfda 4,147 · faers 99 · cdc 27.
 | Heart failure | ~41 | ~120 | shallow |
 | Chronic kidney disease | ~? | ~120 | shallow |
 
-## Conditions — TO COVER (next head, then long tail)
+**Tier-2 deep-ingest (✅ 2026-08-02, ~300 trials + 150 papers each):**
 
-**Remaining head (high research volume):**
-- Oncology: pancreatic, ovarian, bladder, kidney (RCC), glioblastoma, multiple myeloma, head & neck
-- Cardio-metabolic: hyperlipidemia, hyperlipidemia/CAD prevention, PAD, VTE, hypertension (deepen)
-- Infectious: COVID-19, tuberculosis, sepsis, hepatitis B, influenza
-- Neuro/Psych: multiple sclerosis, epilepsy, migraine, schizophrenia, anxiety, bipolar, ALS
-- Immuno/Rheum: psoriasis, IBD (Crohn's/UC), lupus, ankylosing spondylitis, asthma (deepen)
-- Renal/GI/other: NASH/MASH, GERD, osteoporosis, anemia, chronic pain
+| Group | Conditions | Depth |
+|---|---|---|
+| Oncology | pancreatic · ovarian · bladder · renal cell carcinoma · glioblastoma · multiple myeloma · head & neck | deep |
+| Cardiovascular | hyperlipidemia · peripheral artery disease · venous thromboembolism | deep |
+| Infectious | COVID-19 · tuberculosis · sepsis · hepatitis B · influenza | deep |
+| Neuro/Psych | multiple sclerosis · epilepsy · migraine · schizophrenia · anxiety disorder · bipolar disorder · ALS | deep |
+| Immuno/Rheum | psoriasis · inflammatory bowel disease · systemic lupus erythematosus · ankylosing spondylitis | deep |
+| Metabolic/GI | NASH/MASH · GERD · osteoporosis · anemia | deep |
+| Other | chronic pain | deep |
+
+## Conditions — TO COVER (tier-3 long tail)
+
+- Oncology: cervical, esophageal, gastric, sarcoma
+- Cardiovascular: pulmonary hypertension, valvular heart disease
+- Infectious: malaria, HPV
+- Neuro/Psych: Huntington disease, PTSD, ADHD
+- Immuno/Rheum: Sjögren syndrome, vasculitis
+- Metabolic/GI: celiac disease, gout
+- Respiratory: pulmonary fibrosis, cystic fibrosis
+- Renal: polycystic kidney disease
 
 **Long tail (deferred, per plan):** rare diseases, pediatric-specific, region-specific, sub-indications.
 

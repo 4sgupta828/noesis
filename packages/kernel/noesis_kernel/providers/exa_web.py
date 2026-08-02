@@ -15,7 +15,7 @@ EXA_URL = "https://api.exa.ai/search"
 
 
 class ExaWebSearch:
-    def __init__(self, *, api_key: str | None = None, timeout: float = 18.0,
+    def __init__(self, *, api_key: str | None = None, timeout: float = 10.0,
                  include_domains: list[str] | None = None):
         self._api_key = api_key or os.environ.get("EXA_API_KEY", "")
         self._timeout = timeout

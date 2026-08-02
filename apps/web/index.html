@@ -622,9 +622,9 @@ async function loadConfig(){
     for(const k of SOURCES){
       const b = document.createElement("button");
       b.type="button"; b.className="pill"; b.dataset.key=k;
-      // all sources on by default (web = Exa, restricted to trusted medical domains, runs in
-      // parallel so latency is bounded). Toggle web off for max speed on pure-corpus questions.
-      b.setAttribute("aria-pressed","true"); b.textContent = label(k);
+      // Corpus on by default (fast). Web = Exa restricted to trusted medical domains — it WORKS,
+      // but each query does several trusted-source lookups, so it's OPT-IN to keep the default fast.
+      b.setAttribute("aria-pressed", k==="web" ? "false" : "true"); b.textContent = label(k);
       b.onclick = () => b.setAttribute("aria-pressed", b.getAttribute("aria-pressed")==="true"?"false":"true");
       box.appendChild(b);
     }

@@ -295,6 +295,47 @@
   .answer.md .tw{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:.75rem 0 1.05rem;}
   .answer.md .tw .mdt{margin:0;}
 
+  /* briefing videos — Netflix-style catalogue */
+  .videos[hidden]{display:none;}
+  .videos{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;
+    background-image:radial-gradient(120% 60% at 85% -10%, rgba(211,179,124,.06), transparent 60%);}
+  .videos .vhd{display:flex;align-items:center;gap:.9rem;padding:.85rem 1.2rem;border-bottom:1px solid var(--hair);flex:none;}
+  .videos .sback{font-family:var(--mono);font-size:.66rem;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;
+    background:transparent;border:1px solid var(--hair);border-radius:8px;padding:.4rem .75rem;color:var(--ink);}
+  .videos .sback:hover{border-color:var(--gold);color:var(--gold);}
+  .videos .stitle{font-family:var(--serif);font-size:1.1rem;color:var(--ink);}
+  .vgrid{flex:1;overflow-y:auto;padding:1.4rem;display:grid;gap:1.1rem;
+    grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr));align-content:start;}
+  .vcard{background:var(--panel);border:1px solid var(--hair);border-radius:13px;overflow:hidden;cursor:pointer;
+    transition:transform .16s, border-color .16s, box-shadow .16s;}
+  .vcard:hover{transform:translateY(-3px);border-color:rgba(211,179,124,.45);box-shadow:0 16px 40px -22px #000;}
+  .vposter{position:relative;aspect-ratio:16/9;background:#000;}
+  .vposter video{width:100%;height:100%;object-fit:cover;display:block;}
+  .vposter .vplay{position:absolute;inset:0;display:grid;place-items:center;font-size:2rem;color:#fff;
+    background:linear-gradient(180deg,rgba(0,0,0,.1),rgba(0,0,0,.35));opacity:.9;transition:opacity .15s;}
+  .vcard:hover .vplay{opacity:1;}
+  .vposter .vdur{position:absolute;right:.5rem;bottom:.5rem;background:rgba(0,0,0,.72);color:#fff;
+    font-family:var(--mono);font-size:.62rem;padding:.12rem .42rem;border-radius:5px;}
+  .vcinfo{padding:.7rem .8rem .85rem;}
+  .vctitle{font-weight:560;font-size:.9rem;line-height:1.32;color:var(--ink);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .vcmeta{font-family:var(--mono);font-size:.62rem;color:var(--muted);margin-top:.5rem;display:flex;gap:.55rem;flex-wrap:wrap;}
+  .vcmeta .vcwho{color:var(--gold);}
+  .vempty{color:var(--muted);padding:2.5rem 1rem;text-align:center;grid-column:1/-1;}
+  /* playback lightbox */
+  .vlight[hidden]{display:none;}
+  .vlight{position:fixed;inset:0;z-index:65;background:rgba(3,8,16,.9);-webkit-backdrop-filter:blur(3px);
+    backdrop-filter:blur(3px);display:grid;place-items:center;padding:1.2rem;}
+  .vlbox{width:min(880px,96vw);}
+  .vlhead{display:flex;align-items:center;gap:.7rem;margin-bottom:.7rem;flex-wrap:wrap;}
+  .vltitle{font-family:var(--serif);font-size:1.1rem;color:var(--ink);flex:1;min-width:0;}
+  .vlopen{cursor:pointer;background:transparent;border:1px solid var(--gold);color:var(--gold);border-radius:8px;
+    font-family:var(--mono);font-size:.64rem;text-transform:uppercase;letter-spacing:.04em;padding:.4rem .7rem;}
+  .vlopen:hover{background:var(--gold);color:#1A1206;}
+  .vlclose{cursor:pointer;background:transparent;border:1px solid var(--hair);border-radius:8px;color:var(--ink);
+    font-family:var(--mono);font-size:.68rem;padding:.4rem .7rem;}
+  .vlbox video{width:100%;border-radius:12px;background:#000;display:block;max-height:74vh;}
+
   @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   @keyframes spin{to{transform:rotate(360deg)}}
   @media (prefers-reduced-motion:reduce){.claim{animation:none}.status::before,button.go.loading::after{animation:none}}
@@ -323,6 +364,7 @@
     <img class="logo" src="/noesis-mark.png" alt="Noesis" />
     <span class="vertical" id="vertical">…</span>
     <a class="histbtn" href="/admin" style="margin-left:auto;text-decoration:none;">Coverage</a>
+    <button type="button" class="histbtn" id="vidbtn" style="margin-left:0;">Videos</button>
     <button type="button" class="histbtn" id="histbtn" style="margin-left:0;">Past Sessions</button>
   </header>
 
@@ -374,6 +416,25 @@
     <div class="sdetail" id="sdetail"><div class="splaceholder">Select a question to view its answer.</div></div>
   </div>
 </section>
+
+<!-- briefing videos catalogue (Netflix-style) across all sessions -->
+<section class="videos" id="videos" hidden aria-label="Briefing videos">
+  <div class="vhd">
+    <button type="button" class="sback" id="vback">← Back</button>
+    <span class="stitle">Briefing Videos</span>
+  </div>
+  <div class="vgrid" id="vgrid"></div>
+</section>
+<div class="vlight" id="vlight" hidden aria-label="Video player">
+  <div class="vlbox">
+    <div class="vlhead">
+      <span class="vltitle" id="vltitle"></span>
+      <button type="button" class="vlopen" id="vlopen">Open session</button>
+      <button type="button" class="vlclose" id="vlclose">Close ✕</button>
+    </div>
+    <video id="vlvideo" controls playsinline></video>
+  </div>
+</div>
 
 <!-- identity gate: capture name + email at landing, stored against each session -->
 <div class="idmodal" id="idmodal" hidden>
@@ -807,25 +868,75 @@ async function loadSessionList(){
     if(first) selectSession(first);
   }catch(e){ slist.innerHTML = `<div class="sempty">Couldn't load sessions.</div>`; }
 }
+function showSessionDetail(row, rowEl){
+  if(rowEl){ slist.querySelectorAll(".srow").forEach(r=>r.removeAttribute("aria-current")); rowEl.setAttribute("aria-current","true"); }
+  CURRENT_Q = row.question;
+  const who = row.user_name || row.user_email;
+  // question stated at the TOP of the answer, with who asked + when + delete
+  sdetail.innerHTML = `<div class="sqhead">
+      <div class="qhrow"><div class="qq">${esc(row.question)}</div>
+        <button type="button" class="sdel" id="sdel" title="Delete session">🗑 Delete</button></div>
+      <div class="qm">${who?`Asked by <b>${esc(row.user_name||"")}</b>${row.user_email?" · "+esc(row.user_email):""} · `:""}${fmtDate(row.created_at)}</div>
+    </div><div id="sdbody"></div>`;
+  render(row, $("#sdbody"));         // saved row matches render()'s expected shape
+  const del = $("#sdel"); if(del) del.addEventListener("click", ()=>deleteSession(row.id, rowEl));
+  sdetail.scrollTop = 0;
+}
 async function selectSession(rowEl){
-  slist.querySelectorAll(".srow").forEach(r=>r.removeAttribute("aria-current"));
-  rowEl.setAttribute("aria-current","true");
   sdetail.innerHTML = `<div class="status">Loading…</div>`;
   try{
     const row = await (await fetch("/sessions/"+encodeURIComponent(rowEl.dataset.id))).json();
-    CURRENT_Q = row.question;
-    const who = row.user_name || row.user_email;
-    // question stated at the TOP of the answer, with who asked + when + delete
-    sdetail.innerHTML = `<div class="sqhead">
-        <div class="qhrow"><div class="qq">${esc(row.question)}</div>
-          <button type="button" class="sdel" id="sdel" title="Delete session">🗑 Delete</button></div>
-        <div class="qm">${who?`Asked by <b>${esc(row.user_name||"")}</b>${row.user_email?" · "+esc(row.user_email):""} · `:""}${fmtDate(row.created_at)}</div>
-      </div><div id="sdbody"></div>`;
-    render(row, $("#sdbody"));         // saved row matches render()'s expected shape
-    const del = $("#sdel"); if(del) del.addEventListener("click", ()=>deleteSession(row.id, rowEl));
-    sdetail.scrollTop = 0;
+    showSessionDetail(row, rowEl);
   }catch(e){ sdetail.innerHTML = `<div class="empty">Couldn't load that session.</div>`; }
 }
+
+// ---- briefing videos catalogue ----
+const videosEl = $("#videos"), vgrid = $("#vgrid"), vlight = $("#vlight"), vlvideo = $("#vlvideo");
+function openVideos(){ videosEl.hidden = false; document.body.style.overflow = "hidden"; loadVideos(); }
+function closeVideos(){ videosEl.hidden = true; if($("#sessions").hidden) document.body.style.overflow = ""; }
+async function loadVideos(){
+  vgrid.innerHTML = `<div class="vempty">Loading…</div>`;
+  try{
+    const {videos} = await (await fetch("/videos?tenant_id=demo&limit=200")).json();
+    if(!videos || !videos.length){ vgrid.innerHTML = `<div class="vempty">No briefing videos yet — generate one from any grounded answer.</div>`; return; }
+    vgrid.innerHTML = videos.map(v=>{
+      const who = v.user_name || v.user_email;
+      const dur = v.video_duration ? Math.round(v.video_duration)+"s" : "";
+      const title = v.video_title || v.question || "Briefing video";
+      return `<div class="vcard" data-file="${esc(v.video_filename)}" data-title="${esc(title)}" data-sid="${esc(v.id)}">
+        <div class="vposter">
+          <video muted preload="metadata" src="/video/file/${encodeURIComponent(v.video_filename)}#t=1"></video>
+          <div class="vplay">▶</div>${dur?`<div class="vdur">${dur}</div>`:""}
+        </div>
+        <div class="vcinfo"><div class="vctitle">${esc(title)}</div>
+          <div class="vcmeta">${who?`<span class="vcwho">${esc(who)}</span>`:""}<span>${new Date(v.created_at).toLocaleDateString()}</span></div>
+        </div></div>`;
+    }).join("");
+    vgrid.querySelectorAll(".vcard").forEach(c=>c.addEventListener("click",()=>openLight(c.dataset.file, c.dataset.title, c.dataset.sid)));
+  }catch(e){ vgrid.innerHTML = `<div class="vempty">Couldn't load videos.</div>`; }
+}
+function openLight(file, title, sid){
+  $("#vltitle").textContent = title || "Briefing video";
+  vlvideo.src = "/video/file/"+encodeURIComponent(file);
+  $("#vlopen").onclick = ()=>openSessionById(sid);
+  vlight.hidden = false; vlvideo.play().catch(()=>{});
+}
+function closeLight(){ vlvideo.pause(); vlvideo.removeAttribute("src"); vlvideo.load(); vlight.hidden = true; }
+async function openSessionById(id){
+  closeLight(); closeVideos();
+  sessionsEl.hidden = false; document.body.style.overflow = "hidden";
+  $("#ssearch").value = ""; slist.innerHTML = `<div class="sempty">Loading…</div>`;
+  await loadSessionList();
+  try{
+    const row = await (await fetch("/sessions/"+encodeURIComponent(id))).json();
+    showSessionDetail(row, [...slist.querySelectorAll(".srow")].find(b=>b.dataset.id===id) || null);
+  }catch(e){}
+}
+$("#vidbtn").addEventListener("click", openVideos);
+$("#vback").addEventListener("click", closeVideos);
+$("#vlclose").addEventListener("click", closeLight);
+$("#vlight").addEventListener("click", e=>{ if(e.target === vlight) closeLight(); });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ if(!vlight.hidden) closeLight(); else if(!videosEl.hidden) closeVideos(); } });
 async function deleteSession(id, rowEl){
   if(!confirm("Delete this session? It will be removed from your history.")) return;
   try{

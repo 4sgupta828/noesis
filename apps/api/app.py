@@ -300,6 +300,17 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"session store error: {e}") from e
 
+    @app.get("/videos")
+    async def list_videos(tenant_id: str = "demo", limit: int = 200) -> dict:
+        """All briefing videos across sessions (for the video catalogue)."""
+        store = _store()
+        if store is None:
+            return {"videos": []}
+        try:
+            return {"videos": await store.list_videos(tenant_id=tenant_id, limit=min(limit, 300))}
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"session store error: {e}") from e
+
     @app.get("/sessions/{session_id}")
     async def get_session(session_id: str) -> dict:
         """Full saved Q&A (answer, claims, and any linked video)."""

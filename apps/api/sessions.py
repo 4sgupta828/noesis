@@ -149,6 +149,26 @@ class SessionStore:
             "created_at": r["created_at"].isoformat(),
         } for r in rows]
 
+    async def list_videos(self, *, tenant_id: str, limit: int = 200) -> list[dict[str, Any]]:
+        """All sessions that have a briefing video (for the video catalogue)."""
+        await self._ensure()
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT id, question, video_filename, video_title, video_duration,
+                          user_name, user_email, created_at
+                   FROM noesis_research_session
+                   WHERE vertical=$1 AND tenant_id=$2 AND NOT deleted AND video_filename IS NOT NULL
+                   ORDER BY created_at DESC LIMIT $3""",
+                self._vertical, tenant_id, limit)
+        return [{
+            "id": r["id"], "question": r["question"],
+            "video_filename": r["video_filename"], "video_title": r["video_title"],
+            "video_duration": r["video_duration"],
+            "user_name": r["user_name"], "user_email": r["user_email"],
+            "created_at": r["created_at"].isoformat(),
+        } for r in rows]
+
     async def get(self, session_id: str) -> dict[str, Any] | None:
         await self._ensure()
         pool = await self._get_pool()

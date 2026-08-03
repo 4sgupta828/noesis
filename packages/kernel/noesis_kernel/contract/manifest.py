@@ -78,6 +78,10 @@ class VerticalManifest:
     # authoritative gov/db sources). When set, web search is restricted to these — the corpus is
     # augmented only with high-quality sources, never the open web. Empty → open web.
     web_domains: tuple[str, ...] = ()
+    # Optional extraction LENSES (domain vocabulary) for the claims-first pipeline: the aspects the
+    # extractor should cover per atom (e.g. interventions, outcomes, safety). Passed as a checklist
+    # in ONE extraction call (not fanned out). Empty → generic "extract every fact". Kernel-neutral.
+    extraction_lenses: tuple[str, ...] = ()
 
     # Held-out eval gold + vocab
     eval_gold: dict[str, object] = field(default_factory=dict)

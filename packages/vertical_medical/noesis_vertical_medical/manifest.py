@@ -51,5 +51,13 @@ def build_manifest() -> VerticalManifest:
         gap_prompt=MEDICAL_GAP_PROMPT,
         suggest_prompt=MEDICAL_SUGGEST_PROMPT,
         web_domains=TRUSTED_WEB_DOMAINS,
+        extraction_lenses=(
+            "interventions/treatments/drugs studied",
+            "outcomes, findings and effect sizes",
+            "comparisons (vs placebo / standard of care / another drug)",
+            "population / eligibility / subgroup",
+            "safety, adverse effects and contraindications",
+            "mechanism or trial design",
+        ),
         eval_gold=dict(GOLD),
     )

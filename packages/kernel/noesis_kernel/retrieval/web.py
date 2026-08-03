@@ -15,6 +15,30 @@ from noesis_kernel.ingestion.storage import content_key
 from noesis_kernel.providers.websearch import WebSearchClient
 
 
+def _chunk_text(text: str, *, max_chars: int = 900) -> list[str]:
+    """Split a (possibly break-less HTML→text) body into length-bounded chunks, preferring a
+    sentence/newline boundary near the budget so a verbatim span stays intact within one chunk."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    if len(text) <= max_chars:
+        return [text]
+    chunks: list[str] = []
+    i = 0
+    while i < len(text):
+        end = min(i + max_chars, len(text))
+        if end < len(text):
+            window = text[i:end]
+            cut = max(window.rfind(". "), window.rfind("\n"), window.rfind("; "))
+            if cut > max_chars * 0.5:            # only honor a boundary past the halfway point
+                end = i + cut + 1
+        piece = text[i:end].strip()
+        if piece:
+            chunks.append(piece)
+        i = end
+    return chunks
+
+
 class WebRetrievalSource:
     def __init__(self, client: WebSearchClient, *, key: str = "web", max_results: int = 8):
         self.key = key
@@ -37,20 +61,29 @@ class WebRetrievalSource:
 
     async def search(self, req: RetrievalRequest) -> list[BlockHit]:
         results = await self._client.search(req.query, max_results=self._max)
+        # Chunk each fetched page body into length-bounded blocks so a verbatim span is findable
+        # (a 4000-char blob is nearly unquotable). HTML→text often lacks paragraph breaks, so we
+        # split on a char budget with sentence-boundary preference — not the corpus paragraph
+        # splitter. Interleave chunks breadth-first so EVERY result contributes a quotable block
+        # before we go deeper into any one page.
+        per_result = [(r, _chunk_text(r.body or r.snippet or "")) for r in results]
         hits: list[BlockHit] = []
-        n = len(results)
-        for i, r in enumerate(results):
-            body = r.body or r.snippet or ""
-            bid = content_key(f"{r.url}|{body}".encode())
-            self._cache[(r.url, bid)] = body
-            hits.append(BlockHit(
-                document_id=r.url, block_id=bid, text=body,
-                score=float(n - i),                       # provider order → descending score
-                # block_span locator: web grounding is "quote exists in the fetched
-                # body", the same check as a doc span — one uniform provenance gate.
-                # The url rides in ref for citation rendering.
-                facets={}, locator=Locator("block_span", r.url, {"block_id": bid, "url": r.url}),
-                document_title=r.title, content_type="text/html", source_key=self.key,
-                legs=("web",),
-            ))
+        ci = 0
+        while len(hits) < req.k and any(ci < len(ch) for _, ch in per_result):
+            for ri, (r, chunks) in enumerate(per_result):
+                if ci >= len(chunks) or len(hits) >= req.k:
+                    continue
+                text = chunks[ci]
+                bid = content_key(f"{r.url}|{ci}|{text}".encode())
+                self._cache[(r.url, bid)] = text
+                hits.append(BlockHit(
+                    document_id=r.url, block_id=bid, text=text,
+                    score=float(1000 - ri * 10 - ci),      # result rank primary, chunk index secondary
+                    # block_span locator: web grounding is "quote exists in the fetched chunk", the
+                    # same check as a doc span — one uniform provenance gate. url rides in ref.
+                    facets={}, locator=Locator("block_span", r.url, {"block_id": bid, "url": r.url}),
+                    document_title=r.title, content_type="text/html", source_key=self.key,
+                    legs=("web",),
+                ))
+            ci += 1
         return hits[: req.k]

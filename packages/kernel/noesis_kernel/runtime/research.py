@@ -35,6 +35,8 @@ class ResearchService:
     connectors: dict[str, Connector] = field(default_factory=dict)  # for /ingest
     corpus_source_key: str = ""             # the pg-backed corpus key (if any)
     aux_source_keys: tuple[str, ...] = ("web",)   # queried once/step (no variant fan-out) — e.g. web
+    claims_first: bool = False              # run the comprehensive extraction pipeline (flag)
+    extraction_lenses: tuple[str, ...] = () # vertical lenses for claims-first extraction
 
     def _retriever(self, source_keys: list[str] | None) -> MultiSourceRetriever:
         chosen = {k: v for k, v in self.sources.items()
@@ -111,6 +113,7 @@ class ResearchService:
             system_prompt=self.persona_prompt, answer_format=self.answer_format,
             attachment_context=attachment_context, history_context=history_context,
             planner_llm=self.planner_llm, on_event=on_event,
+            claims_first=self.claims_first, extraction_lenses=self.extraction_lenses,
             max_steps=max_steps,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)

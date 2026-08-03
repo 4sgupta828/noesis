@@ -136,6 +136,8 @@ async def run_react(
     planner_llm: LLMClient | None = None,     # fast model for search-planning steps (compose uses `llm`)
     on_event=None,                            # optional async callback(dict) for live progress (SSE)
     aux_source: RetrievalSource | None = None,  # e.g. web: queried ONCE per step (no variant fan-out)
+    claims_first: bool = False,               # run comprehensive extraction over ALL atoms (flag)
+    extraction_lenses: tuple[str, ...] = (),  # vertical-supplied lenses for the extractor
     max_steps: int = 8,
     k: int = 10,
     planner_atom_window: int = 60,            # atoms SHOWN to the planner per step (store keeps all)
@@ -384,6 +386,46 @@ async def run_react(
                 await emit({"type": "verified", "verified": len(result.verified_claims),
                             "rejected": len(result.rejected_claims)})
         except Exception:   # noqa: BLE001 — fallback is best-effort; never break the answer
+            pass
+
+    # CLAIMS-FIRST comprehensive extraction (flag): the terse loop cites only a few atoms, so most
+    # retrieved evidence goes unused (e.g. 2 grounded from 18). Mine EVERY atom with a cheap batched
+    # model, then ADD any claim that passes BOTH the unchanged verbatim span gate AND an independent
+    # entailment gate. Only adds provenance-clean claims (never fabricates, never weakens the gate);
+    # runs OFF the expensive loop model. Dedups against what the loop already grounded.
+    if claims_first and atoms.all() and not budget.exhausted:
+        await emit({"type": "extracting"})
+        try:
+            from noesis_kernel.research.claims_first import entail_claims, extract_claims
+            from noesis_kernel.research.provenance import normalize
+            cands = await extract_claims(
+                question=question, atoms=[(a.atom_id, a.text) for a in atoms.all()],
+                lenses=list(extraction_lenses))
+            span_ok = []                                   # candidates whose quote verbatim-verifies
+            for c in cands:
+                atom = atoms.get(c["atom_id"])
+                if atom is not None and atom.locator is not None \
+                        and verifier.verify(c["quote"], atom.locator):
+                    span_ok.append((c, atom))
+            verdicts = await entail_claims(claims=[c for c, _ in span_ok]) if span_ok else []
+            seen = {(vc.atom_id, normalize(vc.quote)) for vc in result.verified_claims}
+            added = 0
+            for (c, atom), ok in zip(span_ok, verdicts):
+                if not ok:                                 # entailment gate (support, not just quote)
+                    continue
+                key = (c["atom_id"], normalize(c["quote"]))
+                if key in seen:                            # dedup vs existing + each other
+                    continue
+                seen.add(key)
+                result.verified_claims.append(VerifiedClaim(
+                    c["text"], c["atom_id"], c["quote"], atom.source_key,
+                    atom.document_title, atom.document_id))
+                added += 1
+                if len(result.verified_claims) >= 30:      # cap compose input (cost/latency)
+                    break
+            await emit({"type": "extracted", "added": added, "candidates": len(cands),
+                        "total": len(result.verified_claims)})
+        except Exception:   # noqa: BLE001 — extraction is best-effort; never break the answer
             pass
 
     # Compose a synthesized answer FROM the verified findings only (factra "living

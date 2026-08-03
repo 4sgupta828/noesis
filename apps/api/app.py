@@ -180,8 +180,10 @@ def build_default_service() -> ResearchService:
     # so planner_llm is left unset and run_react uses `llm` throughout. Optional explicit override.
     planner_model = os.environ.get("NOESIS_PLANNER_MODEL", "")   # empty → same strong model as compose
     planner_llm = build_llm(mode=mode, model=planner_model) if planner_model else None
+    claims_first = os.environ.get("NOESIS_CLAIMS_FIRST", "").lower() in ("1", "true", "yes")
     return ResearchService(
         llm=build_llm(mode=mode), embedder=embedder, planner_llm=planner_llm,
+        claims_first=claims_first, extraction_lenses=getattr(manifest, "extraction_lenses", ()),
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
         answer_format=answer_format, vision_prompt=vision_prompt,
         layman_prompt=manifest.layman_prompt, gap_prompt=gap_prompt,

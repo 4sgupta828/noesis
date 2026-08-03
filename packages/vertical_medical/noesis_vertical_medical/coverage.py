@@ -18,7 +18,8 @@ SOURCE_INVENTORY = [
     {"key": "licensed", "label": "Cochrane · NICE · NCCN · NEJM · JAMA", "kind": "reviews / guidelines / journals", "tier": "licensed", "status": "planned", "note": "needs contracts / API access"},
 ]
 
-# Conditions already ingested (deep = ~300 trials + 150 papers; ref/medium/shallow as noted).
+# Conditions already ingested (deep = ~300 trials + ~150 papers; type 2 diabetes = reference depth).
+# As of 2026-08-03 every roadmap condition is DEEP — depth labels reflect landed corpus blocks.
 COVERED_CONDITIONS = [
     {"group": "Oncology", "name": "lung cancer", "depth": "deep"},
     {"group": "Oncology", "name": "prostate cancer", "depth": "deep"},
@@ -26,23 +27,23 @@ COVERED_CONDITIONS = [
     {"group": "Oncology", "name": "leukemia", "depth": "deep"},
     {"group": "Oncology", "name": "lymphoma", "depth": "deep"},
     {"group": "Oncology", "name": "melanoma", "depth": "deep"},
-    {"group": "Oncology", "name": "breast cancer", "depth": "medium"},
+    {"group": "Oncology", "name": "breast cancer", "depth": "deep"},
     {"group": "Cardiovascular", "name": "coronary artery disease", "depth": "deep"},
     {"group": "Cardiovascular", "name": "atrial fibrillation", "depth": "deep"},
     {"group": "Cardiovascular", "name": "stroke", "depth": "deep"},
-    {"group": "Cardiovascular", "name": "hypertension", "depth": "shallow"},
-    {"group": "Cardiovascular", "name": "heart failure", "depth": "shallow"},
+    {"group": "Cardiovascular", "name": "hypertension", "depth": "deep"},
+    {"group": "Cardiovascular", "name": "heart failure", "depth": "deep"},
     {"group": "Infectious", "name": "HIV", "depth": "deep"},
     {"group": "Infectious", "name": "hepatitis C", "depth": "deep"},
     {"group": "Respiratory / Immuno", "name": "asthma", "depth": "deep"},
     {"group": "Respiratory / Immuno", "name": "rheumatoid arthritis", "depth": "deep"},
-    {"group": "Respiratory / Immuno", "name": "COPD", "depth": "medium"},
+    {"group": "Respiratory / Immuno", "name": "COPD", "depth": "deep"},
     {"group": "Neuro / Psych", "name": "Alzheimer disease", "depth": "deep"},
     {"group": "Neuro / Psych", "name": "depression", "depth": "deep"},
     {"group": "Neuro / Psych", "name": "Parkinson disease", "depth": "deep"},
     {"group": "Metabolic / Renal", "name": "type 2 diabetes", "depth": "reference"},
-    {"group": "Metabolic / Renal", "name": "obesity", "depth": "medium"},
-    {"group": "Metabolic / Renal", "name": "chronic kidney disease", "depth": "shallow"},
+    {"group": "Metabolic / Renal", "name": "obesity", "depth": "deep"},
+    {"group": "Metabolic / Renal", "name": "chronic kidney disease", "depth": "deep"},
     # Tier-2 (2026-08-02): ~300 trials + 150 papers each
     {"group": "Oncology", "name": "pancreatic cancer", "depth": "deep"},
     {"group": "Oncology", "name": "ovarian cancer", "depth": "deep"},
@@ -75,30 +76,34 @@ COVERED_CONDITIONS = [
     {"group": "Metabolic / GI", "name": "osteoporosis", "depth": "deep"},
     {"group": "Metabolic / GI", "name": "anemia", "depth": "deep"},
     {"group": "Other", "name": "chronic pain", "depth": "deep"},
+    # Tier-3 (2026-08-03): ~300 trials + ~150 papers each, prod-direct ingest (all verified deep by
+    # landed blocks). Seven of these were previously bulk-ingested; eleven added in this pass.
+    {"group": "Oncology", "name": "cervical cancer", "depth": "deep"},
+    {"group": "Oncology", "name": "esophageal cancer", "depth": "deep"},
+    {"group": "Oncology", "name": "gastric cancer", "depth": "deep"},
+    {"group": "Oncology", "name": "sarcoma", "depth": "deep"},
+    {"group": "Cardiovascular", "name": "pulmonary hypertension", "depth": "deep"},
+    {"group": "Cardiovascular", "name": "valvular heart disease", "depth": "deep"},
+    {"group": "Infectious", "name": "malaria", "depth": "deep"},
+    {"group": "Infectious", "name": "HPV", "depth": "deep"},
+    {"group": "Neuro / Psych", "name": "Huntington disease", "depth": "deep"},
+    {"group": "Neuro / Psych", "name": "PTSD", "depth": "deep"},
+    {"group": "Neuro / Psych", "name": "ADHD", "depth": "deep"},
+    {"group": "Immuno / Rheum", "name": "Sjögren syndrome", "depth": "deep"},
+    {"group": "Immuno / Rheum", "name": "vasculitis", "depth": "deep"},
+    {"group": "Metabolic / GI", "name": "celiac disease", "depth": "deep"},
+    {"group": "Metabolic / GI", "name": "gout", "depth": "deep"},
+    {"group": "Respiratory", "name": "pulmonary fibrosis", "depth": "deep"},
+    {"group": "Respiratory", "name": "cystic fibrosis", "depth": "deep"},
+    {"group": "Renal", "name": "polycystic kidney disease", "depth": "deep"},
 ]
 
-# Tier-3 / long tail + depth work still to do.
+# Remaining work. Every roadmap CONDITION is now covered deep; what's left is cross-cutting DEPTH
+# on the non-trial sources (not a condition gap) — the lever for effect sizes / eligibility /
+# guideline-grade synthesis (see the clinical-synthesis answer work).
 REMAINING_CONDITIONS = [
-    {"group": "Oncology", "name": "cervical cancer"},
-    {"group": "Oncology", "name": "esophageal cancer"},
-    {"group": "Oncology", "name": "gastric cancer"},
-    {"group": "Oncology", "name": "sarcoma"},
-    {"group": "Cardiovascular", "name": "pulmonary hypertension"},
-    {"group": "Cardiovascular", "name": "valvular heart disease"},
-    {"group": "Infectious", "name": "malaria"},
-    {"group": "Infectious", "name": "HPV"},
-    {"group": "Neuro / Psych", "name": "Huntington disease"},
-    {"group": "Neuro / Psych", "name": "PTSD"},
-    {"group": "Neuro / Psych", "name": "ADHD"},
-    {"group": "Immuno / Rheum", "name": "Sjögren syndrome"},
-    {"group": "Immuno / Rheum", "name": "vasculitis"},
-    {"group": "Metabolic / GI", "name": "celiac disease"},
-    {"group": "Metabolic / GI", "name": "gout"},
-    {"group": "Respiratory", "name": "pulmonary fibrosis"},
-    {"group": "Respiratory", "name": "cystic fibrosis"},
-    {"group": "Renal", "name": "polycystic kidney disease"},
-    {"group": "Depth work", "name": "deepen hypertension / heart failure / CKD to ≥300 trials"},
-    {"group": "Depth work", "name": "DailyMed bulk labels + FAERS breadth + Europe PMC full-text"},
+    {"group": "Depth work", "name": "DailyMed bulk labels + FAERS breadth across more drugs"},
+    {"group": "Depth work", "name": "Europe PMC full-text (currently abstracts) + licensed guideline sources"},
 ]
 
 

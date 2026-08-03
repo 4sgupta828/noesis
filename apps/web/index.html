@@ -383,11 +383,18 @@
     .sessions .shead{padding:.75rem .9rem;}
     .sessions .ssearch{margin-left:0;order:3;width:100%;min-width:0;}
     .sessions .sbody{flex-direction:column;}
-    .sessions .slist{width:auto !important;max-width:none;min-width:0;max-height:38vh;
-      border-right:none;border-bottom:1px solid var(--hair);}
     .sessions .sdrag{display:none;}
+    /* Mobile = one simple screen at a time: the full list, then drill into one answer. */
+    .sessions .slist{width:auto !important;max-width:none;min-width:0;max-height:none;flex:1;
+      border-right:none;}
     .sessions .sdetail{padding:1.1rem 1rem;}
     .sessions .sqhead .qq{font-size:1.12rem;}
+    /* list view (default): show the list, hide the answer */
+    .sessions:not([data-view="detail"]) .sdetail{display:none;}
+    /* detail view: show the answer full-screen; hide list, search + title so the screen stays clean */
+    .sessions[data-view="detail"] .slist{display:none;}
+    .sessions[data-view="detail"] .ssearch,
+    .sessions[data-view="detail"] .stitle{display:none;}
   }
 
   .answer.md .tw{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:.75rem 0 1.05rem;}
@@ -1334,11 +1341,19 @@ $("#newbtn").addEventListener("click", newConversation);   // masthead: start a 
 // ---- Past Sessions: full-page master/detail ----
 const sessionsEl = $("#sessions"), slist = $("#slist"), sdetail = $("#sdetail");
 
+const isMobileSess = () => window.matchMedia("(max-width:640px)").matches;
+function setSback(label){ const b = $("#sback"); if(b) b.textContent = label; }
 function openSessions(){
   sessionsEl.hidden = false;
+  sessionsEl.dataset.view = "list";     // mobile lands on the list; a tap drills into one answer
+  setSback("← Back");
   document.body.style.overflow = "hidden";
   sdetail.innerHTML = `<div class="splaceholder">Select a question to view its answer.</div>`;
   loadSessionList();
+}
+function backToSessionList(){           // mobile: answer → list (not all the way out of the panel)
+  sessionsEl.dataset.view = "list";
+  setSback("← Back");
 }
 function closeSessions(){
   sessionsEl.hidden = true;
@@ -1364,8 +1379,8 @@ async function loadSessionList(){
         </div></button>`;
     }).join("");
     slist.querySelectorAll(".srow").forEach(b=>b.addEventListener("click",()=>selectSession(b)));
-    const first = slist.querySelector(".srow");    // show the most recent by default
-    if(first) selectSession(first);
+    const first = slist.querySelector(".srow");    // desktop split shows the most recent by default;
+    if(first && !isMobileSess()) selectSession(first);   // mobile stays on the list until a tap
   }catch(e){ slist.innerHTML = `<div class="sempty">Couldn't load sessions.</div>`; }
 }
 function showSessionDetail(row, rowEl){
@@ -1381,6 +1396,7 @@ function showSessionDetail(row, rowEl){
   render(row, $("#sdbody"));         // saved row matches render()'s expected shape
   const del = $("#sdel"); if(del) del.addEventListener("click", ()=>deleteSession(row.id, rowEl));
   sdetail.scrollTop = 0;
+  if(isMobileSess()){ sessionsEl.dataset.view = "detail"; setSback("← Sessions"); }  // drill into the answer
 }
 async function selectSession(rowEl){
   sdetail.innerHTML = `<div class="status">Loading…</div>`;
@@ -1445,7 +1461,8 @@ async function deleteSession(id, rowEl){
     if(!r.ok) throw new Error();
     if(rowEl) rowEl.remove();
     const next = slist.querySelector(".srow");
-    if(next) selectSession(next);
+    if(isMobileSess()){ backToSessionList(); }        // mobile: return to the list after deleting
+    else if(next) selectSession(next);                // desktop split: show the next one
     else sdetail.innerHTML = `<div class="splaceholder">No sessions.</div>`;
   }catch(e){ alert("Couldn't delete that session."); }
 }
@@ -1466,7 +1483,10 @@ $("#ssearch").addEventListener("input", ()=>{ clearTimeout(searchT); searchT = s
   window.addEventListener("mouseup", ()=>{ if(dragging){ dragging=false; drag.classList.remove("drag"); document.body.style.userSelect=""; } });
 })();
 $("#histbtn").addEventListener("click", openSessions);
-$("#sback").addEventListener("click", closeSessions);
+$("#sback").addEventListener("click", ()=>{
+  if(isMobileSess() && sessionsEl.dataset.view === "detail"){ backToSessionList(); }  // answer → list
+  else { closeSessions(); }                                                          // list → out
+});
 document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !sessionsEl.hidden) closeSessions(); });
 
 // ---- identity gate (name + email captured at landing, stored per session) ----

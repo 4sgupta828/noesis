@@ -17,8 +17,11 @@ from __future__ import annotations
 
 import os
 
+# Extraction is bulk + span-gate-protected → cheap gpt-4o-mini. The ENTAILMENT judge is the
+# correctness safety gate (Rule 6: catches a real quote stapled to an unsupported claim), so it runs
+# on the STRONGER gpt-4o — it's one batched call, so the cost bump is small. Both env-overridable.
 EXTRACT_MODEL = os.environ.get("NOESIS_EXTRACT_MODEL", "gpt-4o-mini")
-ENTAIL_MODEL = os.environ.get("NOESIS_ENTAIL_MODEL", "gpt-4o-mini")
+ENTAIL_MODEL = os.environ.get("NOESIS_ENTAIL_MODEL", "gpt-4o")
 _ATOMS_PER_CALL = 10          # batch size for extraction (recall vs cost)
 _ENTAIL_CHUNK = 12            # batch size for the entailment judge (factra: avoid one oversized call)
 _ATOM_CAP = 1600              # chars per atom shown to the extractor (chunked web keeps this small)

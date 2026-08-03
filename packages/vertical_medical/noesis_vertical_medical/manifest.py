@@ -1,6 +1,8 @@
 """Assemble the medical VerticalManifest."""
 from __future__ import annotations
 
+import os
+
 from noesis_kernel.contract.manifest import VerticalManifest
 
 from . import entities
@@ -34,7 +36,8 @@ def build_manifest() -> VerticalManifest:
         connectors={
             "clinicaltrials": ClinicalTrialsConnector(studies=sample_studies()),
             "openfda": OpenFdaConnector(),
-            "europepmc": EuropePmcConnector(),
+            "europepmc": EuropePmcConnector(
+                full_text=os.environ.get("NOESIS_EPMC_FULLTEXT", "").lower() in ("1", "true", "yes")),
             "faers": FaersConnector(),
             "dailymed": DailyMedConnector(),
             "cdc": CdcConnector(),

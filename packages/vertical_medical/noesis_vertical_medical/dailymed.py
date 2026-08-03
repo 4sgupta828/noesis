@@ -24,9 +24,12 @@ class DailyMedConnector:
         # spls: list of {setid,title, [text]} — fixtures may carry text
         self._by_id={s["setid"]: s for s in (spls or [])}
 
-    async def _list(self, limit):
-        import httpx
-        url=f"{V2}/spls.json?pagesize={min(limit,self._page_size)}"
+    async def _list(self, limit, query=""):
+        # drug_name filters the SPL list (v2 supports it); without it the endpoint returns only the
+        # first page, so bulk ingest MUST pass a query or every job returns the same labels.
+        import httpx, urllib.parse
+        q=f"drug_name={urllib.parse.quote(query)}&" if (query or "").strip() else ""
+        url=f"{V2}/spls.json?{q}pagesize={min(limit,self._page_size)}"
         async with httpx.AsyncClient(timeout=30.0) as c:
             r=await c.get(url); r.raise_for_status()
             return r.json().get("data",[])
@@ -39,7 +42,8 @@ class DailyMedConnector:
         if not (window or {}).get("query") and self._by_id:
             items=list(self._by_id.values())
         else:
-            items=await self._list(int((window or {}).get("limit",self._page_size)))
+            items=await self._list(int((window or {}).get("limit",self._page_size)),
+                                    (window or {}).get("query",""))
             for s in items: self._by_id.setdefault(s["setid"], s)
         return [EntityRef(source_key=self.key, native_id=s["setid"], title=s.get("title",""),
                           facets=self._facets(s)) for s in items]

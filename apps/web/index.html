@@ -278,6 +278,13 @@
     border-radius:8px;background:var(--gold);color:#1A1206;font-family:var(--mono);font-size:.68rem;font-weight:700;margin-top:.1rem;}
   .turn-qtext{font-family:var(--serif,Georgia,serif);font-size:1.18rem;line-height:1.4;color:var(--ink);font-weight:500;letter-spacing:-.01em;}
   .turnstatus{margin-top:1.2rem;}
+  /* ChatGPT-style conversation: once a thread is active, the composer docks to the BOTTOM and the
+     thread (each turn is question-first) scrolls above it. Empty/landing state is unchanged. */
+  body.chatting #heading{display:none;}
+  body.chatting #ask{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;
+    max-width:44rem;margin:0;z-index:40;background:var(--bg);border-top:1px solid var(--hair);
+    padding:.7rem 1.15rem calc(.7rem + env(safe-area-inset-bottom,0px));}
+  body.chatting #out{padding-bottom:9rem;}   /* JS keeps this in sync with the composer's real height */
   /* suggested follow-ups */
   .suggest{margin:.6rem 0 .4rem;padding:1rem 1.15rem;border:1px solid var(--hair);border-radius:14px;background:var(--panel2);}
   .suggest-h{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:.7rem;}
@@ -1286,12 +1293,14 @@ function appendGapFallback(question){
 function threadHistoryPayload(){ return THREAD.turns.map(t=>({question:t.question, answer:t.answer||""})); }
 function newConversation(){
   THREAD = {session_id:null, turns:[]};
+  document.body.classList.remove("chatting"); out.style.paddingBottom = "";   // back to landing layout
   out.innerHTML = "";
   try{ history.replaceState(null, "", location.pathname + location.search); }catch(e){}
   q.value=""; q.style.height="auto"; q.setAttribute("placeholder", pickPlaceholder());  // fresh question each New chat
   window.scrollTo({top:0}); q.focus();
 }
 function renderThread(){
+  document.body.classList.toggle("chatting", THREAD.turns.length > 0);   // dock composer to bottom
   out.innerHTML = "";
   if(THREAD.session_id){                          // one shareable link + reset, per thread
     const bar = document.createElement("div"); bar.className = "threadbar";
@@ -1313,6 +1322,7 @@ function renderThread(){
     render(t, ans, {noLink:true});
   });
   const last = out.querySelector(".turn:last-child"); if(last) last.scrollIntoView({behavior:"smooth", block:"start"});
+  syncComposerPad();
 }
 async function loadSuggestions(){
   if(!SUGGEST_ENABLED || !THREAD.turns.length) return;
@@ -1333,8 +1343,13 @@ async function loadSuggestions(){
 }
 
 // ChatGPT-style auto-grow: the intake box grows with content up to a generous max, then scrolls.
-function autoGrow(){ q.style.height = "auto"; q.style.height = Math.min(q.scrollHeight, 320) + "px"; }
+function autoGrow(){ q.style.height = "auto"; q.style.height = Math.min(q.scrollHeight, 320) + "px"; syncComposerPad(); }
+function syncComposerPad(){   // keep the thread clear of the fixed bottom composer (its height varies)
+  if(!document.body.classList.contains("chatting")) return;
+  const a = $("#ask"); if(a) out.style.paddingBottom = (a.offsetHeight + 28) + "px";
+}
 q.addEventListener("input", autoGrow);
+window.addEventListener("resize", syncComposerPad);
 window.addEventListener("load", autoGrow);
 $("#newbtn").addEventListener("click", newConversation);   // masthead: start a fresh chat
 

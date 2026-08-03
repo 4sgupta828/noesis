@@ -33,6 +33,14 @@ def structured_answers() -> bool:
     return os.environ.get("NOESIS_STRUCTURED_ANSWERS", "").lower() in ("1", "true", "yes")
 
 
+def clinical_synthesis() -> bool:
+    """Flag (default OFF, Rule 20): when ON (and structured answers are ON), the medical vertical's
+    SHARPER clinical-synthesis directive shapes the answer — scope-up-front, registry=protocol-not-
+    efficacy, surrogate≠clinical endpoints, preserve specific figures, no citation stacking, no vague
+    hype. Same adaptive section set — provenance unchanged. OFF → the base answer_format, byte-identical."""
+    return os.environ.get("NOESIS_CLINICAL_SYNTHESIS", "").lower() in ("1", "true", "yes")
+
+
 def vision_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, uploaded image/PDF/DICOM attachments are
     described by the vision pre-step and used as CONTEXT for the grounded research. The
@@ -170,8 +178,15 @@ def build_default_service() -> ResearchService:
     persona = manifest.persona.system_prompt() if manifest.persona else \
         "You are an evidence-grounded research agent."
     # Flag-gated (Rule 20): only pass the vertical's answer-structure directive when ON.
-    # OFF → None → the kernel's flat-prose compose path, byte-identical to pre-flag.
-    answer_format = manifest.answer_format if structured_answers() else None
+    # OFF → None → the kernel's flat-prose compose path, byte-identical to pre-flag. When the
+    # separate clinical-synthesis flag is ALSO on, swap in the sharper directive (A/B seam);
+    # falls back to the base format if the vertical doesn't supply one.
+    if structured_answers():
+        answer_format = manifest.answer_format
+        if clinical_synthesis():
+            answer_format = getattr(manifest, "clinical_answer_format", None) or manifest.answer_format
+    else:
+        answer_format = None
     vision_prompt = manifest.vision_prompt if vision_enabled() else None
     gap_prompt = manifest.gap_prompt if gap_healing_enabled() else None
     suggest_prompt = manifest.suggest_prompt if conversation_enabled() else None
@@ -307,6 +322,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "console": console,
             "video_enabled": video_enabled(),
             "structured_answers": structured_answers(),
+            "clinical_synthesis": clinical_synthesis() and structured_answers(),
             "vision_enabled": vision_enabled(),
             "layman_enabled": bool(getattr(svc, "layman_prompt", None)),
             "gap_healing_enabled": gap_healing_enabled() and bool(getattr(svc, "gap_prompt", None)),

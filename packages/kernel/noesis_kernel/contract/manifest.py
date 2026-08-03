@@ -56,6 +56,12 @@ class VerticalManifest:
     # prose — the kernel only threads it into the grounded-compose step; all domain
     # wording lives in the vertical. None → the kernel's default flat-prose answer.
     answer_format: str | None = None
+    # Optional ENHANCED answer_format used only when the clinical-synthesis flag is ON (Rule 20 A/B
+    # seam). A sharper, still-adaptive variant of `answer_format` — same section set, tighter
+    # in-section discipline (scope, evidence-status, surrogate-vs-clinical, no citation stacking).
+    # Opaque prose; the kernel threads it in exactly like `answer_format`. None → fall back to
+    # `answer_format` (so the flag is a no-op for verticals that don't supply this).
+    clinical_answer_format: str | None = None
     # Optional vertical-supplied instruction for the VISION pre-step: how to DESCRIBE a
     # user-uploaded image (color/shape/borders/texture/distribution), producing a labeled
     # visual observation — never a diagnosis. Opaque prose; the kernel only threads it into

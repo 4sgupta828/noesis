@@ -11,9 +11,21 @@ in P3; here the mechanics are proven offline with a scripted FakeLLM.
 """
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Literal
+
+_log = logging.getLogger(__name__)
+
+# Compose is the user-facing DELIVERABLE (the prose answer), not discretionary enrichment — a
+# transient LLM blip on that one call must not silently drop the answer while the verified evidence
+# survives (the 'grounded, N claims, empty answer' bug). Retry a few times, then surface a note.
+_COMPOSE_ATTEMPTS = 3
+_COMPOSE_BACKOFF_S = 1.5          # base backoff between compose retries (tests patch to 0)
+_COMPOSE_FAIL_NOTE = (
+    "_The written answer couldn't be generated just now, but the evidence below was retrieved and "
+    "verified against its sources. Please retry the question._")
 
 from pydantic import BaseModel
 
@@ -105,6 +117,7 @@ class AnswerResult:
     steps: int = 0
     atoms_gathered: int = 0
     retried_empty: bool = False          # the extract recovery re-ask fired (observability)
+    compose_failed: bool = False         # compose exhausted its retries → the answer is the fail note
     stopped_reason: str = "answered"     # "answered" | "budget" | "max_steps"
 
     @property
@@ -433,8 +446,8 @@ async def run_react(
     # findings and must reference them [n]; it may not add outside facts. A vertical
     # may supply an optional `answer_format` directive (domain-owned) that shapes the
     # structure — the kernel stays domain-free and only threads the string through.
-    if result.verified_claims and not budget.exhausted:
-        await emit({"type": "composing", "findings": len(result.verified_claims)})
+    if result.verified_claims:          # compose is the DELIVERABLE — always attempt it when we have
+        await emit({"type": "composing", "findings": len(result.verified_claims)})  # findings (not
         n_findings = len(result.verified_claims)
         findings = "\n".join(
             f"[{i}] {vc.text}  (quote: \"{vc.quote}\" — source: {vc.source_key})"
@@ -466,26 +479,47 @@ async def run_react(
             budget.charge(calls=1, tokens=comp.output_tokens)
             return comp.parsed
 
-        try:
-            budget.reserve()
-            parsed = await _compose(answer_format)
-            text = parsed.answer.strip()
-            # Domain-free provenance check: if a structured directive produced an
-            # answer with a bad/absent [n] reference, fall back once to the plain
-            # (directive-free) compose — the proven-safe path — when budget allows.
-            if answer_format and not _refs_valid(text, n_findings) and not budget.exhausted:
-                budget.reserve()
-                parsed = await _compose(None)
-                text = parsed.answer.strip()
+        # Compose must NOT be silently dropped on a transient LLM blip (the 'grounded, N claims,
+        # empty answer' bug). It is the user-facing deliverable, so: (1) RETRY a few times — cheap
+        # and idempotent, the findings are already in hand; (2) it is NOT gated on the loop budget
+        # (a heavy gather must not starve the one call that writes the answer); (3) if it truly
+        # can't complete, SURFACE a note + log it (Rule 13) rather than returning a blank answer.
+        parsed = None
+        text = ""
+        for _attempt in range(_COMPOSE_ATTEMPTS):
+            try:
+                cand = await _compose(answer_format)
+                text = (cand.answer or "").strip()   # a malformed/empty parse raises or stays "" →
+                parsed = cand                         # counted as this attempt's outcome, inside the try
+                if text:
+                    break                             # got a real answer — done
+                raise ValueError("empty compose answer")   # empty → treat as a failed attempt, retry
+            except Exception as _e:   # noqa: BLE001
+                _log.warning("compose attempt %d/%d failed: %r", _attempt + 1, _COMPOSE_ATTEMPTS, _e)
+                if _attempt + 1 < _COMPOSE_ATTEMPTS:
+                    await asyncio.sleep(_COMPOSE_BACKOFF_S * (_attempt + 1))   # backoff for a transient error
+        if text:
+            # Domain-free provenance check: if a structured directive produced an answer with a
+            # bad/absent [n] reference, retry ONCE directive-free (the proven-safe path). Best-effort:
+            # a failed fallback never overwrites the directive answer we already have.
+            if answer_format and not _refs_valid(text, n_findings):
+                try:
+                    alt = await _compose(None)
+                    if (alt.answer or "").strip():
+                        parsed, text = alt, alt.answer.strip()
+                except Exception as _e:   # noqa: BLE001
+                    _log.warning("compose directive-free fallback failed: %r", _e)
             result.composed_answer = text
             # Honesty signal → coverage gap: a "grounded-on-analogues" answer still flags the gap,
             # so the UI shows the prominent fill-the-gaps affordance (LLM-owned judgment, no regex).
             if parsed.directly_addresses is False and (parsed.gap_note or "").strip():
                 result.coverage_gaps.append(parsed.gap_note.strip())
-        except Exception:
-            # Composition is best-effort enrichment over already-verified findings;
-            # its failure must never drop the grounded answer/findings.
-            pass
+        if not result.composed_answer:
+            # Every compose attempt failed — SURFACE it (never a silent blank); the verified
+            # evidence still stands and is shown, and the user is told to retry.
+            result.compose_failed = True
+            result.composed_answer = _COMPOSE_FAIL_NOTE
+            _log.warning("compose produced NO answer despite %d verified findings", n_findings)
 
     # per-source contribution: retrieved (atoms) vs. cited (verified claims)
     stats: dict[str, dict[str, int]] = {}

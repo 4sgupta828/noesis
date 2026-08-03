@@ -136,6 +136,9 @@ def test_forced_answer_on_last_step() -> None:
     class _AlwaysSearch:
         def __init__(self): self.n = 0
         async def complete(self, *, system, messages, response_format, max_tokens=2048, temperature=None):
+            if "VERIFIED FINDINGS" in messages[0]["content"]:      # compose step honors its contract
+                from noesis_kernel.research.react import ComposedAnswer
+                return LLMResult(parsed=ComposedAnswer(answer="Metric value is 9.8 percent [1]."), output_tokens=5)
             self.n += 1
             # On the forced/last step the prompt says "MUST answer"; emit an answer then.
             if "MUST now" in messages[0]["content"]:
@@ -244,3 +247,59 @@ def test_composed_answer_grounded_in_findings():
     assert res.grounded and len(res.verified_claims) == 1
     assert res.composed_answer == "The approved metric value was 9.8 percent [1]."
     assert "[1]" in res.composed_answer                  # references the finding
+
+
+def _compose_setup():
+    """A source + a fake whose loop grounds ONE claim; compose behavior is injected per-test."""
+    src = _source()
+    def make(compose_fn):
+        class _LLM:
+            def __init__(self): self.compose_calls = 0
+            async def complete(self, *, system, messages, response_format, max_tokens=2048, temperature=None):
+                if "VERIFIED FINDINGS" in messages[0]["content"]:     # compose step
+                    self.compose_calls += 1
+                    return compose_fn(self.compose_calls)
+                if "no evidence yet" in messages[0]["content"]:
+                    return LLMResult(parsed=AgentStep(action="search", query="term metric value"), output_tokens=5)
+                return LLMResult(parsed=AgentStep(action="answer", claims=[
+                    ClaimOut(text="the metric value was 9.8 percent", atom_id="a1",
+                             quote="the approved metric value was 9.8 percent")]), output_tokens=5)
+        return _LLM()
+    return src, make
+
+
+def test_compose_retries_transient_failure(monkeypatch):
+    # REGRESSION (the 'grounded, N claims, empty answer' bug): a transient error on the compose call
+    # must NOT drop the answer — it retries and recovers.
+    import noesis_kernel.research.react as react
+    monkeypatch.setattr(react, "_COMPOSE_BACKOFF_S", 0)     # no real sleeping in the test
+    from noesis_kernel.research.react import ComposedAnswer
+    src, make = _compose_setup()
+    def compose_fn(call_n):
+        if call_n == 1:
+            raise RuntimeError("transient overload")          # first attempt fails…
+        return LLMResult(parsed=ComposedAnswer(answer="Metric value is 9.8 percent [1]."), output_tokens=5)
+    llm = make(compose_fn)
+    res = asyncio.run(run_react(question="what was the metric value?", llm=llm,
+        embedder=FakeEmbedder(dim=8), source=src, tenant_id="A", budget=BudgetState(max_calls=20)))
+    assert res.grounded and len(res.verified_claims) == 1
+    assert res.composed_answer == "Metric value is 9.8 percent [1]."   # recovered on retry
+    assert res.compose_failed is False
+    assert llm.compose_calls == 2                              # exactly one retry
+
+
+def test_compose_failure_surfaces_note(monkeypatch):
+    # If compose can NEVER complete, the failure is SURFACED (a note), not a silent blank — and the
+    # verified evidence still stands (grounded, claims intact).
+    import noesis_kernel.research.react as react
+    monkeypatch.setattr(react, "_COMPOSE_BACKOFF_S", 0)
+    src, make = _compose_setup()
+    def compose_fn(call_n):
+        raise RuntimeError("persistent outage")
+    llm = make(compose_fn)
+    res = asyncio.run(run_react(question="what was the metric value?", llm=llm,
+        embedder=FakeEmbedder(dim=8), source=src, tenant_id="A", budget=BudgetState(max_calls=20)))
+    assert res.grounded and len(res.verified_claims) == 1     # evidence survives the compose failure
+    assert res.compose_failed is True
+    assert res.composed_answer and res.composed_answer == react._COMPOSE_FAIL_NOTE   # not empty
+    assert llm.compose_calls == react._COMPOSE_ATTEMPTS       # exhausted the retries

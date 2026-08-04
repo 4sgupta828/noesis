@@ -704,6 +704,9 @@ function mdInline(s){
   s = s.replace(/\[\[F\]\]([\s\S]*?)\[\[\/F\]\]/g,'<mark class="hl hl-f">$1</mark>')
        .replace(/\[\[R\]\]([\s\S]*?)\[\[\/R\]\]/g,'<mark class="hl hl-r">$1</mark>')
        .replace(/\[\[K\]\]([\s\S]*?)\[\[\/K\]\]/g,'<mark class="hl hl-k">$1</mark>');
+  // Drop any UNMATCHED marker (a model-emitted [[K]] with no [[/K]], or one split across blocks) so
+  // it degrades to plain text instead of leaking a raw "[[K]]" into the answer.
+  s = s.replace(/\[\[\/?[FRK]\]\]/g, "");
   return s;
 }
 // Minimal, self-contained, XSS-safe markdown → HTML. We esc() the whole source FIRST,

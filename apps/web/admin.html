@@ -110,6 +110,15 @@ async function load(){
       `</tbody></table></div>`);
   }
 
+  // by source country (evidence geography — drives country-scoped search)
+  const CLABEL = {US:"United States", IN:"India", global:"Global / shared", "?":"Untagged"};
+  const bc = live.by_country||{};
+  if(Object.keys(bc).length){
+    parts.push(`<h2>By country</h2><div class="tw"><table><thead><tr><th>Country</th><th>Blocks</th></tr></thead><tbody>` +
+      Object.entries(bc).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(CLABEL[k]||k)}</td><td class="num">${fmt(v)}</td></tr>`).join("") +
+      `</tbody></table></div>`);
+  }
+
   // covered conditions (grouped, with depth)
   parts.push(`<h2>Conditions covered</h2>` + groupGrid(plan.covered||[], true));
   // remaining

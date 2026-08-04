@@ -70,8 +70,15 @@ class ResearchService:
         on_event=None,                       # async callback(dict) for live progress (SSE)
         facets: dict | None = None,          # hard retrieval facet filter (e.g. source_country scope)
         max_steps: int = 8,
+        effort: float = 1.0,                 # research-effort multiplier (1.0 = baseline no-op)
     ) -> AnswerResult:
-        budget = BudgetState(max_calls=self.max_calls)
+        # Effort scales STRUCTURAL search knobs only (turns, results, context, citations, budget) —
+        # never the grounding gates. At effort<=1.0 every value round-trips to today's exact defaults,
+        # so this is a byte-identical no-op when the caller passes 1.0 (flag OFF).
+        from noesis_kernel.research.effort import scale_research_effort
+        sc = scale_research_effort(
+            effort, base_max_steps=max_steps, base_atom_cap=self.atom_cap, base_max_calls=self.max_calls)
+        budget = BudgetState(max_calls=sc.max_calls)
         # Attachment context (never corpus evidence, never a verified claim):
         #  - images/scans → a labeled DESCRIPTIVE vision observation (vision pre-step),
         #  - uploaded documents (e.g. a paper PDF) → their extracted TEXT.
@@ -117,11 +124,13 @@ class ResearchService:
             attachment_context=attachment_context, history_context=history_context,
             planner_llm=self.planner_llm, on_event=on_event,
             claims_first=self.claims_first, extraction_lenses=self.extraction_lenses,
-            evidence_select=self.evidence_select, atom_cap=self.atom_cap,
+            evidence_select=self.evidence_select, atom_cap=sc.atom_cap,
             facets=facets or {},
-            max_steps=max_steps,
+            max_steps=sc.max_steps, k=sc.k, planner_atom_window=sc.planner_atom_window,
+            compose_claim_cap=sc.compose_claim_cap, extract_collect=sc.extract_collect,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)
+        res.effort = sc.effort                   # echo the resolved multiplier (observability)
         return res
 
     async def explain(self, *, question: str, answer: str) -> str:

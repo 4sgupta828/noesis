@@ -13,7 +13,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from noesis_kernel.providers.base import resolve_mode
 from noesis_kernel.providers.cassette import CassetteMiss
@@ -69,6 +69,18 @@ def country_scope_enabled() -> bool:
     return os.environ.get("NOESIS_COUNTRY_SCOPE", "").lower() in ("1", "true", "yes")
 
 
+def effort_scale_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, a request's `effort` multiplier (1.0..2.5) scales how
+    hard the research loop works (turns, results considered, context, citations, LLM budget) on a
+    hard question. OFF → `effort` is forced to 1.0 and ignored (byte-identical to today). Effort only
+    scales STRUCTURAL search — the provenance/grounding gates are never touched."""
+    return os.environ.get("NOESIS_EFFORT_SCALE", "").lower() in ("1", "true", "yes")
+
+
+# Effort slider stops echoed to /config when the flag is on (UI renders the control from this).
+EFFORT_STOPS = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
+
+
 # Available source countries, echoed to /config when the flag is on (UI renders the toggle from this).
 AVAILABLE_COUNTRIES = [{"code": "US", "label": "United States"}, {"code": "IN", "label": "India"}]
 
@@ -110,6 +122,7 @@ class ResearchIn(BaseModel):
     history: list[dict] | None = None     # prior turns [{question, answer}] → follow-up context
     session_id: str | None = None         # thread to append this turn to (conversation)
     countries: list[str] | None = None    # source-country scope (e.g. ["IN"]); None/[]=all (see flag)
+    effort: float = Field(default=1.0, ge=1.0, le=2.5)   # effort multiplier; ignored unless flag on
 
 
 class SuggestIn(BaseModel):
@@ -171,6 +184,7 @@ class ResearchOut(BaseModel):
     retried_empty: bool = False      # the abstention-recovery re-ask fired (observability)
     visual_observation: str = ""     # labeled AI image description (context, NOT a finding)
     attachment_notes: list[str] = [] # anything skipped when reading attachments
+    effort: float | None = None      # resolved effort multiplier (only set when the flag is on)
 
 
 def build_default_service() -> ResearchService:
@@ -368,6 +382,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "stream_enabled": stream_enabled(),
             "country_scope_enabled": country_scope_enabled(),
             "countries": AVAILABLE_COUNTRIES if country_scope_enabled() else [],
+            "effort_scale_enabled": effort_scale_enabled(),
+            "effort_stops": EFFORT_STOPS if effort_scale_enabled() else [],
         }
 
     @app.post("/search")
@@ -444,11 +460,15 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 [a.model_dump() for a in body.attachments])
             previews = session_previews(images or [], docs or [])
         history = body.history if conversation_enabled() else None
+        # Effort is HONORED only when the flag is on; otherwise forced to 1.0 (byte-identical no-op).
+        effort = body.effort if effort_scale_enabled() else 1.0
+        if on_event is not None and effort > 1.0:
+            await on_event({"type": "effort", "effort": effort})
         res = await app.state.service.ask(
             question=body.question, tenant_id=body.tenant_id,
             workspace_id=body.workspace_id, source_keys=body.sources,
             images=images, documents=docs, history=history, on_event=on_event,
-            facets=_country_facets(body.countries))
+            facets=_country_facets(body.countries), effort=effort)
         ui = getattr(app.state.service, "ui", None)
         def _url(c):
             fn = getattr(ui, "source_url", None)
@@ -470,6 +490,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     "source_stats": res.source_stats, "coverage_gaps": res.coverage_gaps,
                     "rejected": len(res.rejected_claims),
                     "visual_observation": res.visual_observation, "attachments": previews}
+            if effort_scale_enabled():
+                turn["effort"] = res.effort    # per-turn badge on the session (JSONB, no migration)
             try:
                 if conversation_enabled() and body.session_id and \
                         await store.append_turn(body.session_id, turn):
@@ -492,6 +514,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             stopped_reason=res.stopped_reason, atoms_gathered=res.atoms_gathered,
             retried_empty=res.retried_empty, visual_observation=res.visual_observation,
             attachment_notes=attach_notes,
+            effort=res.effort if effort_scale_enabled() else None,
         )
 
     @app.post("/research/stream")

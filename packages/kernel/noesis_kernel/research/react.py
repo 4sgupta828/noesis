@@ -153,6 +153,7 @@ class AnswerResult:
     retried_empty: bool = False          # the extract recovery re-ask fired (observability)
     compose_failed: bool = False         # compose exhausted its retries → the answer is the fail note
     stopped_reason: str = "answered"     # "answered" | "budget" | "max_steps"
+    effort: float = 1.0                  # the resolved effort multiplier this run used (observability)
 
     @property
     def grounded(self) -> bool:
@@ -191,6 +192,8 @@ async def run_react(
     max_steps: int = 8,
     k: int = 10,
     planner_atom_window: int = 60,            # atoms SHOWN to the planner per step (store keeps all)
+    compose_claim_cap: int = _COMPOSE_CLAIM_CAP,  # max verified findings sent to compose (effort-scalable)
+    extract_collect: int = _EXTRACT_COLLECT,      # candidate pool before relevance-ranking (effort-scalable)
 ) -> AnswerResult:
     import asyncio
     atoms = AtomStore()
@@ -473,7 +476,7 @@ async def run_react(
                 added += 1
                 # OFF: cap first-come at the compose limit (unchanged). ON: collect a bigger pool so
                 # the relevance ranking below has real choices before it trims to the compose cap.
-                if len(result.verified_claims) >= (_EXTRACT_COLLECT if evidence_select else _COMPOSE_CLAIM_CAP):
+                if len(result.verified_claims) >= (extract_collect if evidence_select else compose_claim_cap):
                     break
             await emit({"type": "extracted", "added": added, "candidates": len(cands),
                         "total": len(result.verified_claims)})
@@ -484,10 +487,10 @@ async def run_react(
     # survive the cap matters. Default = first-come. Under evidence-select, keep the findings most
     # RELEVANT to the question (span+entailment already passed → provenance unchanged; this only
     # reorders/trims already-verified claims). Applies to the whole set (loop + fallback + extraction).
-    if evidence_select and len(result.verified_claims) > _COMPOSE_CLAIM_CAP:
-        await emit({"type": "selecting", "from": len(result.verified_claims), "to": _COMPOSE_CLAIM_CAP})
+    if evidence_select and len(result.verified_claims) > compose_claim_cap:
+        await emit({"type": "selecting", "from": len(result.verified_claims), "to": compose_claim_cap})
         result.verified_claims = await _rank_claims_by_relevance(
-            question, result.verified_claims, embedder, _COMPOSE_CLAIM_CAP)
+            question, result.verified_claims, embedder, compose_claim_cap)
 
     # Compose a synthesized answer FROM the verified findings only (factra "living
     # answer" model). Grounded by construction: the composer sees only the verified

@@ -81,6 +81,29 @@
     border-radius:999px;padding:.22rem .7rem;user-select:none;transition:.12s;}
   .pill[aria-pressed="true"]{color:var(--on-accent);background:var(--gold);border-color:var(--gold);}
 
+  /* effort dial — a labeled snap slider (Standard→Deeper→Deepest); scales how hard the agent
+     works on a hard question. Distinct from the source pills so it's never read as a source key. */
+  .effort{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:.55rem 0 0;}
+  .effort .lbl{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
+  .effort .track{flex:1;min-width:150px;max-width:280px;display:flex;align-items:center;}
+  .effort input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;border-radius:3px;
+    background:var(--hair);outline:none;cursor:pointer;}
+  .effort input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:15px;height:15px;
+    border-radius:50%;background:var(--gold);border:2px solid var(--bg);box-shadow:0 0 0 1px var(--gold);transition:.12s;}
+  .effort input[type=range]::-moz-range-thumb{width:15px;height:15px;border:2px solid var(--bg);border-radius:50%;
+    background:var(--gold);box-shadow:0 0 0 1px var(--gold);cursor:pointer;}
+  .effort input[type=range]:focus-visible{outline:2px solid var(--gold);outline-offset:4px;border-radius:3px;}
+  .effort .eval{font-family:var(--mono);font-size:.72rem;color:var(--gold);white-space:nowrap;min-width:8.5rem;}
+  .effort .ehint{flex-basis:100%;font-family:var(--mono);font-size:.63rem;color:var(--muted);opacity:.85;}
+  .effort[data-tier="1"] .eval{color:var(--muted);}
+  /* effort on a saved turn: a small gold badge + a retry-deeper affordance */
+  .efbadge{display:inline-block;font-family:var(--mono);font-size:.64rem;letter-spacing:.03em;color:var(--gold);
+    border:1px solid var(--gold);border-radius:999px;padding:.05rem .5rem;vertical-align:middle;margin-left:.4rem;}
+  .retrydeep{font-family:var(--mono);font-size:.68rem;color:var(--gold);background:transparent;border:1px solid var(--gold);
+    border-radius:999px;padding:.22rem .7rem;cursor:pointer;transition:.12s;margin-top:.9rem;}
+  .retrydeep:hover{background:var(--gold);color:var(--on-accent);}
+  .retrydeep[disabled]{opacity:.5;cursor:default;}
+
   /* image/PDF/DICOM attachments (vision) */
   button.attach{flex:none;width:44px;height:44px;border-radius:50%;cursor:pointer;background:transparent;
     border:1px solid var(--hair);color:var(--muted);display:grid;place-items:center;transition:.12s;}
@@ -575,6 +598,13 @@
     <input type="file" id="file" accept="image/*,.pdf,application/pdf,.dcm,application/dicom" multiple hidden />
     <div class="attns" id="attns" hidden></div>
     <div class="sources" id="sources"><span class="lbl">Sources</span></div>
+    <div class="effort" id="effort" data-tier="1" hidden>
+      <span class="lbl">Effort</span>
+      <span class="track"><input type="range" id="effort-range" min="1" max="2.5" step="0.25" value="1"
+             aria-label="Research effort — higher digs deeper but uses more credits and time"></span>
+      <span class="eval" id="effort-val">Standard · 1×</span>
+      <span class="ehint" id="effort-hint">Standard depth. Raise it for a hard question — uses more credits and time.</span>
+    </div>
   </form>
 
   <section id="out" aria-live="polite">
@@ -660,6 +690,8 @@ let GAP_ENABLED = false;    // self-healing: suggest + queue sources to fill evi
 let CONV_ENABLED = false;   // multi-turn conversation (follow-ups carry context)
 let SUGGEST_ENABLED = false;// suggested follow-up questions after each answer
 let STREAM_ENABLED = false; // live agent trace via SSE (/research/stream)
+let EFFORT_ENABLED = false; // effort multiplier available (scales turns/results/depth/budget)
+let EFFORT = 1;             // current effort multiplier (1 = Standard); only sent when >1
 let THREAD = {session_id:null, turns:[]};   // the active conversation
 let BASE_PLACEHOLDER = "";                   // vertical console placeholder (restored on New)
 let EXAMPLES = [];                            // vertical example questions → random intake prompt
@@ -686,7 +718,14 @@ async function loadConfig(){
     CONV_ENABLED = !!c.conversation_enabled;
     SUGGEST_ENABLED = !!c.suggest_enabled;
     STREAM_ENABLED = !!c.stream_enabled;
+    EFFORT_ENABLED = !!c.effort_scale_enabled;
     VISION_ENABLED = !!c.vision_enabled;
+    if(EFFORT_ENABLED){
+      const wrap = $("#effort"), rng = $("#effort-range");
+      wrap.hidden = false;
+      rng.addEventListener("input", () => setEffort(parseFloat(rng.value)));
+      setEffort(1);
+    }
     if(VISION_ENABLED){
       $("#attach").hidden = false;
       if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) $("#camera").hidden = false;
@@ -714,6 +753,25 @@ async function loadConfig(){
 }
 
 const chosen = () => [...document.querySelectorAll('.pill[aria-pressed="true"]')].map(b=>b.dataset.key);
+
+// Effort tiers: 1× Standard · 1.25–1.75 Deeper · 2–2.5 Deepest. Names read differently from a raw
+// multiplier and keep the cost tradeoff legible. Returns {tier, name}.
+function effortTier(v){
+  if(v <= 1) return {tier:1, name:"Standard"};
+  if(v < 2)  return {tier:2, name:"Deeper"};
+  return {tier:3, name:"Deepest"};
+}
+function setEffort(v){
+  EFFORT = Math.min(2.5, Math.max(1, Math.round(v*4)/4));   // snap to 0.25
+  const {tier, name} = effortTier(EFFORT);
+  const wrap = $("#effort"); if(wrap) wrap.dataset.tier = tier;
+  const rng = $("#effort-range"); if(rng && parseFloat(rng.value)!==EFFORT) rng.value = EFFORT;
+  const val = $("#effort-val"); if(val) val.textContent = `${name} · ${EFFORT}×`;
+  const hint = $("#effort-hint");
+  if(hint) hint.textContent = EFFORT<=1
+    ? "Standard depth. Raise it for a hard question — uses more credits and time."
+    : `Searches ~${EFFORT}× as hard (more turns, evidence & citations) — more credits and time.`;
+}
 
 function esc(s){const d=document.createElement("div");d.textContent=s??"";return d.innerHTML;}
 
@@ -1237,6 +1295,7 @@ $("#ask").addEventListener("submit", e=>{
 
 // ---- live agent trace (SSE) ----
 function traceLine(ev){
+  if(ev.type==="effort")    return `<div class="tstep">⚡ Digging deeper — ${effortTier(ev.effort).name} · ${ev.effort}× effort</div>`;
   if(ev.type==="step")      return `<div class="tstep">▸ Step ${ev.step}</div>`;
   if(ev.type==="search")    return `<div class="tstep">🔎 Searching <span class="tq">${esc(ev.query||"")}</span>${(ev.variants&&ev.variants.length)?` <span class="tvar">+${ev.variants.length} reformulations</span>`:""}</div>`;
   if(ev.type==="found")     return `<div class="tstep">📥 Found <b>${ev.total}</b> passage${ev.total===1?"":"s"}${(ev.sources&&ev.sources.length)?` <span class="tvar">${ev.sources.map(esc).join(" · ")}</span>`:""}</div>`;
@@ -1291,6 +1350,7 @@ async function askQuestion(question){
   CURRENT_Q = question;
   const conv = CONV_ENABLED;
   const payload = {question, tenant_id:"demo", sources: chosen()};
+  if(EFFORT_ENABLED && EFFORT > 1) payload.effort = EFFORT;
   if(ATTACHMENTS.length) payload.attachments = ATTACHMENTS.slice();
   if(USER){ payload.user_name = USER.name; payload.user_email = USER.email; }
   if(conv){
@@ -1511,10 +1571,27 @@ function showSessionDetail(row, rowEl){
   const sdbody = $("#sdbody");
   turns.forEach((t,i)=>{
     const block = document.createElement("div"); block.className = "turn";
+    const ef = Number(t.effort) || 1;
     if(i>0){ const qh = document.createElement("div"); qh.className = "turn-q";   // Q1 is in the header
-      qh.innerHTML = `<span class="turn-qmark">Q${i+1}</span><div class="turn-qtext">${esc(t.question||"")}</div>`;
+      qh.innerHTML = `<span class="turn-qmark">Q${i+1}</span><div class="turn-qtext">${esc(t.question||"")}`
+        + (EFFORT_ENABLED && ef>1 ? `<span class="efbadge">${effortTier(ef).name} · ${ef}×</span>` : "")
+        + `</div>`;
       block.appendChild(qh); }
+    else if(EFFORT_ENABLED && ef>1){   // Q1's badge goes on the header question
+      const hq = sdetail.querySelector(".qq");
+      if(hq) hq.insertAdjacentHTML("beforeend", ` <span class="efbadge">${effortTier(ef).name} · ${ef}×</span>`);
+    }
     const ans = document.createElement("div"); block.appendChild(ans);
+    // "Retry with more effort": re-ask THIS question in the main chat at the next-higher effort.
+    if(EFFORT_ENABLED){
+      const nextEf = Math.min(2.5, Math.round((ef + 0.5)*4)/4);
+      const rb = document.createElement("button");
+      rb.type = "button"; rb.className = "retrydeep";
+      if(nextEf <= ef){ rb.disabled = true; rb.textContent = "↻ Already at max effort"; }
+      else { rb.textContent = `↻ Retry with more effort — ${effortTier(nextEf).name} · ${nextEf}×`;
+        rb.addEventListener("click", () => retryDeeper(t.question, nextEf)); }
+      block.appendChild(rb);
+    }
     sdbody.appendChild(block);
     render(t, ans, {noLink:true});
   });
@@ -1527,6 +1604,16 @@ function showSessionDetail(row, rowEl){
   });
   sdetail.scrollTop = 0;
   if(isMobileSess()){ sessionsEl.dataset.view = "detail"; setSback("← Sessions"); }  // drill into the answer
+}
+// Re-ask a past question in the main chat at a higher effort — a fresh run (new thread), not an
+// append, so the deeper answer stands on its own next to the original in the session list.
+function retryDeeper(question, ef){
+  closeSessions();
+  THREAD = {session_id:null, turns:[]};
+  setEffort(ef);
+  q.value = question; q.style.height="auto"; q.style.height = q.scrollHeight+"px";
+  askQuestion(question);
+  window.scrollTo({top:0});
 }
 async function selectSession(rowEl){
   sdetail.innerHTML = `<div class="status">Loading…</div>`;

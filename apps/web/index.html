@@ -189,6 +189,7 @@
   .answer.md.hl-on .hl-k{background:rgba(var(--hl-k),.26);}
   .hltoggle.on{color:var(--gold);border-color:var(--gold);}
   .hllegend{display:flex;flex-wrap:wrap;gap:.9rem;margin:-.4rem 0 1.3rem;font-size:.72rem;color:var(--muted);}
+  .hllegend[hidden]{display:none;}   /* author display:flex would otherwise beat the [hidden] UA rule */
   .hllegend span{display:inline-flex;align-items:center;gap:.35rem;}
   .hllegend i{width:.72rem;height:.72rem;border-radius:3px;display:inline-block;}
   .hllegend .lf{background:rgba(var(--hl-f),.95);} .hllegend .lr{background:rgba(var(--hl-r),.95);}

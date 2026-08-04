@@ -21,10 +21,15 @@ def _text_fragment(quote: str | None) -> str:
 
 def source_url(document_id: str, quote: str | None = None) -> str | None:
     """Canonical URL for a citation's document, or None if no clean page exists."""
+    frag = _text_fragment(quote)
+    # WEB findings store the full page URL as the document_id — that IS the canonical link. (Without
+    # this, "https://…".partition(":") gives src="https", matches no case, and web claims lose their
+    # link.) Deep-link to the quote where supported.
+    if document_id.startswith("http://") or document_id.startswith("https://"):
+        return document_id + frag
     src, _, native = document_id.partition(":")
     if not native:
         return None
-    frag = _text_fragment(quote)
 
     if src == "clinicaltrials":                       # native = NCT id
         return f"https://clinicaltrials.gov/study/{native}{frag}"

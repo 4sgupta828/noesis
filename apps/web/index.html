@@ -6,26 +6,27 @@
 <title>Noesis — Research</title>
 <style>
   /* ---- Noesis identity: deep navy canvas, gold brand accent, green = verified ---- */
+  /* DEFAULT = CLINICAL LIGHT — the look familiar from clinical/EHR apps: cool-white surfaces, a
+     trustworthy medical-blue accent, dark-slate text. Dark is opt-in via the bottom-left toggle. */
   :root{
-    color-scheme:dark;
-    --bg:#060E1B; --panel:#0F1A2C; --panel2:#0C1524; --ink:#ECEBE3; --muted:#8B96A9;
-    --gold:#D3B37C; --gold-strong:#E7CB93; --gold-rgb:211,179,124; --verified:#57B891; --gap:#D6975A;
-    --on-accent:#1A1206; --on-accent-rgb:26,18,6;     /* text/spinner ON the accent (dark theme: on gold) */
-    --hair:#22304A; --hair-soft:rgba(255,255,255,.06);
-    --hl-f:87,184,145; --hl-r:211,179,124; --hl-k:110,160,224;   /* fact / reasoning / context */
-    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
-    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
-  }
-  /* CLINICAL LIGHT theme — the look familiar from clinical/EHR apps: cool-white surfaces, a
-     trustworthy medical blue accent, dark-slate text. Opt-in via the bottom-left toggle. */
-  :root[data-theme="light"]{
     color-scheme:light;
     --bg:#EEF3F8; --panel:#FFFFFF; --panel2:#F4F8FC; --ink:#132430; --muted:#5A6B7B;
     --gold:#1568B5; --gold-strong:#0F5497; --gold-rgb:21,104,181; --verified:#137A54; --gap:#B26A1E;
     --on-accent:#FFFFFF; --on-accent-rgb:255,255,255;   /* white text on the blue accent */
     --hair:#D2DEEA; --hair-soft:rgba(19,36,48,.06);
     --hl-f:17,122,84; --hl-r:176,120,40; --hl-k:37,99,175;   /* darker tints stay legible on white */
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  }
+  /* DARK theme — the original branded look; opt-in. */
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --bg:#060E1B; --panel:#0F1A2C; --panel2:#0C1524; --ink:#ECEBE3; --muted:#8B96A9;
+    --gold:#D3B37C; --gold-strong:#E7CB93; --gold-rgb:211,179,124; --verified:#57B891; --gap:#D6975A;
+    --on-accent:#1A1206; --on-accent-rgb:26,18,6;
+    --hair:#22304A; --hair-soft:rgba(255,255,255,.06);
+    --hl-f:87,184,145; --hl-r:211,179,124; --hl-k:110,160,224;
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%;font-size:15px}   /* slightly smaller, more professional scale */
@@ -100,7 +101,7 @@
     -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);display:grid;place-items:center;padding:1.2rem;}
   .idcard{background:var(--panel);border:1px solid var(--hair);border-radius:16px;padding:1.7rem 1.5rem;
     max-width:25rem;width:100%;box-shadow:0 24px 70px -34px #000;}
-  .idcard img{height:54px;display:block;margin:0 auto .9rem;}
+  .idcard img,.idcard .idlogo{height:74px;width:auto;display:block;margin:0 auto .6rem;}
   .idcard h2{font-family:var(--serif);font-size:1.35rem;text-align:center;margin:0 0 .3rem;}
   .idcard p{color:var(--muted);font-size:.84rem;text-align:center;margin:0 0 1.2rem;line-height:1.5;}
   .idcard input{width:100%;background:var(--panel2);border:1px solid var(--hair);border-radius:10px;
@@ -438,11 +439,15 @@
   .vcard{background:var(--panel);border:1px solid var(--hair);border-radius:13px;overflow:hidden;cursor:pointer;
     transition:transform .16s, border-color .16s, box-shadow .16s;}
   .vcard:hover{transform:translateY(-3px);border-color:rgba(var(--gold-rgb),.45);box-shadow:0 16px 40px -22px #000;}
-  .vposter{position:relative;aspect-ratio:16/9;background:#000;}
-  .vposter video{width:100%;height:100%;object-fit:cover;display:block;}
-  .vposter .vplay{position:absolute;inset:0;display:grid;place-items:center;font-size:2rem;color:#fff;
-    background:linear-gradient(180deg,rgba(0,0,0,.1),rgba(0,0,0,.35));opacity:.9;transition:opacity .15s;}
-  .vcard:hover .vplay{opacity:1;}
+  /* Static branded poster (no <video> preload → never a black box). Real video loads on click. */
+  .vposter{position:relative;aspect-ratio:16/9;overflow:hidden;
+    background:linear-gradient(135deg,rgba(var(--gold-rgb),.20),var(--panel2) 70%);}
+  .vposter .vmark{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:56%;max-width:150px;opacity:.16;}
+  .vposter .vplay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:50px;height:50px;
+    border-radius:50%;background:var(--gold);color:var(--on-accent);display:grid;place-items:center;
+    font-size:1.1rem;padding-left:3px;box-shadow:0 6px 20px -8px rgba(0,0,0,.45);opacity:.95;
+    transition:transform .15s,opacity .15s;}
+  .vcard:hover .vplay{transform:translate(-50%,-50%) scale(1.1);opacity:1;}
   .vposter .vdur{position:absolute;right:.5rem;bottom:.5rem;background:rgba(0,0,0,.72);color:#fff;
     font-family:var(--mono);font-size:.62rem;padding:.12rem .42rem;border-radius:5px;}
   .vcinfo{padding:.7rem .8rem .85rem;}
@@ -497,17 +502,18 @@
 <script>
   /* Apply the saved theme BEFORE first paint (no flash), then wire the toggle once the DOM is ready. */
   (function(){
-    try{ if(localStorage.getItem("noesis-theme")==="light") document.documentElement.setAttribute("data-theme","light"); }catch(e){}
+    /* default is LIGHT (base :root); only explicit "dark" opts in. */
+    try{ if(localStorage.getItem("noesis-theme")==="dark") document.documentElement.setAttribute("data-theme","dark"); }catch(e){}
     document.addEventListener("DOMContentLoaded", function(){
       var btn=document.getElementById("themebtn");
-      function label(){ var light=document.documentElement.getAttribute("data-theme")==="light";
-        if(btn) btn.textContent = light ? "☀ Light" : "🌙 Dark"; }
+      function label(){ var dark=document.documentElement.getAttribute("data-theme")==="dark";
+        if(btn) btn.textContent = dark ? "🌙 Dark" : "☀ Light"; }
       label();
       if(btn) btn.addEventListener("click", function(){
-        var light=document.documentElement.getAttribute("data-theme")==="light";
-        if(light) document.documentElement.removeAttribute("data-theme");
-        else document.documentElement.setAttribute("data-theme","light");
-        try{ localStorage.setItem("noesis-theme", light ? "dark" : "light"); }catch(e){}
+        var dark=document.documentElement.getAttribute("data-theme")==="dark";
+        if(dark) document.documentElement.removeAttribute("data-theme");
+        else document.documentElement.setAttribute("data-theme","dark");
+        try{ localStorage.setItem("noesis-theme", dark ? "light" : "dark"); }catch(e){}
         label();
       });
     });
@@ -515,10 +521,19 @@
 </script>
 </head>
 <body>
-<button type="button" class="themebtn" id="themebtn" aria-label="Switch color theme" title="Switch between dark and clinical light theme">🌙 Dark</button>
+<!-- Noesis mark as a themed SVG (adapts to light/dark via CSS vars) — reused in the header + welcome modal -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="noesis-logo" viewBox="0 0 220 132">
+  <circle cx="110" cy="40" r="27" fill="none" stroke="var(--gold)" stroke-width="2.4"/>
+  <path d="M88 44 C97 28 106 56 114 41 C119 31 126 30 131 34" fill="none" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M131 34 l-8 -1 M131 34 l-2 8" fill="none" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="88" cy="44" r="3.1" fill="var(--gold)"/>
+  <text x="110" y="92" text-anchor="middle" font-family="var(--serif)" font-size="27" letter-spacing="7" fill="var(--ink)">NOESIS</text>
+  <text x="110" y="111" text-anchor="middle" font-family="var(--sans)" font-size="7.4" letter-spacing="3" fill="var(--gold)">DISCOVER · UNDERSTAND · ACT</text>
+</symbol></svg>
+<button type="button" class="themebtn" id="themebtn" aria-label="Switch color theme" title="Switch between dark and clinical light theme">☀ Light</button>
 <div class="wrap">
   <header>
-    <img class="logo" src="/noesis-mark.png" alt="Noesis" />
+    <svg class="logo" viewBox="0 0 220 132" role="img" aria-label="Noesis"><use href="#noesis-logo"/></svg>
     <button type="button" class="histbtn newbtn" id="newbtn" style="margin-left:auto;">＋ New chat</button>
     <a class="histbtn" href="/admin" style="margin-left:0;text-decoration:none;">Coverage</a>
     <button type="button" class="histbtn" id="vidbtn" style="margin-left:0;">Videos</button>
@@ -605,7 +620,7 @@
 <!-- identity gate: capture name + email at landing, stored against each session -->
 <div class="idmodal" id="idmodal" hidden>
   <div class="idcard">
-    <img src="/noesis-mark.png" alt="Noesis" />
+    <svg class="idlogo" viewBox="0 0 220 132" role="img" aria-label="Noesis"><use href="#noesis-logo"/></svg>
     <h2>Welcome to Noesis</h2>
     <p>Tell us who you are, so your questions are saved to your name.</p>
     <input id="idname" type="text" placeholder="Full name" autocomplete="name" />
@@ -1493,8 +1508,7 @@ async function loadVideos(){
       const title = v.video_title || v.question || "Briefing video";
       return `<div class="vcard" data-file="${esc(v.video_filename)}" data-title="${esc(title)}" data-sid="${esc(v.id)}">
         <div class="vposter">
-          <video muted preload="metadata" src="/video/file/${encodeURIComponent(v.video_filename)}#t=1"
-            onerror="this.closest('.vcard').remove()"></video>
+          <svg class="vmark" viewBox="0 0 220 132" aria-hidden="true"><use href="#noesis-logo"/></svg>
           <div class="vplay">▶</div>${dur?`<div class="vdur">${dur}</div>`:""}
         </div>
         <div class="vcinfo"><div class="vctitle">${esc(title)}</div>

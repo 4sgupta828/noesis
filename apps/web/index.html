@@ -1108,7 +1108,7 @@ async function loadSharedSession(id){
     const thread = row.thread || [];
     if(CONV_ENABLED && thread.length){          // resume the shared conversation (continuable)
       THREAD = {session_id:id, turns:thread.slice()};
-      q.value=""; q.style.height="auto"; q.setAttribute("placeholder","Ask a follow-up…");
+      q.value=""; q.style.height="auto"; q.setAttribute("placeholder","");
       renderThread(); loadSuggestions();
     } else {
       q.value = row.question; autoGrow();
@@ -1309,7 +1309,11 @@ async function askQuestion(question){
   }
   // finishTurn REPLACES the pending turn with the real (or error) result.
   const finishTurn = (data) => { THREAD.session_id = data.session_id || THREAD.session_id;
-    THREAD.turns[THREAD.turns.length-1] = data; renderThread(); loadSuggestions(); };
+    const prev = THREAD.turns[THREAD.turns.length-1] || {};
+    // PRESERVE the question: the backend ResearchOut doesn't echo it, so replacing the pending turn
+    // with `data` would blank the Q header AND send an empty question to /suggest (422 → no chips).
+    THREAD.turns[THREAD.turns.length-1] = Object.assign({}, data, {question: data.question || prev.question || question});
+    renderThread(); loadSuggestions(); };
   const errTurn = (note) => ({question, answer:"", grounded:false, claims:[],
     coverage_gaps:[], source_stats:{}, _note:note});
   const traceEl = () => conv ? out.querySelector(".turn:last-child .agenttrace") : out.querySelector(".agenttrace");
@@ -1355,7 +1359,7 @@ async function askQuestion(question){
     appendGapFallback(question);
   }finally{
     go.disabled = false; go.classList.remove("loading");
-    if(conv) q.setAttribute("placeholder", "Ask a follow-up…");
+    if(conv) q.setAttribute("placeholder","");
   }
 }
 // Append the reusable fill-the-gaps panel to the main view (degraded/no-evidence paths).
@@ -1513,7 +1517,7 @@ function showSessionDetail(row, rowEl){
   const cont = $("#scont"); if(cont) cont.addEventListener("click", ()=>{   // resume as a live thread
     THREAD = {session_id: row.id, turns: turns.slice()};
     closeSessions();
-    q.value=""; q.style.height="auto"; q.setAttribute("placeholder","Ask a follow-up…");
+    q.value=""; q.style.height="auto"; q.setAttribute("placeholder","");
     renderThread(); window.scrollTo({top:0}); q.focus();
   });
   sdetail.scrollTop = 0;

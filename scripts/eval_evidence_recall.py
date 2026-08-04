@@ -31,28 +31,33 @@ import sys
 import time
 import urllib.request
 
-# Held-out gold: (question, figure-regex, human label). The regex matches the SPECIFIC quantitative
-# result in normalized text (whitespace-collapsed). Kept deliberately different in shape from any
-# prompt/few-shot. Broad, well-covered conditions so a miss is about SELECTION, not coverage.
+# Held-out gold — the DISCRIMINATING set. Each figure was verified (via a direct corpus probe) to
+# live ONLY past char ~1600 of a full-text europepmc block — i.e. inside the zone the old _ATOM_CAP
+# truncated. Sources are CORPUS-ONLY (no web) so the figure can't sneak in via a news page — it can
+# reach the answer only if the full-text extractor actually saw it. `known_in_corpus=True` means a
+# miss is a true HAD-BUT-DROPPED, not a coverage gap. (A saturated "headline figures" set — semaglutide
+# 15%, SELECT HR 0.80 — scored 6/6 OFF and could NOT measure the fix; that's why it was replaced.)
+_CORPUS = ["europepmc", "clinicaltrials", "openfda", "faers"]
 GOLD = [
-    {"q": "What weight loss did semaglutide 2.4 mg achieve versus placebo in adults with obesity?",
-     "pat": r"\b1[0-9](?:\.\d)?\s?%|\b1[0-9](?:\.\d)?\s?percent", "label": "semaglutide ~15-17% weight loss",
-     "sources": ["europepmc", "clinicaltrials", "web"]},
-    {"q": "By how much do SGLT2 inhibitors reduce heart-failure hospitalization?",
-     "pat": r"\b(?:0\.[0-9]{2}|2[0-9]\s?%|3[0-9]\s?%)\b", "label": "HR ~0.7 / ~25-30% RRR",
-     "sources": ["europepmc", "clinicaltrials", "web"]},
-    {"q": "What LDL cholesterol reduction do high-intensity statins produce?",
-     "pat": r"\b[4-6][0-9]\s?%|\b[4-6][0-9]\s?percent", "label": "~50% LDL reduction",
-     "sources": ["europepmc", "web"]},
-    {"q": "What is the absolute AHI reduction with CPAP in moderate-to-severe OSA?",
-     "pat": r"\b\d{1,2}(?:\.\d)?\s*(?:events?/?h|/hour|per hour|events per hour)|\bAHI\b.*\b\d{1,2}\b",
-     "label": "AHI events/hour figure", "sources": ["europepmc", "clinicaltrials", "web"]},
-    {"q": "What HbA1c reduction do GLP-1 receptor agonists achieve in type 2 diabetes?",
-     "pat": r"\b1?\.[0-9]\s?%|\b1?\.[0-9]\s?percent|\b1?\.[0-9]\s?percentage points",
-     "label": "~1-1.5% HbA1c drop", "sources": ["europepmc", "clinicaltrials", "web"]},
-    {"q": "What major-adverse-cardiovascular-event reduction did semaglutide show in the SELECT trial?",
-     "pat": r"\b(?:0\.8[0-9]|20\s?%|2[0-4]\s?%)\b", "label": "SELECT HR 0.80 / 20% MACE",
-     "sources": ["europepmc", "clinicaltrials", "web"]},
+    {"q": "What was the estimated effectiveness of 2024-2025 COVID-19 vaccination against "
+          "COVID-19-associated hospitalization?",
+     "pat": r"\b40\s?%|95%\s*CI[,:]?\s*27", "label": "COVID 2024-25 VE 40% (CI 27-51)",
+     "known_in_corpus": True, "sources": _CORPUS},
+    {"q": "How did thrombolysis costs with tenecteplase compare to alteplase for acute ischaemic "
+          "stroke in elderly patients?",
+     "pat": r"\b30\s?%\s*lower|\b30\s?%", "label": "tenecteplase ~30% lower cost",
+     "known_in_corpus": True, "sources": _CORPUS},
+    {"q": "What was the specificity of point-of-care HPV DNA testing for detecting cervical disease?",
+     "pat": r"\b63\.3\s?%|\b6[0-3](?:\.\d)?\s?%", "label": "HPV POC test specificity 63.3%",
+     "known_in_corpus": True, "sources": _CORPUS},
+    {"q": "What was the magnitude and significance of symptom reduction with psilocybin-assisted therapy "
+          "in the reported pilot outcomes?",
+     "pat": r"\b27\.5\b|d\s*=\s*2\.3|p\s*<\s*0?\.001", "label": "psilocybin MD 27.5 / d=2.30 / p<0.001",
+     "known_in_corpus": True, "sources": _CORPUS},
+    {"q": "In the malaria vector-control combination study, how much faster was the reduction in test "
+          "positivity rate compared with the reference district?",
+     "pat": r"\b5\s*times faster|0\.006|0\.56\s?%", "label": "malaria TPR ~5x faster / 0.56%/mo",
+     "known_in_corpus": True, "sources": _CORPUS},
 ]
 
 
@@ -85,8 +90,15 @@ def _run(args):
         quotes = _norm(" ".join(c.get("quote", "") for c in (d.get("claims") or [])))
         in_answer = bool(pat.search(ans))
         in_evidence = bool(pat.search(quotes))     # figure present in a CITED quote
-        # classify: RECALL if in answer; CORPUS-GAP if nowhere in cited evidence; MISS if in evidence not answer
-        verdict = "RECALL" if in_answer else ("CORPUS-GAP" if not in_evidence else "MISS")
+        # Classify. For known-in-corpus gold, a non-answer is a true HAD-BUT-DROPPED (MISS) — the
+        # figure provably exists in a corpus block, so failing to surface it is the pipeline, not
+        # coverage. (Otherwise fall back to the cited-evidence heuristic to separate gap vs miss.)
+        if in_answer:
+            verdict = "RECALL"
+        elif case.get("known_in_corpus"):
+            verdict = "MISS"
+        else:
+            verdict = "CORPUS-GAP" if not in_evidence else "MISS"
         tag = {"RECALL": "OK  ", "MISS": "MISS", "CORPUS-GAP": "GAP "}[verdict]
         print(f"  [{tag}] {el}s claims={len(d.get('claims') or [])} in_answer={in_answer} "
               f"in_evidence={in_evidence} | {case['label']}")

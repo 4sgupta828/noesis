@@ -1406,23 +1406,35 @@ async function loadSuggestions(){
   const holder = document.createElement("div"); holder.className = "suggest"; holder.id = "suggest";
   holder.innerHTML = `<div class="suggest-h">◇ Go deeper</div><div class="suggest-loading">Finding good next questions…</div>`;
   out.appendChild(holder);
+  // In conversation mode the composer is fixed at the bottom → float the suggestions just above it.
+  if(document.body.classList.contains("chatting")){
+    holder.style.position="fixed"; holder.style.left="50%"; holder.style.transform="translateX(-50%)";
+    holder.style.width="100%"; holder.style.maxWidth="44rem"; holder.style.zIndex="39"; holder.style.margin="0";
+  }
+  syncComposerPad();
   try{
     const r = await fetch("/suggest",{method:"POST",headers:{"content-type":"application/json"},
       body:JSON.stringify({question:last.question, answer:last.answer||"", history:threadHistoryPayload()})});
     if(!r.ok) throw new Error();
     const {suggestions} = await r.json();
-    if(!suggestions || !suggestions.length){ holder.remove(); return; }
+    if(!suggestions || !suggestions.length){ holder.remove(); syncComposerPad(); return; }
     holder.innerHTML = `<div class="suggest-h">◇ Go deeper</div><div class="suggest-chips">` +
       suggestions.map(s=>`<button type="button" class="chip-q">${esc(s)}</button>`).join("") + `</div>`;
     holder.querySelectorAll(".chip-q").forEach(b=>b.addEventListener("click",()=>askQuestion(b.textContent.trim())));
-  }catch(e){ holder.remove(); }
+    syncComposerPad();   // chips changed the height → re-pin above the composer + re-reserve room
+  }catch(e){ holder.remove(); syncComposerPad(); }
 }
 
 // ChatGPT-style auto-grow: the intake box grows with content up to a generous max, then scrolls.
 function autoGrow(){ q.style.height = "auto"; q.style.height = Math.min(q.scrollHeight, 320) + "px"; syncComposerPad(); }
 function syncComposerPad(){   // keep the thread clear of the fixed bottom composer (its height varies)
   if(!document.body.classList.contains("chatting")) return;
-  const a = $("#ask"); if(a) out.style.paddingBottom = (a.offsetHeight + 28) + "px";
+  const a = $("#ask"); if(!a) return;
+  // The "Go deeper" suggestions float just ABOVE the fixed composer (else they hide behind it);
+  // reserve room for BOTH so the last turn is never covered, and keep the strip pinned above it.
+  const sg = document.getElementById("suggest");
+  if(sg){ sg.style.bottom = (a.offsetHeight + 8) + "px"; }
+  out.style.paddingBottom = (a.offsetHeight + (sg ? sg.offsetHeight + 12 : 0) + 28) + "px";
 }
 q.addEventListener("input", autoGrow);
 window.addEventListener("resize", syncComposerPad);

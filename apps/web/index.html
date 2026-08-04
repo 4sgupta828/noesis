@@ -179,11 +179,15 @@
   .answer.md .mdt td{padding:.6rem .75rem;border-bottom:1px solid var(--hair);vertical-align:top;line-height:1.55;}
   .answer.md .mdt tbody tr:last-child td{border-bottom:none;}
   .answer.md .ref{color:var(--gold);font-weight:640;cursor:pointer;font-size:.68em;padding:0 .06em;vertical-align:super;}
-  .answer.md mark.hl{color:inherit;border-radius:3px;padding:.04em .18em;
+  /* color highlights are OFF by default — a <mark> reads as plain text until the reader toggles
+     them on (adds .hl-on to the answer). */
+  .answer.md mark.hl{color:inherit;background:transparent;border-radius:0;padding:0;
     box-decoration-break:clone;-webkit-box-decoration-break:clone;}
-  .answer.md .hl-f{background:rgba(var(--hl-f),.24);}
-  .answer.md .hl-r{background:rgba(var(--hl-r),.26);}
-  .answer.md .hl-k{background:rgba(var(--hl-k),.26);}
+  .answer.md.hl-on mark.hl{border-radius:3px;padding:.04em .18em;}
+  .answer.md.hl-on .hl-f{background:rgba(var(--hl-f),.24);}
+  .answer.md.hl-on .hl-r{background:rgba(var(--hl-r),.26);}
+  .answer.md.hl-on .hl-k{background:rgba(var(--hl-k),.26);}
+  .hltoggle.on{color:var(--gold);border-color:var(--gold);}
   .hllegend{display:flex;flex-wrap:wrap;gap:.9rem;margin:-.4rem 0 1.3rem;font-size:.72rem;color:var(--muted);}
   .hllegend span{display:inline-flex;align-items:center;gap:.35rem;}
   .hllegend i{width:.72rem;height:.72rem;border-radius:3px;display:inline-block;}
@@ -708,11 +712,13 @@ function render(data, target, opts){
   const n = data.claims.length;
   const sid = data.session_id || data.id || null;   // saved session → shareable permalink
   const showLink = sid && !opts.noLink;             // thread turns suppress per-turn link (one per thread)
+  const hasHl = STRUCTURED && !!data.answer && /\[\[[FRK]\]\]/.test(data.answer);  // answer has markers
   parts.push(`<div class="ansmeta">
     <span class="gpill ${data.grounded?"on":"off"}">${data.grounded?"✓ Grounded":"◦ Not fully grounded"}</span>
     <span class="mstat"><b>${n}</b> verified finding${n===1?"":"s"}</span>
     ${data.rejected ? `<span class="mstat dim">${data.rejected} rejected</span>`:""}
     <span class="metabtns">
+      ${hasHl?`<button type="button" class="copybtn hltoggle" id="hltoggle" title="Show color highlights (load-bearing facts, reasoning, key context)">✦ Highlights</button>`:""}
       ${showLink?`<button type="button" class="copybtn" id="linkbtn">🔗 Copy link</button>`:""}
       ${(data.answer||n)?`<button type="button" class="copybtn" id="copybtn">⧉ Copy</button>`:""}
     </span>
@@ -755,7 +761,7 @@ function render(data, target, opts){
       : esc(data.answer).replace(/\[(\d+)\]/g, '<sup class="ref" data-n="$1">[$1]</sup>');
     parts.push(`<div class="answer${STRUCTURED?" md":""}">${html}</div>`);
     if(STRUCTURED && /<mark class="hl/.test(html)){
-      parts.push(`<div class="hllegend">
+      parts.push(`<div class="hllegend" hidden>
         <span><i class="lf"></i>Load-bearing fact</span>
         <span><i class="lr"></i>Critical reasoning</span>
         <span><i class="lk"></i>Key context</span></div>`);
@@ -837,6 +843,13 @@ function render(data, target, opts){
   if(vgo) vgo.addEventListener("click", ()=>generateVideo(target));
   const cb = target.querySelector("#copybtn");
   if(cb) cb.addEventListener("click", ()=>copyAnswer(data, cb));
+  const ht = target.querySelector("#hltoggle");   // toggle color highlights (off by default)
+  if(ht) ht.addEventListener("click", ()=>{
+    const ans = target.querySelector(".answer.md"), leg = target.querySelector(".hllegend");
+    const on = ans && ans.classList.toggle("hl-on");
+    ht.classList.toggle("on", !!on);
+    if(leg) leg.hidden = !on;
+  });
   const lb = target.querySelector("#linkbtn");
   if(lb && showLink){ if(target===out) setShareHash(sid); lb.addEventListener("click", ()=>copyLink(sid, lb)); }
   const pg = target.querySelector("#plaingo");

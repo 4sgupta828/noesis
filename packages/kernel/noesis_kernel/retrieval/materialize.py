@@ -38,9 +38,15 @@ def materialize(repo: CorpusRepository, source: InMemoryRetrievalSource) -> int:
     return added
 
 
-async def materialize_to_postgres(repo: CorpusRepository, pg_source, *, batch_size: int = 500) -> int:
+async def materialize_to_postgres(repo: CorpusRepository, pg_source, *, batch_size: int = 500,
+                                  facet_overrides: dict | None = None) -> int:
     """Same join, into a PostgresRetrievalSource's index table — BATCHED upserts
-    (one round-trip per `batch_size` blocks instead of one per block)."""
+    (one round-trip per `batch_size` blocks instead of one per block).
+
+    `facet_overrides` (generic) is merged LAST onto every block's facets — the caller-chosen way to
+    stamp a whole ingest run (e.g. source_country for a country-specific ingest); it never encodes
+    domain meaning here, only applies whatever the caller passed."""
+    ov = facet_overrides or {}
     rows: list[dict] = []
     added = 0
     for doc in repo.iter_documents():
@@ -49,7 +55,7 @@ async def materialize_to_postgres(repo: CorpusRepository, pg_source, *, batch_si
             rows.append(dict(
                 tenant_id=doc.tenant_id, document_id=doc.id, block_id=block.content_key,
                 text=block.text, embedding=list(bc.embedding) if (bc and bc.embedding) else None,
-                facets={**doc.facets, **block.facets}, workspace_id=doc.workspace_id,
+                facets={**doc.facets, **block.facets, **ov}, workspace_id=doc.workspace_id,
                 document_title=doc.title, content_type=doc.content_type, source_key=doc.source_key,
             ))
             if len(rows) >= batch_size:

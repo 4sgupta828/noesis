@@ -27,6 +27,7 @@ async def ingest_connector_to_postgres(
     window: dict | None = None,
     object_store: ObjectStore | None = None,
     embed_batch_size: int = 256,
+    facet_overrides: dict | None = None,   # stamped onto every block (e.g. {"source_country": "IN"})
 ) -> int:
     """Ingest one connector into the pg corpus. Returns blocks materialized.
 
@@ -46,4 +47,4 @@ async def ingest_connector_to_postgres(
     embed_pending(repo, embedder, batch_size=embed_batch_size)
 
     await pg_source.ensure_schema()
-    return await materialize_to_postgres(repo, pg_source)
+    return await materialize_to_postgres(repo, pg_source, facet_overrides=facet_overrides)

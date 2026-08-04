@@ -144,6 +144,7 @@ class CorpusIngestIn(BaseModel):
     papers: int = 150                      # per-condition literature limit
     faers_drugs: list[str] = []            # each → a faers adverse-event job
     jobs: list[dict] = []                  # explicit passthrough {connector, query, limit, ...}
+    source_country: str = ""               # stamp every block from this batch (e.g. "IN" for India sources)
 
 
 class Citation(BaseModel):
@@ -272,9 +273,12 @@ async def _gap_processor_loop(dsn: str, vertical: str) -> None:
         if conn is None:
             await q.fail(job["id"], f"unknown connector {job['connector']}"); continue
         try:
+            # a job may stamp a source_country on everything it ingests (country-specific sources)
+            sc = job.get("source_country")
             n = await ingest_connector_to_postgres(
                 conn, pg, tenant_id=job["tenant_id"], embedder=embedder,
-                window={"query": job["query"], "limit": job["limit"]})
+                window={"query": job["query"], "limit": job["limit"]},
+                facet_overrides={"source_country": sc} if sc else None)
             await q.complete(job["id"], n)
         except Exception as e:   # noqa: BLE001 — record + move on
             await q.fail(job["id"], str(e))
@@ -694,6 +698,11 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                              "kind": (j.get("kind") or "")[:80], "quality": (j.get("quality") or "")[:120]})
         if not jobs:
             raise HTTPException(status_code=400, detail="no valid jobs (unknown connector or empty inputs)")
+        # a batch-level source_country stamps every job's blocks (per-job override wins if given)
+        sc = (body.source_country or "").strip()
+        if sc:
+            for jb in jobs:
+                jb.setdefault("source_country", sc)
         try:
             ids = await q.enqueue(tenant_id="demo", question="admin bulk ingest", jobs=jobs)
         except Exception as e:

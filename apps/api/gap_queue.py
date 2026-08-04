@@ -28,9 +28,11 @@ CREATE TABLE IF NOT EXISTS noesis_corpus_gap_queue (
     status        TEXT NOT NULL DEFAULT 'pending',   -- pending | running | done | failed
     blocks_added  INTEGER NOT NULL DEFAULT 0,
     error         TEXT DEFAULT '',
+    source_country TEXT DEFAULT '',                     -- stamp every ingested block (country sources)
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE noesis_corpus_gap_queue ADD COLUMN IF NOT EXISTS source_country TEXT DEFAULT '';
 CREATE INDEX IF NOT EXISTS idx_gapq_status ON noesis_corpus_gap_queue (vertical, status, created_at);
 """
 
@@ -69,11 +71,11 @@ class GapQueue:
                 jid = uuid.uuid4().hex
                 await conn.execute(
                     """INSERT INTO noesis_corpus_gap_queue
-                       (id, vertical, tenant_id, connector, query, lim, kind, rationale, quality, question)
-                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)""",
+                       (id, vertical, tenant_id, connector, query, lim, kind, rationale, quality, question, source_country)
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)""",
                     jid, self._vertical, tenant_id, j["connector"], j["query"],
                     int(j.get("limit", 200)), j.get("kind", ""), j.get("rationale", ""),
-                    j.get("quality", ""), question)
+                    j.get("quality", ""), question, j.get("source_country", ""))
                 ids.append(jid)
         return ids
 
@@ -93,12 +95,13 @@ class GapQueue:
                              WHERE vertical=$1 AND status='pending'
                              ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED) c
                        WHERE q.id=c.id
-                       RETURNING q.id, q.connector, q.query, q.lim, q.tenant_id""",
+                       RETURNING q.id, q.connector, q.query, q.lim, q.tenant_id, q.source_country""",
                     self._vertical)
         if row is None:
             return None
         return {"id": row["id"], "connector": row["connector"], "query": row["query"],
-                "limit": row["lim"], "tenant_id": row["tenant_id"]}
+                "limit": row["lim"], "tenant_id": row["tenant_id"],
+                "source_country": row["source_country"] or ""}
 
     async def complete(self, job_id: str, blocks_added: int) -> None:
         await self._ensure()

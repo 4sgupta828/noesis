@@ -527,10 +527,13 @@
 <body>
 <!-- Noesis mark as a themed SVG (adapts to light/dark via CSS vars) — reused in the header + welcome modal -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="noesis-logo" viewBox="0 0 220 132">
-  <circle cx="110" cy="40" r="27" fill="none" stroke="var(--gold)" stroke-width="2.4"/>
-  <path d="M88 44 C97 28 106 56 114 41 C119 31 126 30 131 34" fill="none" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
-  <path d="M131 34 l-8 -1 M131 34 l-2 8" fill="none" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
-  <circle cx="88" cy="44" r="3.1" fill="var(--gold)"/>
+  <!-- open ring: gap upper-right for the breakout arrow, subtle gap left at the origin dot -->
+  <path d="M120.1 15.0 A27 27 0 0 0 83.1 42.4" fill="none" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M85.1 50.6 A27 27 0 0 0 136.6 35.3" fill="none" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
+  <!-- rising S-wave from the dot up into the breakout arrow -->
+  <path d="M84 46 C94 34 104 34 110 41 C116 48 122 34 132 20" fill="none" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M132 20 l-10 1 M132 20 l-1 10" fill="none" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="84" cy="46" r="3.1" fill="var(--gold)"/>
   <text x="110" y="92" text-anchor="middle" font-family="var(--serif)" font-size="27" letter-spacing="7" fill="var(--ink)">NOESIS</text>
   <text x="110" y="111" text-anchor="middle" font-family="var(--sans)" font-size="7.4" letter-spacing="3" fill="var(--gold)">DISCOVER · UNDERSTAND · ACT</text>
 </symbol></svg>

@@ -54,7 +54,7 @@ def _xml_to_text(xml_bytes: bytes) -> str:
 
 def _facets(r: dict) -> dict:
     f = {
-        "source_kind": "article",
+        "source_kind": "article", "source_country": "global",
         "source_db": (r.get("source") or "").lower(),          # MED / PMC / …
         "open_access": "yes" if r.get("isOpenAccess") == "Y" else "no",
     }

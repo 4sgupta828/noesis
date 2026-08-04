@@ -34,7 +34,8 @@ def _reactions(r: dict) -> list[str]:
 
 def facets(r: dict) -> dict:
     drugs = _drugs(r)
-    f = {"source_kind": "adverse_event", "serious": "yes" if str(r.get("serious")) == "1" else "no"}
+    f = {"source_kind": "adverse_event", "source_country": "US",   # openFDA FAERS is US regulatory
+         "serious": "yes" if str(r.get("serious")) == "1" else "no"}
     if drugs:
         f["generic"] = drugs[0].lower()
     if r.get("receivedate", "")[:4].isdigit():

@@ -61,6 +61,31 @@ def stream_enabled() -> bool:
     return os.environ.get("NOESIS_STREAM", "").lower() in ("1", "true", "yes")
 
 
+def country_scope_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, a request may scope retrieval to a source country via
+    `countries` (hard filter on the `source_country` facet). OFF → `countries` is ignored and NO facet
+    is applied (byte-identical to today). MUST NOT be flipped on in prod until every block is tagged
+    with source_country (else a scoped query returns empty — the legacy-null-excluded trap)."""
+    return os.environ.get("NOESIS_COUNTRY_SCOPE", "").lower() in ("1", "true", "yes")
+
+
+# Available source countries, echoed to /config when the flag is on (UI renders the toggle from this).
+AVAILABLE_COUNTRIES = [{"code": "US", "label": "United States"}, {"code": "IN", "label": "India"}]
+
+
+def _country_facets(countries: list[str] | None) -> dict:
+    """Map a selected-country list → the hard retrieval facet, ALWAYS including 'global' so shared
+    literature/trials are searched alongside the country's own sources. Off-flag or empty → {} (no
+    filter, byte-identical). Only known country codes are honored (unknown → ignored)."""
+    if not country_scope_enabled():
+        return {}
+    valid = {c["code"] for c in AVAILABLE_COUNTRIES}
+    picked = tuple(c for c in (countries or []) if c in valid)
+    if not picked:
+        return {}
+    return {"source_country": picked + ("global",)}
+
+
 def conversation_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, answers become a multi-turn thread — follow-up
     questions carry prior turns as context, the thread persists on one session, and suggested
@@ -84,6 +109,7 @@ class ResearchIn(BaseModel):
     user_email: str | None = None
     history: list[dict] | None = None     # prior turns [{question, answer}] → follow-up context
     session_id: str | None = None         # thread to append this turn to (conversation)
+    countries: list[str] | None = None    # source-country scope (e.g. ["IN"]); None/[]=all (see flag)
 
 
 class SuggestIn(BaseModel):
@@ -336,6 +362,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "conversation_enabled": conversation_enabled(),
             "suggest_enabled": conversation_enabled() and bool(getattr(svc, "suggest_prompt", None)),
             "stream_enabled": stream_enabled(),
+            "country_scope_enabled": country_scope_enabled(),
+            "countries": AVAILABLE_COUNTRIES if country_scope_enabled() else [],
         }
 
     @app.post("/search")
@@ -415,7 +443,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         res = await app.state.service.ask(
             question=body.question, tenant_id=body.tenant_id,
             workspace_id=body.workspace_id, source_keys=body.sources,
-            images=images, documents=docs, history=history, on_event=on_event)
+            images=images, documents=docs, history=history, on_event=on_event,
+            facets=_country_facets(body.countries))
         ui = getattr(app.state.service, "ui", None)
         def _url(c):
             fn = getattr(ui, "source_url", None)

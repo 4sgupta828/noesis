@@ -187,6 +187,7 @@ async def run_react(
     extraction_lenses: tuple[str, ...] = (),  # vertical-supplied lenses for the extractor
     evidence_select: bool = False,            # rank claims by relevance before the cap + wider atom window
     atom_cap: int = 1600,                     # per-atom char window for the extractor (evidence-select raises it)
+    facets: dict | None = None,               # hard retrieval facet filter (empty {} = no filter, byte-identical)
     max_steps: int = 8,
     k: int = 10,
     planner_atom_window: int = 60,            # atoms SHOWN to the planner per step (store keeps all)
@@ -360,7 +361,7 @@ async def run_react(
             qvec = await asyncio.to_thread(lambda: list(embedder.embed([q])[0]))  # off the loop
             base_req = RetrievalRequest(
                 query=q, tenant_id=tenant_id, workspace_id=workspace_id,
-                query_embedding=qvec, k=k,
+                query_embedding=qvec, k=k, facets=dict(facets or {}),
             )
             # Corpus: agent reformulations → multi-query fusion (recall); else a single search.
             # aux (web): ONE call per step on the ORIGINAL query (no per-variant fan-out) — runs

@@ -68,6 +68,7 @@ class ResearchService:
         documents: list[dict] | None = None,
         history: list[dict] | None = None,
         on_event=None,                       # async callback(dict) for live progress (SSE)
+        facets: dict | None = None,          # hard retrieval facet filter (e.g. source_country scope)
         max_steps: int = 8,
     ) -> AnswerResult:
         budget = BudgetState(max_calls=self.max_calls)
@@ -117,6 +118,7 @@ class ResearchService:
             planner_llm=self.planner_llm, on_event=on_event,
             claims_first=self.claims_first, extraction_lenses=self.extraction_lenses,
             evidence_select=self.evidence_select, atom_cap=self.atom_cap,
+            facets=facets or {},
             max_steps=max_steps,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)

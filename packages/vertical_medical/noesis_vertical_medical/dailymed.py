@@ -35,7 +35,7 @@ class DailyMedConnector:
             return r.json().get("data",[])
 
     def _facets(self, s):
-        return {"source_kind":"drug_label"}
+        return {"source_kind":"drug_label","source_country":"US"}
 
     async def discover_entities(self, window):
         from noesis_kernel.contract.dto import EntityRef
@@ -51,7 +51,7 @@ class DailyMedConnector:
     async def list_documents(self, entity):
         from noesis_kernel.contract.dto import DocumentRef
         return [DocumentRef(source_key=self.key, native_id=entity.native_id, title=entity.title,
-                            content_type="text/markdown", facets={"source_kind":"drug_label"},
+                            content_type="text/markdown", facets={"source_kind":"drug_label","source_country":"US"},
                             entity_ids=(entity.native_id,))]
 
     async def fetch_artifact(self, doc):

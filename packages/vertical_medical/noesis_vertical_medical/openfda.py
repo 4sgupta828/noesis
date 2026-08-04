@@ -44,7 +44,7 @@ def label_facets(rec: dict) -> dict:
         "route": _first(of.get("route")).lower(),
         "product_type": _first(of.get("product_type")).lower(),
         "manufacturer": _first(of.get("manufacturer_name")).lower(),
-        "source_kind": "drug_label",
+        "source_kind": "drug_label", "source_country": "US",
     }
     return {k: v for k, v in f.items() if v}
 

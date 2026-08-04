@@ -32,7 +32,7 @@ class CdcConnector:
                      "updatedAt":x["resource"].get("updatedAt","")} for x in r.json().get("results",[])]
 
     def _facets(self, d):
-        f={"source_kind":"public_health"}
+        f={"source_kind":"public_health","source_country":"US"}
         if (d.get("updatedAt") or "")[:4].isdigit(): f["year"]=d["updatedAt"][:4]
         return f
 

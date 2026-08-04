@@ -36,6 +36,7 @@ def facets(study: dict) -> dict:
     f = {
         "study_type": des.get("studyType", "").lower(),
         "status": st.get("overallStatus", "").lower(),
+        "source_country": "global",    # ClinicalTrials.gov is global (distinct from `country` = trial location)
     }
     # single-valued facets (first / primary); lists kept in extra for display
     if cond:

@@ -60,7 +60,7 @@
   .field:focus-within{border-color:rgba(var(--gold-rgb),.55);
     box-shadow:0 8px 30px -16px rgba(0,0,0,.7), 0 0 0 3px rgba(var(--gold-rgb),.14);}
   textarea{flex:1;border:0;background:transparent;color:var(--ink);font:inherit;font-size:1.06rem;
-    line-height:1.5;resize:none;outline:none;padding:.15rem 0;min-height:2.6rem;max-height:20rem;overflow-y:auto;}
+    line-height:1.5;resize:none;outline:none;padding:.15rem 0;min-height:3.5rem;max-height:20rem;overflow-y:auto;}
   textarea::placeholder{color:var(--muted);}
   button.go{flex:none;width:44px;height:44px;border:0;border-radius:50%;cursor:pointer;
     background:var(--gold);color:var(--on-accent);display:grid;place-items:center;
@@ -209,14 +209,18 @@
   .hllegend .lk{background:rgba(var(--hl-k),.95);}
   /* evidence dossier — collapsed by default; summary is the disclosure control */
   .evblock{margin:1.8rem 0 0;border-top:1px solid var(--hair);}
-  .evblock>summary{list-style:none;cursor:pointer;}
+  .evblock>summary{list-style:none;cursor:pointer;border-radius:10px;transition:background .15s;}
   .evblock>summary::-webkit-details-marker{display:none;}
+  .evblock>summary:hover{background:var(--panel2);}
   .evhead{font-family:var(--sans);font-size:.68rem;text-transform:uppercase;letter-spacing:.14em;color:var(--gold);
-    font-weight:680;margin:0;padding:1.3rem 0 .2rem;display:flex;align-items:center;gap:.55rem;}
+    font-weight:680;margin:0;padding:1.3rem .55rem .2rem;display:flex;align-items:center;gap:.55rem;}
   .evhead::before{content:"";width:15px;height:2px;border-radius:2px;background:var(--gold);}
-  .evhead::after{content:"▸";margin-left:auto;font-size:.7rem;color:var(--muted);transition:transform .18s;}
-  .evblock[open]>summary .evhead::after{transform:rotate(90deg);}
-  .evblock>summary:hover .evhead{color:#E7CE9A;}
+  /* explicit clickable pill so it's obvious the evidence section expands */
+  .evtoggle{margin-left:auto;font-family:var(--mono);font-size:.6rem;letter-spacing:.04em;white-space:nowrap;
+    color:var(--on-accent);background:var(--gold);border-radius:12px;padding:.2rem .62rem;text-transform:none;}
+  .evtoggle::after{content:"Show ▸";}
+  .evblock[open] .evtoggle::after{content:"Hide ▾";}
+  .evblock>summary:hover .evtoggle{background:var(--gold-strong);}
   .evbody{padding-top:1rem;}
   .fnum{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:1.4rem;height:1.4rem;
     border-radius:8px;background:var(--gold);color:var(--on-accent);font-family:var(--mono);font-size:.72rem;
@@ -867,7 +871,7 @@ function render(data, target, opts){
       </article>`;
     }).join("");
     parts.push(`<details class="evblock" id="evblock">
-      <summary><h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}</h4></summary>
+      <summary><h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}<span class="evtoggle"></span></h4></summary>
       <div class="evbody">${cards}</div>
     </details>`);
   }
@@ -1474,14 +1478,32 @@ function showSessionDetail(row, rowEl){
   if(rowEl){ slist.querySelectorAll(".srow").forEach(r=>r.removeAttribute("aria-current")); rowEl.setAttribute("aria-current","true"); }
   CURRENT_Q = row.question;
   const who = row.user_name || row.user_email;
-  // question stated at the TOP of the answer, with who asked + when + delete
+  // Render the WHOLE conversation (all follow-up turns), not just the first answer.
+  const turns = (row.thread && row.thread.length) ? row.thread : [row];
   sdetail.innerHTML = `<div class="sqhead">
       <div class="qhrow"><div class="qq">${esc(row.question)}</div>
-        <button type="button" class="sdel" id="sdel" title="Delete session">🗑 Delete</button></div>
-      <div class="qm">${who?`Asked by <b>${esc(row.user_name||"")}</b>${row.user_email?" · "+esc(row.user_email):""} · `:""}${fmtDate(row.created_at)}</div>
+        <span class="metabtns">
+          ${CONV_ENABLED?`<button type="button" class="copybtn" id="scont" title="Continue this conversation in the main chat">↳ Continue in chat</button>`:""}
+          <button type="button" class="sdel" id="sdel" title="Delete session">🗑 Delete</button></span></div>
+      <div class="qm">${who?`Asked by <b>${esc(row.user_name||"")}</b>${row.user_email?" · "+esc(row.user_email):""} · `:""}${fmtDate(row.created_at)}${turns.length>1?` · ${turns.length} turns`:""}</div>
     </div><div id="sdbody"></div>`;
-  render(row, $("#sdbody"));         // saved row matches render()'s expected shape
+  const sdbody = $("#sdbody");
+  turns.forEach((t,i)=>{
+    const block = document.createElement("div"); block.className = "turn";
+    if(i>0){ const qh = document.createElement("div"); qh.className = "turn-q";   // Q1 is in the header
+      qh.innerHTML = `<span class="turn-qmark">Q${i+1}</span><div class="turn-qtext">${esc(t.question||"")}</div>`;
+      block.appendChild(qh); }
+    const ans = document.createElement("div"); block.appendChild(ans);
+    sdbody.appendChild(block);
+    render(t, ans, {noLink:true});
+  });
   const del = $("#sdel"); if(del) del.addEventListener("click", ()=>deleteSession(row.id, rowEl));
+  const cont = $("#scont"); if(cont) cont.addEventListener("click", ()=>{   // resume as a live thread
+    THREAD = {session_id: row.id, turns: turns.slice()};
+    closeSessions();
+    q.value=""; q.style.height="auto"; q.setAttribute("placeholder","Ask a follow-up…");
+    renderThread(); window.scrollTo({top:0}); q.focus();
+  });
   sdetail.scrollTop = 0;
   if(isMobileSess()){ sessionsEl.dataset.view = "detail"; setSback("← Sessions"); }  // drill into the answer
 }

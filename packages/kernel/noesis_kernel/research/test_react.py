@@ -303,3 +303,29 @@ def test_compose_failure_surfaces_note(monkeypatch):
     assert res.compose_failed is True
     assert res.composed_answer and res.composed_answer == react._COMPOSE_FAIL_NOTE   # not empty
     assert llm.compose_calls == react._COMPOSE_ATTEMPTS       # exhausted the retries
+
+
+def test_rank_claims_by_relevance_keeps_the_most_relevant():
+    # Evidence selection (#2): under the flag, compose gets the claims most RELEVANT to the question,
+    # not the first-come ones. Deterministic FakeEmbedder encodes relevance in a 2-d vector.
+    from noesis_kernel.research.react import _rank_claims_by_relevance, VerifiedClaim
+    class _FE:
+        def dim(self): return 2
+        def embed(self, texts): return [[1.0, 0.0] if "relevant" in t else [0.0, 1.0] for t in texts]
+    claims = [VerifiedClaim("off-topic A", "a1", "q"), VerifiedClaim("relevant B", "a2", "q"),
+              VerifiedClaim("off-topic C", "a3", "q"), VerifiedClaim("relevant D", "a4", "q")]
+    top2 = asyncio.run(_rank_claims_by_relevance("the relevant question", claims, _FE(), 2))
+    assert [c.text for c in top2] == ["relevant B", "relevant D"]   # relevant win; stable among ties
+    # already within cap → returned unchanged (no reorder)
+    assert asyncio.run(_rank_claims_by_relevance("x", claims[:2], _FE(), 5)) == claims[:2]
+
+
+def test_rank_claims_fail_safe_on_embed_error():
+    # Any embedding failure must degrade to today's behavior (first `top`), never crash the answer.
+    from noesis_kernel.research.react import _rank_claims_by_relevance, VerifiedClaim
+    class _Bad:
+        def dim(self): return 2
+        def embed(self, texts): raise RuntimeError("embed down")
+    claims = [VerifiedClaim(f"c{i}", f"a{i}", "q") for i in range(5)]
+    got = asyncio.run(_rank_claims_by_relevance("x", claims, _Bad(), 2))
+    assert got == claims[:2]

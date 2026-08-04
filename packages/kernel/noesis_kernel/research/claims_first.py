@@ -24,7 +24,11 @@ EXTRACT_MODEL = os.environ.get("NOESIS_EXTRACT_MODEL", "gpt-4o-mini")
 ENTAIL_MODEL = os.environ.get("NOESIS_ENTAIL_MODEL", "gpt-4o")
 _ATOMS_PER_CALL = 10          # batch size for extraction (recall vs cost)
 _ENTAIL_CHUNK = 12            # batch size for the entailment judge (factra: avoid one oversized call)
-_ATOM_CAP = 1600              # chars per atom shown to the extractor (chunked web keeps this small)
+_ATOM_CAP = 1600              # DEFAULT chars/atom shown to the extractor. Full-text europepmc blocks
+# are one paragraph with NO max size (Results paragraphs run 1.5-4k chars), so at 1600 the extractor
+# never sees the sentence holding the effect size / CI — it silently can't become a claim. The caller
+# raises this via `atom_cap` under the evidence-select flag; span+entail gates stay unchanged, so a
+# bigger window only lets MORE real evidence be found — never weakens provenance.
 
 
 def _extract_system(lenses: list[str]) -> str:
@@ -67,12 +71,14 @@ def _client(explicit=None):
 
 async def extract_claims(
     *, question: str, atoms: list[tuple[str, str]], lenses: list[str] | None = None,
-    client=None, model: str | None = None,
+    client=None, model: str | None = None, atom_cap: int | None = None,
 ) -> list[dict]:
     """Batched, comprehensive extraction over `atoms` (list of (atom_id, text)). Returns candidate
-    claim dicts {text, atom_id, quote}. Caller still span-verifies AND entails each. Fail-safe → []."""
+    claim dicts {text, atom_id, quote}. Caller still span-verifies AND entails each. Fail-safe → [].
+    `atom_cap` overrides the per-atom char window shown to the extractor (default `_ATOM_CAP`)."""
     import asyncio
-    eligible = [(aid, (t or "").strip()[:_ATOM_CAP]) for aid, t in atoms if (t or "").strip()]
+    cap = atom_cap if atom_cap else _ATOM_CAP
+    eligible = [(aid, (t or "").strip()[:cap]) for aid, t in atoms if (t or "").strip()]
     if not eligible:
         return []
     cl = _client(client)

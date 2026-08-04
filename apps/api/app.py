@@ -196,9 +196,15 @@ def build_default_service() -> ResearchService:
     planner_model = os.environ.get("NOESIS_PLANNER_MODEL", "")   # empty → same strong model as compose
     planner_llm = build_llm(mode=mode, model=planner_model) if planner_model else None
     claims_first = os.environ.get("NOESIS_CLAIMS_FIRST", "").lower() in ("1", "true", "yes")
+    # Evidence selection (flag, default OFF): raise the extractor's per-atom window so full-text
+    # effect-size/CI sentences aren't truncated, AND keep the claims most RELEVANT to the question
+    # for compose (not the first-come 30). Both are provenance-safe (span+entail gates unchanged).
+    evidence_select = os.environ.get("NOESIS_EVIDENCE_SELECT", "").lower() in ("1", "true", "yes")
+    atom_cap = int(os.environ.get("NOESIS_ATOM_CAP", "6000" if evidence_select else "1600"))
     return ResearchService(
         llm=build_llm(mode=mode), embedder=embedder, planner_llm=planner_llm,
         claims_first=claims_first, extraction_lenses=getattr(manifest, "extraction_lenses", ()),
+        evidence_select=evidence_select, atom_cap=atom_cap,
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
         answer_format=answer_format, vision_prompt=vision_prompt,
         layman_prompt=manifest.layman_prompt, gap_prompt=gap_prompt,
@@ -323,6 +329,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "video_enabled": video_enabled(),
             "structured_answers": structured_answers(),
             "clinical_synthesis": clinical_synthesis() and structured_answers(),
+            "evidence_select": bool(getattr(svc, "evidence_select", False)),
             "vision_enabled": vision_enabled(),
             "layman_enabled": bool(getattr(svc, "layman_prompt", None)),
             "gap_healing_enabled": gap_healing_enabled() and bool(getattr(svc, "gap_prompt", None)),

@@ -37,6 +37,8 @@ class ResearchService:
     aux_source_keys: tuple[str, ...] = ("web",)   # queried once/step (no variant fan-out) — e.g. web
     claims_first: bool = False              # run the comprehensive extraction pipeline (flag)
     extraction_lenses: tuple[str, ...] = () # vertical lenses for claims-first extraction
+    evidence_select: bool = False           # rank claims by relevance before the cap + wider atom window (flag)
+    atom_cap: int = 1600                    # per-atom char window for the extractor (raised under evidence_select)
 
     def _retriever(self, source_keys: list[str] | None) -> MultiSourceRetriever:
         chosen = {k: v for k, v in self.sources.items()
@@ -114,6 +116,7 @@ class ResearchService:
             attachment_context=attachment_context, history_context=history_context,
             planner_llm=self.planner_llm, on_event=on_event,
             claims_first=self.claims_first, extraction_lenses=self.extraction_lenses,
+            evidence_select=self.evidence_select, atom_cap=self.atom_cap,
             max_steps=max_steps,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)

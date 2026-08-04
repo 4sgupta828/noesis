@@ -27,6 +27,12 @@ _COMPOSE_FAIL_NOTE = (
     "_The written answer couldn't be generated just now, but the evidence below was retrieved and "
     "verified against its sources. Please retry the question._")
 
+# Compose sees only the verified findings, capped for cost + scannability. Default selection is
+# first-come (retrieval/extraction order). Under the evidence-select flag we collect MORE candidates
+# and keep the ones most RELEVANT to the question — so compose gets the BEST findings, not the first.
+_COMPOSE_CLAIM_CAP = 30       # max verified findings sent to compose
+_EXTRACT_COLLECT = 80         # under evidence-select, gather up to this many before ranking down
+
 from pydantic import BaseModel
 
 from noesis_kernel.contract.dto import RetrievalRequest
@@ -77,6 +83,34 @@ def _refs_valid(text: str, n_findings: int) -> bool:
     if not refs:
         return False
     return all(1 <= r <= n_findings for r in refs)
+
+
+async def _rank_claims_by_relevance(question, claims, embedder, top):
+    """Keep the `top` verified claims most RELEVANT to the question, by dense cosine similarity of
+    claim↔question embeddings. This replaces first-come truncation so compose gets the BEST findings,
+    not the first ones retrieved. A dense embedding score is a computable relevance signal (Rule 18 —
+    NOT a regex/keyword semantic heuristic); it never touches the span/entailment gates, so which
+    claims are ELIGIBLE is unchanged — only which of the already-verified ones survive the cap.
+    Fail-safe: any embedding error → the original order's first `top` (never worse than today)."""
+    import asyncio
+    import math
+    if len(claims) <= top:
+        return list(claims)
+    try:
+        vecs = await asyncio.to_thread(lambda: embedder.embed([question] + [c.text for c in claims]))
+    except Exception:   # noqa: BLE001
+        return list(claims)[:top]
+    qv = vecs[0]
+    qn = math.sqrt(sum(x * x for x in qv)) or 1.0
+
+    def _cos(i: int) -> float:
+        v = vecs[1 + i]
+        dot = sum(a * b for a, b in zip(qv, v))
+        vn = math.sqrt(sum(x * x for x in v)) or 1.0
+        return dot / (qn * vn)
+
+    order = sorted(range(len(claims)), key=_cos, reverse=True)
+    return [claims[i] for i in order[:top]]
 
 
 # ---- results -------------------------------------------------------------
@@ -151,6 +185,8 @@ async def run_react(
     aux_source: RetrievalSource | None = None,  # e.g. web: queried ONCE per step (no variant fan-out)
     claims_first: bool = False,               # run comprehensive extraction over ALL atoms (flag)
     extraction_lenses: tuple[str, ...] = (),  # vertical-supplied lenses for the extractor
+    evidence_select: bool = False,            # rank claims by relevance before the cap + wider atom window
+    atom_cap: int = 1600,                     # per-atom char window for the extractor (evidence-select raises it)
     max_steps: int = 8,
     k: int = 10,
     planner_atom_window: int = 60,            # atoms SHOWN to the planner per step (store keeps all)
@@ -413,7 +449,7 @@ async def run_react(
             from noesis_kernel.research.provenance import normalize
             cands = await extract_claims(
                 question=question, atoms=[(a.atom_id, a.text) for a in atoms.all()],
-                lenses=list(extraction_lenses))
+                lenses=list(extraction_lenses), atom_cap=atom_cap)
             span_ok = []                                   # candidates whose quote verbatim-verifies
             for c in cands:
                 atom = atoms.get(c["atom_id"])
@@ -434,12 +470,23 @@ async def run_react(
                     c["text"], c["atom_id"], c["quote"], atom.source_key,
                     atom.document_title, atom.document_id))
                 added += 1
-                if len(result.verified_claims) >= 30:      # cap compose input (cost/latency)
+                # OFF: cap first-come at the compose limit (unchanged). ON: collect a bigger pool so
+                # the relevance ranking below has real choices before it trims to the compose cap.
+                if len(result.verified_claims) >= (_EXTRACT_COLLECT if evidence_select else _COMPOSE_CLAIM_CAP):
                     break
             await emit({"type": "extracted", "added": added, "candidates": len(cands),
                         "total": len(result.verified_claims)})
         except Exception:   # noqa: BLE001 — extraction is best-effort; never break the answer
             pass
+
+    # Evidence SELECTION (flag): compose is capped for cost/scannability, so WHICH verified findings
+    # survive the cap matters. Default = first-come. Under evidence-select, keep the findings most
+    # RELEVANT to the question (span+entailment already passed → provenance unchanged; this only
+    # reorders/trims already-verified claims). Applies to the whole set (loop + fallback + extraction).
+    if evidence_select and len(result.verified_claims) > _COMPOSE_CLAIM_CAP:
+        await emit({"type": "selecting", "from": len(result.verified_claims), "to": _COMPOSE_CLAIM_CAP})
+        result.verified_claims = await _rank_claims_by_relevance(
+            question, result.verified_claims, embedder, _COMPOSE_CLAIM_CAP)
 
     # Compose a synthesized answer FROM the verified findings only (factra "living
     # answer" model). Grounded by construction: the composer sees only the verified

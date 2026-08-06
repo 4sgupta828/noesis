@@ -45,6 +45,7 @@ class ResearchService:
     layman_prompt: str | None = None        # vertical layman-rephrasing directive (opaque)
     gap_prompt: str | None = None           # vertical gap-fill-planner directive (opaque)
     suggest_prompt: str | None = None       # vertical suggested-follow-ups directive (opaque)
+    refine_prompt: str | None = None         # vertical pre-answer question-refinement directive (opaque)
     max_calls: int = 40
     vertical_name: str = ""
     ui: object | None = None                # the vertical's UIContract (for /config)
@@ -340,6 +341,16 @@ class ResearchService:
         return await suggest_followups(
             llm=self.llm, suggest_prompt=self.suggest_prompt,
             question=question, answer=answer, history=history)
+
+    async def refine(self, *, question: str) -> list[str]:
+        """Pre-answer refinements: 0, or a few DISTINCT sharper standalone questions to choose from.
+        [] when the vertical has no refine prompt, the question is already precise, or on error. Uses
+        the FAST planner model — it only proposes questions the user picks; it never enters a gate."""
+        if not self.refine_prompt:
+            return []
+        from noesis_kernel.research.refine import refine_question
+        return await refine_question(
+            llm=self.planner_llm or self.llm, refine_prompt=self.refine_prompt, question=question)
 
     async def search(
         self,

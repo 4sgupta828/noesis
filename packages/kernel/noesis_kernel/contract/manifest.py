@@ -72,6 +72,9 @@ class VerticalManifest:
     # on — pushes the answer toward comparison tables / ranked options / pros-cons, strictly from the
     # verified findings (never fabricated structure). Opaque prose threaded like `answer_format`.
     visual_guidance: str | None = None
+    # Optional PRE-ANSWER refinement directive: propose sharper standalone versions of a fresh question
+    # for the user to pick from (express refinement). Opaque prose; kernel owns the mechanics.
+    refine_prompt: str | None = None
     # Optional vertical-supplied instruction for the VISION pre-step: how to DESCRIBE a
     # user-uploaded image (color/shape/borders/texture/distribution), producing a labeled
     # visual observation — never a diagnosis. Opaque prose; the kernel only threads it into

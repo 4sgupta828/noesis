@@ -88,6 +88,14 @@ def patient_mode_enabled() -> bool:
     return os.environ.get("NOESIS_PATIENT_MODE", "").lower() in ("1", "true", "yes")
 
 
+def refine_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, a FRESH question (no history) is first sent to /refine,
+    which proposes a few distinct sharper standalone questions to pick from (express refinement). The
+    LLM returns [] when the question is already precise → the FE just answers it. OFF → no /refine
+    step (byte-identical); follow-ups are never refined (the resolver handles those)."""
+    return os.environ.get("NOESIS_REFINE", "").lower() in ("1", "true", "yes")
+
+
 def answer_visuals_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, append the vertical's visualization guidance to the
     compose directive so answers proactively use comparison tables / ranked options / pros-cons —
@@ -169,6 +177,10 @@ class SuggestIn(BaseModel):
     question: str
     answer: str = ""
     history: list[dict] | None = None
+
+
+class RefineIn(BaseModel):
+    question: str
 
 
 class ExplainIn(BaseModel):
@@ -279,6 +291,7 @@ def build_default_service() -> ResearchService:
     vision_prompt = manifest.vision_prompt if vision_enabled() else None
     gap_prompt = manifest.gap_prompt if gap_healing_enabled() else None
     suggest_prompt = manifest.suggest_prompt if conversation_enabled() else None
+    refine_prompt = getattr(manifest, "refine_prompt", None) if refine_enabled() else None
     # Use the BEST model for EVERY research step (planning + claim extraction + compose). A cheaper
     # planner (haiku) paraphrased quotes → span-verification rejected them (grounding regression),
     # so planner_llm is left unset and run_react uses `llm` throughout. Optional explicit override.
@@ -302,7 +315,7 @@ def build_default_service() -> ResearchService:
         patient_answer_format=(manifest.patient_answer_format if patient_mode_enabled() else None),
         vision_prompt=vision_prompt,
         layman_prompt=manifest.layman_prompt, gap_prompt=gap_prompt,
-        suggest_prompt=suggest_prompt,
+        suggest_prompt=suggest_prompt, refine_prompt=refine_prompt,
         vertical_name=manifest.name, ui=manifest.ui,
         connectors=connectors, corpus_source_key=corpus_key,
     )
@@ -441,6 +454,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "answer_focus_enabled": answer_focus_enabled(),
             "followup_clarify_enabled": followup_clarify_enabled(),
             "answer_visuals_enabled": answer_visuals_enabled(),
+            "refine_enabled": refine_enabled() and bool(getattr(svc, "refine_prompt", None)),
         }
 
     @app.post("/search")
@@ -684,6 +698,26 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
         return {"suggestions": qs}
+
+    @app.post("/refine")
+    async def refine(body: RefineIn) -> dict:
+        """Pre-answer question refinement: propose a few distinct sharper standalone questions to pick
+        from. Returns {"refinements": []} when the question is already precise (so the FE just answers
+        it), when the flag/vertical is off, or on any provider error — never a dead-end."""
+        if not refine_enabled():
+            return {"refinements": []}
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        if not getattr(svc, "refine_prompt", None):
+            return {"refinements": []}
+        try:
+            opts = await svc.refine(question=body.question)
+        except CassetteMiss:
+            return {"refinements": []}     # replay mode → no refinement, answer the original
+        except Exception:                  # provider error → fail open (answer the original)
+            return {"refinements": []}
+        return {"refinements": opts}
 
     @app.post("/corpus/gap-plan")
     async def corpus_gap_plan(body: GapPlanIn) -> dict:

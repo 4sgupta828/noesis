@@ -362,6 +362,8 @@
     background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:.6rem .8rem;transition:border-color .15s,color .15s;}
   .chip-q::before{content:"→ ";color:var(--gold);font-weight:700;}
   .chip-q:hover{border-color:rgba(var(--gold-rgb),.45);background:rgba(var(--gold-rgb),.10);color:var(--ink);}
+  .chip-q.chip-asis{color:var(--muted);font-style:italic;}   /* the "ask exactly as I wrote it" escape */
+  .chip-q.chip-asis::before{content:"↩ ";font-style:normal;}
 
   /* live agent trace (streaming) */
   .agenttrace{display:flex;flex-direction:column;gap:.45rem;padding:.4rem 0 .2rem;}
@@ -758,6 +760,7 @@ let EFFORT = 1;             // current effort multiplier (1 = Standard); only se
 let PATIENT_MODE_ENABLED = false; // audience switch available (clinician vs patient answer)
 let AUDIENCE = "clinician"; // current answer audience; only sent when "patient"
 let SESS_AUDIENCE = "clinician"; // active Past-Sessions audience tab (clinician | patient)
+let REFINE_ENABLED = false;     // pre-answer question refinement (offer sharper versions to pick)
 let THREAD = {session_id:null, turns:[]};   // the active conversation
 let BASE_PLACEHOLDER = "";                   // vertical console placeholder (restored on New)
 let EXAMPLES = [];                            // vertical example questions → random intake prompt
@@ -786,6 +789,7 @@ async function loadConfig(){
     STREAM_ENABLED = !!c.stream_enabled;
     EFFORT_ENABLED = !!c.effort_scale_enabled;
     PATIENT_MODE_ENABLED = !!c.patient_mode_enabled;
+    REFINE_ENABLED = !!c.refine_enabled;
     VISION_ENABLED = !!c.vision_enabled;
     if(EFFORT_ENABLED){
       const wrap = $("#effort"), rng = $("#effort-range");
@@ -1488,12 +1492,41 @@ async function streamResearch(payload, onEvent, signal){
 
 // The one path for asking. In CONVERSATION mode it appends a turn to the running thread (carrying
 // prior turns as context + the thread id); otherwise it renders a single answer (unchanged).
-async function askQuestion(question){
+// Pre-answer REFINEMENT: on a fresh question, offer a few sharper versions to pick from (or fall
+// through if the LLM finds it already precise / on any error). Returns true if chips were shown.
+async function fetchRefinements(question){
+  try{
+    const r = await fetch("/refine",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({question})});
+    if(!r.ok) return [];
+    return (await r.json()).refinements || [];
+  }catch(_){ return []; }
+}
+function renderRefineChips(original, refs){
+  const box = document.createElement("div"); box.id = "refine"; box.className = "suggest";
+  box.innerHTML = `<div class="suggest-h">◈ Pick a sharper question — or ask as-is</div>`
+    + `<div class="suggest-chips">`
+    + refs.map(s=>`<button type="button" class="chip-q" data-q="${esc(s)}">${esc(s)}</button>`).join("")
+    + `<button type="button" class="chip-q chip-asis" data-q="${esc(original)}">Ask exactly as I wrote it</button>`
+    + `</div>`;
+  out.innerHTML = ""; out.appendChild(box);
+  box.querySelectorAll(".chip-q").forEach(b=>b.addEventListener("click",()=>askQuestion(b.dataset.q,{skipRefine:true})));
+  syncComposerPad();
+}
+async function askQuestion(question, opts){
+  opts = opts || {};
   if(ATTACHMENTS.length && !($("#consent")||{}).checked){
     const c = $("#consent"); if(c){ c.focus(); c.parentElement.style.color = "var(--gap)"; }
     return;
   }
   CURRENT_Q = question;
+  // Fresh-question refinement (no thread history, no attachments). Skipped when re-entering from a chip.
+  if(REFINE_ENABLED && !opts.skipRefine && !THREAD.turns.length && !ATTACHMENTS.length){
+    go.disabled = true; go.classList.add("loading");
+    const refs = await fetchRefinements(question);
+    go.disabled = false; go.classList.remove("loading");
+    if(refs.length){ renderRefineChips(question, refs); return; }   // let the user pick; stop here
+  }
   const conv = CONV_ENABLED;
   const payload = {question, tenant_id:"demo", sources: chosen()};
   if(EFFORT_ENABLED && EFFORT > 1) payload.effort = EFFORT;

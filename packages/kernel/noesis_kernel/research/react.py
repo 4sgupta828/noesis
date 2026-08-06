@@ -23,6 +23,12 @@ _log = logging.getLogger(__name__)
 # survives (the 'grounded, N claims, empty answer' bug). Retry a few times, then surface a note.
 _COMPOSE_ATTEMPTS = 3
 _COMPOSE_BACKOFF_S = 1.5          # base backoff between compose retries (tests patch to 0)
+# Compose is the user-facing prose answer synthesizing up to ~60 findings (effort-scaled) with inline
+# [n] citations — it needs far more room than a planner step. At the 2048 default the emit tool-call
+# gets TRUNCATED mid-answer → the partial dict fails ComposedAnswer validation on EVERY retry (the
+# deterministic 'couldn't be generated' bug). Only actually-generated tokens are billed, so a high
+# ceiling adds no cost, only headroom.
+_COMPOSE_MAX_TOKENS = 8000
 _COMPOSE_FAIL_NOTE = (
     "_The written answer couldn't be generated just now, but the evidence below was retrieved and "
     "verified against its sources. Please retry the question._")
@@ -526,7 +532,7 @@ async def run_react(
             comp = await llm.complete(
                 system=system_prompt,
                 messages=[{"role": "user", "content": compose_user}],
-                response_format=ComposedAnswer)
+                response_format=ComposedAnswer, max_tokens=_COMPOSE_MAX_TOKENS)
             budget.charge(calls=1, tokens=comp.output_tokens)
             return comp.parsed
 

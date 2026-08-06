@@ -62,6 +62,13 @@ class AnthropicLLM:
                 tool_choice={"type": "tool", "name": "emit"},
                 **({"temperature": temperature} if temperature is not None else {}),
             ))
+        # A max_tokens cutoff truncates the emit tool-call mid-JSON, so block.input is a partial dict
+        # that fails schema validation with an opaque pydantic error. Surface the REAL cause instead
+        # (Rule 13) so the fix is "raise max_tokens", not a wild goose chase.
+        if getattr(resp, "stop_reason", None) == "max_tokens":
+            raise RuntimeError(
+                f"Anthropic structured output truncated: hit max_tokens={max_tokens} before the "
+                f"'{response_format.__name__}' emit call completed — raise max_tokens for this call.")
         parsed = None
         for block in resp.content:
             if getattr(block, "type", None) == "tool_use" and block.name == "emit":

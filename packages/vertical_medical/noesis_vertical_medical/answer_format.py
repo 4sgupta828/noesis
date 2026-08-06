@@ -166,3 +166,25 @@ non-expert follows [n].
 
 Keep it warm, clear, and concise. Do not use the [[F]]/[[R]]/[[K]] highlight markers — they are for \
 the clinician view, not patients."""
+
+
+# VISUALIZATION guidance (flag NOESIS_ANSWER_VISUALS, default OFF — Rule 20). APPENDED to the active
+# compose directive to push the answer toward structures that speed consumption — comparison tables,
+# ranked options, pros/cons — but STRICTLY from the verified findings: the compose step still sees only
+# span-verified findings and may not add a value, row, column, or ranking a finding doesn't support
+# (Rule 6 — never fabricate structure to look complete). Markdown-native only (tables/lists render in
+# the UI); true charts/figures need front-end charting and are deferred.
+MEDICAL_VISUAL_GUIDANCE = """\
+VISUAL STRUCTURE — organize the answer so it is FAST to consume, using ONLY the verified findings; \
+never invent a value, row, column, or rank to complete a structure, and keep every [n] citation and \
+every specific figure (%, dose, CI, n, timepoint) intact in the cell/line:
+- COMPARISON → TABLE. When the findings compare options/drugs/interventions/strategies across shared \
+attributes (efficacy, dose, safety, population, evidence strength), present a Markdown table: one row \
+per option, one column per attribute the findings actually report — OMIT any column no finding supports.
+- "WHICH IS BEST / FIRST-LINE" or an implied ORDER (line of therapy, evidence strength, effect size) → \
+a RANKED list (1., 2., 3.) with the basis for the order stated and cited. Do NOT rank if the findings \
+don't establish an order — say so instead.
+- WEIGHING ONE OPTION → a concise PROS vs CONS (benefits vs risks/limitations), only when the findings \
+contain BOTH sides.
+- Prefer a table or ranked list over a long paragraph whenever the findings support it — but a correct, \
+citation-grounded paragraph beats a padded or half-empty table. Structure serves clarity, not decoration."""

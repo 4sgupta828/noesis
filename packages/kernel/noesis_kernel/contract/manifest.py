@@ -68,6 +68,10 @@ class VerticalManifest:
     # exactly like `answer_format`. None → the vertical has no patient view (patient mode falls back to
     # the clinician directive), so the flag is a safe no-op for verticals that don't supply this.
     patient_answer_format: str | None = None
+    # Optional VISUALIZATION guidance appended to the compose directive when the answer-visuals flag is
+    # on — pushes the answer toward comparison tables / ranked options / pros-cons, strictly from the
+    # verified findings (never fabricated structure). Opaque prose threaded like `answer_format`.
+    visual_guidance: str | None = None
     # Optional vertical-supplied instruction for the VISION pre-step: how to DESCRIBE a
     # user-uploaded image (color/shape/borders/texture/distribution), producing a labeled
     # visual observation — never a diagnosis. Opaque prose; the kernel only threads it into

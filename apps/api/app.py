@@ -88,6 +88,14 @@ def patient_mode_enabled() -> bool:
     return os.environ.get("NOESIS_PATIENT_MODE", "").lower() in ("1", "true", "yes")
 
 
+def answer_visuals_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, append the vertical's visualization guidance to the
+    compose directive so answers proactively use comparison tables / ranked options / pros-cons —
+    strictly from the verified findings. Requires structured answers (tables render only then). OFF →
+    the directive is unchanged (byte-identical)."""
+    return os.environ.get("NOESIS_ANSWER_VISUALS", "").lower() in ("1", "true", "yes")
+
+
 def answer_focus_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, elliptical conversational follow-ups are condensed into a
     self-contained question (so retrieval + compose inherit the subject) AND compose ANSWERS the
@@ -264,6 +272,10 @@ def build_default_service() -> ResearchService:
             answer_format = getattr(manifest, "clinical_answer_format", None) or manifest.answer_format
     else:
         answer_format = None
+    # Visualization guidance (flag): append to the CLINICIAN directive so answers use tables/rankings/
+    # pros-cons from the verified findings. Only when structured answers are on (tables render then).
+    if answer_format and answer_visuals_enabled() and getattr(manifest, "visual_guidance", None):
+        answer_format = answer_format + "\n\n" + manifest.visual_guidance
     vision_prompt = manifest.vision_prompt if vision_enabled() else None
     gap_prompt = manifest.gap_prompt if gap_healing_enabled() else None
     suggest_prompt = manifest.suggest_prompt if conversation_enabled() else None
@@ -428,6 +440,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "patient_mode_enabled": patient_mode_enabled(),
             "answer_focus_enabled": answer_focus_enabled(),
             "followup_clarify_enabled": followup_clarify_enabled(),
+            "answer_visuals_enabled": answer_visuals_enabled(),
         }
 
     @app.post("/search")

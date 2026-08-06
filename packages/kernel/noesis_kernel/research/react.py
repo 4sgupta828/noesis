@@ -45,7 +45,7 @@ _COMPOSE_FAIL_NOTE = (
 _COMPOSE_CLAIM_CAP = 30       # max verified findings sent to compose
 _EXTRACT_COLLECT = 80         # under evidence-select, gather up to this many before ranking down
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from noesis_kernel.contract.dto import RetrievalRequest
 from noesis_kernel.contract.protocols import GatingPolicy, RetrievalSource
@@ -149,8 +149,12 @@ class ComposedAnswer(BaseModel):
     charts: list[ChartSpec] = []
     # Reasoning Read (only when the reasoning-read flag drives the directive). Both are VALIDATED /
     # surfaced in the kernel; empty/None when the directive doesn't ask → byte-identical OFF path.
-    interpretation: list[InterpretationItem] = []
-    confidence: ConfidenceRead | None = None
+    interpretation: list[InterpretationItem] = Field(
+        default=[], description="Typed interpretation of the evidence (tension/gap/assumption/"
+        "implication/what_would_change_this) — populate when the directive asks for a Reasoning Read.")
+    confidence: ConfidenceRead | None = Field(
+        default=None, description="Three-dimension confidence read (factual/causal/generalization) — "
+        "populate when the directive asks for a Reasoning Read.")
 
 
 def _validate_charts(charts: list[ChartSpec], verified: list["VerifiedClaim"]) -> list[dict]:
@@ -715,6 +719,18 @@ async def run_react(
                 "DIRECTLY (e.g. no evidence on the exact intervention/population/outcome asked); then "
                 "put ONE short line in gap_note naming the direct evidence that is missing. Otherwise "
                 "directly_addresses=true and gap_note empty."
+                # REASONING READ (flag): anchor the structured interpretation/confidence fields at the
+                # KERNEL level, symmetric to the directly_addresses metadata above — the domain-free
+                # mechanics live here; the domain MEANING (what each kind is, neutrality) is in the
+                # directive below. Without this anchor the model composes great prose and leaves the
+                # trailing structured fields empty (the fields have defaults, so nothing forces them).
+                + ("\n\nSEPARATELY, you MUST ALSO populate the STRUCTURED `interpretation` and "
+                   "`confidence` fields (these are required outputs, NOT optional, and are separate from "
+                   "the answer prose above). Emit 2–5 `interpretation` items and the three-dimension "
+                   "`confidence` read, following the REASONING READ instructions in the directive below. "
+                   "Each interpretation item must set `basis_findings` to the finding number(s) it rests "
+                   "on and introduce no number/date/dose not already in those findings."
+                   if reasoning_read else "")
                 + (("\n\n" + directive) if directive else ""))
             comp = await llm.complete(
                 system=system_prompt,

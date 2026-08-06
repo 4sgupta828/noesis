@@ -162,6 +162,7 @@ class AnswerResult:
     effort: float = 1.0                  # the resolved effort multiplier this run used (observability)
     resolved_question: str = ""          # condensed self-contained question (set only if it differed)
     clarification: str = ""              # a clarifying question to ask instead of answering (ambiguous follow-up)
+    derived_from_prior: bool = False     # answer is a transform of the PREVIOUS answer (no new retrieval)
 
     @property
     def grounded(self) -> bool:

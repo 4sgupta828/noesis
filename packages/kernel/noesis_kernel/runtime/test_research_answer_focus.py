@@ -16,11 +16,13 @@ SCOPE_MARK = "Directly ANSWER the specific question"   # only present under answ
 
 
 class FocusLLM:
-    def __init__(self, condensed="RESOLVED SUBJECT QUESTION", clar="", subject=""):
+    def __init__(self, condensed="RESOLVED SUBJECT QUESTION", clar="", subject="", operate=False):
         self.condensed = condensed
         self.clar = clar
         self.subject = subject
+        self.operate = operate
         self.compose_user = None
+        self.transformed = None
         self._loop = [
             AgentStep(action="search", query="metric value"),
             AgentStep(action="answer", claims=[
@@ -33,7 +35,11 @@ class FocusLLM:
         if name == "_Resolution":                      # the follow-up resolver pre-step
             return LLMResult(parsed=response_format(
                 core_query=self.condensed, subject=self.subject,
-                needs_clarification=bool(self.clar), clarification=self.clar), model="c")
+                needs_clarification=bool(self.clar), clarification=self.clar,
+                operate_on_prior=self.operate), model="c")
+        if name == "_PlainAnswer":                     # the operate-on-prior transform
+            self.transformed = messages[-1]["content"]
+            return LLMResult(parsed=response_format(text="A shorter version of the prior answer."), model="c")
         if response_format is ComposedAnswer:
             self.compose_user = messages[-1]["content"]
             return LLMResult(parsed=ComposedAnswer(answer="Value is 9.8 percent [1].",
@@ -41,11 +47,11 @@ class FocusLLM:
         return LLMResult(parsed=self._loop.pop(0), output_tokens=5, model="c")
 
 
-def _service(condensed="RESOLVED SUBJECT QUESTION", clar="", subject=""):
+def _service(condensed="RESOLVED SUBJECT QUESTION", clar="", subject="", operate=False):
     src = InMemoryRetrievalSource()
     src.add(IndexedBlock(block_id="b1", document_id="d1", tenant_id="A", text=_TEXT,
                          locator=Locator("block_span", "d1", {"block_id": "b1"})))
-    llm = FocusLLM(condensed, clar, subject)
+    llm = FocusLLM(condensed, clar, subject, operate)
     return ResearchService(llm=llm, embedder=FakeEmbedder(dim=8), sources={"corpus": src}), llm
 
 
@@ -105,3 +111,23 @@ def test_clarify_off_ignores_needs_clarification():
                               answer_focus=True, clarify=False))   # clarify flag OFF
     assert res.clarification == ""                      # not honored
     assert llm.compose_user is not None                # research + compose ran normally
+
+
+def test_operate_on_prior_reshapes_without_research():
+    svc, llm = _service(operate=True)
+    hist = [{"question": "First-line PCP prophylaxis?", "answer": "TMP-SMX is first-line; the dose is 1 DS tab daily."}]
+    res = asyncio.run(svc.ask(question="summarize that", tenant_id="A", history=hist, answer_focus=True))
+    assert res.derived_from_prior is True
+    assert res.composed_answer == "A shorter version of the prior answer."
+    assert res.stopped_reason == "operate_prior"
+    assert not res.verified_claims                     # NO new research/claims
+    assert llm.compose_user is None                    # compose never ran
+    assert "TMP-SMX is first-line" in llm.transformed  # the prior answer was the transform input
+
+
+def test_operate_on_prior_falls_through_without_prior_answer():
+    svc, llm = _service(operate=True)
+    res = asyncio.run(svc.ask(question="summarize that", tenant_id="A",
+                              history=[{"question": "hi", "answer": ""}], answer_focus=True))
+    assert res.derived_from_prior is False             # no prior answer → normal research ran
+    assert llm.compose_user is not None

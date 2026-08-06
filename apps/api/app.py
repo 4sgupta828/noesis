@@ -220,6 +220,7 @@ class ResearchOut(BaseModel):
     audience: str | None = None      # resolved audience 'clinician'|'patient' (only set when flag on)
     resolved_question: str | None = None  # condensed follow-up question, if it differed (flag on only)
     clarification: str | None = None      # a clarifying question when the follow-up was ambiguous
+    derived_from_prior: bool = False      # answer is a reshape of the previous answer (no new evidence)
 
 
 def build_default_service() -> ResearchService:
@@ -577,6 +578,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             effort=res.effort if effort_scale_enabled() else None,
             audience=audience if patient_mode_enabled() else None,
             resolved_question=(res.resolved_question or None) if answer_focus_enabled() else None,
+            derived_from_prior=bool(getattr(res, "derived_from_prior", False)),
         )
 
     @app.post("/research/stream")

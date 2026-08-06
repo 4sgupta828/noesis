@@ -14,6 +14,11 @@ from noesis_kernel.providers.llm import LLMClient
 from noesis_kernel.research.budget import BudgetState
 from noesis_kernel.research.react import AnswerResult, run_react
 from noesis_kernel.retrieval.multi import MultiSourceRetriever
+from pydantic import BaseModel
+
+
+class _PlainAnswer(BaseModel):
+    text: str
 
 
 @dataclass
@@ -23,6 +28,7 @@ class FollowupResolution:
     subject: str = ""                   # the carried subject/entity (transparency)
     needs_clarification: bool = False   # the follow-up is genuinely ambiguous → ask, don't guess
     clarification: str = ""             # the clarifying question to put to the user
+    operate_on_prior: bool = False      # transform the PREVIOUS answer (summarize/shorten/…), not new research
 
 
 @dataclass
@@ -96,6 +102,24 @@ class ResearchService:
         resolved_question = ""
         if answer_focus and history:
             r = await self._resolve_followup(question, history, allow_clarify=clarify)
+            # OPERATE-ON-PRIOR (#5): "summarize that / shorten / explain point 2" → transform the
+            # previous answer with NO new retrieval (adds no new facts). Fall through to normal
+            # research if there's no prior answer or the transform fails.
+            if r.operate_on_prior:
+                prior = next((t.get("answer") for t in reversed(history)
+                              if (t.get("answer") or "").strip()), "")
+                if prior:
+                    transformed = await self._transform_prior(question, prior)
+                    if transformed:
+                        if on_event is not None:
+                            try:
+                                await on_event({"type": "operate_prior"})
+                            except Exception:
+                                pass
+                        out = AnswerResult(stopped_reason="operate_prior")
+                        out.composed_answer = transformed
+                        out.derived_from_prior = True
+                        return out
             if r.needs_clarification and r.clarification:
                 if on_event is not None:
                     try:
@@ -201,6 +225,7 @@ class ResearchService:
             subject: str = ""
             needs_clarification: bool = False
             clarification: str = ""
+            operate_on_prior: bool = False
 
         convo = []
         for t in (history or []):
@@ -229,7 +254,14 @@ class ResearchService:
             "to the carried subject/entity. RULES: (1) If LATEST QUESTION is ALREADY self-contained, set "
             "core_query to it VERBATIM. (2) If it CHANGES the topic (a new subject), set core_query "
             "VERBATIM — do not graft on the old subject. (3) Carry ONLY the subject the latest question is "
-            "implicitly about; do NOT add facts, answers, doses, or details from the prior answers."
+            "implicitly about; do NOT add facts, answers, doses, or details from the prior answers. "
+            "(3b) DO carry any patient CONSTRAINT the conversation established that still applies — age/"
+            "pediatric/elderly, pregnancy, renal or hepatic impairment, an allergy, a comorbidity — into "
+            "core_query (e.g. after 'in a patient with renal impairment', a later 'what about the dose?' → "
+            "'... dose ... in a patient with renal impairment'), unless the latest question overrides it. "
+            "(5) If LATEST QUESTION asks to TRANSFORM the PREVIOUS answer itself rather than seek new "
+            "information — e.g. 'summarize that', 'shorten it', 'explain the second point', 'put it in a "
+            "table', 'in one sentence' — set operate_on_prior=true (and core_query VERBATIM)."
             + clause)
         planner = self.planner_llm or self.llm
         try:
@@ -246,7 +278,27 @@ class ResearchService:
         return FollowupResolution(
             core_query=cq, subject=(r.subject or "").strip(),
             needs_clarification=bool(allow_clarify and r.needs_clarification and clar),
-            clarification=clar if (allow_clarify and r.needs_clarification) else "")
+            clarification=clar if (allow_clarify and r.needs_clarification) else "",
+            operate_on_prior=bool(r.operate_on_prior))
+
+    async def _transform_prior(self, request: str, prior_answer: str) -> str:
+        """Apply a user's TRANSFORM request ('summarize that', 'shorten', 'explain point 2', 'as a
+        table') to the PREVIOUS answer, adding NO new facts. The prior answer was already grounded;
+        this only reshapes it, so it is provenance-safe by construction (no retrieval, no new claims).
+        Returns "" on failure → the caller falls back to normal research."""
+        sys = ("You reshape a previous answer per the user's request. Use ONLY information already in "
+               "the previous answer — add NO new facts, numbers, drugs, or claims. If the request asks "
+               "for something not in the previous answer, say that briefly rather than inventing it.")
+        user = (f"PREVIOUS ANSWER:\n{prior_answer[:6000]}\n\n"
+                f"USER REQUEST: {request}\n\n"
+                "Produce the reshaped answer as clean prose (no [n] citation markers — the sources are "
+                "shown with the previous answer).")
+        try:
+            comp = await self.llm.complete(system=sys, messages=[{"role": "user", "content": user}],
+                                           response_format=_PlainAnswer, max_tokens=2000)
+            return (comp.parsed.text or "").strip()
+        except Exception:
+            return ""
 
     async def explain(self, *, question: str, answer: str) -> str:
         """On-demand plain-language rephrasing of a grounded answer (adds no new facts)."""

@@ -29,6 +29,12 @@ _COMPOSE_BACKOFF_S = 1.5          # base backoff between compose retries (tests 
 # deterministic 'couldn't be generated' bug). Only actually-generated tokens are billed, so a high
 # ceiling adds no cost, only headroom.
 _COMPOSE_MAX_TOKENS = 8000
+# The ReAct step (AgentStep) emits an `action` plus, on the answer step, a list of claims (each with
+# text + atom_id + a verbatim quote). On a broad, evidence-rich question the agent can emit MANY claims
+# in one step, and at the 2048 default the emit tool-call TRUNCATES mid-JSON → a hard provider error
+# surfaces as a 502 ("Couldn't reach the research service"). Give the step ample room — only
+# actually-generated tokens are billed, so a high ceiling is headroom, not cost.
+_PLANNER_MAX_TOKENS = 8000
 _COMPOSE_FAIL_NOTE = (
     "_The written answer couldn't be generated just now, but the evidence below was retrieved and "
     "verified against its sources. Please retry the question._")
@@ -321,7 +327,7 @@ async def run_react(
         # discipline above + the extract recovery re-ask, not by sampling controls.
         res = await planner.complete(system=system_prompt,
                                      messages=[{"role": "user", "content": user}],
-                                     response_format=AgentStep)
+                                     response_format=AgentStep, max_tokens=_PLANNER_MAX_TOKENS)
         budget.charge(calls=1, tokens=res.output_tokens)
         result.steps += 1
         return res.parsed

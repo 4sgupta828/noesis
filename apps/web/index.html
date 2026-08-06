@@ -1241,12 +1241,40 @@ async function addFiles(files){
   }
   renderAttachments();
 }
+// Paste-to-attachment (ChatGPT/Claude style): a LARGE plain-text paste becomes a "Pasted text"
+// document chip instead of flooding the intake box, so the box stays for the actual question. Small
+// pastes fall through and insert inline as usual. Requires the attachments pipeline (vision on).
+const PASTE_MIN_CHARS = 800, PASTE_MIN_LINES = 8;
+const _b64utf8 = s => btoa(unescape(encodeURIComponent(s)));   // UTF-8 safe base64
+function addPastedText(text){
+  if(ATTACHMENTS.length >= 4) return false;
+  ATTACHMENTS.push({name:"Pasted text", media_type:"text/plain", data:_b64utf8(text), _chars:text.length});
+  renderAttachments();
+  return true;
+}
+q.addEventListener("paste", (e)=>{
+  if(!VISION_ENABLED) return;                       // attachments only processed when the pipeline is on
+  const cd = e.clipboardData; if(!cd) return;
+  const files = [...(cd.files||[])].filter(f=>f && f.size);
+  if(files.length){ e.preventDefault(); addFiles(files); return; }   // pasted screenshot/file → attach
+  const text = cd.getData("text/plain") || "";
+  const lines = (text.match(/\n/g)||[]).length + 1;
+  if((text.length >= PASTE_MIN_CHARS || lines >= PASTE_MIN_LINES) && ATTACHMENTS.length < 4){
+    e.preventDefault();
+    addPastedText(text);                            // big paste → attachment (keeps the box clean)
+  }                                                 // else: small paste inserts inline (default)
+});
 function renderAttachments(){
   const box = $("#attns");
   if(!ATTACHMENTS.length){ box.hidden = true; box.innerHTML = ""; return; }
   box.hidden = false;
   box.innerHTML =
-    ATTACHMENTS.map((a,i)=>`<span class="chip">📎 ${esc(a.name||"file")}<button class="x" data-i="${i}" title="Remove" aria-label="Remove">×</button></span>`).join("") +
+    ATTACHMENTS.map((a,i)=>{
+      const isText = (a.media_type||"").startsWith("text/");
+      const label = isText ? `${esc(a.name||"Pasted text")} · ${(a._chars||0).toLocaleString()} chars`
+                           : esc(a.name||"file");
+      return `<span class="chip">${isText?"📄":"📎"} ${label}<button class="x" data-i="${i}" title="Remove" aria-label="Remove">×</button></span>`;
+    }).join("") +
     `<label class="consent"><input type="checkbox" id="consent">
        Images/documents are sent to the AI model for analysis. I confirm they contain <b>no identifying patient information</b> (faces, names, IDs).</label>`;
   box.querySelectorAll(".x").forEach(b=>b.addEventListener("click",()=>{ ATTACHMENTS.splice(+b.dataset.i,1); renderAttachments(); }));

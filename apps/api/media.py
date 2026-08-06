@@ -40,9 +40,11 @@ def _png_from_pil(img) -> dict:
 
 
 def _kind(att: dict) -> str:
-    """Classify an attachment as 'image' | 'pdf' | 'dicom' | 'unknown'."""
+    """Classify an attachment as 'image' | 'pdf' | 'dicom' | 'text' | 'unknown'."""
     mt = (att.get("media_type") or "").lower()
     name = (att.get("name") or "").lower()
+    if mt.startswith("text/") or name.endswith((".txt", ".md")):
+        return "text"                       # pasted text / plain-text upload → document context
     if mt in _ANTHROPIC_IMAGE_TYPES or mt.startswith("image/"):
         return "image"
     if mt == "application/pdf" or name.endswith(".pdf"):
@@ -140,12 +142,17 @@ def attachments_to_media(attachments: list[dict]) -> tuple[list[dict], list[dict
         return ims
 
     for att in attachments or []:
-        if len(images) >= _MAX_IMAGES and _kind(att) != "pdf":
+        if len(images) >= _MAX_IMAGES and _kind(att) not in ("pdf", "text"):
             notes.append("some attachments skipped (max 4 images per request)")
             break
         kind = _kind(att)
         try:
-            if kind == "image":
+            if kind == "text":
+                raw = base64.b64decode(att.get("data", ""), validate=False)
+                text = raw.decode("utf-8", errors="replace").strip()
+                if text:
+                    docs.append({"name": _label(att), "text": text[:_MAX_DOC_CHARS]})
+            elif kind == "image":
                 images.extend(_tag(_image(att), _label(att)))
             elif kind == "dicom":
                 images.extend(_tag(_dicom(att), _label(att)))

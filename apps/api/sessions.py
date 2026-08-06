@@ -88,7 +88,8 @@ class SessionStore:
                    user_name: str | None = None, user_email: str | None = None,
                    visual_observation: str | None = None,
                    attachments: list[dict] | None = None,
-                   audience: str = "clinician") -> str:
+                   audience: str = "clinician",
+                   charts: list[dict] | None = None) -> str:
         await self._ensure()
         sid = uuid.uuid4().hex
         # turn 0 also lives in `thread` so a conversation is one shareable row; the flat columns
@@ -98,6 +99,8 @@ class SessionStore:
                  "visual_observation": visual_observation, "attachments": attachments or []}
         if audience and audience != "clinician":
             turn0["audience"] = audience     # per-turn tag; the flat column drives list segmentation
+        if charts:
+            turn0["charts"] = charts         # grounded charts persist in the shareable session (JSONB)
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             await conn.execute(

@@ -612,7 +612,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                         rejected=len(res.rejected_claims), sources=body.sources,
                         user_name=body.user_name, user_email=body.user_email,
                         visual_observation=res.visual_observation, attachments=previews,
-                        audience=audience)
+                        audience=audience,
+                        charts=(res.charts if answer_charts_enabled() else None))
             except Exception:
                 session_id = None
         return ResearchOut(

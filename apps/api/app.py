@@ -491,10 +491,16 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 conn, pg, tenant_id=tenant_id, embedder=svc.embedder)
         return {"ingested": total, "tenant_id": tenant_id}
 
+    # The single-page app shell is a COMMITTED file that changes on every deploy. Serve it with
+    # no-store so browsers always fetch the current build — otherwise a stale cached index.html keeps
+    # running old front-end code and new features (flags/UI) never reach the user until a hard refresh.
+    _NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate"}
+
     @app.get("/", response_class=HTMLResponse)
-    def index() -> str:
+    def index() -> HTMLResponse:
         page = _WEB_DIR / "index.html"
-        return page.read_text() if page.exists() else "<h1>Noesis</h1>"
+        html = page.read_text() if page.exists() else "<h1>Noesis</h1>"
+        return HTMLResponse(html, headers=_NO_CACHE)
 
     @app.get("/{name}.png")
     def web_png(name: str):
@@ -943,8 +949,9 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         return {"vertical": getattr(svc, "vertical_name", ""), "plan": plan, "live": live}
 
     @app.get("/admin", response_class=HTMLResponse)
-    def admin_page() -> str:
+    def admin_page() -> HTMLResponse:
         page = _WEB_DIR / "admin.html"
-        return page.read_text() if page.exists() else "<h1>Noesis admin</h1>"
+        html = page.read_text() if page.exists() else "<h1>Noesis admin</h1>"
+        return HTMLResponse(html, headers=_NO_CACHE)
 
     return app

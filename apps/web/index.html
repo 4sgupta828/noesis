@@ -246,17 +246,23 @@
     color:var(--muted);font-weight:660;text-align:left;padding:.5rem .75rem;border-bottom:1.5px solid var(--gold);}
   .answer.md .mdt td{padding:.6rem .75rem;border-bottom:1px solid var(--hair);vertical-align:top;line-height:1.55;}
   .answer.md .mdt tbody tr:last-child td{border-bottom:none;}
-  /* grounded bar chart (inline SVG) */
-  .chartwrap{margin:.5rem 0 1.1rem;}
+  /* grounded chart (inline SVG) — framed as a figure with a caption + legend */
+  .chartfig{margin:1.1rem 0 1.3rem;border:1px solid var(--hair);border-radius:12px;
+    padding:.85rem 1rem;background:var(--panel2);}
+  .chartcap{font-family:var(--mono);font-size:.7rem;font-weight:600;letter-spacing:.02em;color:var(--ink);margin:0 0 .55rem;}
+  .chartwrap{margin:0;}
   .chart{max-width:100%;height:auto;font-family:var(--sans);display:block;}
-  .chart .c-title{fill:var(--muted);font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;}
   .chart .c-lbl{fill:var(--ink);font-size:12px;}
   .chart .c-val{fill:var(--gold);font-size:12px;font-weight:700;}
   .chart .c-bar{fill:var(--gold);opacity:.85;}
   .chart .c-wh{stroke:var(--muted);stroke-width:1.6;}       /* forest-plot CI whisker */
-  .chart .c-dot{fill:var(--gold);stroke:var(--bg);stroke-width:1;}  /* point estimate marker */
-  .chart .c-leg{fill:var(--muted);font-size:11px;} .chart .c-sw{font-size:12px;}
+  .chart .c-dot{fill:var(--gold);stroke:var(--panel2);stroke-width:1.5;}  /* point estimate marker */
   .chart .c-ref{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3;opacity:.6;}  /* forest null line */
+  .chartlegend{display:flex;flex-wrap:wrap;gap:.9rem;font-family:var(--mono);font-size:.66rem;color:var(--muted);margin-top:.55rem;}
+  .chartlegend .lg{display:inline-flex;align-items:center;gap:.35rem;}
+  .chartlegend .lg i{width:.7rem;height:.7rem;border-radius:2px;display:inline-block;}
+  .chartlegend .lg-dot{color:var(--gold);} .chartlegend .lg-ci{color:var(--muted);letter-spacing:-.5px;}
+  .chartlegend .lg-refm{color:var(--muted);}
   .answer.md .ref{color:var(--gold);font-weight:640;cursor:pointer;font-size:.68em;padding:0 .06em;vertical-align:super;}
   /* color highlights are OFF by default — a <mark> reads as plain text until the reader toggles
      them on (adds .hl-on to the answer). */
@@ -912,75 +918,76 @@ function mdInline(s){
 // Kinds: 'bar' (one value/option), 'grouped_bar' (a trade-off, 2+ series/option), 'interval' (a forest
 // plot — point estimate + CI/range per option). Series colors are fixed (not model-derived).
 const _CHART_COLS = ["var(--gold)", "#3b82c4", "#5b8f6a", "#b0693a", "#8a63b0"];
-function _chartWrap(W, H, chart, inner){
-  return `<div class="tw chartwrap"><svg viewBox="0 0 ${W} ${H}" class="chart" preserveAspectRatio="xMinYMin meet"`
-    + ` role="img" aria-label="${esc(String(chart.title||"chart"))}">${inner}</svg></div>`;
-}
 function chartSvg(chart){
   const bars = ((chart && (chart.bars || chart.points)) || [])
     .filter(b => typeof b.value === "number" && isFinite(b.value));
   if(bars.length < 2) return "";
   const kind = (chart.kind || "bar");
-  const barX = 168, plotW = 240, W = barX + plotW + 78;
   const E = s => esc(String(s == null ? "" : s));
-  const titleSvg = `<text x="2" y="12" class="c-title">${E(chart.title||"")}${chart.unit?" ("+E(chart.unit)+")":""}</text>`;
+  const barX = 200, plotW = 230;               // barX = generous left column so labels aren't clipped
+  // right-aligned label ending at barX-8; truncate to fit the column and add a <title> for the full text
+  const lbl = (s, y) => { const t = String(s == null ? "" : s); const shown = t.length > 28 ? t.slice(0,27)+"…" : t;
+    return `<text x="${barX-8}" y="${y}" text-anchor="end" class="c-lbl">${E(shown)}<title>${E(t)}</title></text>`; };
+  let W, H, body = "", legend = "";
 
   if(kind === "interval"){                     // forest plot: whisker low..high + marker at value
-    const Wi = barX + plotW + 150;             // wider right margin for the "value [low–high]" labels
+    W = barX + plotW + 150;
     let lo = Infinity, hi = -Infinity;
     bars.forEach(b => { lo = Math.min(lo, b.low ?? b.value, b.value); hi = Math.max(hi, b.high ?? b.value, b.value); });
     if(!isFinite(lo) || !(hi > lo)) hi = lo + 1;
-    const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;   // a little breathing room
+    const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
     const X = v => barX + Math.round((v - lo)/(hi - lo) * plotW);
-    const rowH = 30, H = bars.length*rowH + 30;
-    // a null reference line at 1.0 for ratio-type forest plots (HR/OR/RR) when the axis crosses it
-    const ref = (lo < 1 && 1 < hi) ? `<line x1="${X(1)}" y1="18" x2="${X(1)}" y2="${H-14}" class="c-ref"></line>`
-      + `<text x="${X(1)}" y="${H-4}" text-anchor="middle" class="c-leg">1.0</text>` : "";
-    const body = bars.map((b,i) => {
-      const cy = 30 + i*rowH, x1 = X(b.low ?? b.value), x2 = X(b.high ?? b.value), xm = X(b.value);
+    const rowH = 30; H = bars.length*rowH + 18;
+    const crosses1 = (lo < 1 && 1 < hi);
+    const ref = crosses1 ? `<line x1="${X(1)}" y1="6" x2="${X(1)}" y2="${H-6}" class="c-ref"></line>` : "";
+    body = ref + bars.map((b,i) => {
+      const cy = 18 + i*rowH, x1 = X(b.low ?? b.value), x2 = X(b.high ?? b.value), xm = X(b.value);
       const ci = (b.low_str && b.high_str) ? " ["+E(b.low_str)+"–"+E(b.high_str)+"]" : "";
-      return `<text x="${barX-8}" y="${cy+4}" text-anchor="end" class="c-lbl">${E(String(b.label).slice(0,40))}</text>`
+      return lbl(b.label, cy+4)
         + `<line x1="${x1}" y1="${cy}" x2="${x2}" y2="${cy}" class="c-wh"></line>`
         + `<line x1="${x1}" y1="${cy-4}" x2="${x1}" y2="${cy+4}" class="c-wh"></line>`
         + `<line x1="${x2}" y1="${cy-4}" x2="${x2}" y2="${cy+4}" class="c-wh"></line>`
         + `<circle cx="${xm}" cy="${cy}" r="4" class="c-dot"></circle>`
         + `<text x="${barX+plotW+8}" y="${cy+4}" class="c-val">${E(b.value_str||b.value)}${ci}</text>`;
     }).join("");
-    return _chartWrap(Wi, H, chart, titleSvg + ref + body);
-  }
-
-  if(kind === "grouped_bar"){                  // trade-off: sub-bar per series within each option group
+    legend = `<span class="lg"><span class="lg-dot">●</span> point estimate</span>`
+      + `<span class="lg"><span class="lg-ci">├──┤</span> 95% CI</span>`
+      + (crosses1 ? `<span class="lg"><span class="lg-refm">┊</span> 1.0 = no effect</span>` : "");
+  } else if(kind === "grouped_bar"){           // trade-off: sub-bar per series within each option group
+    W = barX + plotW + 74;
     const labels = [...new Set(bars.map(b => b.label))];
     const series = [...new Set(bars.map(b => b.series || "value"))];
     const max = Math.max(...bars.map(b => Math.abs(b.value)), 0) || 1;
-    const subH = 15, gap = 3, grpPad = 10, grpH = series.length*(subH+gap) + grpPad;
-    const H = labels.length*grpH + 42;
-    let y = 22, body = "";
-    labels.forEach(lb => {
+    const subH = 15, gap = 3, grpH = series.length*(subH+gap) + 10;
+    H = labels.length*grpH + 12;
+    let y = 10;
+    labels.forEach(lb0 => {
       series.forEach((sname, si) => {
-        const b = bars.find(x => x.label === lb && (x.series || "value") === sname);
+        const b = bars.find(x => x.label === lb0 && (x.series || "value") === sname);
         if(!b) return;
         const yy = y + si*(subH+gap), bw = Math.max(2, Math.round(Math.abs(b.value)/max * plotW));
         body += `<rect x="${barX}" y="${yy}" width="${bw}" height="${subH}" rx="2" fill="${_CHART_COLS[si%_CHART_COLS.length]}" opacity=".9"></rect>`
           + `<text x="${barX+bw+6}" y="${yy+12}" class="c-val" style="fill:${_CHART_COLS[si%_CHART_COLS.length]}">${E(b.value_str||b.value)}</text>`;
       });
-      body += `<text x="${barX-8}" y="${y + series.length*(subH+gap)/2 + 2}" text-anchor="end" class="c-lbl">${E(String(lb).slice(0,40))}</text>`;
+      body += lbl(lb0, y + series.length*(subH+gap)/2 + 2);
       y += grpH;
     });
-    const legend = series.map((s,i) => `<tspan class="c-sw" fill="${_CHART_COLS[i%_CHART_COLS.length]}">■</tspan> ${E(s)}`).join("   ");
-    return _chartWrap(W, H, chart, titleSvg + body + `<text x="2" y="${H-8}" class="c-leg">${legend}</text>`);
+    legend = series.map((s,i) => `<span class="lg"><i style="background:${_CHART_COLS[i%_CHART_COLS.length]}"></i>${E(s)}</span>`).join("");
+  } else {                                     // single-series horizontal bars
+    W = barX + plotW + 74;
+    const max = Math.max(...bars.map(b => Math.abs(b.value)), 0) || 1;
+    const rowH = 30; H = bars.length*rowH + 12;
+    body = bars.map((b,i) => {
+      const yy = 12 + i*rowH, bw = Math.max(2, Math.round(Math.abs(b.value)/max * plotW));
+      return lbl(b.label, yy+15)
+        + `<rect x="${barX}" y="${yy+3}" width="${bw}" height="17" rx="3" class="c-bar"></rect>`
+        + `<text x="${barX+bw+6}" y="${yy+15}" class="c-val">${E(b.value_str||b.value)}</text>`;
+    }).join("");
   }
-
-  // default: single-series horizontal bars (use only when the ranking/spread across many options is the point)
-  const max = Math.max(...bars.map(b => Math.abs(b.value)), 0) || 1;
-  const rowH = 30, H = bars.length*rowH + 26;
-  const body = bars.map((b,i) => {
-    const yy = 22 + i*rowH, bw = Math.max(2, Math.round(Math.abs(b.value)/max * plotW));
-    return `<text x="${barX-8}" y="${yy+15}" text-anchor="end" class="c-lbl">${E(String(b.label).slice(0,40))}</text>`
-      + `<rect x="${barX}" y="${yy+3}" width="${bw}" height="17" rx="3" class="c-bar"></rect>`
-      + `<text x="${barX+bw+6}" y="${yy+15}" class="c-val">${E(b.value_str||b.value)}</text>`;
-  }).join("");
-  return _chartWrap(W, H, chart, titleSvg + body);
+  const cap = chart.title ? `<figcaption class="chartcap">📊 ${E(chart.title)}${chart.unit?" · "+E(chart.unit):""}</figcaption>` : "";
+  const svg = `<div class="tw chartwrap"><svg viewBox="0 0 ${W} ${H}" class="chart" preserveAspectRatio="xMinYMin meet" role="img" aria-label="${E(chart.title||"chart")}">${body}</svg></div>`;
+  const leg = legend ? `<div class="chartlegend">${legend}</div>` : "";
+  return `<figure class="chartfig">${cap}${svg}${leg}</figure>`;
 }
 // Minimal, self-contained, XSS-safe markdown → HTML. We esc() the whole source FIRST,
 // so any HTML in the model output is neutralized before we add known-safe tags. Handles

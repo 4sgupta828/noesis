@@ -273,8 +273,12 @@
     font-weight:700;margin-top:.05rem;}
   .claim.flash{outline:2px solid var(--gold);outline-offset:2px;}
 
+  /* answer-actions group — a uniform set of add-on boxes (briefing video · explain · strengthen),
+     rendered once per conversation. The group owns the spacing so the boxes read as one unit. */
+  .addons{margin:1.3rem 0 .3rem;display:flex;flex-direction:column;gap:.65rem;}
+  .addons > *{margin:0 !important;}
   /* answer-video add-on */
-  .vid{margin:.2rem 0 1.4rem;padding:.95rem 1.05rem;border:1px solid var(--hair);border-radius:14px;background:var(--panel2);}
+  .vid{margin:.2rem 0 1.4rem;padding:.85rem 1rem;border:1px solid var(--hair);border-left:3px solid var(--gold);border-radius:12px;background:var(--panel2);}
   .vid .vbtn{font-family:var(--mono);font-size:.78rem;font-weight:600;letter-spacing:.03em;cursor:pointer;
     border:1px solid var(--gold);color:var(--gold);background:transparent;border-radius:9px;padding:.55rem .9rem;}
   .vid .vbtn:hover{background:var(--gold);color:var(--on-accent);}
@@ -283,8 +287,8 @@
   .vid video{width:100%;max-width:640px;border-radius:12px;margin-top:.75rem;display:block;}
 
   /* plain-language (layman) explanation */
-  .plain{margin:.2rem 0 1.4rem;padding:.95rem 1.1rem;border:1px solid var(--hair);border-left:3px solid var(--verified);
-    border-radius:14px;background:var(--panel2);}
+  .plain{margin:.2rem 0 1.4rem;padding:.85rem 1rem;border:1px solid var(--hair);border-left:3px solid var(--verified);
+    border-radius:12px;background:var(--panel2);}
   .plain .vbtn{font-family:var(--mono);font-size:.78rem;font-weight:600;letter-spacing:.03em;cursor:pointer;
     border:1px solid var(--verified);color:var(--verified);background:transparent;border-radius:9px;padding:.55rem .9rem;}
   .plain .vbtn:hover{background:var(--verified);color:#0A1F16;}
@@ -306,8 +310,8 @@
   .plain .plain-b.md strong{color:var(--ink);font-weight:640;}
 
   /* self-healing corpus — fill-the-gaps panel */
-  .gapfix{margin:1.4rem 0 .4rem;padding:1rem 1.15rem;border:1px solid var(--hair);border-left:3px solid var(--gold);
-    border-radius:14px;background:var(--panel2);}
+  .gapfix{margin:1.4rem 0 .4rem;padding:.85rem 1rem;border:1px solid var(--hair);border-left:3px solid var(--gold);
+    border-radius:12px;background:var(--panel2);}
   .gapfix.soft{border-left-color:var(--hair);background:transparent;opacity:.86;}
   .gapfix.soft .gapfix-h{color:var(--muted);}
   .gapfix .vbtn{font-family:var(--mono);font-size:.78rem;font-weight:600;letter-spacing:.03em;cursor:pointer;
@@ -555,20 +559,13 @@
     .answer.md .mdt{font-size:.82rem;width:auto;}
     .answer.md .mdt th{padding:.4rem .55rem;min-width:6em;}
     .answer.md .mdt td{padding:.45rem .55rem;line-height:1.45;min-width:6em;}
-    /* minimize the footprint of the "Explain in plain language" add-on: tighter box, drop the
-       explanatory hint (the button label suffices), full-width compact button. */
-    .plain{padding:.55rem .65rem;margin:.15rem 0 1rem;border-radius:10px;}
-    .plain .plain-hint{display:none;}
-    .plain .vbtn{width:100%;text-align:center;font-size:.72rem;padding:.45rem .7rem;}
-    /* "Generate briefing video" → just ONE compact line: no box chrome, small inline button. */
-    .vid{border:none;background:none;padding:0;margin:.1rem 0 .85rem;}
-    .vid .vhint{font-size:.72rem;margin-top:.35rem;}     /* the video title, once a video exists */
-    .vid .vbtn{width:auto;font-size:.7rem;padding:.3rem .62rem;}
-    /* "Strengthen the evidence" / "Fill the evidence gaps" → tighter box, drop the long hint. */
-    .gapfix{padding:.6rem .72rem;margin:.85rem 0 .3rem;border-radius:10px;}
+    /* UNIFORM compact add-on boxes: same tight padding, full-width single-line button, hints dropped
+       (the button label suffices) — briefing video · explain · strengthen all match. */
+    .addons{gap:.5rem;margin:1rem 0 .3rem;}
+    .vid, .plain, .gapfix{padding:.55rem .68rem;border-radius:10px;}
+    .plain .plain-hint, .gapfix-hint, .vid .vhint{display:none;}
     .gapfix-h{margin-bottom:.3rem;}
-    .gapfix-hint{display:none;}
-    .gapfix .vbtn{width:100%;text-align:center;font-size:.72rem;padding:.45rem .7rem;margin-top:.3rem;}
+    .vid .vbtn, .plain .vbtn, .gapfix .vbtn{width:100%;text-align:center;font-size:.72rem;padding:.45rem .7rem;margin-top:0;}
   }
   /* bottom-left theme toggle — adapts to the active theme via the same tokens */
   .themebtn{position:fixed;left:1rem;bottom:1rem;z-index:60;font-family:var(--mono);font-size:.64rem;
@@ -1006,34 +1003,10 @@ function render(data, target, opts){
         <span><i class="lr"></i>Critical reasoning</span>
         <span><i class="lk"></i>Key context</span></div>`);
     }
-    // answer-video add-on. A saved session may already have a video → show it inline;
-    // otherwise offer to generate one (only when enabled AND the answer is grounded).
+    // The answer-action add-ons (briefing video / explain / strengthen) render as ONE uniform group
+    // below — at conversation level in a thread (see renderThread), so they're not repeated per turn.
     LAST = {question:(data.question||CURRENT_Q), answer:data.answer,
             session_id:(data.session_id||data.id||null)};
-    if(data.video_filename){
-      parts.push(`<div class="vid" id="vid">
-        <div class="vhint" id="vhint">🎬 ${esc(data.video_title||"Briefing video")}${data.video_duration?" · "+Math.round(data.video_duration)+"s":""}</div>
-        <video controls preload="metadata" src="/video/file/${encodeURIComponent(data.video_filename)}"
-          onerror="this.insertAdjacentHTML('afterend','<div class=&quot;vhint&quot;>This video is no longer available.</div>');this.remove();"></video>
-        ${VIDEO_ENABLED?`<button type="button" class="vbtn" id="vgo" style="margin-top:.75rem">↻ Regenerate briefing video</button>`:""}
-      </div>`);
-    } else if(VIDEO_ENABLED && data.grounded){
-      parts.push(`<div class="vid" id="vid">
-        <button type="button" class="vbtn" id="vgo">▶ Generate briefing video</button>
-        <div class="vhint" id="vhint">A ~60-second clinical evidence briefing on this answer — for clinicians and researchers, not patients. Takes ~2 minutes.</div>
-      </div>`);
-    }
-    // plain-language explanation — saved copy if present, else an on-demand button
-    if(data.layman_answer){
-      parts.push(`<details class="plain plain-d"><summary class="plain-h">◍ In plain language</summary>
-        <div class="plain-b md">${mdToHtml(data.layman_answer)}</div></details>`);
-    } else if(LAYMAN_ENABLED && data.grounded && data.audience !== "patient"){
-      // In patient mode the answer is ALREADY plain-language, so the re-explain button is redundant.
-      parts.push(`<div class="plain" id="plain">
-        <button type="button" class="vbtn" id="plaingo">◍ Explain in plain language</button>
-        <div class="plain-hint">The same answer, re-explained for a patient — plain words, same essence, no new claims.</div>
-      </div>`);
-    }
   }
   // Evidence dossier — collapsed by default; a [n] ref click or the summary opens it.
   if(n){
@@ -1065,13 +1038,10 @@ function render(data, target, opts){
       parts.push(`<div class="empty">${data._note?esc(data._note):"No grounded answer for that question with the chosen sources."}</div>`);
     }
   }
-  // Self-healing corpus — ALWAYS offer to find + queue sources when enabled (a grounded answer
-  // can still admit "no direct evidence" — the HPB case — so we never hide the affordance). Copy
-  // adapts: prominent when under-evidenced, softer when the answer already looks solid.
-  if(GAP_ENABLED){
-    const weak = !data.grounded || (data.coverage_gaps||[]).length || n < 2;
-    parts.push(gapPanelMarkup(weak));
-  }
+  // Uniform answer-actions group (briefing video · explain · strengthen evidence). In a conversation
+  // these render ONCE at the bottom of the thread (renderThread passes noActions per turn); in single-
+  // answer mode they render here under the answer.
+  if(!opts.noActions) parts.push(addonsMarkup(data));
   target.innerHTML = parts.join("");
   // clicking a [n] reference scrolls to and highlights its finding (within this pane)
   target.querySelectorAll(".ref").forEach(r=>r.addEventListener("click",()=>{
@@ -1117,6 +1087,49 @@ function gapPanelMarkup(weak){
 function wireGap(root, data){
   const gg = root.querySelector("#gapgo");
   if(gg) gg.addEventListener("click", ()=>generateGapPlan(root, data));
+}
+
+// The uniform answer-actions group: briefing video · explain in plain language · strengthen evidence.
+// Rendered once (per answer in single mode, per CONVERSATION at the thread bottom). All three share
+// the same compact box treatment for consistency.
+function addonsMarkup(data){
+  const n = (data.claims||[]).length;
+  const bits = [];
+  // briefing video — existing player if a video was generated, else the generate affordance
+  if(data.video_filename){
+    bits.push(`<div class="vid" id="vid">
+      <div class="vhint" id="vhint">🎬 ${esc(data.video_title||"Briefing video")}${data.video_duration?" · "+Math.round(data.video_duration)+"s":""}</div>
+      <video controls preload="metadata" src="/video/file/${encodeURIComponent(data.video_filename)}"
+        onerror="this.insertAdjacentHTML('afterend','<div class=&quot;vhint&quot;>This video is no longer available.</div>');this.remove();"></video>
+      ${VIDEO_ENABLED?`<button type="button" class="vbtn" id="vgo" style="margin-top:.6rem">↻ Regenerate briefing video</button>`:""}
+    </div>`);
+  } else if(VIDEO_ENABLED && data.grounded){
+    bits.push(`<div class="vid" id="vid">
+      <button type="button" class="vbtn" id="vgo">▶ Generate briefing video</button>
+      <div class="vhint" id="vhint">A ~60-second clinical evidence briefing on this conversation — for clinicians and researchers, not patients. Takes ~2 minutes.</div>
+    </div>`);
+  }
+  // plain-language explanation — saved copy if present, else an on-demand button
+  if(data.layman_answer){
+    bits.push(`<details class="plain plain-d"><summary class="plain-h">◍ In plain language</summary>
+      <div class="plain-b md">${mdToHtml(data.layman_answer)}</div></details>`);
+  } else if(LAYMAN_ENABLED && data.grounded && data.audience !== "patient"){
+    bits.push(`<div class="plain" id="plain">
+      <button type="button" class="vbtn" id="plaingo">◍ Explain in plain language</button>
+      <div class="plain-hint">The same answer, re-explained for a patient — plain words, same essence, no new claims.</div>
+    </div>`);
+  }
+  // strengthen the evidence / fill the gaps
+  if(GAP_ENABLED){
+    const weak = !data.grounded || (data.coverage_gaps||[]).length || n < 2;
+    bits.push(gapPanelMarkup(weak));
+  }
+  return bits.length ? `<div class="addons">${bits.join("")}</div>` : "";
+}
+function wireAddons(target, data){
+  const vgo = target.querySelector("#vgo"); if(vgo) vgo.addEventListener("click", ()=>generateVideo(target));
+  const pg = target.querySelector("#plaingo"); if(pg) pg.addEventListener("click", ()=>generatePlain(target));
+  const gg = target.querySelector("#gapgo"); if(gg) gg.addEventListener("click", ()=>generateGapPlan(target, data));
 }
 
 // Self-healing: ask the backend which sources would fill this question's gaps, render them
@@ -1648,8 +1661,15 @@ function renderThread(){
     block.appendChild(qh);
     const ans = document.createElement("div"); block.appendChild(ans);
     out.appendChild(block);
-    render(t, ans, {noLink:true});
+    render(t, ans, {noLink:true, noActions:true});   // per-turn: no add-ons (rendered once below)
   });
+  // Conversation-level answer actions — ONE briefing-video / explain / strengthen group for the whole
+  // thread, tied to the latest answer.
+  const lt = THREAD.turns[THREAD.turns.length-1];
+  if(lt && !lt._pending && !lt.clarification && !lt.derived_from_prior){
+    const act = document.createElement("div"); act.innerHTML = addonsMarkup(lt);
+    if(act.firstChild){ out.appendChild(act); wireAddons(act, lt); }
+  }
   const last = out.querySelector(".turn:last-child"); if(last) last.scrollIntoView({behavior:"smooth", block:"start"});
   syncComposerPad();
 }
@@ -1790,8 +1810,16 @@ function showSessionDetail(row, rowEl){
       block.appendChild(rb);
     }
     sdbody.appendChild(block);
-    render(t, ans, {noLink:true});
+    render(t, ans, {noLink:true, noActions:true});
   });
+  // Conversation-level actions for the loaded session (session-level video/plain live on `row`).
+  const lastTurn = turns[turns.length-1] || row;
+  const actData = Object.assign({}, lastTurn, {
+    video_filename: row.video_filename, video_title: row.video_title, video_duration: row.video_duration,
+    layman_answer: row.layman_answer, session_id: row.id, id: row.id});
+  LAST = {question: row.question, answer: (lastTurn.answer||row.answer||""), session_id: row.id};
+  const act = document.createElement("div"); act.innerHTML = addonsMarkup(actData);
+  if(act.firstChild){ sdbody.appendChild(act); wireAddons(act, actData); }
   const del = $("#sdel"); if(del) del.addEventListener("click", ()=>deleteSession(row.id, rowEl));
   const cont = $("#scont"); if(cont) cont.addEventListener("click", ()=>{   // resume as a live thread
     THREAD = {session_id: row.id, turns: turns.slice()};

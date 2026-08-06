@@ -113,6 +113,12 @@ class VerticalManifest:
     # in ONE extraction call (not fanned out). Empty → generic "extract every fact". Kernel-neutral.
     extraction_lenses: tuple[str, ...] = ()
 
+    # Optional STRUCTURAL evidence-tier classifier: (source_key, facets) -> evidence_kind str (Rule 18 —
+    # maps computable per-source metadata onto the authority pyramid, no semantic judgment). Used to
+    # stamp each verified claim's evidence tier (for evidence-fitness ranking + the eval's evidence_floor).
+    # None → tiers unavailable (evidence_kind stays ""), a safe no-op.
+    evidence_classifier: object | None = None
+
     # Held-out eval gold + vocab
     eval_gold: dict[str, object] = field(default_factory=dict)
 

@@ -314,6 +314,11 @@ class VerifiedClaim:
     source_key: str = ""
     document_title: str = ""
     document_id: str = ""
+    # Evidence-fitness (Phase 1): the cited atom's facets + a vertical-classified evidence tier. Raw
+    # data only — nothing consumes it unless the evidence-fitness flag is on (ranking) or an eval reads
+    # it (evidence_floor). Domain-free: `evidence_kind` is filled by a vertical-supplied classifier.
+    facets: dict = field(default_factory=dict)
+    evidence_kind: str = ""
 
 
 @dataclass
@@ -402,6 +407,7 @@ async def run_react(
     answer_focus: bool = False,               # ANSWER the question + scope to its subject (vs compile findings)
     reasoning_read: bool = False,             # surface the validated interpretation + confidence layer (flag)
     collect_diagnostics: bool = False,        # capture a troubleshooting trace (turns/tools/retries/failures)
+    classify_evidence=None,                   # vertical hook (source_key, facets) -> evidence_kind str (Rule 18: structural)
 ) -> AnswerResult:
     import asyncio
     atoms = AtomStore()
@@ -456,15 +462,25 @@ async def run_react(
         if conv else ""
     )
 
+    def _mk_verified(text: str, atom_id: str, quote: str, atom) -> VerifiedClaim:
+        """Build a VerifiedClaim, stamping the cited atom's facets + evidence tier (best-effort;
+        classification is a structural vertical hook — a bad/absent classifier never breaks the answer)."""
+        kind = ""
+        if classify_evidence is not None:
+            try:
+                kind = classify_evidence(atom.source_key, atom.facets) or ""
+            except Exception:   # noqa: BLE001 — classification must never break grounding
+                kind = ""
+        return VerifiedClaim(text, atom_id, quote, atom.source_key, atom.document_title,
+                             atom.document_id, facets=dict(atom.facets or {}), evidence_kind=kind)
+
     def _apply_answer(step: AgentStep) -> None:
         for c in step.claims:
             atom = atoms.get(c.atom_id)
             if atom is None or atom.locator is None:
                 result.rejected_claims.append(RejectedClaim(c.text, c.atom_id, c.quote, "unknown_atom"))
             elif verifier.verify(c.quote, atom.locator):
-                result.verified_claims.append(VerifiedClaim(
-                    c.text, c.atom_id, c.quote, atom.source_key,
-                    atom.document_title, atom.document_id))
+                result.verified_claims.append(_mk_verified(c.text, c.atom_id, c.quote, atom))
             else:
                 result.rejected_claims.append(RejectedClaim(c.text, c.atom_id, c.quote, "quote_not_grounded"))
 
@@ -695,9 +711,7 @@ async def run_react(
                 if key in seen:                            # dedup vs existing + each other
                     continue
                 seen.add(key)
-                result.verified_claims.append(VerifiedClaim(
-                    c["text"], c["atom_id"], c["quote"], atom.source_key,
-                    atom.document_title, atom.document_id))
+                result.verified_claims.append(_mk_verified(c["text"], c["atom_id"], c["quote"], atom))
                 added += 1
                 # OFF: cap first-come at the compose limit (unchanged). ON: collect a bigger pool so
                 # the relevance ranking below has real choices before it trims to the compose cap.

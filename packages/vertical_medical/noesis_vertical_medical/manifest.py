@@ -6,6 +6,7 @@ import os
 from noesis_kernel.contract.manifest import VerticalManifest
 
 from . import entities
+from . import evidence_kind
 from .answer_format import (
     MEDICAL_ANSWER_FORMAT,
     MEDICAL_CLINICAL_SYNTHESIS_FORMAT,
@@ -64,6 +65,7 @@ def build_manifest() -> VerticalManifest:
         chart_guidance=MEDICAL_CHART_GUIDANCE,
         reasoning_format=MEDICAL_REASONING_FORMAT,
         patient_reasoning_format=MEDICAL_PATIENT_REASONING_FORMAT,
+        evidence_classifier=evidence_kind.classify,   # structural facets → evidence tier (Rule 18)
         vision_prompt=MEDICAL_VISION_PROMPT,
         layman_prompt=MEDICAL_LAYMAN_PROMPT,
         gap_prompt=MEDICAL_GAP_PROMPT,

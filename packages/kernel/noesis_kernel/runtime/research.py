@@ -58,6 +58,7 @@ class ResearchService:
     atom_cap: int = 1600                    # per-atom char window for the extractor (raised under evidence_select)
     reasoning_read: bool = False            # surface the validated interpretation + confidence layer (flag)
     collect_diagnostics: bool = False       # capture a troubleshooting trace (turns/tools/retries/failures) (flag)
+    classify_evidence: object | None = None # vertical structural evidence-tier classifier (source_key, facets) -> kind
 
     def _retriever(self, source_keys: list[str] | None) -> MultiSourceRetriever:
         chosen = {k: v for k, v in self.sources.items()
@@ -218,6 +219,7 @@ class ResearchService:
             compose_claim_cap=sc.compose_claim_cap, extract_collect=sc.extract_collect,
             answer_focus=answer_focus, reasoning_read=self.reasoning_read,
             collect_diagnostics=self.collect_diagnostics,
+            classify_evidence=self.classify_evidence,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)
         res.effort = sc.effort                   # echo the resolved multiplier (observability)

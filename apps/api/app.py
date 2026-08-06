@@ -353,6 +353,7 @@ def build_default_service() -> ResearchService:
         evidence_select=evidence_select, atom_cap=atom_cap,
         reasoning_read=reasoning_read_enabled(),
         collect_diagnostics=diag_trace_enabled(),
+        classify_evidence=getattr(manifest, "evidence_classifier", None),
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
         answer_format=answer_format,
         # Patient directive resolved INDEPENDENTLY of structured_answers/clinical_synthesis — the

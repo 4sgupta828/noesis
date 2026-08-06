@@ -24,6 +24,7 @@ class QaClaim:
     text: str
     verified: bool                       # produced by the vertical CitationVerifier
     citation_facets: dict[str, str] = field(default_factory=dict)
+    evidence_kind: str = ""              # vertical-classified evidence tier (for the evidence_floor check)
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,11 @@ class QaCase:
     must_be_grounded: bool = True
     # Each constraint: a facet map a cited claim must ⊇ (generic source-class etc).
     citation_constraints: tuple[dict[str, str], ...] = ()
+    # Evidence-floor: at least one VERIFIED claim's evidence_kind must be in this acceptable set
+    # (e.g. ("rct","systematic_review","guideline") = "must rest on RCT-or-better"). Empty = no floor.
+    # Domain-free: the vertical decides which tiers count; the scorer only checks set membership.
+    evidence_floor_kinds: tuple[str, ...] = ()
+    clinical_risk: str = "low"           # "low" | "med" | "high" — risk-weights a failure (thesis §11)
     category: str = ""
 
 
@@ -56,7 +62,9 @@ class QaScore:
     refused_correctly: bool
     answered: bool
     citation_grounded: bool
+    evidence_floor_ok: bool
     fully_correct: bool
+    clinical_risk: str = "low"
 
 
 def _norm_num(s: str) -> str:
@@ -109,6 +117,15 @@ def score_qa(case: QaCase, answer: QaAnswer) -> QaScore:
         )
         citation_grounded = all_verified and constraints_met
 
+    # Evidence-floor: does a VERIFIED claim rest on an acceptable evidence tier? (skip on refusal /
+    # when no floor declared). This is what measures whether evidence-fitness ranking actually surfaces
+    # the right tier of evidence — provenance-adjacent, deterministic, domain-free (set membership).
+    if should_refuse or not case.evidence_floor_kinds:
+        evidence_floor_ok = True
+    else:
+        floor = set(case.evidence_floor_kinds)
+        evidence_floor_ok = any(c.verified and c.evidence_kind in floor for c in answer.claims)
+
     if should_refuse:
         fully_correct = refused_correctly
     else:
@@ -119,6 +136,7 @@ def score_qa(case: QaCase, answer: QaAnswer) -> QaScore:
             and refused_correctly
             and answered
             and citation_grounded
+            and evidence_floor_ok
         )
 
     return QaScore(
@@ -129,5 +147,7 @@ def score_qa(case: QaCase, answer: QaAnswer) -> QaScore:
         refused_correctly=refused_correctly,
         answered=answered,
         citation_grounded=citation_grounded,
+        evidence_floor_ok=evidence_floor_ok,
         fully_correct=fully_correct,
+        clinical_risk=case.clinical_risk,
     )

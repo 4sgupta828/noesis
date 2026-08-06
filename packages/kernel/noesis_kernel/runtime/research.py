@@ -182,8 +182,21 @@ class ResearchService:
             for t in history:
                 qy = (t.get("question") or "").strip()
                 an = (t.get("answer") or "").strip()
-                if qy:
-                    turns.append(f"Q: {qy}\nA: {an[:1200]}" if an else f"Q: {qy}")
+                if not qy:
+                    continue
+                block = f"Q: {qy}\nA: {an[:1200]}" if an else f"Q: {qy}"
+                # EPISODIC MEMORY (answer-focus): surface the prior turn's STRUCTURED findings (not just
+                # the truncated prose) so the planner builds ON established evidence and decides what is
+                # NEW to search. Labeled context ONLY — like all history it is NEVER a citable finding;
+                # a follow-up that uses it still re-retrieves + span-verifies (the resolved question makes
+                # that reliable). Capped to keep the planner prompt bounded.
+                if answer_focus:
+                    cl = t.get("claims") or []
+                    estab = "; ".join((c.get("text") or "").strip()
+                                      for c in cl[:8] if isinstance(c, dict) and c.get("text"))
+                    if estab:
+                        block += f"\n[already established: {estab[:1000]}]"
+                turns.append(block)
             history_context = "\n\n".join(turns) or None
 
         corpus_src, web_src = self._split_retriever(source_keys)

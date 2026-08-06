@@ -1564,7 +1564,9 @@ function appendGapFallback(question){
 // ---- conversation (multi-turn thread) ----
 function threadHistoryPayload(){ return THREAD.turns.map(t=>({question:t.question,
   // a clarification turn has no answer — feed its prompt into history so the user's reply resolves.
-  answer:t.answer || (t.clarification ? "(I asked to clarify) "+t.clarification : "")})); }
+  answer:t.answer || (t.clarification ? "(I asked to clarify) "+t.clarification : ""),
+  // episodic memory: send the turn's verified findings (text only, capped) so the agent builds on them.
+  claims:(t.claims||[]).slice(0,8).map(c=>({text:c.text}))})); }
 function newConversation(){
   THREAD = {session_id:null, turns:[]};
   document.body.classList.remove("chatting"); out.style.paddingBottom = "";   // back to landing layout

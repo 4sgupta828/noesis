@@ -22,6 +22,7 @@ class FocusLLM:
         self.subject = subject
         self.operate = operate
         self.compose_user = None
+        self.planner_user = None
         self.transformed = None
         self._loop = [
             AgentStep(action="search", query="metric value"),
@@ -44,6 +45,8 @@ class FocusLLM:
             self.compose_user = messages[-1]["content"]
             return LLMResult(parsed=ComposedAnswer(answer="Value is 9.8 percent [1].",
                                                    directly_addresses=True), model="c")
+        if self.planner_user is None:                  # first planner (search-planning) message
+            self.planner_user = messages[-1]["content"]
         return LLMResult(parsed=self._loop.pop(0), output_tokens=5, model="c")
 
 
@@ -123,6 +126,23 @@ def test_operate_on_prior_reshapes_without_research():
     assert not res.verified_claims                     # NO new research/claims
     assert llm.compose_user is None                    # compose never ran
     assert "TMP-SMX is first-line" in llm.transformed  # the prior answer was the transform input
+
+
+def test_episodic_prior_findings_reach_the_planner():
+    svc, llm = _service()
+    hist = [{"question": "First-line PCP prophylaxis?", "answer": "TMP-SMX is first-line.",
+             "claims": [{"text": "TMP-SMX is the first-line agent for PCP prophylaxis"},
+                        {"text": "Alternatives include dapsone and atovaquone"}]}]
+    asyncio.run(svc.ask(question="What dose?", tenant_id="A", history=hist, answer_focus=True))
+    assert "already established" in llm.planner_user
+    assert "TMP-SMX is the first-line agent" in llm.planner_user
+
+
+def test_episodic_off_without_answer_focus():
+    svc, llm = _service()
+    hist = [{"question": "q", "answer": "a", "claims": [{"text": "ESTABLISHED FINDING X"}]}]
+    asyncio.run(svc.ask(question="follow up", tenant_id="A", history=hist, answer_focus=False))
+    assert "already established" not in (llm.planner_user or "")   # gated on answer_focus
 
 
 def test_operate_on_prior_falls_through_without_prior_answer():

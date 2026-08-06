@@ -595,6 +595,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 turn["effort"] = res.effort    # per-turn badge on the session (JSONB, no migration)
             if patient_mode_enabled():
                 turn["audience"] = audience    # per-turn audience tag (only under the flag)
+            if answer_charts_enabled() and getattr(res, "charts", None):
+                turn["charts"] = res.charts    # persist grounded charts so a reopened session shows them
             try:
                 # Audience-guarded append: only continue a thread whose audience MATCHES this turn's
                 # (mid-thread toggle → mismatch → save a fresh session instead of corrupting the thread).

@@ -103,6 +103,15 @@
     border-radius:999px;padding:.22rem .7rem;cursor:pointer;transition:.12s;margin-top:.9rem;}
   .retrydeep:hover{background:var(--gold);color:var(--on-accent);}
   .retrydeep[disabled]{opacity:.5;cursor:default;}
+  .retrydeep-top{margin:0 0 1rem;}   /* at the TOP, above the answer */
+  /* Diagnostics box — collapsed provenance/observability meta at the bottom of an answer */
+  .diagbox{margin:1.4rem 0 .2rem;border-top:1px solid var(--hair);}
+  .diagbox>summary{list-style:none;cursor:pointer;padding:.65rem 0 0;}
+  .diagbox>summary::-webkit-details-marker{display:none;}
+  .diaghead{display:flex;align-items:center;font-family:var(--mono);font-size:.64rem;text-transform:uppercase;
+    letter-spacing:.11em;color:var(--muted);}
+  .diagbox .diagbody{padding:.6rem 0 .2rem;display:flex;flex-direction:column;gap:.3rem;}
+  .diagbox .diagbody .ansmeta{display:flex;gap:.7rem;flex-wrap:wrap;align-items:center;}
 
   /* audience switch — a two-segment control that reads as "who the answer is FOR", distinct from
      the effort dial next to it (words, not a slider). */
@@ -979,28 +988,15 @@ function render(data, target, opts){
   const sid = data.session_id || data.id || null;   // saved session → shareable permalink
   const showLink = sid && !opts.noLink;             // thread turns suppress per-turn link (one per thread)
   const hasHl = STRUCTURED && !!data.answer && /\[\[[FRK]\]\]/.test(data.answer);  // answer has markers
-  parts.push(`<div class="ansmeta">
-    <span class="gpill ${data.grounded?"on":"off"}">${data.grounded?"✓ Grounded":"◦ Not fully grounded"}</span>
-    <span class="mstat"><b>${n}</b> verified finding${n===1?"":"s"}</span>
-    ${data.rejected ? `<span class="mstat dim">${data.rejected} rejected</span>`:""}
-    <span class="metabtns">
-      ${hasHl?`<button type="button" class="copybtn hltoggle" id="hltoggle" title="Show color highlights (load-bearing facts, reasoning, key context)">✦ Highlights</button>`:""}
-      ${showLink?`<button type="button" class="copybtn" id="linkbtn">🔗 Copy link</button>`:""}
-      ${(data.answer||n)?`<button type="button" class="copybtn" id="copybtn">⧉ Copy</button>`:""}
-    </span>
-  </div>`);
+  // TOP bar: action buttons only (retry-with-more-effort is prepended by the session view). The
+  // "Grounded" status + "Sources used" move to the Diagnostics box at the BOTTOM (see below).
+  const topbtns = `${hasHl?`<button type="button" class="copybtn hltoggle" id="hltoggle" title="Show color highlights (load-bearing facts, reasoning, key context)">✦ Highlights</button>`:""}`
+    + `${showLink?`<button type="button" class="copybtn" id="linkbtn">🔗 Copy link</button>`:""}`
+    + `${(data.answer||n)?`<button type="button" class="copybtn" id="copybtn">⧉ Copy</button>`:""}`;
+  if(topbtns.trim()) parts.push(`<div class="ansmeta ansmeta-top"><span class="metabtns">${topbtns}</span></div>`);
   if(data.coverage_gaps && data.coverage_gaps.length){
     parts.push(`<div class="gaps"><h4>Coverage gaps</h4><ul>` +
       data.coverage_gaps.map(g=>`<li>${esc(g)}</li>`).join("") + `</ul></div>`);
-  }
-  const ss = data.source_stats || {};
-  const skeys = Object.keys(ss);
-  if(skeys.length){
-    const chips = skeys.map(k=>{
-      const s = ss[k]; const helped = s.cited>0;
-      return `<span class="pill" style="cursor:default;${helped?'color:var(--on-accent);background:var(--verified);border-color:var(--verified)':''}">${esc(k)} · ${s.cited}/${s.retrieved} cited</span>`;
-    }).join(" ");
-    parts.push(`<div class="summary" style="border:none;padding-top:.2rem"><span>Sources used:</span>${chips}</div>`);
   }
   // labeled AI visual observation (context, NOT a diagnosis, NOT part of the evidence)
   if(data.visual_observation){
@@ -1081,6 +1077,9 @@ function render(data, target, opts){
     evBits.push(gapPanelMarkup(weak));
   }
   if(evBits.length) parts.push(`<div class="ansbox">${evBits.join("")}</div>`);
+  // DIAGNOSTICS box (bottom, collapsed): grounded status, verified/rejected counts, passages seen,
+  // stop reason, and "Sources used" — the how-it-was-produced meta, moved off the top of the answer.
+  if(data.answer || n) parts.push(diagBoxMarkup(data));
   // CONVERSATION-LEVEL box: briefing video + explain-in-plain-language. In a thread it renders ONCE at
   // the bottom (renderThread passes noConvo per turn); in single-answer mode it renders here.
   if(!opts.noConvo) parts.push(convoActionsMarkup(data));
@@ -1113,6 +1112,27 @@ function render(data, target, opts){
 
 // Reusable "Fill the evidence gaps" panel — used by render() AND by the no-answer / error /
 // timeout paths, so the self-healing affordance is ALWAYS available when evidence is missing.
+// Diagnostics box — the answer's provenance/observability meta (grounded status, counts, sources
+// used, stop reason), collapsed at the bottom so it doesn't crowd the answer at the top.
+function diagBoxMarkup(data){
+  const n = (data.claims||[]).length;
+  const bits = [`<span class="gpill ${data.grounded?"on":"off"}">${data.grounded?"✓ Grounded":"◦ Not fully grounded"}</span>`,
+    `<span class="mstat"><b>${n}</b> verified finding${n===1?"":"s"}</span>`];
+  if(data.rejected) bits.push(`<span class="mstat dim">${data.rejected} rejected</span>`);
+  if(data.atoms_gathered) bits.push(`<span class="mstat dim">${data.atoms_gathered} passages seen</span>`);
+  if(data.effort && data.effort > 1) bits.push(`<span class="mstat dim">effort ${data.effort}×</span>`);
+  if(data.stopped_reason && data.stopped_reason !== "answered") bits.push(`<span class="mstat dim">stopped: ${esc(data.stopped_reason)}</span>`);
+  const ss = data.source_stats || {}; const skeys = Object.keys(ss);
+  let sources = "";
+  if(skeys.length){
+    const chips = skeys.map(k=>{ const s = ss[k]; const helped = s.cited>0;
+      return `<span class="pill" style="cursor:default;${helped?'color:var(--on-accent);background:var(--verified);border-color:var(--verified)':''}">${esc(k)} · ${s.cited}/${s.retrieved} cited</span>`;
+    }).join(" ");
+    sources = `<div class="summary" style="border:none;padding:.4rem 0 0"><span>Sources used:</span> ${chips}</div>`;
+  }
+  return `<details class="diagbox"><summary><span class="diaghead">◔ Diagnostics<span class="evtoggle"></span></span></summary>
+    <div class="diagbody"><div class="ansmeta" style="margin:0;padding:0;border:none">${bits.join("")}</div>${sources}</div></details>`;
+}
 function gapPanelMarkup(weak){
   // weak = under-evidenced (not grounded / stated gaps / thin / no direct evidence). When the
   // answer looks solid we still OFFER gap-fill (an answer can always be strengthened), but with
@@ -1831,17 +1851,17 @@ function showSessionDetail(row, rowEl){
       const hq = sdetail.querySelector(".qq");
       if(hq) hq.insertAdjacentHTML("beforeend", ` <span class="efbadge">${effortTier(ef).name} · ${ef}×</span>`);
     }
-    const ans = document.createElement("div"); block.appendChild(ans);
-    // "Retry with more effort": re-ask THIS question in the main chat at the next-higher effort.
+    // "Retry with more effort" — at the TOP, above the answer: re-ask THIS question at higher effort.
     if(EFFORT_ENABLED){
       const nextEf = Math.min(2.5, Math.round((ef + 0.5)*4)/4);
       const rb = document.createElement("button");
-      rb.type = "button"; rb.className = "retrydeep";
+      rb.type = "button"; rb.className = "retrydeep retrydeep-top";
       if(nextEf <= ef){ rb.disabled = true; rb.textContent = "↻ Already at max effort"; }
       else { rb.textContent = `↻ Retry with more effort — ${effortTier(nextEf).name} · ${nextEf}×`;
         rb.addEventListener("click", () => retryDeeper(t.question, nextEf)); }
       block.appendChild(rb);
     }
+    const ans = document.createElement("div"); block.appendChild(ans);
     sdbody.appendChild(block);
     render(t, ans, {noLink:true, noConvo:true});
   });

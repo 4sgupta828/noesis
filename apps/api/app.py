@@ -332,6 +332,12 @@ def build_default_service() -> ResearchService:
     # for compose (not the first-come 30). Both are provenance-safe (span+entail gates unchanged).
     evidence_select = os.environ.get("NOESIS_EVIDENCE_SELECT", "").lower() in ("1", "true", "yes")
     atom_cap = int(os.environ.get("NOESIS_ATOM_CAP", "6000" if evidence_select else "1600"))
+    # Patient directive (per-request by audience). Reasoning Read (flag): append the PATIENT-facing
+    # reasoning directive so patient answers get the same purpose→factors→judgment→confidence arc in
+    # plain language (same structured fields + code validation as the clinician path).
+    patient_directive = manifest.patient_answer_format if patient_mode_enabled() else None
+    if patient_directive and reasoning_read_enabled() and getattr(manifest, "patient_reasoning_format", None):
+        patient_directive = patient_directive + "\n\n" + manifest.patient_reasoning_format
     return ResearchService(
         llm=build_llm(mode=mode), embedder=embedder, planner_llm=planner_llm,
         claims_first=claims_first, extraction_lenses=getattr(manifest, "extraction_lenses", ()),
@@ -342,7 +348,7 @@ def build_default_service() -> ResearchService:
         # Patient directive resolved INDEPENDENTLY of structured_answers/clinical_synthesis — the
         # patient view selects it per-request by audience, so it must be available even when the
         # clinician structured-answer flags are off (else patient mode would silently no-op).
-        patient_answer_format=(manifest.patient_answer_format if patient_mode_enabled() else None),
+        patient_answer_format=patient_directive,
         vision_prompt=vision_prompt,
         layman_prompt=manifest.layman_prompt, gap_prompt=gap_prompt,
         suggest_prompt=suggest_prompt, refine_prompt=refine_prompt,

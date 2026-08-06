@@ -250,6 +250,54 @@ EVIDENCE supports (that is the point of the conclusion); do NOT prescribe to a s
 the reader what THEY personally should do. No new facts, no hype, no reassurance beyond the findings."""
 
 
+# PATIENT-facing REASONING READ (flag NOESIS_REASONING_READ + audience=patient). Same purpose→factors→
+# judgment→confidence ARC as the clinician version, but in plain, warm language for a non-expert, and
+# with a patient-appropriate conclusion (what the evidence suggests + talk-to-your-doctor, never a
+# prescription). Populates the SAME structured fields (reasoning_purpose/interpretation/reasoning_
+# conclusion/confidence), validated identically in code (no new facts). Kept SEPARATE so the clinician
+# path is unchanged.
+MEDICAL_PATIENT_REASONING_FORMAT = """\
+REASONING READ (for a PATIENT) — in ADDITION to the plain-language answer, produce a short, purpose-driven \
+read of the evidence that helps the reader think the decision through. It must read as ONE clear line of \
+thinking toward a decision, in warm everyday language — NOT a list of disconnected notes, and NOT jargon. \
+Use ONLY the verified findings; add no fact, number, or reassurance that isn't in them.
+
+Populate these four structured fields (all required; write every one in plain language a non-expert follows):
+
+1. `reasoning_purpose` — ONE plain sentence naming the real choice or question behind what they asked \
+(e.g. "Whether it's worth taking anything for these cold symptoms, or just waiting it out"). This is what \
+everything below is helping them think about. Restate the decision; add no new fact.
+
+2. `interpretation` — 2–5 things that MATTER for that decision, ordered so they build toward it. Each: \
+`text` (one or two plain sentences saying the point AND what it means for the decision — which way it \
+leans and why), `kind` (from the five below), and `basis_findings` (the finding numbers it comes from — \
+REQUIRED). No medical jargon without a quick plain explanation; no number that isn't in the findings it \
+rests on. If a point doesn't help the decision, leave it out.
+  - `tension` — the studies DISAGREE or pull different ways; say so plainly and what it means for the choice.
+  - `gap` — something the research does NOT tell us that matters here (e.g. "no study measured how many \
+days it actually shortens the illness").
+  - `assumption` — something the answer is taking for granted that isn't fully proven.
+  - `implication` — what it all MEANS for the decision — the "so what for me". Be careful with cause: say \
+"linked to" rather than "causes" unless the findings show cause.
+  - `what_would_change_this` — the kind of new study that would change the picture.
+
+3. `reasoning_conclusion` — 1–3 plain sentences: what the evidence GENERALLY suggests about the decision \
+(e.g. "the evidence suggests antibiotics won't help a normal cold, and rest and fluids are the mainstay"). \
+This is general understanding, NOT personal medical advice — close by gently pointing them to their own \
+doctor for their situation. Ground it in the findings; add no new fact.
+
+4. `confidence` — how sure we can be, in three plain dimensions, each a `level` (high | moderate | low | \
+unknown) + a one-line plain `rationale` (how many studies, how good, how consistent; no invented counts):
+  - `factual` — how solid the basic facts are (one small study → low; several good studies that agree → high).
+  - `causal` — whether the research really shows the treatment CAUSES the benefit, or just that they go \
+together (a well-run randomized trial → higher; just an observed link → low).
+  - `generalization` — how well it fits someone like the person asking (studied in very different people \
+or settings → lower).
+
+Warm, clear, honest. Do not promise, downplay a risk, or tell the reader what THEY personally must do — \
+help them understand and decide with their doctor. No new facts."""
+
+
 # CHART emission (flag NOESIS_ANSWER_CHARTS, default OFF — Rule 20). Appended to the compose directive.
 # Every plotted number is validated in code (must appear verbatim in its cited finding) before it
 # renders — an ungrounded number drops the whole chart. A VISUAL of grounded numbers, never new data.

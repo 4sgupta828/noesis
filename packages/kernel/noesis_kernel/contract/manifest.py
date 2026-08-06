@@ -79,6 +79,10 @@ class VerticalManifest:
     # on — lets compose emit a typed interpretation layer (tension/gap/assumption/implication/what-would-
     # change) + a 3-dimension confidence read, both validated in code (no new facts). Opaque prose.
     reasoning_format: str | None = None
+    # Optional PATIENT-facing variant of `reasoning_format`, appended to the patient directive when the
+    # reasoning-read flag is on AND audience=patient — same structured fields + code validation, plain
+    # language. None → patient answers reuse no reasoning layer (safe no-op).
+    patient_reasoning_format: str | None = None
     # Optional PRE-ANSWER refinement directive: propose sharper standalone versions of a fresh question
     # for the user to pick from (express refinement). Opaque prose; kernel owns the mechanics.
     refine_prompt: str | None = None

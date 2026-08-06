@@ -277,6 +277,9 @@
      rendered once per conversation. The group owns the spacing so the boxes read as one unit. */
   .addons{margin:1.3rem 0 .3rem;display:flex;flex-direction:column;gap:.65rem;}
   .addons > *{margin:0 !important;}
+  /* per-answer box: the Evidence dossier + "add more sources", grouped so they read as one unit */
+  .ansbox{margin:1.15rem 0 .2rem;display:flex;flex-direction:column;gap:.55rem;}
+  .ansbox > *{margin:0 !important;}
   /* answer-video add-on */
   .vid{margin:.2rem 0 1.4rem;padding:.85rem 1rem;border:1px solid var(--hair);border-left:3px solid var(--gold);border-radius:12px;background:var(--panel2);}
   .vid .vbtn{font-family:var(--mono);font-size:.78rem;font-weight:600;letter-spacing:.03em;cursor:pointer;
@@ -1008,24 +1011,6 @@ function render(data, target, opts){
     LAST = {question:(data.question||CURRENT_Q), answer:data.answer,
             session_id:(data.session_id||data.id||null)};
   }
-  // Evidence dossier — collapsed by default; a [n] ref click or the summary opens it.
-  if(n){
-    const cards = data.claims.map((c,idx)=>{
-      const label = esc(c.source) + (c.title ? " · " + esc(c.title) : "");
-      const src = c.url
-        ? `<a class="src srclink" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer" title="Open source in a new tab">${label} ↗</a>`
-        : (c.source ? `<span class="src">${label}</span>` : "");
-      return `<article class="claim" id="f${idx+1}">
-        <div class="chead"><span class="fnum">${idx+1}</span><div class="ctext">${esc(c.text)}</div></div>
-        <blockquote class="cquote">${esc(c.quote)}</blockquote>
-        <div class="cfoot"><span class="verified" title="A verbatim quote from this source was located and matched — this is a provenance check, not a judgment of source quality, currency, or clinical applicability.">✓ Quote found in source</span>${src}</div>
-      </article>`;
-    }).join("");
-    parts.push(`<details class="evblock" id="evblock">
-      <summary><h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}<span class="evtoggle"></span></h4></summary>
-      <div class="evbody">${cards}</div>
-    </details>`);
-  }
   if(!n && !(data.coverage_gaps||[]).length){
     const atoms = data.atoms_gathered || 0;
     if(atoms > 0){
@@ -1038,10 +1023,33 @@ function render(data, target, opts){
       parts.push(`<div class="empty">${data._note?esc(data._note):"No grounded answer for that question with the chosen sources."}</div>`);
     }
   }
-  // Uniform answer-actions group (briefing video · explain · strengthen evidence). In a conversation
-  // these render ONCE at the bottom of the thread (renderThread passes noActions per turn); in single-
-  // answer mode they render here under the answer.
-  if(!opts.noActions) parts.push(addonsMarkup(data));
+  // PER-ANSWER box: the verified-evidence dossier + "add more sources", grouped in one clean box.
+  const evBits = [];
+  if(n){
+    const cards = data.claims.map((c,idx)=>{
+      const label = esc(c.source) + (c.title ? " · " + esc(c.title) : "");
+      const src = c.url
+        ? `<a class="src srclink" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer" title="Open source in a new tab">${label} ↗</a>`
+        : (c.source ? `<span class="src">${label}</span>` : "");
+      return `<article class="claim" id="f${idx+1}">
+        <div class="chead"><span class="fnum">${idx+1}</span><div class="ctext">${esc(c.text)}</div></div>
+        <blockquote class="cquote">${esc(c.quote)}</blockquote>
+        <div class="cfoot"><span class="verified" title="A verbatim quote from this source was located and matched — this is a provenance check, not a judgment of source quality, currency, or clinical applicability.">✓ Quote found in source</span>${src}</div>
+      </article>`;
+    }).join("");
+    evBits.push(`<details class="evblock" id="evblock">
+      <summary><h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}<span class="evtoggle"></span></h4></summary>
+      <div class="evbody">${cards}</div>
+    </details>`);
+  }
+  if(GAP_ENABLED){
+    const weak = !data.grounded || (data.coverage_gaps||[]).length || n < 2;
+    evBits.push(gapPanelMarkup(weak));
+  }
+  if(evBits.length) parts.push(`<div class="ansbox">${evBits.join("")}</div>`);
+  // CONVERSATION-LEVEL box: briefing video + explain-in-plain-language. In a thread it renders ONCE at
+  // the bottom (renderThread passes noConvo per turn); in single-answer mode it renders here.
+  if(!opts.noConvo) parts.push(convoActionsMarkup(data));
   target.innerHTML = parts.join("");
   // clicking a [n] reference scrolls to and highlights its finding (within this pane)
   target.querySelectorAll(".ref").forEach(r=>r.addEventListener("click",()=>{
@@ -1089,11 +1097,9 @@ function wireGap(root, data){
   if(gg) gg.addEventListener("click", ()=>generateGapPlan(root, data));
 }
 
-// The uniform answer-actions group: briefing video · explain in plain language · strengthen evidence.
-// Rendered once (per answer in single mode, per CONVERSATION at the thread bottom). All three share
-// the same compact box treatment for consistency.
-function addonsMarkup(data){
-  const n = (data.claims||[]).length;
+// CONVERSATION-LEVEL actions box: briefing video + explain-in-plain-language. Rendered once (per
+// answer in single mode, per CONVERSATION at the thread bottom). The two share one compact box.
+function convoActionsMarkup(data){
   const bits = [];
   // briefing video — existing player if a video was generated, else the generate affordance
   if(data.video_filename){
@@ -1119,17 +1125,11 @@ function addonsMarkup(data){
       <div class="plain-hint">The same answer, re-explained for a patient — plain words, same essence, no new claims.</div>
     </div>`);
   }
-  // strengthen the evidence / fill the gaps
-  if(GAP_ENABLED){
-    const weak = !data.grounded || (data.coverage_gaps||[]).length || n < 2;
-    bits.push(gapPanelMarkup(weak));
-  }
-  return bits.length ? `<div class="addons">${bits.join("")}</div>` : "";
+  return bits.length ? `<div class="addons convobox">${bits.join("")}</div>` : "";
 }
-function wireAddons(target, data){
+function wireConvo(target, data){
   const vgo = target.querySelector("#vgo"); if(vgo) vgo.addEventListener("click", ()=>generateVideo(target));
   const pg = target.querySelector("#plaingo"); if(pg) pg.addEventListener("click", ()=>generatePlain(target));
-  const gg = target.querySelector("#gapgo"); if(gg) gg.addEventListener("click", ()=>generateGapPlan(target, data));
 }
 
 // Self-healing: ask the backend which sources would fill this question's gaps, render them
@@ -1661,14 +1661,13 @@ function renderThread(){
     block.appendChild(qh);
     const ans = document.createElement("div"); block.appendChild(ans);
     out.appendChild(block);
-    render(t, ans, {noLink:true, noActions:true});   // per-turn: no add-ons (rendered once below)
+    render(t, ans, {noLink:true, noConvo:true});   // per-turn keeps its Evidence box; convo box is once, below
   });
-  // Conversation-level answer actions — ONE briefing-video / explain / strengthen group for the whole
-  // thread, tied to the latest answer.
+  // Conversation-level box — ONE briefing-video + explain group for the whole thread (latest answer).
   const lt = THREAD.turns[THREAD.turns.length-1];
   if(lt && !lt._pending && !lt.clarification && !lt.derived_from_prior){
-    const act = document.createElement("div"); act.innerHTML = addonsMarkup(lt);
-    if(act.firstChild){ out.appendChild(act); wireAddons(act, lt); }
+    const act = document.createElement("div"); act.innerHTML = convoActionsMarkup(lt);
+    if(act.firstChild){ out.appendChild(act); wireConvo(act, lt); }
   }
   const last = out.querySelector(".turn:last-child"); if(last) last.scrollIntoView({behavior:"smooth", block:"start"});
   syncComposerPad();
@@ -1810,16 +1809,16 @@ function showSessionDetail(row, rowEl){
       block.appendChild(rb);
     }
     sdbody.appendChild(block);
-    render(t, ans, {noLink:true, noActions:true});
+    render(t, ans, {noLink:true, noConvo:true});
   });
-  // Conversation-level actions for the loaded session (session-level video/plain live on `row`).
+  // Conversation-level box for the loaded session (session-level video/plain live on `row`).
   const lastTurn = turns[turns.length-1] || row;
   const actData = Object.assign({}, lastTurn, {
     video_filename: row.video_filename, video_title: row.video_title, video_duration: row.video_duration,
     layman_answer: row.layman_answer, session_id: row.id, id: row.id});
   LAST = {question: row.question, answer: (lastTurn.answer||row.answer||""), session_id: row.id};
-  const act = document.createElement("div"); act.innerHTML = addonsMarkup(actData);
-  if(act.firstChild){ sdbody.appendChild(act); wireAddons(act, actData); }
+  const act = document.createElement("div"); act.innerHTML = convoActionsMarkup(actData);
+  if(act.firstChild){ sdbody.appendChild(act); wireConvo(act, actData); }
   const del = $("#sdel"); if(del) del.addEventListener("click", ()=>deleteSession(row.id, rowEl));
   const cont = $("#scont"); if(cont) cont.addEventListener("click", ()=>{   // resume as a live thread
     THREAD = {session_id: row.id, turns: turns.slice()};

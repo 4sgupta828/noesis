@@ -198,45 +198,56 @@ citation-grounded paragraph beats a padded or half-empty table. Structure serves
 # finding and may contain NO number/dose/date/% not already in those findings (a fabricated inference
 # is dropped before it ships). This gives editorial + causal intelligence WITHOUT loosening grounding.
 MEDICAL_REASONING_FORMAT = """\
-REASONING READ (`interpretation` field + `confidence` field) — in ADDITION to the prose answer, produce a \
-short, high-signal layer of INTERPRETATION about the evidence. The prose answer states the facts; this \
-layer reasons about them. It is for a clinician deciding how much to trust and act on the evidence.
+REASONING READ — in ADDITION to the prose answer, produce a PURPOSE-DRIVEN analysis of the evidence: a \
+single line of reasoning that starts from a clear PURPOSE (the decision the clinician faces), \
+systematically works through the FACTORS that bear on it, and CONVERGES on an informed judgment. It must \
+read as ONE coherent argument toward a decision — NOT a checklist of disconnected observations. The prose \
+`answer` states the FACTS; this layer reasons FROM them toward what to conclude/do.
 
-STRICT SEPARATION — facts vs interpretation:
-- The prose `answer` carries the FACTS (with [n] citations). The `interpretation` layer carries \
-JUDGMENTS about those facts. Do NOT restate facts here, and do NOT put any new number, dose, %, date, or \
-figure in an interpretation item that is not already in the findings it rests on — interpretation adds \
-MEANING, never new data. (Items that introduce an ungrounded figure are dropped automatically.)
+Populate these four structured fields (all required for the Reasoning Read; none is optional):
 
-Emit 2–5 `interpretation` items, each with: `text` (one or two tight sentences), `kind` (one of the five \
-below), and `basis_findings` (the 1-based finding numbers it rests on — REQUIRED; an item with no valid \
-basis is dropped). Only include items that genuinely add insight — fewer, sharper items beat padding.
-- `tension` — the findings CONFLICT or point different ways (different effect sizes, opposite \
-conclusions, a trial vs a guideline). Name both sides and what the conflict is; do NOT silently average \
-them away. Reconcile where the evidence lets you (e.g. different populations/endpoints explain the gap).
-- `gap` — a decision-relevant thing the evidence does NOT establish (no head-to-head, no long-term data, \
-no data in the asked population, surrogate endpoint only). This is what's MISSING, stated as a limit.
-- `assumption` — an inference the answer leans on that the findings don't fully prove (e.g. a surrogate \
-marker will translate to a clinical outcome; results in one population transfer to another).
-- `implication` — what the evidence, taken together, actually MEANS for the question — the "so what". \
-Calibrate causal language to the design: association/observational ≠ causation; a registered trial's \
-intent ≠ a demonstrated effect. Say "associated with", not "causes", unless a finding supports causation.
-- `what_would_change_this` — the specific new evidence that would move the answer (a completed RCT, a \
-head-to-head, long-term follow-up). Names the fragility of the current read.
+1. `reasoning_purpose` — ONE sentence naming the actual decision or desired outcome behind the question \
+(e.g. "Whether to use, withhold, or choose among X for Y in population Z — and how confident to be"). \
+This is the NORTH STAR; every factor below must visibly serve it. Restate the decision; add no new fact.
 
-`confidence` — a three-dimension read, each with a `level` (high | moderate | low | unknown) and a \
-one-line `rationale` grounded in the CHARACTER of the evidence (how many studies, what tier, how \
-consistent, how directly they measure the outcome). Do NOT invent counts not supported by the findings:
-- `factual` — how solid are the reported facts themselves (study tier/consistency; a single small \
-observational study → low; concordant RCTs/guideline → high).
-- `causal` — how well the evidence supports a CAUSAL reading vs mere association (RCT → higher; \
+2. `interpretation` — 2–5 FACTORS that bear on that purpose, ordered as a progression that BUILDS toward \
+the decision (not random order). Each factor: `text` (one or two tight sentences that state the \
+consideration AND its bearing on the purpose — i.e. which way it pushes the decision and why), `kind` \
+(the TYPE of consideration, from the five below), and `basis_findings` (the 1-based finding numbers it \
+rests on — REQUIRED; an item with no valid basis is dropped). Do NOT restate facts, and put NO number/ \
+dose/%/date in a factor that isn't already in the findings it rests on (ungrounded figures are dropped). \
+Every factor must connect back to the purpose — if it doesn't move the decision, cut it.
+  - `tension` — findings CONFLICT or pull different ways (effect sizes, a trial vs a guideline). Name \
+both sides and what the conflict means for the decision; reconcile where the evidence lets you (different \
+populations/endpoints), don't silently average.
+  - `gap` — a decision-relevant thing the evidence does NOT establish (no head-to-head, no long-term \
+data, no data in the asked population, surrogate endpoint only) — and why that limits the decision.
+  - `assumption` — an inferential leap the decision would rest on that the findings don't fully prove \
+(a surrogate translating to a clinical outcome; one population transferring to another).
+  - `implication` — a direct consequence of the evidence FOR the decision — the "so what". Calibrate \
+causal language to the design: association/observational ≠ causation; a registered trial's intent ≠ a \
+demonstrated effect. Say "associated with", not "causes", unless a finding supports causation.
+  - `what_would_change_this` — the specific new evidence that would move the decision (a completed RCT, \
+a head-to-head, long-term follow-up) — naming the current read's fragility.
+
+3. `reasoning_conclusion` — 1–3 sentences: the INFORMED JUDGMENT toward the purpose. Given the factors \
+and their strength, state what the evidence SUPPORTS concluding or doing relative to the purpose (e.g. \
+"the evidence supports withholding antibiotics for symptom relief in adults with colds"). This is where \
+the reasoning pays off in a decision. Ground it in the findings; add no new fact.
+
+4. `confidence` — how much to trust that conclusion, on three dimensions, each a `level` (high | moderate \
+| low | unknown) + a one-line `rationale` grounded in the CHARACTER of the evidence (how many studies, \
+what tier, how consistent, how directly they measure the outcome; invent no count not in the findings):
+  - `factual` — how solid the reported facts are (single small observational study → low; concordant \
+RCTs/guideline → high).
+  - `causal` — how well the evidence supports a CAUSAL reading vs mere association (RCT → higher; \
 cross-sectional/registry → low).
-- `generalization` — how well it transfers beyond the studied population/setting/timeframe to the \
+  - `generalization` — how well it transfers beyond the studied population/setting/timeframe to the \
 question as asked (narrow eligibility or one setting → low).
 
-NEUTRALITY — this is research synthesis, NOT medical advice. Do NOT recommend, prescribe, or tell the \
-reader what to do; characterize the evidence and its limits so the clinician decides. No new facts, no \
-hype, no reassurance beyond what the findings state."""
+NEUTRALITY — this is research synthesis, NOT individualized medical advice. You MAY state the decision the \
+EVIDENCE supports (that is the point of the conclusion); do NOT prescribe to a specific patient or tell \
+the reader what THEY personally should do. No new facts, no hype, no reassurance beyond the findings."""
 
 
 # CHART emission (flag NOESIS_ANSWER_CHARTS, default OFF — Rule 20). Appended to the compose directive.

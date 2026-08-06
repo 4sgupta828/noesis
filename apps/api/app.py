@@ -259,8 +259,10 @@ class ResearchOut(BaseModel):
     clarification: str | None = None      # a clarifying question when the follow-up was ambiguous
     derived_from_prior: bool = False      # answer is a reshape of the previous answer (no new evidence)
     charts: list = []                     # validated grounded bar charts (empty unless the flag is on)
-    interpretation: list = []             # validated reasoning-read items (empty unless the flag is on)
+    interpretation: list = []             # validated reasoning-read factors (empty unless the flag is on)
     confidence: dict | None = None        # 3-dimension confidence read (None unless the flag is on)
+    reasoning_purpose: str = ""           # the decision the reasoning serves (empty unless the flag is on)
+    reasoning_conclusion: str = ""        # the informed judgment toward that purpose (flag on only)
 
 
 def build_default_service() -> ResearchService:
@@ -620,6 +622,10 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     turn["interpretation"] = res.interpretation   # persist the reasoning layer (JSONB)
                 if getattr(res, "confidence", None):
                     turn["confidence"] = res.confidence
+                if getattr(res, "reasoning_purpose", ""):
+                    turn["reasoning_purpose"] = res.reasoning_purpose
+                if getattr(res, "reasoning_conclusion", ""):
+                    turn["reasoning_conclusion"] = res.reasoning_conclusion
             try:
                 # Audience-guarded append: only continue a thread whose audience MATCHES this turn's
                 # (mid-thread toggle → mismatch → save a fresh session instead of corrupting the thread).
@@ -638,7 +644,9 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                         audience=audience,
                         charts=(res.charts if answer_charts_enabled() else None),
                         interpretation=(getattr(res, "interpretation", None) if reasoning_read_enabled() else None),
-                        confidence=(getattr(res, "confidence", None) if reasoning_read_enabled() else None))
+                        confidence=(getattr(res, "confidence", None) if reasoning_read_enabled() else None),
+                        reasoning_purpose=(getattr(res, "reasoning_purpose", "") if reasoning_read_enabled() else ""),
+                        reasoning_conclusion=(getattr(res, "reasoning_conclusion", "") if reasoning_read_enabled() else ""))
             except Exception:
                 session_id = None
         return ResearchOut(
@@ -655,6 +663,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             charts=(getattr(res, "charts", []) or []) if answer_charts_enabled() else [],
             interpretation=(getattr(res, "interpretation", []) or []) if reasoning_read_enabled() else [],
             confidence=(getattr(res, "confidence", None) if reasoning_read_enabled() else None),
+            reasoning_purpose=(getattr(res, "reasoning_purpose", "") if reasoning_read_enabled() else ""),
+            reasoning_conclusion=(getattr(res, "reasoning_conclusion", "") if reasoning_read_enabled() else ""),
         )
 
     @app.post("/research/stream")

@@ -155,6 +155,18 @@ class ComposedAnswer(BaseModel):
     confidence: ConfidenceRead | None = Field(
         default=None, description="Three-dimension confidence read (factual/causal/generalization) — "
         "populate when the directive asks for a Reasoning Read.")
+    # The Reasoning Read's FRAME: a purpose (the decision/outcome the reasoning serves, from the
+    # question) and a conclusion (the informed judgment toward that purpose). These turn the typed
+    # `interpretation` items from disconnected observations into a purpose-driven analysis that
+    # CONVERGES on a decision. Both are grounded (no hard token absent from the findings).
+    reasoning_purpose: str = Field(
+        default="", description="ONE sentence naming the decision or outcome the reasoning serves, "
+        "framed from the question (the north star the interpretation factors are organized around). "
+        "Populate only for a Reasoning Read; adds no new fact.")
+    reasoning_conclusion: str = Field(
+        default="", description="The informed judgment TOWARD the purpose: given the factors and their "
+        "strength, what the evidence supports concluding or doing (not individualized advice). 1–3 "
+        "sentences, resting on the findings, no new fact. Populate only for a Reasoning Read.")
 
 
 def _validate_charts(charts: list[ChartSpec], verified: list["VerifiedClaim"]) -> list[dict]:
@@ -336,10 +348,13 @@ class AnswerResult:
     clarification: str = ""              # a clarifying question to ask instead of answering (ambiguous follow-up)
     charts: list = field(default_factory=list)   # validated grounded bar charts (dicts) for the UI
     derived_from_prior: bool = False     # answer is a transform of the PREVIOUS answer (no new retrieval)
-    # Reasoning Read (flag): validated interpretation items (dicts) + the 3-dimension confidence read.
-    # Empty/None unless the reasoning-read flag drove the compose directive (byte-identical OFF).
+    # Reasoning Read (flag): a purpose-driven analysis — a stated PURPOSE, the interpretation FACTORS
+    # that bear on it, a converging CONCLUSION, and the 3-dimension confidence read. All empty/None
+    # unless the reasoning-read flag drove the compose directive (byte-identical OFF).
     interpretation: list = field(default_factory=list)
     confidence: dict | None = None
+    reasoning_purpose: str = ""
+    reasoning_conclusion: str = ""
 
     @property
     def grounded(self) -> bool:
@@ -724,12 +739,14 @@ async def run_react(
                 # mechanics live here; the domain MEANING (what each kind is, neutrality) is in the
                 # directive below. Without this anchor the model composes great prose and leaves the
                 # trailing structured fields empty (the fields have defaults, so nothing forces them).
-                + ("\n\nSEPARATELY, you MUST ALSO populate the STRUCTURED `interpretation` and "
-                   "`confidence` fields (these are required outputs, NOT optional, and are separate from "
-                   "the answer prose above). Emit 2–5 `interpretation` items and the three-dimension "
-                   "`confidence` read, following the REASONING READ instructions in the directive below. "
-                   "Each interpretation item must set `basis_findings` to the finding number(s) it rests "
-                   "on and introduce no number/date/dose not already in those findings."
+                + ("\n\nSEPARATELY, you MUST ALSO populate the STRUCTURED Reasoning Read fields (required "
+                   "outputs, NOT optional, separate from the answer prose above): `reasoning_purpose` "
+                   "(one sentence naming the decision/outcome the reasoning serves), 2–5 `interpretation` "
+                   "factors that each bear on that purpose, `reasoning_conclusion` (the informed judgment "
+                   "toward the purpose), and the three-dimension `confidence` read — all following the "
+                   "REASONING READ instructions in the directive below. Each interpretation factor must "
+                   "set `basis_findings` to the finding number(s) it rests on and introduce no number/"
+                   "date/dose not already in those findings."
                    if reasoning_read else "")
                 + (("\n\n" + directive) if directive else ""))
             comp = await llm.complete(
@@ -783,6 +800,17 @@ async def run_react(
                     getattr(parsed, "interpretation", []) or [], result.verified_claims)
                 conf = getattr(parsed, "confidence", None)
                 result.confidence = conf.model_dump() if conf is not None else None
+                # Purpose + conclusion FRAME the factors. Grounded no-new-facts against ALL findings
+                # (they synthesize across the whole set, not one basis) — a fabricated figure drops the
+                # text (fail-safe). Purpose is usually number-free (it restates the decision), so it
+                # passes trivially; the guard only bites if the model invents a figure.
+                _all_src = " ".join((vc.text + " " + vc.quote) for vc in result.verified_claims)
+                _all_tokens = extract_hard_tokens(_all_src)
+                def _grounded_frame(s: str) -> str:
+                    s = (s or "").strip()
+                    return s if (s and extract_hard_tokens(s).issubset(_all_tokens)) else ""
+                result.reasoning_purpose = _grounded_frame(getattr(parsed, "reasoning_purpose", ""))
+                result.reasoning_conclusion = _grounded_frame(getattr(parsed, "reasoning_conclusion", ""))
             # Honesty signal → coverage gap: a "grounded-on-analogues" answer still flags the gap,
             # so the UI shows the prominent fill-the-gaps affordance (LLM-owned judgment, no regex).
             if parsed.directly_addresses is False and (parsed.gap_note or "").strip():

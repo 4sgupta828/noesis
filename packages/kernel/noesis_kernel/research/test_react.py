@@ -331,11 +331,13 @@ def test_reasoning_read_flows_through_when_enabled(monkeypatch):
     def compose_fn(call_n):
         return LLMResult(parsed=ComposedAnswer(
             answer="The approved metric value was 9.8 percent [1].",
+            reasoning_purpose="Whether the metric value is reliable enough to act on.",
             interpretation=[
                 InterpretationItem(text="Only one source reports this, limiting confidence",
                                    kind="gap", basis_findings=[1]),
                 InterpretationItem(text="A value near 12 percent is possible",   # 12 not in finding → dropped
                                    kind="implication", basis_findings=[1])],
+            reasoning_conclusion="The 9.8 percent figure is the only supported value, so it can be used cautiously.",
             confidence=ConfidenceRead(
                 factual=ConfidenceDim(level="low", rationale="single source"),
                 causal=ConfidenceDim(level="unknown", rationale=""),
@@ -349,6 +351,30 @@ def test_reasoning_read_flows_through_when_enabled(monkeypatch):
     # the fabricated-number item is dropped; the grounded gap item survives
     assert len(res.interpretation) == 1 and res.interpretation[0]["kind"] == "gap"
     assert res.confidence and res.confidence["factual"]["level"] == "low"
+    # purpose (no numbers) passes; conclusion reuses only the grounded 9.8 → both survive
+    assert res.reasoning_purpose.startswith("Whether the metric value")
+    assert "9.8 percent" in res.reasoning_conclusion
+
+
+def test_reasoning_conclusion_with_fabricated_number_is_dropped(monkeypatch):
+    # The purpose/conclusion frame is grounded too: a conclusion inventing a figure not in ANY finding
+    # is dropped (fail-safe), while a clean purpose survives.
+    import noesis_kernel.research.react as react
+    monkeypatch.setattr(react, "_COMPOSE_BACKOFF_S", 0)
+    from noesis_kernel.research.react import ComposedAnswer
+    src, make = _compose_setup()
+    def compose_fn(call_n):
+        return LLMResult(parsed=ComposedAnswer(
+            answer="The approved metric value was 9.8 percent [1].",
+            reasoning_purpose="Whether the value can be trusted.",
+            reasoning_conclusion="The true value is likely closer to 15 percent."),  # 15 in no finding
+            output_tokens=5)
+    llm = make(compose_fn)
+    res = asyncio.run(run_react(question="what was the metric value?", llm=llm,
+        embedder=FakeEmbedder(dim=8), source=src, tenant_id="A",
+        budget=BudgetState(max_calls=20), reasoning_read=True))
+    assert res.reasoning_purpose == "Whether the value can be trusted."   # clean → survives
+    assert res.reasoning_conclusion == ""                                 # fabricated figure → dropped
 
 
 def test_reasoning_read_off_is_noop(monkeypatch):
@@ -362,6 +388,7 @@ def test_reasoning_read_off_is_noop(monkeypatch):
     def compose_fn(call_n):
         return LLMResult(parsed=ComposedAnswer(
             answer="The approved metric value was 9.8 percent [1].",
+            reasoning_purpose="a purpose", reasoning_conclusion="a conclusion",
             interpretation=[InterpretationItem(text="grounded gap", kind="gap", basis_findings=[1])],
             confidence=ConfidenceRead(factual=ConfidenceDim(level="high"))), output_tokens=5)
     llm = make(compose_fn)
@@ -370,6 +397,7 @@ def test_reasoning_read_off_is_noop(monkeypatch):
         budget=BudgetState(max_calls=20)))              # reasoning_read defaults False
     assert res.grounded
     assert res.interpretation == [] and res.confidence is None
+    assert res.reasoning_purpose == "" and res.reasoning_conclusion == ""
 
 
 def test_rank_claims_fail_safe_on_embed_error():

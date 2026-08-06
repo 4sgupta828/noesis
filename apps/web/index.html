@@ -274,7 +274,23 @@
     border-radius:12px;padding:.95rem 1.1rem 1.05rem;background:var(--panel2);}
   .reasoning .rhead{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.11em;
     color:var(--gold);margin:0 0 .1rem;display:flex;align-items:center;gap:.5rem;}
-  .reasoning .rsub{font-size:.72rem;color:var(--muted);margin:0 0 .8rem;}
+  .reasoning .rsub{font-size:.72rem;color:var(--muted);margin:0 0 .85rem;}
+  /* purpose — the north star the factors serve; sits at the top, emphasized */
+  .rpurpose{display:flex;gap:.6rem;align-items:baseline;margin:0 0 .7rem;padding:.5rem .7rem;
+    border-radius:8px;background:rgba(var(--gold-rgb),.07);border:1px solid rgba(var(--gold-rgb),.22);}
+  .rpurpose-l{flex:0 0 auto;font-family:var(--mono);font-size:.58rem;font-weight:700;text-transform:uppercase;
+    letter-spacing:.09em;color:var(--gold);}
+  .rpurpose-t{font-size:.9rem;line-height:1.5;color:var(--ink);font-weight:560;}
+  .rfactors-l{font-family:var(--mono);font-size:.58rem;font-weight:700;text-transform:uppercase;
+    letter-spacing:.1em;color:var(--muted);margin:.2rem 0 .1rem;}
+  /* conclusion — where the reasoning converges into an informed judgment */
+  .rconcl{margin:.85rem 0 .2rem;padding:.6rem .8rem;border-left:3px solid var(--verified);
+    border-radius:0 8px 8px 0;background:rgba(19,122,84,.06);}
+  .rconcl-l{display:block;font-family:var(--mono);font-size:.58rem;font-weight:700;text-transform:uppercase;
+    letter-spacing:.09em;color:var(--verified);margin-bottom:.28rem;}
+  .rconcl-t{font-size:.92rem;line-height:1.58;color:var(--ink);}
+  :root[data-theme="dark"] .rconcl{background:rgba(87,184,145,.09);}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .rconcl{background:rgba(87,184,145,.09);}}
   .ritem{display:flex;gap:.7rem;padding:.55rem 0;border-top:1px solid var(--hair-soft);}
   .ritem:first-of-type{border-top:0;}
   .rkind{flex:0 0 auto;align-self:flex-start;font-family:var(--mono);font-size:.6rem;font-weight:700;
@@ -967,7 +983,9 @@ function reasoningMarkup(data){
   if(!REASONING_ENABLED) return "";
   const items = Array.isArray(data.interpretation) ? data.interpretation : [];
   const conf = data.confidence && typeof data.confidence === "object" ? data.confidence : null;
-  if(!items.length && !conf) return "";
+  const purpose = (data.reasoning_purpose || "").trim();
+  const conclusion = (data.reasoning_conclusion || "").trim();
+  if(!items.length && !conf && !purpose && !conclusion) return "";
   // basis-finding refs → clickable chips that scroll to the evidence card (reuses the [n] machinery)
   const refChips = b => (Array.isArray(b) ? b : []).map(n =>
     `<sup class="rref ref" data-n="${parseInt(n,10)||0}" title="Rests on finding ${parseInt(n,10)||0}">[${parseInt(n,10)||0}]</sup>`).join("");
@@ -992,11 +1010,21 @@ function reasoningMarkup(data){
       confHtml = `<div class="rconf"><div class="rconf-h">Confidence — how much to trust this</div>${rowsC}</div>`;
     }
   }
-  if(!rows && !confHtml) return "";
+  if(!rows && !confHtml && !purpose && !conclusion) return "";
+  // Purpose frames the whole analysis (the decision it serves); conclusion is where it converges.
+  const purposeHtml = purpose
+    ? `<div class="rpurpose"><span class="rpurpose-l">Purpose</span><span class="rpurpose-t">${esc(purpose)}</span></div>`
+    : "";
+  const conclusionHtml = conclusion
+    ? `<div class="rconcl"><span class="rconcl-l">Informed judgment</span><div class="rconcl-t">${esc(conclusion)}</div></div>`
+    : "";
+  const factorsHtml = rows
+    ? `<div class="rfactors-l">What bears on this</div>${rows}`
+    : "";
   return `<section class="reasoning">
     <div class="rhead">◆ Reasoning</div>
-    <div class="rsub">Interpretation of the evidence above — judgments, not new facts. Each rests on the cited findings.</div>
-    ${rows}${confHtml}</section>`;
+    <div class="rsub">A purpose-driven read of the evidence above — judgments, not new facts. Each factor rests on the cited findings.</div>
+    ${purposeHtml}${factorsHtml}${conclusionHtml}${confHtml}</section>`;
 }
 // Render a grounded chart as inline SVG. XSS-safe by construction: every model-derived string
 // (label/value_str/series/title/unit) is esc()'d into <text> content, and every geometry attribute is

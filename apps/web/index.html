@@ -110,12 +110,17 @@
   .retrydeep[disabled]{opacity:.5;cursor:default;}
   .retrydeep-top{margin:0 0 1rem;}   /* at the TOP, above the answer */
   /* Diagnostics box — collapsed provenance/observability meta at the bottom of an answer */
-  .diagbox{margin:1.4rem 0 .2rem;border-top:1px solid var(--hair);}
-  .diagbox>summary{list-style:none;cursor:pointer;padding:.65rem 0 0;}
+  /* diagnostics — a SOFT left-highlighted box (lower-priority meta: muted accent, no fill) matching
+     the other bottom boxes; collapsed, summary = header + hint. */
+  .diagbox{margin:0;border:1px solid var(--hair);border-left:3px solid var(--hair);border-radius:12px;
+    background:transparent;overflow:hidden;}
+  .diagbox>summary{list-style:none;cursor:pointer;padding:.75rem 1rem;transition:background .15s;}
   .diagbox>summary::-webkit-details-marker{display:none;}
+  .diagbox>summary:hover{background:var(--hair-soft);}
   .diaghead{display:flex;align-items:center;font-family:var(--mono);font-size:.64rem;text-transform:uppercase;
     letter-spacing:.11em;color:var(--muted);}
-  .diagbox .diagbody{padding:.6rem 0 .2rem;display:flex;flex-direction:column;gap:.3rem;}
+  .diaghint{font-size:.78rem;color:var(--muted);margin-top:.4rem;line-height:1.5;opacity:.9;}
+  .diagbox .diagbody{padding:.2rem 1rem .9rem;display:flex;flex-direction:column;gap:.3rem;}
   .diagbox .diagbody .ansmeta{display:flex;gap:.7rem;flex-wrap:wrap;align-items:center;}
 
   /* audience switch — a two-segment control that reads as "who the answer is FOR", distinct from
@@ -352,21 +357,23 @@
   .hllegend i{width:.72rem;height:.72rem;border-radius:3px;display:inline-block;}
   .hllegend .lf{background:rgba(var(--hl-f),.95);} .hllegend .lr{background:rgba(var(--hl-r),.95);}
   .hllegend .lk{background:rgba(var(--hl-k),.95);}
-  /* evidence dossier — collapsed by default; summary is the disclosure control */
-  .evblock{margin:1.8rem 0 0;border-top:1px solid var(--hair);}
-  .evblock>summary{list-style:none;cursor:pointer;border-radius:10px;transition:background .15s;}
+  /* evidence dossier — a left-highlighted box (matches the strengthen/plain/video boxes); collapsed
+     by default, the summary (header + hint + Show/Hide pill) is the disclosure control. */
+  .evblock{margin:0;border:1px solid var(--hair);border-left:3px solid var(--gold);border-radius:12px;
+    background:var(--panel2);overflow:hidden;}
+  .evblock>summary{list-style:none;cursor:pointer;padding:.85rem 1rem;transition:background .15s;}
   .evblock>summary::-webkit-details-marker{display:none;}
-  .evblock>summary:hover{background:var(--panel2);}
-  .evhead{font-family:var(--sans);font-size:.68rem;text-transform:uppercase;letter-spacing:.14em;color:var(--gold);
-    font-weight:680;margin:0;padding:1.3rem .55rem .2rem;display:flex;align-items:center;gap:.55rem;}
-  .evhead::before{content:"";width:15px;height:2px;border-radius:2px;background:var(--gold);}
+  .evblock>summary:hover{background:rgba(var(--gold-rgb),.05);}
+  .evhead{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);
+    font-weight:680;margin:0;padding:0;display:flex;align-items:center;gap:.55rem;}
+  .evhint{font-size:.8rem;color:var(--muted);margin-top:.45rem;line-height:1.5;}
   /* explicit clickable pill so it's obvious the evidence section expands */
   .evtoggle{margin-left:auto;font-family:var(--mono);font-size:.6rem;letter-spacing:.04em;white-space:nowrap;
     color:var(--on-accent);background:var(--gold);border-radius:12px;padding:.2rem .62rem;text-transform:none;}
   .evtoggle::after{content:"Show ▸";}
   .evblock[open] .evtoggle::after{content:"Hide ▾";}
   .evblock>summary:hover .evtoggle{background:var(--gold-strong);}
-  .evbody{padding-top:1rem;}
+  .evbody{padding:.2rem 1rem 1rem;}
   .fnum{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:1.4rem;height:1.4rem;
     border-radius:8px;background:var(--gold);color:var(--on-accent);font-family:var(--mono);font-size:.72rem;
     font-weight:700;margin-top:.05rem;}
@@ -662,12 +669,16 @@
     .answer.md .mdt th{padding:.4rem .55rem;min-width:6em;}
     .answer.md .mdt td{padding:.45rem .55rem;line-height:1.45;min-width:6em;}
     /* UNIFORM compact add-on boxes: same tight padding, full-width single-line button, hints dropped
-       (the button label suffices) — briefing video · explain · strengthen all match. */
+       (the button label suffices) — briefing video · explain · strengthen · evidence · diagnostics. */
     .addons{gap:.5rem;margin:1rem 0 .3rem;}
+    .ansbox{gap:.5rem;}
     .vid, .plain, .gapfix{padding:.55rem .68rem;border-radius:10px;}
-    .plain .plain-hint, .gapfix-hint, .vid .vhint{display:none;}
+    .plain .plain-hint, .gapfix-hint, .vid .vhint, .evhint, .diaghint{display:none;}
     .gapfix-h{margin-bottom:.3rem;}
     .vid .vbtn, .plain .vbtn, .gapfix .vbtn{width:100%;text-align:center;font-size:.72rem;padding:.45rem .7rem;margin-top:0;}
+    .evblock>summary, .diagbox>summary{padding:.6rem .7rem;}
+    .evbody{padding:.2rem .7rem .7rem;} .diagbox .diagbody{padding:.2rem .7rem .6rem;}
+    .evblock, .diagbox{border-radius:10px;}
   }
   /* bottom-left theme toggle — adapts to the active theme via the same tokens */
   .themebtn{position:fixed;left:1rem;bottom:1rem;z-index:60;font-family:var(--mono);font-size:.64rem;
@@ -1281,7 +1292,8 @@ function render(data, target, opts){
       </article>`;
     }).join("");
     evBits.push(`<details class="evblock" id="evblock">
-      <summary><h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}<span class="evtoggle"></span></h4></summary>
+      <summary><h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}<span class="evtoggle"></span></h4>
+        <div class="evhint">The passages this answer is built on — each shows a quote located in its cited source.</div></summary>
       <div class="evbody">${cards}</div>
     </details>`);
   }
@@ -1289,10 +1301,10 @@ function render(data, target, opts){
     const weak = !data.grounded || (data.coverage_gaps||[]).length || n < 2;
     evBits.push(gapPanelMarkup(weak));
   }
+  // DIAGNOSTICS joins the same bottom-box cluster (Evidence · Strengthen · Diagnostics) so the three
+  // read as one consistent set of left-highlighted boxes. Grounding meta, collapsed by default.
+  if(data.answer || n) evBits.push(diagBoxMarkup(data));
   if(evBits.length) parts.push(`<div class="ansbox">${evBits.join("")}</div>`);
-  // DIAGNOSTICS box (bottom, collapsed): grounded status, verified/rejected counts, passages seen,
-  // stop reason, and "Sources used" — the how-it-was-produced meta, moved off the top of the answer.
-  if(data.answer || n) parts.push(diagBoxMarkup(data));
   // CONVERSATION-LEVEL box: briefing video + explain-in-plain-language. In a thread it renders ONCE at
   // the bottom (renderThread passes noConvo per turn); in single-answer mode it renders here.
   if(!opts.noConvo) parts.push(convoActionsMarkup(data));
@@ -1343,7 +1355,8 @@ function diagBoxMarkup(data){
     }).join(" ");
     sources = `<div class="summary" style="border:none;padding:.4rem 0 0"><span>Sources used:</span> ${chips}</div>`;
   }
-  return `<details class="diagbox"><summary><span class="diaghead">◔ Diagnostics<span class="evtoggle"></span></span></summary>
+  return `<details class="diagbox"><summary><span class="diaghead">◔ Diagnostics<span class="evtoggle"></span></span>
+      <div class="diaghint">How this answer was produced — grounding status, verified/rejected counts, and which sources were used.</div></summary>
     <div class="diagbody"><div class="ansmeta" style="margin:0;padding:0;border:none">${bits.join("")}</div>${sources}</div></details>`;
 }
 function gapPanelMarkup(weak){

@@ -160,6 +160,7 @@ class AnswerResult:
     compose_failed: bool = False         # compose exhausted its retries → the answer is the fail note
     stopped_reason: str = "answered"     # "answered" | "budget" | "max_steps"
     effort: float = 1.0                  # the resolved effort multiplier this run used (observability)
+    resolved_question: str = ""          # condensed self-contained question (set only if it differed)
 
     @property
     def grounded(self) -> bool:
@@ -200,6 +201,7 @@ async def run_react(
     planner_atom_window: int = 60,            # atoms SHOWN to the planner per step (store keeps all)
     compose_claim_cap: int = _COMPOSE_CLAIM_CAP,  # max verified findings sent to compose (effort-scalable)
     extract_collect: int = _EXTRACT_COLLECT,      # candidate pool before relevance-ranking (effort-scalable)
+    answer_focus: bool = False,               # ANSWER the question + scope to its subject (vs compile findings)
 ) -> AnswerResult:
     import asyncio
     atoms = AtomStore()
@@ -523,7 +525,16 @@ async def run_react(
                 "[n] where you use it. Use ONLY the findings above — do not add facts, "
                 "figures, or claims not present in them. If they only partially answer "
                 "the question, say what is and isn't supported."
-                "\n\nSEPARATELY (metadata, not part of the answer prose): set directly_addresses=false "
+                # ANSWER-FOCUS (flag): ANSWER the specific question and scope to its subject, instead of
+                # compiling every retrieved finding. Fixes elliptical follow-ups ("what dose" → dumping
+                # every drug's dose) AND single-turn "compile everything". Grounding is unchanged — it
+                # still uses ONLY the verified findings and still cites [n].
+                + (" Directly ANSWER the specific question asked. If some findings concern a DIFFERENT "
+                   "subject, drug, population, or topic than the question, use ONLY the findings about "
+                   "the asked subject and ignore the rest — do not enumerate unrelated findings. If the "
+                   "findings do not contain the specific answer the question asks for, say so explicitly "
+                   "as a gap; do NOT substitute a list of unrelated findings." if answer_focus else "")
+                + "\n\nSEPARATELY (metadata, not part of the answer prose): set directly_addresses=false "
                 "if the findings only address the question by analogy/adjacent topic rather than "
                 "DIRECTLY (e.g. no evidence on the exact intervention/population/outcome asked); then "
                 "put ONE short line in gap_note naming the direct evidence that is missing. Otherwise "

@@ -73,7 +73,26 @@ class ResearchService:
         max_steps: int = 8,
         effort: float = 1.0,                 # research-effort multiplier (1.0 = baseline no-op)
         audience: str = "clinician",         # "clinician" (default) | "patient" — selects the compose directive ONLY
+        answer_focus: bool = False,          # condense elliptical follow-ups + ANSWER-scope compose (flag)
     ) -> AnswerResult:
+        # ANSWER-FOCUS (flag): resolve an elliptical FOLLOW-UP ("what dose?") into a self-contained
+        # question carrying the subject from the conversation ("dose of TMP-SMX for PCP prophylaxis"),
+        # BEFORE retrieval — so the query, the relevance ranking, AND compose all inherit the subject
+        # (they all key off `question`). Only fires with history present; off/no-history → no-op. The
+        # condenser sees ONLY the conversation (never the corpus), so it can't inject retrieved content;
+        # the ORIGINAL question is preserved as `question_original` for echo/persistence.
+        question_original = question
+        resolved_question = ""
+        if answer_focus and history:
+            condensed = await self._condense_followup(question, history)
+            if condensed and condensed != question:
+                resolved_question = condensed
+                question = condensed
+                if on_event is not None:
+                    try:
+                        await on_event({"type": "resolved_question", "question": condensed})
+                    except Exception:
+                        pass
         # Audience changes ONLY the compose directive — same retrieval, same persona/system_prompt,
         # same span/entailment gates. "patient" uses the vertical's patient directive when it supplies
         # one; anything else (incl. an unknown value) falls back to the clinician directive → the
@@ -137,10 +156,58 @@ class ResearchService:
             facets=facets or {},
             max_steps=sc.max_steps, k=sc.k, planner_atom_window=sc.planner_atom_window,
             compose_claim_cap=sc.compose_claim_cap, extract_collect=sc.extract_collect,
+            answer_focus=answer_focus,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)
         res.effort = sc.effort                   # echo the resolved multiplier (observability)
+        res.resolved_question = resolved_question # condensed question if it differed (observability)
         return res
+
+    async def _condense_followup(self, question: str, history: list[dict]) -> str:
+        """Rewrite an elliptical FOLLOW-UP into a self-contained question using the conversation.
+
+        Returns the rewritten question, or "" to keep the original (already self-contained, a topic
+        change, or any failure → fail-safe). Sees ONLY the conversation (never the corpus), so it can
+        add no retrieved content. Resolving the referent/subject is a coreference judgment — the LLM's
+        job (Rule 18), never a regex. Uses the fast planner model when available."""
+        from pydantic import BaseModel
+
+        class _Condensed(BaseModel):
+            question: str
+
+        convo = []
+        for t in (history or []):
+            qy = (t.get("question") or "").strip()
+            an = (t.get("answer") or "").strip()
+            if qy:
+                convo.append(f"Q: {qy}\nA: {an[:800]}" if an else f"Q: {qy}")
+        if not convo:
+            return ""
+        sys = ("You rewrite a user's LATEST question into a single, SELF-CONTAINED question, using the "
+               "prior conversation to fill in the subject the latest question leaves implicit.")
+        user = (
+            "CONVERSATION SO FAR:\n" + "\n\n".join(convo) + "\n\n"
+            f"LATEST QUESTION: {question}\n\n"
+            "Rewrite LATEST QUESTION as ONE standalone question that names its subject explicitly, so it "
+            "can be understood with NO conversation context (e.g. 'What dose?' after establishing "
+            "co-trimoxazole for PCP prophylaxis → 'What is the dose of co-trimoxazole for Pneumocystis "
+            "pneumonia prophylaxis?'). RULES: (1) If the latest question is ALREADY self-contained, "
+            "return it VERBATIM. (2) If it CHANGES the topic (introduces a new subject), return it "
+            "VERBATIM — do not graft on the old subject. (3) Only carry over the subject/entity that the "
+            "latest question is implicitly about; do NOT add facts, answers, or details from the prior "
+            "answers. Return ONLY the rewritten question.")
+        planner = self.planner_llm or self.llm
+        try:
+            res = await planner.complete(system=sys, messages=[{"role": "user", "content": user}],
+                                         response_format=_Condensed, max_tokens=256)
+            out = (res.parsed.question or "").strip()
+        except Exception:
+            return ""      # fail-safe: any error → keep the original question
+        # Structural guards (code owns structure, not meaning): keep the rewrite only if it's non-empty
+        # and not implausibly long vs the original (a runaway rewrite = drop it).
+        if not out or len(out) > max(120, 4 * len(question)):
+            return ""
+        return out
 
     async def explain(self, *, question: str, answer: str) -> str:
         """On-demand plain-language rephrasing of a grounded answer (adds no new facts)."""

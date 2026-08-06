@@ -378,6 +378,9 @@
   /* grounding header band */
   .ansmeta{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:0 0 1.3rem;padding-bottom:.9rem;
     border-bottom:1px solid var(--hair);}
+  .rqnote{font-family:var(--mono);font-size:.72rem;color:var(--muted);margin:0 0 1rem;padding:.5rem .7rem;
+    background:var(--panel);border-left:2px solid var(--gold);border-radius:0 4px 4px 0;}
+  .rqnote b{color:var(--ink);font-weight:600;}
   .gpill{font-family:var(--mono);font-size:.66rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
     border-radius:999px;padding:.24rem .7rem;border:1px solid;}
   .gpill.on{color:var(--verified);border-color:rgba(87,184,145,.5);background:rgba(87,184,145,.09);}
@@ -944,6 +947,10 @@ function render(data, target, opts){
       : `<span class="adoc">📄 ${esc(a.name)}</span>`).join("");
     parts.push(`<div class="attstrip"><span class="attlbl">Uploaded</span>${items}</div>`);
   }
+  // when an elliptical follow-up was resolved to a self-contained question, show it (transparency)
+  if(data.resolved_question){
+    parts.push(`<div class="rqnote">↳ Interpreted your follow-up as: <b>${esc(data.resolved_question)}</b></div>`);
+  }
   // synthesized answer (grounded in the findings) — the hero; [n] refs → findings.
   if(data.answer){
     const html = STRUCTURED
@@ -1393,6 +1400,7 @@ $("#ask").addEventListener("submit", e=>{
 function traceLine(ev){
   if(ev.type==="effort")    return `<div class="tstep">⚡ Digging deeper — ${effortTier(ev.effort).name} · ${ev.effort}× effort</div>`;
   if(ev.type==="audience")  return `<div class="tstep">🧑‍⚕️ Answering for a ${ev.audience==="patient"?"patient":"clinician"}</div>`;
+  if(ev.type==="resolved_question") return `<div class="tstep">↳ Interpreting your follow-up as: <span class="tq">${esc(ev.question||"")}</span></div>`;
   if(ev.type==="step")      return `<div class="tstep">▸ Step ${ev.step}</div>`;
   if(ev.type==="search")    return `<div class="tstep">🔎 Searching <span class="tq">${esc(ev.query||"")}</span>${(ev.variants&&ev.variants.length)?` <span class="tvar">+${ev.variants.length} reformulations</span>`:""}</div>`;
   if(ev.type==="found")     return `<div class="tstep">📥 Found <b>${ev.total}</b> passage${ev.total===1?"":"s"}${(ev.sources&&ev.sources.length)?` <span class="tvar">${ev.sources.map(esc).join(" · ")}</span>`:""}</div>`;

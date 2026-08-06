@@ -88,6 +88,15 @@ def patient_mode_enabled() -> bool:
     return os.environ.get("NOESIS_PATIENT_MODE", "").lower() in ("1", "true", "yes")
 
 
+def answer_focus_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, elliptical conversational follow-ups are condensed into a
+    self-contained question (so retrieval + compose inherit the subject) AND compose ANSWERS the
+    question / scopes to its subject instead of compiling every retrieved finding. Needs conversation
+    context for the condense half; the compose-scope half also improves single-turn. OFF →
+    byte-identical (no condense call, original compose instruction)."""
+    return os.environ.get("NOESIS_ANSWER_FOCUS", "").lower() in ("1", "true", "yes")
+
+
 def _resolve_audience(audience: str | None) -> str:
     """The audience actually used: 'patient' only when the flag is on AND explicitly requested;
     everything else → 'clinician' (the default, byte-identical path)."""
@@ -202,6 +211,7 @@ class ResearchOut(BaseModel):
     attachment_notes: list[str] = [] # anything skipped when reading attachments
     effort: float | None = None      # resolved effort multiplier (only set when the flag is on)
     audience: str | None = None      # resolved audience 'clinician'|'patient' (only set when flag on)
+    resolved_question: str | None = None  # condensed follow-up question, if it differed (flag on only)
 
 
 def build_default_service() -> ResearchService:
@@ -407,6 +417,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "effort_scale_enabled": effort_scale_enabled(),
             "effort_stops": EFFORT_STOPS if effort_scale_enabled() else [],
             "patient_mode_enabled": patient_mode_enabled(),
+            "answer_focus_enabled": answer_focus_enabled(),
         }
 
     @app.post("/search")
@@ -491,11 +502,15 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             await on_event({"type": "effort", "effort": effort})
         if on_event is not None and audience == "patient":
             await on_event({"type": "audience", "audience": audience})
+        # Answer-focus: condense elliptical follow-ups + answer-scope compose (needs the flag; the
+        # condense half additionally needs conversation history, which `history` above already gates).
+        focus = answer_focus_enabled()
         res = await app.state.service.ask(
             question=body.question, tenant_id=body.tenant_id,
             workspace_id=body.workspace_id, source_keys=body.sources,
             images=images, documents=docs, history=history, on_event=on_event,
-            facets=_country_facets(body.countries), effort=effort, audience=audience)
+            facets=_country_facets(body.countries), effort=effort, audience=audience,
+            answer_focus=focus)
         ui = getattr(app.state.service, "ui", None)
         def _url(c):
             fn = getattr(ui, "source_url", None)
@@ -548,6 +563,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             attachment_notes=attach_notes,
             effort=res.effort if effort_scale_enabled() else None,
             audience=audience if patient_mode_enabled() else None,
+            resolved_question=(res.resolved_question or None) if answer_focus_enabled() else None,
         )
 
     @app.post("/research/stream")

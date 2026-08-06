@@ -11,6 +11,7 @@ from .answer_format import (
     MEDICAL_CLINICAL_SYNTHESIS_FORMAT,
     MEDICAL_PATIENT_FORMAT,
     MEDICAL_VISUAL_GUIDANCE,
+    MEDICAL_CHART_GUIDANCE,
 )
 from .vision import MEDICAL_VISION_PROMPT
 from .layman import MEDICAL_LAYMAN_PROMPT
@@ -58,6 +59,7 @@ def build_manifest() -> VerticalManifest:
         clinical_answer_format=MEDICAL_CLINICAL_SYNTHESIS_FORMAT,
         patient_answer_format=MEDICAL_PATIENT_FORMAT,
         visual_guidance=MEDICAL_VISUAL_GUIDANCE,
+        chart_guidance=MEDICAL_CHART_GUIDANCE,
         vision_prompt=MEDICAL_VISION_PROMPT,
         layman_prompt=MEDICAL_LAYMAN_PROMPT,
         gap_prompt=MEDICAL_GAP_PROMPT,

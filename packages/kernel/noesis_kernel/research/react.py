@@ -72,6 +72,23 @@ class AgentStep(BaseModel):
     claims: list[ClaimOut] = []
 
 
+class ChartPoint(BaseModel):
+    """One bar of a chart. `value` is what's plotted; `value_str` is the figure EXACTLY as it appears
+    in the cited finding (used to VERIFY the bar is grounded); `finding` is the 1-based finding index."""
+    label: str
+    value: float
+    value_str: str = ""
+    finding: int = 0
+
+
+class ChartSpec(BaseModel):
+    """A simple horizontal-BAR chart built ONLY from verified findings. Every bar must be grounded
+    (its value_str must appear verbatim in its cited finding) or the whole chart is dropped."""
+    title: str = ""
+    unit: str = ""
+    points: list[ChartPoint] = []
+
+
 class ComposedAnswer(BaseModel):
     """A synthesized prose answer built ONLY from the verified findings, with
     inline [n] references to them so every statement stays traceable."""
@@ -81,6 +98,33 @@ class ComposedAnswer(BaseModel):
     # kernel surfaces it as a coverage gap so a "grounded-on-analogues" answer still flags the gap.
     directly_addresses: bool = True
     gap_note: str = ""
+    # Optional bar charts (only when the answer-charts flag drives the directive to emit them). Each is
+    # VALIDATED against the verified findings before it reaches the UI — an ungrounded bar drops the chart.
+    charts: list[ChartSpec] = []
+
+
+def _validate_charts(charts: list[ChartSpec], verified: list["VerifiedClaim"]) -> list[dict]:
+    """Keep only charts whose EVERY bar is grounded: a valid finding index AND the bar's `value_str`
+    appears verbatim (case-insensitive) in that finding's text or quote. Fail-safe — any bad bar drops
+    the WHOLE chart (a partially-verified chart is worse than none). Returns plain dicts for the API."""
+    out: list[dict] = []
+    for ch in charts or []:
+        pts = ch.points or []
+        if len(pts) < 2:
+            continue                       # not a meaningful comparison
+        ok = True
+        for p in pts:
+            vs = (p.value_str or "").strip().lower()
+            if not (1 <= p.finding <= len(verified)) or not vs:
+                ok = False; break
+            src = (verified[p.finding - 1].text + " " + verified[p.finding - 1].quote).lower()
+            if vs not in src:              # the plotted figure must be present in the cited finding
+                ok = False; break
+        if ok:
+            out.append(ch.model_dump())
+        else:
+            _log.warning("chart dropped: a bar's value_str not found in its cited finding (title=%r)", ch.title)
+    return out
 
 
 def _refs_valid(text: str, n_findings: int) -> bool:
@@ -168,6 +212,7 @@ class AnswerResult:
     effort: float = 1.0                  # the resolved effort multiplier this run used (observability)
     resolved_question: str = ""          # condensed self-contained question (set only if it differed)
     clarification: str = ""              # a clarifying question to ask instead of answering (ambiguous follow-up)
+    charts: list = field(default_factory=list)   # validated grounded bar charts (dicts) for the UI
     derived_from_prior: bool = False     # answer is a transform of the PREVIOUS answer (no new retrieval)
 
     @property
@@ -588,6 +633,9 @@ async def run_react(
                 except Exception as _e:   # noqa: BLE001
                     _log.warning("compose ref-retry failed: %r", _e)
             result.composed_answer = text
+            # Grounded charts: keep only bars whose figure appears in the cited finding (drop the whole
+            # chart otherwise). Empty when the charts flag isn't driving the directive → no-op.
+            result.charts = _validate_charts(getattr(parsed, "charts", []) or [], result.verified_claims)
             # Honesty signal → coverage gap: a "grounded-on-analogues" answer still flags the gap,
             # so the UI shows the prominent fill-the-gaps affordance (LLM-owned judgment, no regex).
             if parsed.directly_addresses is False and (parsed.gap_note or "").strip():

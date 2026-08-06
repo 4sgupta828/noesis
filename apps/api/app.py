@@ -88,6 +88,13 @@ def patient_mode_enabled() -> bool:
     return os.environ.get("NOESIS_PATIENT_MODE", "").lower() in ("1", "true", "yes")
 
 
+def answer_charts_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, append the vertical's chart guidance so compose may emit a
+    grounded bar chart (each bar validated against its cited finding in code; ungrounded → dropped).
+    Requires structured answers. OFF → the directive is unchanged and `charts` stays empty."""
+    return os.environ.get("NOESIS_ANSWER_CHARTS", "").lower() in ("1", "true", "yes")
+
+
 def refine_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, a FRESH question (no history) is first sent to /refine,
     which proposes a few distinct sharper standalone questions to pick from (express refinement). The
@@ -241,6 +248,7 @@ class ResearchOut(BaseModel):
     resolved_question: str | None = None  # condensed follow-up question, if it differed (flag on only)
     clarification: str | None = None      # a clarifying question when the follow-up was ambiguous
     derived_from_prior: bool = False      # answer is a reshape of the previous answer (no new evidence)
+    charts: list = []                     # validated grounded bar charts (empty unless the flag is on)
 
 
 def build_default_service() -> ResearchService:
@@ -288,6 +296,9 @@ def build_default_service() -> ResearchService:
     # pros-cons from the verified findings. Only when structured answers are on (tables render then).
     if answer_format and answer_visuals_enabled() and getattr(manifest, "visual_guidance", None):
         answer_format = answer_format + "\n\n" + manifest.visual_guidance
+    # Chart emission (flag): compose may populate a grounded bar chart, validated in the kernel.
+    if answer_format and answer_charts_enabled() and getattr(manifest, "chart_guidance", None):
+        answer_format = answer_format + "\n\n" + manifest.chart_guidance
     vision_prompt = manifest.vision_prompt if vision_enabled() else None
     gap_prompt = manifest.gap_prompt if gap_healing_enabled() else None
     suggest_prompt = manifest.suggest_prompt if conversation_enabled() else None
@@ -454,6 +465,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "answer_focus_enabled": answer_focus_enabled(),
             "followup_clarify_enabled": followup_clarify_enabled(),
             "answer_visuals_enabled": answer_visuals_enabled(),
+            "answer_charts_enabled": answer_charts_enabled(),
             "refine_enabled": refine_enabled() and bool(getattr(svc, "refine_prompt", None)),
         }
 
@@ -612,6 +624,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             audience=audience if patient_mode_enabled() else None,
             resolved_question=(res.resolved_question or None) if answer_focus_enabled() else None,
             derived_from_prior=bool(getattr(res, "derived_from_prior", False)),
+            charts=(getattr(res, "charts", []) or []) if answer_charts_enabled() else [],
         )
 
     @app.post("/research/stream")

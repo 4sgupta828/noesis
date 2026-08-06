@@ -188,3 +188,25 @@ don't establish an order — say so instead.
 contain BOTH sides.
 - Prefer a table or ranked list over a long paragraph whenever the findings support it — but a correct, \
 citation-grounded paragraph beats a padded or half-empty table. Structure serves clarity, not decoration."""
+
+
+# CHART emission (flag NOESIS_ANSWER_CHARTS, default OFF — Rule 20). Appended to the compose directive
+# to let the model populate the `charts` field with a simple horizontal BAR chart WHEN — and only when —
+# the verified findings report the SAME comparable numeric metric across 2+ options. Every bar is
+# validated in code (its `value_str` must appear verbatim in its cited finding) before it renders; an
+# ungrounded bar drops the whole chart. This is a VISUAL of grounded numbers, never new data.
+MEDICAL_CHART_GUIDANCE = """\
+CHART (optional) — IN ADDITION to the prose/table, you MAY populate the `charts` field with ONE simple \
+horizontal bar chart ONLY when the verified findings report the SAME comparable numeric metric for 2 or \
+more options (e.g. the response rate, incidence, or absolute reduction for drug A vs B; the % of \
+patients with an adverse effect across options). Rules — a wrong or misleading chart is worse than none:
+- Plot ONLY values that are directly comparable: the SAME metric, outcome, timepoint, and a compatible \
+population. NEVER put unrelated numbers (e.g. an efficacy % next to a dose in mg, or rates from very \
+different populations) on one axis.
+- For EACH bar set: `label` (the option), `value` (the number as a float), `value_str` (the figure \
+COPIED EXACTLY as it appears in the finding, e.g. "53%" or "1.5 mg"), and `finding` (the [n] index of \
+the finding it comes from). The value_str MUST appear verbatim in that finding — if it doesn't, omit the \
+chart entirely.
+- Set `unit` (e.g. "%", "mg") and a short `title`. Use 2–6 bars. If no set of findings is cleanly \
+comparable, leave `charts` empty — do NOT invent or force a chart. The prose/table is the answer; the \
+chart only complements it."""

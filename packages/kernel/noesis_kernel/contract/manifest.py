@@ -72,6 +72,9 @@ class VerticalManifest:
     # on — pushes the answer toward comparison tables / ranked options / pros-cons, strictly from the
     # verified findings (never fabricated structure). Opaque prose threaded like `answer_format`.
     visual_guidance: str | None = None
+    # Optional CHART-emission guidance appended to the compose directive when the answer-charts flag is
+    # on — lets compose populate a grounded bar chart (validated in code). Opaque prose.
+    chart_guidance: str | None = None
     # Optional PRE-ANSWER refinement directive: propose sharper standalone versions of a fresh question
     # for the user to pick from (express refinement). Opaque prose; kernel owns the mechanics.
     refine_prompt: str | None = None

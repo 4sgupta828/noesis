@@ -400,6 +400,47 @@ def test_reasoning_read_off_is_noop(monkeypatch):
     assert res.reasoning_purpose == "" and res.reasoning_conclusion == ""
 
 
+def test_diagnostics_trace_captures_turns_tools_and_funnel(monkeypatch):
+    # collect_diagnostics=True builds a troubleshooting trace: per-turn steps, tool-call breakdown,
+    # the grounding funnel, retries, and timing — with NO extra model calls.
+    import noesis_kernel.research.react as react
+    monkeypatch.setattr(react, "_COMPOSE_BACKOFF_S", 0)
+    from noesis_kernel.research.react import ComposedAnswer
+    src, make = _compose_setup()
+    def compose_fn(call_n):
+        return LLMResult(parsed=ComposedAnswer(answer="Metric value is 9.8 percent [1]."), output_tokens=5)
+    llm = make(compose_fn)
+    res = asyncio.run(run_react(question="what was the metric value?", llm=llm,
+        embedder=FakeEmbedder(dim=8), source=src, tenant_id="A",
+        budget=BudgetState(max_calls=20), collect_diagnostics=True))
+    d = res.diagnostics
+    assert d is not None
+    # trace has a search turn then an answer turn
+    actions = [t["action"] for t in d["trace"]]
+    assert "search" in actions and "answer" in actions
+    # funnel reflects the one grounded finding
+    assert d["funnel"]["verified"] == 1 and d["funnel"]["atoms_gathered"] >= 1
+    # tool-call breakdown + budget are present
+    assert d["tool_calls"]["compose_calls"] == 1 and d["tool_calls"]["searches"] >= 1
+    assert d["budget"]["llm_calls"] == budget_calls(res) and d["budget"]["max_calls"] == 20
+    assert d["stopped_reason"] == "answered" and "duration_ms" in d
+
+
+def budget_calls(res):
+    # planner steps + 1 compose (the fixture: 1 search + 1 answer step + 1 compose = 3)
+    return res.steps + 1
+
+
+def test_diagnostics_off_is_none():
+    # Default (flag off): no trace captured — byte-identical.
+    src, make = _compose_setup()
+    from noesis_kernel.research.react import ComposedAnswer
+    llm = make(lambda n: LLMResult(parsed=ComposedAnswer(answer="x [1]."), output_tokens=5))
+    res = asyncio.run(run_react(question="q?", llm=llm, embedder=FakeEmbedder(dim=8),
+        source=src, tenant_id="A", budget=BudgetState(max_calls=20)))
+    assert res.diagnostics is None
+
+
 def test_rank_claims_fail_safe_on_embed_error():
     # Any embedding failure must degrade to today's behavior (first `top`), never crash the answer.
     from noesis_kernel.research.react import _rank_claims_by_relevance, VerifiedClaim

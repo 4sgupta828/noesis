@@ -111,6 +111,14 @@ def answer_visuals_enabled() -> bool:
     return os.environ.get("NOESIS_ANSWER_VISUALS", "").lower() in ("1", "true", "yes")
 
 
+def diag_trace_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, each research run captures a troubleshooting trace
+    (per-turn steps, tool-call breakdown, the grounding funnel, retries, failures, budget, timing)
+    surfaced in the Diagnostics box. Pure bookkeeping over data already in the loop — no extra LLM
+    calls. OFF → no trace captured or surfaced (byte-identical)."""
+    return os.environ.get("NOESIS_DIAG_TRACE", "").lower() in ("1", "true", "yes")
+
+
 def reasoning_read_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON (and structured answers are ON), append the vertical's
     reasoning-read directive so compose emits a TYPED interpretation layer (tension/gap/assumption/
@@ -263,6 +271,7 @@ class ResearchOut(BaseModel):
     confidence: dict | None = None        # 3-dimension confidence read (None unless the flag is on)
     reasoning_purpose: str = ""           # the decision the reasoning serves (empty unless the flag is on)
     reasoning_conclusion: str = ""        # the informed judgment toward that purpose (flag on only)
+    diagnostics: dict | None = None       # troubleshooting trace (None unless the diag-trace flag is on)
 
 
 def build_default_service() -> ResearchService:
@@ -343,6 +352,7 @@ def build_default_service() -> ResearchService:
         claims_first=claims_first, extraction_lenses=getattr(manifest, "extraction_lenses", ()),
         evidence_select=evidence_select, atom_cap=atom_cap,
         reasoning_read=reasoning_read_enabled(),
+        collect_diagnostics=diag_trace_enabled(),
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
         answer_format=answer_format,
         # Patient directive resolved INDEPENDENTLY of structured_answers/clinical_synthesis — the
@@ -492,6 +502,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "answer_visuals_enabled": answer_visuals_enabled(),
             "answer_charts_enabled": answer_charts_enabled(),
             "reasoning_read_enabled": reasoning_read_enabled() and structured_answers(),
+            "diag_trace_enabled": diag_trace_enabled(),
             "refine_enabled": refine_enabled() and bool(getattr(svc, "refine_prompt", None)),
         }
 
@@ -632,6 +643,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     turn["reasoning_purpose"] = res.reasoning_purpose
                 if getattr(res, "reasoning_conclusion", ""):
                     turn["reasoning_conclusion"] = res.reasoning_conclusion
+            if diag_trace_enabled() and getattr(res, "diagnostics", None):
+                turn["diagnostics"] = res.diagnostics   # persist the trace for later troubleshooting
             try:
                 # Audience-guarded append: only continue a thread whose audience MATCHES this turn's
                 # (mid-thread toggle → mismatch → save a fresh session instead of corrupting the thread).
@@ -652,7 +665,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                         interpretation=(getattr(res, "interpretation", None) if reasoning_read_enabled() else None),
                         confidence=(getattr(res, "confidence", None) if reasoning_read_enabled() else None),
                         reasoning_purpose=(getattr(res, "reasoning_purpose", "") if reasoning_read_enabled() else ""),
-                        reasoning_conclusion=(getattr(res, "reasoning_conclusion", "") if reasoning_read_enabled() else ""))
+                        reasoning_conclusion=(getattr(res, "reasoning_conclusion", "") if reasoning_read_enabled() else ""),
+                        diagnostics=(getattr(res, "diagnostics", None) if diag_trace_enabled() else None))
             except Exception:
                 session_id = None
         return ResearchOut(
@@ -671,6 +685,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             confidence=(getattr(res, "confidence", None) if reasoning_read_enabled() else None),
             reasoning_purpose=(getattr(res, "reasoning_purpose", "") if reasoning_read_enabled() else ""),
             reasoning_conclusion=(getattr(res, "reasoning_conclusion", "") if reasoning_read_enabled() else ""),
+            diagnostics=(getattr(res, "diagnostics", None) if diag_trace_enabled() else None),
         )
 
     @app.post("/research/stream")

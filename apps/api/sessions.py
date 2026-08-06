@@ -93,7 +93,8 @@ class SessionStore:
                    interpretation: list[dict] | None = None,
                    confidence: dict | None = None,
                    reasoning_purpose: str = "",
-                   reasoning_conclusion: str = "") -> str:
+                   reasoning_conclusion: str = "",
+                   diagnostics: dict | None = None) -> str:
         await self._ensure()
         sid = uuid.uuid4().hex
         # turn 0 also lives in `thread` so a conversation is one shareable row; the flat columns
@@ -113,6 +114,8 @@ class SessionStore:
             turn0["reasoning_purpose"] = reasoning_purpose
         if reasoning_conclusion:
             turn0["reasoning_conclusion"] = reasoning_conclusion
+        if diagnostics:
+            turn0["diagnostics"] = diagnostics
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             await conn.execute(

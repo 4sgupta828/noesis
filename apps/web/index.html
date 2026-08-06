@@ -122,6 +122,27 @@
   .diaghint{font-size:.78rem;color:var(--muted);margin-top:.4rem;line-height:1.5;opacity:.9;}
   .diagbox .diagbody{padding:.2rem 1rem .9rem;display:flex;flex-direction:column;gap:.3rem;}
   .diagbox .diagbody .ansmeta{display:flex;gap:.7rem;flex-wrap:wrap;align-items:center;}
+  /* troubleshooting trace (flag) — turns, tool-call chips, funnel, failures */
+  .diagtrace{margin-top:.6rem;padding-top:.6rem;border-top:1px solid var(--hair-soft);display:flex;flex-direction:column;gap:.55rem;}
+  .dgrow{display:flex;gap:.6rem;align-items:baseline;flex-wrap:wrap;}
+  .dglbl{flex:0 0 3.6rem;font-family:var(--mono);font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+  .dglbl.bad{color:var(--gap);}
+  .dgfunnel{font-family:var(--mono);font-size:.72rem;color:var(--muted);line-height:1.5;}
+  .dgfunnel .ok{color:var(--verified);} .dgfunnel .bad{color:var(--gap);}
+  .dgchips{display:flex;flex-wrap:wrap;gap:.35rem;}
+  .dgchip{font-family:var(--mono);font-size:.62rem;color:var(--muted);background:var(--hair-soft);
+    border-radius:6px;padding:.14rem .45rem;} .dgchip b{color:var(--ink);font-weight:700;}
+  .dgchip.warn{background:rgba(178,106,30,.14);color:var(--gap);} .dgchip.warn b{color:var(--gap);}
+  .dgturns{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:.28rem;flex:1 1 100%;}
+  .dgturns li{font-family:var(--mono);font-size:.68rem;color:var(--muted);line-height:1.45;
+    padding-left:.6rem;border-left:2px solid var(--hair);}
+  .dgt-a{font-weight:700;text-transform:uppercase;font-size:.58rem;letter-spacing:.04em;padding:.05rem .3rem;border-radius:4px;}
+  .dgt-a.search{color:var(--gold);background:rgba(var(--gold-rgb),.1);}
+  .dgt-a.answer{color:var(--verified);background:rgba(19,122,84,.12);}
+  .dgt-q{color:var(--ink);} .dgt-v{opacity:.8;} .dgt-r{opacity:.85;}
+  .dgt-a.answer + .dgt-r .ok{color:var(--verified);}
+  .dgt-f{color:var(--gap);font-size:.58rem;text-transform:uppercase;letter-spacing:.03em;}
+  .dgfails{margin:0;padding:0 0 0 1rem;font-family:var(--mono);font-size:.66rem;color:var(--gap);line-height:1.5;flex:1 1 100%;}
 
   /* audience switch — a two-segment control that reads as "who the answer is FOR", distinct from
      the effort dial next to it (words, not a slider). */
@@ -1356,8 +1377,49 @@ function diagBoxMarkup(data){
     sources = `<div class="summary" style="border:none;padding:.4rem 0 0"><span>Sources used:</span> ${chips}</div>`;
   }
   return `<details class="diagbox"><summary><span class="diaghead">◔ Diagnostics<span class="evtoggle"></span></span>
-      <div class="diaghint">How this answer was produced — grounding status, verified/rejected counts, and which sources were used.</div></summary>
-    <div class="diagbody"><div class="ansmeta" style="margin:0;padding:0;border:none">${bits.join("")}</div>${sources}</div></details>`;
+      <div class="diaghint">How this answer was produced — grounding funnel, the agent's turns, tool calls, retries and failures.</div></summary>
+    <div class="diagbody"><div class="ansmeta" style="margin:0;padding:0;border:none">${bits.join("")}</div>${sources}${diagTraceMarkup(data.diagnostics)}</div></details>`;
+}
+
+// Troubleshooting trace (flag NOESIS_DIAG_TRACE): the ReAct run's turns, tool-call breakdown, grounding
+// funnel, retries, failures, budget and timing. Empty when the trace wasn't captured. All values are
+// server-produced numbers/short strings; esc()'d defensively.
+function diagTraceMarkup(dg){
+  if(!dg || typeof dg !== "object") return "";
+  const f = dg.funnel||{}, tc = dg.tool_calls||{}, rt = dg.retries||{}, bd = dg.budget||{};
+  const chip = (label,val,cls)=>`<span class="dgchip ${cls||''}">${esc(label)} <b>${esc(String(val))}</b></span>`;
+  const rr = f.rejected_by_reason||{};
+  const rejTxt = Object.keys(rr).length
+    ? " ("+Object.entries(rr).map(([k,v])=>`${v} ${esc(k.replace(/_/g," "))}`).join(", ")+")" : "";
+  const funnel = `<div class="dgrow"><span class="dglbl">Funnel</span>
+    <span class="dgfunnel">${f.atoms_gathered||0} passages → ${f.claims_emitted||0} claims →
+      <b class="ok">${f.verified||0} verified</b>${f.rejected?` · <b class="bad">${f.rejected} rejected</b>${rejTxt}`:""}</span></div>`;
+  const turns = (dg.trace||[]).map(t=>{
+    if(t.action==="search") return `<li><span class="dgt-a search">search</span> <span class="dgt-q">${esc(t.query||"")}</span>`
+      + ((t.variants&&t.variants.length)?` <span class="dgt-v">+${t.variants.length} variant${t.variants.length>1?"s":""}</span>`:"")
+      + ` <span class="dgt-r">+${t.retrieved||0} (${t.total_atoms||0} total)</span>`
+      + (t.forced?` <span class="dgt-f">forced</span>`:"")+`</li>`;
+    return `<li><span class="dgt-a answer">answer</span> <span class="dgt-r"><b class="ok">${t.verified||0}</b> verified / ${t.rejected||0} rejected`
+      + (t.emitted!=null?` of ${t.emitted} emitted`:"")+`</span>`+(t.forced?` <span class="dgt-f">forced</span>`:"")+`</li>`;
+  }).join("");
+  const turnsHtml = turns ? `<div class="dgrow"><span class="dglbl">Turns</span><ol class="dgturns">${turns}</ol></div>` : "";
+  const chips = [
+    chip("LLM calls", (bd.llm_calls!=null?bd.llm_calls:(tc.llm_total||0))+"/"+(bd.max_calls!=null?bd.max_calls:"?")),
+    chip("steps", tc.planner_steps||0),
+    chip("searches", tc.searches||0),
+    chip("compose", tc.compose_calls||0),
+    tc.web_enabled?chip("web","on"):"",
+    rt.compose?chip("compose retries", rt.compose, "warn"):"",
+    rt.compose_ref_retry?chip("ref-retry","yes","warn"):"",
+    rt.extract_recovery?chip("extract recovery", rt.extract_recovery, "warn"):"",
+    bd.tokens?chip("tokens", bd.tokens):"",
+    dg.duration_ms!=null?chip("time", (dg.duration_ms/1000).toFixed(1)+"s"):"",
+    (dg.stopped_reason&&dg.stopped_reason!=="answered")?chip("stopped", esc(dg.stopped_reason), "warn"):"",
+  ].filter(Boolean).join("");
+  const chipsHtml = `<div class="dgrow"><span class="dglbl">Run</span><span class="dgchips">${chips}</span></div>`;
+  const fails = (dg.failures||[]).map(x=>`<li><b>${esc(x.stage||"error")}</b>: ${esc(x.detail||"")}</li>`).join("");
+  const failsHtml = fails ? `<div class="dgrow"><span class="dglbl bad">Failures</span><ul class="dgfails">${fails}</ul></div>` : "";
+  return `<div class="diagtrace">${funnel}${chipsHtml}${turnsHtml}${failsHtml}</div>`;
 }
 function gapPanelMarkup(weak){
   // weak = under-evidenced (not grounded / stated gaps / thin / no direct evidence). When the

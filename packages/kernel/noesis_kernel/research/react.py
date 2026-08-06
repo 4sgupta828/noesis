@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -355,6 +356,9 @@ class AnswerResult:
     confidence: dict | None = None
     reasoning_purpose: str = ""
     reasoning_conclusion: str = ""
+    # Troubleshooting trace (flag): per-turn steps, tool-call breakdown, the grounding funnel,
+    # retries, and failures — None unless collect_diagnostics was requested (byte-identical OFF).
+    diagnostics: dict | None = None
 
     @property
     def grounded(self) -> bool:
@@ -397,11 +401,17 @@ async def run_react(
     extract_collect: int = _EXTRACT_COLLECT,      # candidate pool before relevance-ranking (effort-scalable)
     answer_focus: bool = False,               # ANSWER the question + scope to its subject (vs compile findings)
     reasoning_read: bool = False,             # surface the validated interpretation + confidence layer (flag)
+    collect_diagnostics: bool = False,        # capture a troubleshooting trace (turns/tools/retries/failures)
 ) -> AnswerResult:
     import asyncio
     atoms = AtomStore()
     result = AnswerResult()
     notes: list[str] = []          # running coverage-gap / step notes for the agent
+    # Troubleshooting trace (flag): built ONLY when requested, purely from data already flowing through
+    # the loop (no extra LLM calls). None → byte-identical OFF path.
+    _diag_t0 = time.monotonic() if collect_diagnostics else None
+    diag = ({"trace": [], "retries": {"compose": 0, "compose_ref_retry": False, "extract_recovery": 0},
+             "failures": [], "compose_calls": 0} if collect_diagnostics else None)
     # The span-verifier's block loader must cover EVERY source a claim can cite — corpus AND aux
     # (web). Since search is split (corpus multi-query + aux single-query), combine their loaders
     # so a web-cited quote is still verifiable (else all web claims would be rejected).
@@ -542,6 +552,8 @@ async def run_react(
                 _apply_answer(retry)
             # if it returned action="search" (ignoring the extract instruction), loop and re-ask
             # extract — bounded by `attempts`/budget so a stubborn model can't spin forever.
+        if diag is not None and attempts:
+            diag["retries"]["extract_recovery"] = attempts
 
     stale_searches = 0          # consecutive searches that added NO new atoms (spinning detector)
     for step_i in range(max_steps):
@@ -588,6 +600,11 @@ async def run_react(
             stale_searches = stale_searches + 1 if added == 0 else 0
             srcs = sorted({(h.source_key or "corpus") for h in hits})
             await emit({"type": "found", "added": added, "total": len(atoms.all()), "sources": srcs})
+            if diag is not None:
+                diag["trace"].append({"step": step_i + 1, "action": "search", "query": q,
+                                      "variants": list(step.queries or []), "retrieved": added,
+                                      "total_atoms": len(atoms.all()), "sources": srcs,
+                                      "forced": force})
 
             # vertical gating: surface a real coverage gap so the agent reaches for
             # other sources or answers honestly instead of guessing.
@@ -603,6 +620,11 @@ async def run_react(
         await _finalize_answer(step)
         await emit({"type": "verified", "verified": len(result.verified_claims),
                     "rejected": len(result.rejected_claims)})
+        if diag is not None:
+            diag["trace"].append({"step": step_i + 1, "action": "answer", "forced": force,
+                                  "emitted": len(step.claims),
+                                  "verified": len(result.verified_claims),
+                                  "rejected": len(result.rejected_claims)})
         result.stopped_reason = "answered"
         break
     else:
@@ -683,8 +705,11 @@ async def run_react(
                     break
             await emit({"type": "extracted", "added": added, "candidates": len(cands),
                         "total": len(result.verified_claims)})
-        except Exception:   # noqa: BLE001 — extraction is best-effort; never break the answer
-            pass
+            if diag is not None:
+                diag["extraction"] = {"candidates": len(cands), "added": added}
+        except Exception as _ex:   # noqa: BLE001 — extraction is best-effort; never break the answer
+            if diag is not None:
+                diag["failures"].append({"stage": "extraction", "detail": repr(_ex)[:200]})
 
     # Evidence SELECTION (flag): compose is capped for cost/scannability, so WHICH verified findings
     # survive the cap matters. Default = first-come. Under evidence-select, keep the findings most
@@ -754,6 +779,8 @@ async def run_react(
                 messages=[{"role": "user", "content": compose_user}],
                 response_format=ComposedAnswer, max_tokens=_COMPOSE_MAX_TOKENS)
             budget.charge(calls=1, tokens=comp.output_tokens)
+            if diag is not None:
+                diag["compose_calls"] += 1
             return comp.parsed
 
         # Compose must NOT be silently dropped on a transient LLM blip (the 'grounded, N claims,
@@ -782,6 +809,8 @@ async def run_react(
             # replace e.g. a patient answer with a generic clinician-toned one). Best-effort: a failed
             # fallback never overwrites the answer we already have.
             if answer_format and not _refs_valid(text, n_findings):
+                if diag is not None:
+                    diag["retries"]["compose_ref_retry"] = True
                 try:
                     alt = await _compose(answer_format)
                     if (alt.answer or "").strip():
@@ -821,6 +850,9 @@ async def run_react(
             result.compose_failed = True
             result.composed_answer = _COMPOSE_FAIL_NOTE
             _log.warning("compose produced NO answer despite %d verified findings", n_findings)
+            if diag is not None:
+                diag["failures"].append({"stage": "compose",
+                                         "detail": f"exhausted {_COMPOSE_ATTEMPTS} attempts — answer not generated"})
 
     # per-source contribution: retrieved (atoms) vs. cited (verified claims)
     stats: dict[str, dict[str, int]] = {}
@@ -831,4 +863,35 @@ async def run_react(
         s = vc.source_key or "unknown"
         stats.setdefault(s, {"retrieved": 0, "cited": 0})["cited"] += 1
     result.source_stats = stats
+
+    # Troubleshooting summary (flag): fold the captured trace into a compact, UI-ready shape. Pure
+    # bookkeeping over data already in hand — no extra model calls; None unless collect_diagnostics.
+    if diag is not None:
+        rej_by_reason: dict[str, int] = {}
+        for rc in result.rejected_claims:
+            rej_by_reason[rc.reason] = rej_by_reason.get(rc.reason, 0) + 1
+        n_search = sum(1 for t in diag["trace"] if t.get("action") == "search")
+        compose_calls = diag.pop("compose_calls", 0)
+        diag["retries"]["compose"] = max(0, compose_calls - 1)   # attempts beyond the first
+        diag["funnel"] = {
+            "atoms_gathered": len(atoms.all()),
+            "claims_emitted": len(result.verified_claims) + len(result.rejected_claims),
+            "verified": len(result.verified_claims),
+            "rejected": len(result.rejected_claims),
+            "rejected_by_reason": rej_by_reason,
+        }
+        diag["tool_calls"] = {
+            "llm_total": budget.spent_calls,
+            "planner_steps": result.steps,
+            "searches": n_search,
+            "web_enabled": aux_source is not None,
+            "compose_calls": compose_calls,
+        }
+        diag["budget"] = {"llm_calls": budget.spent_calls, "max_calls": budget.max_calls,
+                          "tokens": budget.spent_tokens}
+        diag["stopped_reason"] = result.stopped_reason
+        diag["retried_empty"] = result.retried_empty
+        diag["compose_failed"] = result.compose_failed
+        diag["duration_ms"] = int((time.monotonic() - _diag_t0) * 1000)
+        result.diagnostics = diag
     return result

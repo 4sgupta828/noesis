@@ -57,6 +57,7 @@ class ResearchService:
     evidence_select: bool = False           # rank claims by relevance before the cap + wider atom window (flag)
     atom_cap: int = 1600                    # per-atom char window for the extractor (raised under evidence_select)
     reasoning_read: bool = False            # surface the validated interpretation + confidence layer (flag)
+    collect_diagnostics: bool = False       # capture a troubleshooting trace (turns/tools/retries/failures) (flag)
 
     def _retriever(self, source_keys: list[str] | None) -> MultiSourceRetriever:
         chosen = {k: v for k, v in self.sources.items()
@@ -216,6 +217,7 @@ class ResearchService:
             max_steps=sc.max_steps, k=sc.k, planner_atom_window=sc.planner_atom_window,
             compose_claim_cap=sc.compose_claim_cap, extract_collect=sc.extract_collect,
             answer_focus=answer_focus, reasoning_read=self.reasoning_read,
+            collect_diagnostics=self.collect_diagnostics,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)
         res.effort = sc.effort                   # echo the resolved multiplier (observability)

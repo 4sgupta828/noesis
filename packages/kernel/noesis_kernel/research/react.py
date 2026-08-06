@@ -99,6 +99,42 @@ class ChartSpec(BaseModel):
     bars: list[ChartBar] = []
 
 
+# ---- Reasoning Read: the interpretation layer (factra "Executive Read" discipline) -----------
+# The answer already exposes span-verified FACTS. The Reasoning Read adds a SEPARATE, typed layer of
+# INTERPRETATION on top — tensions, gaps, assumptions, implications, what-would-change-the-answer —
+# each resting on specific findings and containing NO number/date/dose not already in those findings.
+# It is validated in code (dangling-ref + no-new-facts drops), exactly like `charts`, so a fabricated
+# inference can never ship. Populated only when the reasoning-read flag drives the compose directive.
+
+# Closed set of interpretation kinds (Literal enforces it at parse; the guard re-checks defensively).
+InterpretationKind = Literal["tension", "gap", "assumption", "implication", "what_would_change_this"]
+
+
+class InterpretationItem(BaseModel):
+    """ONE labeled piece of interpretation resting on specific verified findings. `kind` is drawn from a
+    closed set; `basis_findings` are the 1-based finding indices it rests on (dangling refs are dropped);
+    `text` may contain NO hard token (number/%/date/$/dose) absent from its basis findings (no-new-facts)."""
+    text: str
+    kind: InterpretationKind = "implication"
+    basis_findings: list[int] = []
+
+
+class ConfidenceDim(BaseModel):
+    """One confidence dimension: a coarse LLM-owned band + a one-line rationale grounded in the evidence's
+    character (e.g. how many/what tier of studies, whether it's causal vs associational)."""
+    level: Literal["high", "moderate", "low", "unknown"] = "unknown"
+    rationale: str = ""
+
+
+class ConfidenceRead(BaseModel):
+    """Three orthogonal confidence dimensions (feedback #14): FACTUAL (are the reported facts solid?),
+    CAUSAL (does the evidence support a causal reading or only association?), GENERALIZATION (does it
+    transfer beyond the studied population/setting?). Each is qualitative — it adds NO new fact."""
+    factual: ConfidenceDim = ConfidenceDim()
+    causal: ConfidenceDim = ConfidenceDim()
+    generalization: ConfidenceDim = ConfidenceDim()
+
+
 class ComposedAnswer(BaseModel):
     """A synthesized prose answer built ONLY from the verified findings, with
     inline [n] references to them so every statement stays traceable."""
@@ -111,6 +147,10 @@ class ComposedAnswer(BaseModel):
     # Optional bar charts (only when the answer-charts flag drives the directive to emit them). Each is
     # VALIDATED against the verified findings before it reaches the UI — an ungrounded bar drops the chart.
     charts: list[ChartSpec] = []
+    # Reasoning Read (only when the reasoning-read flag drives the directive). Both are VALIDATED /
+    # surfaced in the kernel; empty/None when the directive doesn't ask → byte-identical OFF path.
+    interpretation: list[InterpretationItem] = []
+    confidence: ConfidenceRead | None = None
 
 
 def _validate_charts(charts: list[ChartSpec], verified: list["VerifiedClaim"]) -> list[dict]:
@@ -144,6 +184,64 @@ def _validate_charts(charts: list[ChartSpec], verified: list["VerifiedClaim"]) -
             out.append(ch.model_dump())
         else:
             _log.warning("chart dropped: a plotted figure not found in its cited finding (title=%r)", ch.title)
+    return out
+
+
+# Computable token classes (Rule 18: structural, not a semantic heuristic — the LLM still owns MEANING;
+# this only checks a number/date/dose the model wrote also exists in the findings it cited). Matches
+# percentages/decimals/integers, ISO and US dates, $ amounts, and dose-like "5 mg" / "10mg".
+_HARD_TOKEN_RE = re.compile(
+    r"""(?xi)
+    \d{4}-\d{2}-\d{2}                       # 2026-07-01 (longest first)
+    | \$?\d{1,3}(?:,\d{3})+(?:\.\d+)?       # 1,234 / $1,234.56
+    | \d+(?:\.\d+)?\s?(?:mg|mcg|µg|g|ml|kg|units?|iu)\b   # 5 mg / 10mg / 250 mcg (dose)
+    | \$?\d+(?:\.\d+)?%?                     # 9.5 / 9.5% / $4.2 / 42
+    | \d{1,2}/\d{1,2}/\d{2,4}              # 7/1/2026
+    """,
+)
+
+
+def _norm_token(tok: str) -> str:
+    """Normalize a hard token for membership: lowercase, drop $ , % and internal whitespace so
+    '5 mg' and '5mg' compare equal; keep digits, dots, dashes, slashes, unit letters."""
+    return tok.strip().lower().lstrip("$").rstrip("%").replace(",", "").replace(" ", "")
+
+
+def extract_hard_tokens(text: str) -> set[str]:
+    """Extract computable numeric/date/dose tokens from prose (normalized). Structural extraction only
+    (Rule 18) — used to enforce that interpretation adds no number/date/dose the findings don't state."""
+    return {_norm_token(m.group(0)) for m in _HARD_TOKEN_RE.finditer(text or "")}
+
+
+def _validate_interpretation(items: list["InterpretationItem"],
+                             verified: list["VerifiedClaim"]) -> list[dict]:
+    """Keep only interpretation items that are (a) a valid kind, (b) resting on ≥1 real finding
+    (dangling-ref: basis indices are clamped to 1..n; an item left with none is dropped), and (c)
+    introduce NO hard token (number/%/date/$/dose) absent from the TEXT/QUOTE of their basis findings
+    (no-new-facts). Fail-safe — any violation drops that item. This is PROVENANCE (Rule 6), not a
+    correctness check: it proves the interpretation didn't fabricate a figure, not that it's the right
+    reading. Returns dicts (with resolved 1-based `basis_findings`) for the API."""
+    allowed = {"tension", "gap", "assumption", "implication", "what_would_change_this"}
+    n = len(verified)
+    out: list[dict] = []
+    for it in items or []:
+        kind = (it.kind or "").strip()
+        text = (it.text or "").strip()
+        if kind not in allowed or not text:
+            continue
+        basis = [b for b in (it.basis_findings or []) if isinstance(b, int) and 1 <= b <= n]
+        if not basis:            # dangling: interpretation must rest on ≥1 grounded finding
+            _log.warning("interpretation dropped: no valid basis finding (kind=%s)", kind)
+            continue
+        # no-new-facts: every hard token in the item's text must appear in a basis finding's text/quote
+        basis_src = " ".join((verified[b - 1].text + " " + verified[b - 1].quote) for b in basis)
+        basis_tokens = extract_hard_tokens(basis_src)
+        item_tokens = extract_hard_tokens(text)
+        if not item_tokens.issubset(basis_tokens):
+            _log.warning("interpretation dropped: hard token not in basis findings (kind=%s, extra=%s)",
+                         kind, item_tokens - basis_tokens)
+            continue
+        out.append({"text": text, "kind": kind, "basis_findings": basis})
     return out
 
 
@@ -234,6 +332,10 @@ class AnswerResult:
     clarification: str = ""              # a clarifying question to ask instead of answering (ambiguous follow-up)
     charts: list = field(default_factory=list)   # validated grounded bar charts (dicts) for the UI
     derived_from_prior: bool = False     # answer is a transform of the PREVIOUS answer (no new retrieval)
+    # Reasoning Read (flag): validated interpretation items (dicts) + the 3-dimension confidence read.
+    # Empty/None unless the reasoning-read flag drove the compose directive (byte-identical OFF).
+    interpretation: list = field(default_factory=list)
+    confidence: dict | None = None
 
     @property
     def grounded(self) -> bool:
@@ -275,6 +377,7 @@ async def run_react(
     compose_claim_cap: int = _COMPOSE_CLAIM_CAP,  # max verified findings sent to compose (effort-scalable)
     extract_collect: int = _EXTRACT_COLLECT,      # candidate pool before relevance-ranking (effort-scalable)
     answer_focus: bool = False,               # ANSWER the question + scope to its subject (vs compile findings)
+    reasoning_read: bool = False,             # surface the validated interpretation + confidence layer (flag)
 ) -> AnswerResult:
     import asyncio
     atoms = AtomStore()
@@ -656,6 +759,14 @@ async def run_react(
             # Grounded charts: keep only bars whose figure appears in the cited finding (drop the whole
             # chart otherwise). Empty when the charts flag isn't driving the directive → no-op.
             result.charts = _validate_charts(getattr(parsed, "charts", []) or [], result.verified_claims)
+            # Reasoning Read (flag): validate the interpretation layer (drop dangling/fabricated items)
+            # and carry the confidence read. Gated on the flag so the OFF path never surfaces them even
+            # if the model volunteered them; the guard is fail-safe (a fabricated inference is dropped).
+            if reasoning_read:
+                result.interpretation = _validate_interpretation(
+                    getattr(parsed, "interpretation", []) or [], result.verified_claims)
+                conf = getattr(parsed, "confidence", None)
+                result.confidence = conf.model_dump() if conf is not None else None
             # Honesty signal → coverage gap: a "grounded-on-analogues" answer still flags the gap,
             # so the UI shows the prominent fill-the-gaps affordance (LLM-owned judgment, no regex).
             if parsed.directly_addresses is False and (parsed.gap_note or "").strip():

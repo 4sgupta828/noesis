@@ -320,6 +320,58 @@ def test_rank_claims_by_relevance_keeps_the_most_relevant():
     assert asyncio.run(_rank_claims_by_relevance("x", claims[:2], _FE(), 5)) == claims[:2]
 
 
+def test_reasoning_read_flows_through_when_enabled(monkeypatch):
+    # End-to-end: with reasoning_read=True, a compose that emits a GROUNDED interpretation item +
+    # confidence surfaces both on the result (validated). The basis finding [1] is "9.8 percent".
+    import noesis_kernel.research.react as react
+    monkeypatch.setattr(react, "_COMPOSE_BACKOFF_S", 0)
+    from noesis_kernel.research.react import (
+        ComposedAnswer, InterpretationItem, ConfidenceRead, ConfidenceDim)
+    src, make = _compose_setup()
+    def compose_fn(call_n):
+        return LLMResult(parsed=ComposedAnswer(
+            answer="The approved metric value was 9.8 percent [1].",
+            interpretation=[
+                InterpretationItem(text="Only one source reports this, limiting confidence",
+                                   kind="gap", basis_findings=[1]),
+                InterpretationItem(text="A value near 12 percent is possible",   # 12 not in finding → dropped
+                                   kind="implication", basis_findings=[1])],
+            confidence=ConfidenceRead(
+                factual=ConfidenceDim(level="low", rationale="single source"),
+                causal=ConfidenceDim(level="unknown", rationale=""),
+                generalization=ConfidenceDim(level="low", rationale="one term period"))),
+            output_tokens=5)
+    llm = make(compose_fn)
+    res = asyncio.run(run_react(question="what was the metric value?", llm=llm,
+        embedder=FakeEmbedder(dim=8), source=src, tenant_id="A",
+        budget=BudgetState(max_calls=20), reasoning_read=True))
+    assert res.grounded
+    # the fabricated-number item is dropped; the grounded gap item survives
+    assert len(res.interpretation) == 1 and res.interpretation[0]["kind"] == "gap"
+    assert res.confidence and res.confidence["factual"]["level"] == "low"
+
+
+def test_reasoning_read_off_is_noop(monkeypatch):
+    # OFF path (default): even if the model volunteers interpretation/confidence, the result surfaces
+    # NEITHER — byte-identical to the pre-flag answer (Rule 20).
+    import noesis_kernel.research.react as react
+    monkeypatch.setattr(react, "_COMPOSE_BACKOFF_S", 0)
+    from noesis_kernel.research.react import (
+        ComposedAnswer, InterpretationItem, ConfidenceRead, ConfidenceDim)
+    src, make = _compose_setup()
+    def compose_fn(call_n):
+        return LLMResult(parsed=ComposedAnswer(
+            answer="The approved metric value was 9.8 percent [1].",
+            interpretation=[InterpretationItem(text="grounded gap", kind="gap", basis_findings=[1])],
+            confidence=ConfidenceRead(factual=ConfidenceDim(level="high"))), output_tokens=5)
+    llm = make(compose_fn)
+    res = asyncio.run(run_react(question="what was the metric value?", llm=llm,
+        embedder=FakeEmbedder(dim=8), source=src, tenant_id="A",
+        budget=BudgetState(max_calls=20)))              # reasoning_read defaults False
+    assert res.grounded
+    assert res.interpretation == [] and res.confidence is None
+
+
 def test_rank_claims_fail_safe_on_embed_error():
     # Any embedding failure must degrade to today's behavior (first `top`), never crash the answer.
     from noesis_kernel.research.react import _rank_claims_by_relevance, VerifiedClaim

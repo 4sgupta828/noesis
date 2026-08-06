@@ -268,6 +268,40 @@
   .chartlegend .lg i{width:.7rem;height:.7rem;border-radius:2px;display:inline-block;}
   .chartlegend .lg-dot{color:var(--gold);} .chartlegend .lg-ci{color:var(--muted);letter-spacing:-.5px;}
   .chartlegend .lg-refm{color:var(--muted);}
+  /* Reasoning Read — the interpretation layer (typed items) + confidence read, framed distinctly
+     from the grounded prose so a reader sees "this is judgment ABOUT the evidence, not more evidence". */
+  .reasoning{margin:1.35rem 0 .4rem;border:1px solid var(--hair);border-left:3px solid var(--gold);
+    border-radius:12px;padding:.95rem 1.1rem 1.05rem;background:var(--panel2);}
+  .reasoning .rhead{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.11em;
+    color:var(--gold);margin:0 0 .1rem;display:flex;align-items:center;gap:.5rem;}
+  .reasoning .rsub{font-size:.72rem;color:var(--muted);margin:0 0 .8rem;}
+  .ritem{display:flex;gap:.7rem;padding:.55rem 0;border-top:1px solid var(--hair-soft);}
+  .ritem:first-of-type{border-top:0;}
+  .rkind{flex:0 0 auto;align-self:flex-start;font-family:var(--mono);font-size:.6rem;font-weight:700;
+    text-transform:uppercase;letter-spacing:.06em;border-radius:999px;padding:.16rem .5rem;
+    border:1px solid currentColor;white-space:nowrap;margin-top:.08rem;}
+  .rkind.k-tension{color:var(--gap);} .rkind.k-gap{color:var(--muted);}
+  .rkind.k-assumption{color:var(--gold);} .rkind.k-implication{color:var(--verified);}
+  .rkind.k-change{color:#8a63b0;}
+  :root[data-theme="dark"] .rkind.k-change{color:#c39ee0;}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .rkind.k-change{color:#c39ee0;}}
+  .rtext{font-size:.94rem;line-height:1.58;color:var(--ink);}
+  .rtext .rref{color:var(--gold);font-weight:640;cursor:pointer;font-size:.72em;vertical-align:super;padding:0 .05em;}
+  /* confidence read: three dimensions, each a level badge + one-line rationale */
+  .rconf{margin-top:.9rem;padding-top:.75rem;border-top:1px solid var(--hair);}
+  .rconf-h{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.5rem;}
+  .rconf-row{display:flex;align-items:baseline;gap:.6rem;padding:.28rem 0;}
+  .rconf-dim{flex:0 0 8.5rem;font-size:.82rem;font-weight:640;color:var(--ink);}
+  .rconf-lvl{flex:0 0 auto;font-family:var(--mono);font-size:.62rem;font-weight:700;text-transform:uppercase;
+    letter-spacing:.05em;border-radius:999px;padding:.1rem .5rem;}
+  .rconf-lvl.lv-high{color:var(--verified);background:rgba(19,122,84,.12);}
+  .rconf-lvl.lv-moderate{color:var(--gap);background:rgba(178,106,30,.13);}
+  .rconf-lvl.lv-low{color:#c0392b;background:rgba(192,57,43,.12);}
+  .rconf-lvl.lv-unknown{color:var(--muted);background:var(--hair-soft);}
+  :root[data-theme="dark"] .rconf-lvl.lv-low{color:#e88;}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .rconf-lvl.lv-low{color:#e88;}}
+  .rconf-why{flex:1 1 auto;font-size:.8rem;color:var(--muted);line-height:1.5;}
+  @media (max-width:560px){ .rconf-row{flex-wrap:wrap;} .rconf-dim{flex-basis:auto;} .rconf-why{flex-basis:100%;} }
   .answer.md .ref{color:var(--gold);font-weight:640;cursor:pointer;font-size:.68em;padding:0 .06em;vertical-align:super;}
   /* color highlights are OFF by default — a <mark> reads as plain text until the reader toggles
      them on (adds .hl-on to the answer). */
@@ -792,6 +826,7 @@ let PATIENT_MODE_ENABLED = false; // audience switch available (clinician vs pat
 let AUDIENCE = "clinician"; // current answer audience; only sent when "patient"
 let SESS_AUDIENCE = "clinician"; // active Past-Sessions audience tab (clinician | patient)
 let REFINE_ENABLED = false;     // pre-answer question refinement (offer sharper versions to pick)
+let REASONING_ENABLED = false;  // reasoning-read interpretation + confidence layer (server-validated)
 let THREAD = {session_id:null, turns:[]};   // the active conversation
 let BASE_PLACEHOLDER = "";                   // vertical console placeholder (restored on New)
 let EXAMPLES = [];                            // vertical example questions → random intake prompt
@@ -821,6 +856,7 @@ async function loadConfig(){
     EFFORT_ENABLED = !!c.effort_scale_enabled;
     PATIENT_MODE_ENABLED = !!c.patient_mode_enabled;
     REFINE_ENABLED = !!c.refine_enabled;
+    REASONING_ENABLED = !!c.reasoning_read_enabled;
     VISION_ENABLED = !!c.vision_enabled;
     if(EFFORT_ENABLED){
       const wrap = $("#effort"), rng = $("#effort-range");
@@ -916,6 +952,51 @@ function mdInline(s){
   // it degrades to plain text instead of leaking a raw "[[K]]" into the answer.
   s = s.replace(/\[\[\/?[FRK]\]\]/g, "");
   return s;
+}
+// Reasoning Read — the interpretation layer + confidence read. Every field was server-VALIDATED
+// (each item rests on ≥1 cited finding and introduces no fabricated number), so this only presents
+// what already passed the guard. XSS-safe: all model-derived strings go through esc(). Returns "" when
+// there's nothing to show (flag off, or the model emitted nothing / everything was dropped by the guard).
+const _RKIND = {
+  tension:{c:"k-tension",l:"Tension"}, gap:{c:"k-gap",l:"Gap"},
+  assumption:{c:"k-assumption",l:"Assumption"}, implication:{c:"k-implication",l:"Implication"},
+  what_would_change_this:{c:"k-change",l:"What would change this"},
+};
+const _RLEVEL = {high:"High", moderate:"Moderate", low:"Low", unknown:"Unknown"};
+function reasoningMarkup(data){
+  if(!REASONING_ENABLED) return "";
+  const items = Array.isArray(data.interpretation) ? data.interpretation : [];
+  const conf = data.confidence && typeof data.confidence === "object" ? data.confidence : null;
+  if(!items.length && !conf) return "";
+  // basis-finding refs → clickable chips that scroll to the evidence card (reuses the [n] machinery)
+  const refChips = b => (Array.isArray(b) ? b : []).map(n =>
+    `<sup class="rref ref" data-n="${parseInt(n,10)||0}" title="Rests on finding ${parseInt(n,10)||0}">[${parseInt(n,10)||0}]</sup>`).join("");
+  const rows = items.map(it => {
+    const meta = _RKIND[it.kind] || {c:"k-implication", l:esc(it.kind||"Note")};
+    return `<div class="ritem"><span class="rkind ${meta.c}">${esc(meta.l)}</span>
+      <div class="rtext">${esc(it.text||"")} ${refChips(it.basis_findings)}</div></div>`;
+  }).join("");
+  let confHtml = "";
+  if(conf){
+    const dims = [["factual","Factual"],["causal","Causal"],["generalization","Generalization"]];
+    const rowsC = dims.map(([k,lbl]) => {
+      const d = conf[k]; if(!d || typeof d !== "object") return "";
+      const lv = (d.level||"unknown").toLowerCase();
+      const lvName = _RLEVEL[lv] || "Unknown";
+      const why = (d.rationale||"").trim();
+      return `<div class="rconf-row"><span class="rconf-dim">${esc(lbl)}</span>
+        <span class="rconf-lvl lv-${esc(lv)}">${esc(lvName)}</span>
+        ${why?`<span class="rconf-why">${esc(why)}</span>`:""}</div>`;
+    }).join("");
+    if(rowsC.trim()){
+      confHtml = `<div class="rconf"><div class="rconf-h">Confidence — how much to trust this</div>${rowsC}</div>`;
+    }
+  }
+  if(!rows && !confHtml) return "";
+  return `<section class="reasoning">
+    <div class="rhead">◆ Reasoning</div>
+    <div class="rsub">Interpretation of the evidence above — judgments, not new facts. Each rests on the cited findings.</div>
+    ${rows}${confHtml}</section>`;
 }
 // Render a grounded chart as inline SVG. XSS-safe by construction: every model-derived string
 // (label/value_str/series/title/unit) is esc()'d into <text> content, and every geometry attribute is
@@ -1106,6 +1187,11 @@ function render(data, target, opts){
     if(Array.isArray(data.charts) && data.charts.length){
       parts.push(data.charts.map(chartSvg).join(""));
     }
+    // Reasoning Read: the interpretation layer (tensions/gaps/assumptions/implications/what-would-
+    // change) + a 3-dimension confidence read. Every item was server-validated (rests on cited
+    // findings, no fabricated numbers). Rendered between the answer and the evidence dossier.
+    const rr = reasoningMarkup(data);
+    if(rr) parts.push(rr);
     // The answer-action add-ons (briefing video / explain / strengthen) render as ONE uniform group
     // below — at conversation level in a thread (see renderThread), so they're not repeated per turn.
     LAST = {question:(data.question||CURRENT_Q), answer:data.answer,

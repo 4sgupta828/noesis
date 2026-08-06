@@ -190,6 +190,55 @@ contain BOTH sides.
 citation-grounded paragraph beats a padded or half-empty table. Structure serves clarity, not decoration."""
 
 
+# REASONING READ (flag NOESIS_REASONING_READ, default OFF — Rule 20). Appended to the compose directive.
+# Adds a SEPARATE, typed INTERPRETATION layer on top of the grounded prose answer (factra's "Executive
+# Read" discipline): the prose reports the span-verified FACTS; the interpretation layer reasons ABOUT
+# them — what conflicts, what's missing, what's assumed, what follows, what would change the answer —
+# plus a three-dimension confidence read. Every item is validated in code: it must rest on ≥1 cited
+# finding and may contain NO number/dose/date/% not already in those findings (a fabricated inference
+# is dropped before it ships). This gives editorial + causal intelligence WITHOUT loosening grounding.
+MEDICAL_REASONING_FORMAT = """\
+REASONING READ (`interpretation` field + `confidence` field) — in ADDITION to the prose answer, produce a \
+short, high-signal layer of INTERPRETATION about the evidence. The prose answer states the facts; this \
+layer reasons about them. It is for a clinician deciding how much to trust and act on the evidence.
+
+STRICT SEPARATION — facts vs interpretation:
+- The prose `answer` carries the FACTS (with [n] citations). The `interpretation` layer carries \
+JUDGMENTS about those facts. Do NOT restate facts here, and do NOT put any new number, dose, %, date, or \
+figure in an interpretation item that is not already in the findings it rests on — interpretation adds \
+MEANING, never new data. (Items that introduce an ungrounded figure are dropped automatically.)
+
+Emit 2–5 `interpretation` items, each with: `text` (one or two tight sentences), `kind` (one of the five \
+below), and `basis_findings` (the 1-based finding numbers it rests on — REQUIRED; an item with no valid \
+basis is dropped). Only include items that genuinely add insight — fewer, sharper items beat padding.
+- `tension` — the findings CONFLICT or point different ways (different effect sizes, opposite \
+conclusions, a trial vs a guideline). Name both sides and what the conflict is; do NOT silently average \
+them away. Reconcile where the evidence lets you (e.g. different populations/endpoints explain the gap).
+- `gap` — a decision-relevant thing the evidence does NOT establish (no head-to-head, no long-term data, \
+no data in the asked population, surrogate endpoint only). This is what's MISSING, stated as a limit.
+- `assumption` — an inference the answer leans on that the findings don't fully prove (e.g. a surrogate \
+marker will translate to a clinical outcome; results in one population transfer to another).
+- `implication` — what the evidence, taken together, actually MEANS for the question — the "so what". \
+Calibrate causal language to the design: association/observational ≠ causation; a registered trial's \
+intent ≠ a demonstrated effect. Say "associated with", not "causes", unless a finding supports causation.
+- `what_would_change_this` — the specific new evidence that would move the answer (a completed RCT, a \
+head-to-head, long-term follow-up). Names the fragility of the current read.
+
+`confidence` — a three-dimension read, each with a `level` (high | moderate | low | unknown) and a \
+one-line `rationale` grounded in the CHARACTER of the evidence (how many studies, what tier, how \
+consistent, how directly they measure the outcome). Do NOT invent counts not supported by the findings:
+- `factual` — how solid are the reported facts themselves (study tier/consistency; a single small \
+observational study → low; concordant RCTs/guideline → high).
+- `causal` — how well the evidence supports a CAUSAL reading vs mere association (RCT → higher; \
+cross-sectional/registry → low).
+- `generalization` — how well it transfers beyond the studied population/setting/timeframe to the \
+question as asked (narrow eligibility or one setting → low).
+
+NEUTRALITY — this is research synthesis, NOT medical advice. Do NOT recommend, prescribe, or tell the \
+reader what to do; characterize the evidence and its limits so the clinician decides. No new facts, no \
+hype, no reassurance beyond what the findings state."""
+
+
 # CHART emission (flag NOESIS_ANSWER_CHARTS, default OFF — Rule 20). Appended to the compose directive.
 # Every plotted number is validated in code (must appear verbatim in its cited finding) before it
 # renders — an ungrounded number drops the whole chart. A VISUAL of grounded numbers, never new data.

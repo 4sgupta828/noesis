@@ -111,6 +111,16 @@ def answer_visuals_enabled() -> bool:
     return os.environ.get("NOESIS_ANSWER_VISUALS", "").lower() in ("1", "true", "yes")
 
 
+def reasoning_read_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON (and structured answers are ON), append the vertical's
+    reasoning-read directive so compose emits a TYPED interpretation layer (tension/gap/assumption/
+    implication/what-would-change) + a 3-dimension confidence read ON TOP of the grounded prose. Each
+    item is validated in code — dangling refs and any fabricated number/dose/date/% are dropped — so
+    grounding is never loosened. OFF → the directive is unchanged and no interpretation/confidence is
+    surfaced (byte-identical)."""
+    return os.environ.get("NOESIS_REASONING_READ", "").lower() in ("1", "true", "yes")
+
+
 def answer_focus_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, elliptical conversational follow-ups are condensed into a
     self-contained question (so retrieval + compose inherit the subject) AND compose ANSWERS the
@@ -249,6 +259,8 @@ class ResearchOut(BaseModel):
     clarification: str | None = None      # a clarifying question when the follow-up was ambiguous
     derived_from_prior: bool = False      # answer is a reshape of the previous answer (no new evidence)
     charts: list = []                     # validated grounded bar charts (empty unless the flag is on)
+    interpretation: list = []             # validated reasoning-read items (empty unless the flag is on)
+    confidence: dict | None = None        # 3-dimension confidence read (None unless the flag is on)
 
 
 def build_default_service() -> ResearchService:
@@ -299,6 +311,10 @@ def build_default_service() -> ResearchService:
     # Chart emission (flag): compose may populate a grounded bar chart, validated in the kernel.
     if answer_format and answer_charts_enabled() and getattr(manifest, "chart_guidance", None):
         answer_format = answer_format + "\n\n" + manifest.chart_guidance
+    # Reasoning Read (flag): append the interpretation-layer directive so compose emits typed
+    # interpretation + a confidence read (both validated in the kernel). Requires structured answers.
+    if answer_format and reasoning_read_enabled() and getattr(manifest, "reasoning_format", None):
+        answer_format = answer_format + "\n\n" + manifest.reasoning_format
     vision_prompt = manifest.vision_prompt if vision_enabled() else None
     gap_prompt = manifest.gap_prompt if gap_healing_enabled() else None
     suggest_prompt = manifest.suggest_prompt if conversation_enabled() else None
@@ -318,6 +334,7 @@ def build_default_service() -> ResearchService:
         llm=build_llm(mode=mode), embedder=embedder, planner_llm=planner_llm,
         claims_first=claims_first, extraction_lenses=getattr(manifest, "extraction_lenses", ()),
         evidence_select=evidence_select, atom_cap=atom_cap,
+        reasoning_read=reasoning_read_enabled(),
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
         answer_format=answer_format,
         # Patient directive resolved INDEPENDENTLY of structured_answers/clinical_synthesis — the
@@ -466,6 +483,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "followup_clarify_enabled": followup_clarify_enabled(),
             "answer_visuals_enabled": answer_visuals_enabled(),
             "answer_charts_enabled": answer_charts_enabled(),
+            "reasoning_read_enabled": reasoning_read_enabled() and structured_answers(),
             "refine_enabled": refine_enabled() and bool(getattr(svc, "refine_prompt", None)),
         }
 
@@ -597,6 +615,11 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 turn["audience"] = audience    # per-turn audience tag (only under the flag)
             if answer_charts_enabled() and getattr(res, "charts", None):
                 turn["charts"] = res.charts    # persist grounded charts so a reopened session shows them
+            if reasoning_read_enabled():
+                if getattr(res, "interpretation", None):
+                    turn["interpretation"] = res.interpretation   # persist the reasoning layer (JSONB)
+                if getattr(res, "confidence", None):
+                    turn["confidence"] = res.confidence
             try:
                 # Audience-guarded append: only continue a thread whose audience MATCHES this turn's
                 # (mid-thread toggle → mismatch → save a fresh session instead of corrupting the thread).
@@ -613,7 +636,9 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                         user_name=body.user_name, user_email=body.user_email,
                         visual_observation=res.visual_observation, attachments=previews,
                         audience=audience,
-                        charts=(res.charts if answer_charts_enabled() else None))
+                        charts=(res.charts if answer_charts_enabled() else None),
+                        interpretation=(getattr(res, "interpretation", None) if reasoning_read_enabled() else None),
+                        confidence=(getattr(res, "confidence", None) if reasoning_read_enabled() else None))
             except Exception:
                 session_id = None
         return ResearchOut(
@@ -628,6 +653,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             resolved_question=(res.resolved_question or None) if answer_focus_enabled() else None,
             derived_from_prior=bool(getattr(res, "derived_from_prior", False)),
             charts=(getattr(res, "charts", []) or []) if answer_charts_enabled() else [],
+            interpretation=(getattr(res, "interpretation", []) or []) if reasoning_read_enabled() else [],
+            confidence=(getattr(res, "confidence", None) if reasoning_read_enabled() else None),
         )
 
     @app.post("/research/stream")

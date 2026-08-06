@@ -118,9 +118,14 @@
   .audbadge{display:inline-block;font-family:var(--mono);font-size:.62rem;letter-spacing:.03em;
     border:1px solid var(--hair);border-radius:999px;padding:.05rem .5rem;vertical-align:middle;margin-left:.4rem;color:var(--muted);}
   .audbadge.patient{color:var(--gold);border-color:var(--gold);}
-  .sgroup{font-family:var(--mono);font-size:.64rem;text-transform:uppercase;letter-spacing:.11em;
-    color:var(--muted);margin:1.1rem .2rem .4rem;padding-bottom:.3rem;border-bottom:1px solid var(--hair);}
-  .sgroup:first-child{margin-top:.2rem;}
+  /* audience tabs at the top of Past Sessions (Clinician | Patient) */
+  .sessions .stabs{display:flex;gap:.2rem;padding:0 .9rem;border-bottom:1px solid var(--hair);flex:none;}
+  .sessions .stab{font-family:var(--mono);font-size:.7rem;letter-spacing:.02em;cursor:pointer;border:0;
+    background:transparent;color:var(--muted);padding:.55rem .8rem;border-bottom:2px solid transparent;
+    margin-bottom:-1px;transition:.12s;}
+  .sessions .stab:hover{color:var(--ink);}
+  .sessions .stab[aria-selected="true"]{color:var(--gold);border-bottom-color:var(--gold);}
+  .sessions .stab:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
 
   /* image/PDF/DICOM attachments (vision) */
   button.attach{flex:none;width:44px;height:44px;border-radius:50%;cursor:pointer;background:transparent;
@@ -464,6 +469,7 @@
     /* detail view: show the answer full-screen; hide list, search + title so the screen stays clean */
     .sessions[data-view="detail"] .slist{display:none;}
     .sessions[data-view="detail"] .ssearch,
+    .sessions[data-view="detail"] .stabs,
     .sessions[data-view="detail"] .stitle{display:none;}
   }
 
@@ -654,6 +660,10 @@
     <span class="stitle">Past Sessions</span>
     <input type="search" class="ssearch" id="ssearch" placeholder="Search questions or people…" aria-label="Search sessions" />
   </div>
+  <div class="stabs" id="stabs" role="tablist" hidden>
+    <button type="button" class="stab" data-aud="clinician" role="tab" aria-selected="true">Clinician Driven Q&amp;A</button>
+    <button type="button" class="stab" data-aud="patient" role="tab" aria-selected="false">Patient Driven Q&amp;A</button>
+  </div>
   <div class="sbody" id="sbody">
     <div class="slist" id="slist"></div>
     <div class="sdrag" id="sdrag" role="separator" aria-label="Resize panels"></div>
@@ -720,6 +730,7 @@ let EFFORT_ENABLED = false; // effort multiplier available (scales turns/results
 let EFFORT = 1;             // current effort multiplier (1 = Standard); only sent when >1
 let PATIENT_MODE_ENABLED = false; // audience switch available (clinician vs patient answer)
 let AUDIENCE = "clinician"; // current answer audience; only sent when "patient"
+let SESS_AUDIENCE = "clinician"; // active Past-Sessions audience tab (clinician | patient)
 let THREAD = {session_id:null, turns:[]};   // the active conversation
 let BASE_PLACEHOLDER = "";                   // vertical console placeholder (restored on New)
 let EXAMPLES = [];                            // vertical example questions → random intake prompt
@@ -760,6 +771,14 @@ async function loadConfig(){
       $("#audsel").querySelectorAll(".segbtn").forEach(b =>
         b.addEventListener("click", () => setAudience(b.dataset.aud)));
       setAudience("clinician");
+      // Past-Sessions audience tabs (Clinician | Patient)
+      const tabs = $("#stabs"); tabs.hidden = false;
+      tabs.querySelectorAll(".stab").forEach(t => t.addEventListener("click", () => {
+        SESS_AUDIENCE = t.dataset.aud === "patient" ? "patient" : "clinician";
+        tabs.querySelectorAll(".stab").forEach(x =>
+          x.setAttribute("aria-selected", x.dataset.aud === SESS_AUDIENCE ? "true" : "false"));
+        loadSessionList();
+      }));
     }
     if(VISION_ENABLED){
       $("#attach").hidden = false;
@@ -1614,14 +1633,20 @@ const fmtDate = s => { try{ return new Date(s).toLocaleString([], {dateStyle:"me
 async function loadSessionList(){
   const q = ($("#ssearch").value||"").trim();
   slist.innerHTML = `<div class="sempty">Loading…</div>`;
+  // When patient mode is on, the active tab filters the list to one audience (server-side).
+  const audParam = PATIENT_MODE_ENABLED ? `&audience=${SESS_AUDIENCE}` : "";
   try{
-    const {sessions} = await (await fetch("/sessions?tenant_id=demo&limit=200&q="+encodeURIComponent(q))).json();
-    if(!sessions || !sessions.length){ slist.innerHTML = `<div class="sempty">${q?"No matching sessions.":"No saved questions yet."}</div>`; return; }
-    const rowHtml = s => {
+    const {sessions} = await (await fetch("/sessions?tenant_id=demo&limit=200&q="+encodeURIComponent(q)+audParam)).json();
+    if(!sessions || !sessions.length){
+      const empty = q ? "No matching sessions."
+        : (PATIENT_MODE_ENABLED ? `No ${SESS_AUDIENCE === "patient" ? "patient" : "clinician"}-driven questions yet.`
+                                : "No saved questions yet.");
+      slist.innerHTML = `<div class="sempty">${empty}</div>`; return;
+    }
+    slist.innerHTML = sessions.map(s=>{
       const who = s.user_name || s.user_email;
-      const isPat = (s.audience||"clinician") === "patient";
       return `<button class="srow" data-id="${esc(s.id)}">
-        <div class="sq">${esc(s.question)}${PATIENT_MODE_ENABLED && isPat?`<span class="audbadge patient">Patient</span>`:""}</div>
+        <div class="sq">${esc(s.question)}</div>
         <div class="sm">
           ${who?`<span class="swho">${esc(who)}</span>`:""}
           ${s.grounded?'<span class="sg">✓ grounded</span>':'<span>ungrounded</span>'}
@@ -1629,17 +1654,7 @@ async function loadSessionList(){
           ${s.n_attach?`<span>📎 ${s.n_attach}</span>`:""}
           <span>${new Date(s.created_at).toLocaleDateString()}</span>
         </div></button>`;
-    };
-    if(PATIENT_MODE_ENABLED){
-      // Segment history into the two audience groups the user asked for.
-      const groups = [["clinician","Clinician Driven Q&A"], ["patient","Patient Driven Q&A"]];
-      slist.innerHTML = groups.map(([key,label])=>{
-        const rows = sessions.filter(s => (s.audience||"clinician") === key);
-        return rows.length ? `<div class="sgroup">${label}</div>` + rows.map(rowHtml).join("") : "";
-      }).join("");
-    } else {
-      slist.innerHTML = sessions.map(rowHtml).join("");
-    }
+    }).join("");
     slist.querySelectorAll(".srow").forEach(b=>b.addEventListener("click",()=>selectSession(b)));
     const first = slist.querySelector(".srow");    // desktop split shows the most recent by default;
     if(first && !isMobileSess()) selectSession(first);   // mobile stays on the list until a tap

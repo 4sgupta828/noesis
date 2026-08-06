@@ -302,13 +302,15 @@
   :root[data-theme="dark"] .rkind.k-change{color:#c39ee0;}
   @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .rkind.k-change{color:#c39ee0;}}
   .rtext{font-size:.94rem;line-height:1.58;color:var(--ink);}
-  .rtext .rref{color:var(--gold);font-weight:640;cursor:pointer;font-size:.72em;vertical-align:super;padding:0 .05em;}
-  /* confidence read: three dimensions, each a level badge + one-line rationale */
-  .rconf{margin-top:.9rem;padding-top:.75rem;border-top:1px solid var(--hair);}
-  .rconf-h{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.5rem;}
-  .rconf-row{display:flex;align-items:baseline;gap:.6rem;padding:.28rem 0;}
-  .rconf-dim{flex:0 0 8.5rem;font-size:.82rem;font-weight:640;color:var(--ink);}
-  .rconf-lvl{flex:0 0 auto;font-family:var(--mono);font-size:.62rem;font-weight:700;text-transform:uppercase;
+  .reasoning .rref{color:var(--gold);font-weight:640;cursor:pointer;font-size:.72em;vertical-align:super;padding:0 .05em;}
+  /* confidence read: three dimensions, each = [name · level · gloss] then a rationale below it */
+  .rconf{margin-top:.95rem;padding-top:.75rem;border-top:1px solid var(--hair);}
+  .rconf-h{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.6rem;}
+  .rconf-item{padding:.5rem 0;border-top:1px solid var(--hair-soft);}
+  .rconf-item:first-of-type{border-top:0;padding-top:0;}
+  .rconf-top{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;}
+  .rconf-dim{font-size:.84rem;font-weight:660;color:var(--ink);}
+  .rconf-lvl{font-family:var(--mono);font-size:.62rem;font-weight:700;text-transform:uppercase;
     letter-spacing:.05em;border-radius:999px;padding:.1rem .5rem;}
   .rconf-lvl.lv-high{color:var(--verified);background:rgba(19,122,84,.12);}
   .rconf-lvl.lv-moderate{color:var(--gap);background:rgba(178,106,30,.13);}
@@ -316,8 +318,8 @@
   .rconf-lvl.lv-unknown{color:var(--muted);background:var(--hair-soft);}
   :root[data-theme="dark"] .rconf-lvl.lv-low{color:#e88;}
   @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .rconf-lvl.lv-low{color:#e88;}}
-  .rconf-why{flex:1 1 auto;font-size:.8rem;color:var(--muted);line-height:1.5;}
-  @media (max-width:560px){ .rconf-row{flex-wrap:wrap;} .rconf-dim{flex-basis:auto;} .rconf-why{flex-basis:100%;} }
+  .rconf-gloss{font-size:.74rem;color:var(--muted);font-style:italic;}
+  .rconf-why{font-size:.82rem;color:var(--muted);line-height:1.55;margin-top:.3rem;}
   .answer.md .ref{color:var(--gold);font-weight:640;cursor:pointer;font-size:.68em;padding:0 .06em;vertical-align:super;}
   /* color highlights are OFF by default — a <mark> reads as plain text until the reader toggles
      them on (adds .hl-on to the answer). */
@@ -989,6 +991,9 @@ function reasoningMarkup(data){
   // basis-finding refs → clickable chips that scroll to the evidence card (reuses the [n] machinery)
   const refChips = b => (Array.isArray(b) ? b : []).map(n =>
     `<sup class="rref ref" data-n="${parseInt(n,10)||0}" title="Rests on finding ${parseInt(n,10)||0}">[${parseInt(n,10)||0}]</sup>`).join("");
+  // inline [n] in free text → the SAME clickable ref (used in confidence rationales, which cite inline)
+  const linkRefs = s => esc(s).replace(/\[(\d+)\]/g,
+    '<sup class="rref ref" data-n="$1" title="Finding $1">[$1]</sup>');
   const rows = items.map(it => {
     const meta = _RKIND[it.kind] || {c:"k-implication", l:esc(it.kind||"Note")};
     return `<div class="ritem"><span class="rkind ${meta.c}">${esc(meta.l)}</span>
@@ -996,18 +1001,24 @@ function reasoningMarkup(data){
   }).join("");
   let confHtml = "";
   if(conf){
-    const dims = [["factual","Factual"],["causal","Causal"],["generalization","Generalization"]];
-    const rowsC = dims.map(([k,lbl]) => {
+    // each dimension carries a plain-language gloss so "Factual: Moderate" is self-explanatory
+    const dims = [
+      ["factual","Factual","Are the reported facts themselves solid?"],
+      ["causal","Causal","A real causal effect, or only an association?"],
+      ["generalization","Generalization","Does it apply to the population asked?"]];
+    const rowsC = dims.map(([k,lbl,gloss]) => {
       const d = conf[k]; if(!d || typeof d !== "object") return "";
       const lv = (d.level||"unknown").toLowerCase();
       const lvName = _RLEVEL[lv] || "Unknown";
       const why = (d.rationale||"").trim();
-      return `<div class="rconf-row"><span class="rconf-dim">${esc(lbl)}</span>
-        <span class="rconf-lvl lv-${esc(lv)}">${esc(lvName)}</span>
-        ${why?`<span class="rconf-why">${esc(why)}</span>`:""}</div>`;
+      return `<div class="rconf-item">
+        <div class="rconf-top"><span class="rconf-dim">${esc(lbl)}</span>
+          <span class="rconf-lvl lv-${esc(lv)}">${esc(lvName)}</span>
+          <span class="rconf-gloss">${esc(gloss)}</span></div>
+        ${why?`<div class="rconf-why">${linkRefs(why)}</div>`:""}</div>`;
     }).join("");
     if(rowsC.trim()){
-      confHtml = `<div class="rconf"><div class="rconf-h">Confidence — how much to trust this</div>${rowsC}</div>`;
+      confHtml = `<div class="rconf"><div class="rconf-h">Confidence — how far to trust the judgment above</div>${rowsC}</div>`;
     }
   }
   if(!rows && !confHtml && !purpose && !conclusion) return "";

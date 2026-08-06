@@ -190,23 +190,30 @@ contain BOTH sides.
 citation-grounded paragraph beats a padded or half-empty table. Structure serves clarity, not decoration."""
 
 
-# CHART emission (flag NOESIS_ANSWER_CHARTS, default OFF — Rule 20). Appended to the compose directive
-# to let the model populate the `charts` field with a simple horizontal BAR chart WHEN — and only when —
-# the verified findings report the SAME comparable numeric metric across 2+ options. Every bar is
-# validated in code (its `value_str` must appear verbatim in its cited finding) before it renders; an
-# ungrounded bar drops the whole chart. This is a VISUAL of grounded numbers, never new data.
+# CHART emission (flag NOESIS_ANSWER_CHARTS, default OFF — Rule 20). Appended to the compose directive.
+# Every plotted number is validated in code (must appear verbatim in its cited finding) before it
+# renders — an ungrounded number drops the whole chart. A VISUAL of grounded numbers, never new data.
 MEDICAL_CHART_GUIDANCE = """\
-CHART (optional) — IN ADDITION to the prose/table, you MAY populate the `charts` field with ONE simple \
-horizontal bar chart ONLY when the verified findings report the SAME comparable numeric metric for 2 or \
-more options (e.g. the response rate, incidence, or absolute reduction for drug A vs B; the % of \
-patients with an adverse effect across options). Rules — a wrong or misleading chart is worse than none:
-- Plot ONLY values that are directly comparable: the SAME metric, outcome, timepoint, and a compatible \
-population. NEVER put unrelated numbers (e.g. an efficacy % next to a dose in mg, or rates from very \
-different populations) on one axis.
-- For EACH bar set: `label` (the option), `value` (the number as a float), `value_str` (the figure \
-COPIED EXACTLY as it appears in the finding, e.g. "53%" or "1.5 mg"), and `finding` (the [n] index of \
-the finding it comes from). The value_str MUST appear verbatim in that finding — if it doesn't, omit the \
-chart entirely.
-- Set `unit` (e.g. "%", "mg") and a short `title`. Use 2–6 bars. If no set of findings is cleanly \
-comparable, leave `charts` empty — do NOT invent or force a chart. The prose/table is the answer; the \
-chart only complements it."""
+CHART (optional, `charts` field) — add a chart ONLY when it reveals a pattern that is genuinely HARD to \
+grasp from the prose or a table: a TRADE-OFF, a DISTRIBUTION/SPREAD, or effect sizes whose CONFIDENCE \
+INTERVALS overlap or separate. Do NOT chart 2–3 values a table already shows plainly — a needless chart \
+is worse than none. If nothing qualifies, leave `charts` empty. Pick the kind that carries the insight:
+
+- `kind:"interval"` (a forest plot — the MOST valuable when available): a point estimate WITH its \
+confidence interval / range per option — e.g. hazard/odds/risk ratios with 95% CI across trials, or an \
+effect size with CI. This shows at a glance whether intervals cross a threshold or each other, which \
+prose buries. Each bar: `label`, `value` (+ `value_str`), `low` (+ `low_str`), `high` (+ `high_str`), \
+`finding`.
+- `kind:"grouped_bar"` (a trade-off): 2+ SERIES per option — e.g. BENEFIT vs RISK (response rate vs \
+serious-adverse-event rate) or the same outcome at multiple timepoints, across options. Each bar: \
+`label` (option), `series` (e.g. "Response" / "Serious AE"), `value` (+ `value_str`), `finding`.
+- `kind:"bar"` (only if there are MANY options, ~4+, where the ranking/spread itself is the point): one \
+`value` (+ `value_str`), `finding` per `label`.
+
+Hard rules — a wrong or misleading chart is a safety problem:
+- Plot ONLY directly comparable numbers (same metric/outcome/timepoint, compatible population). NEVER \
+mix units or unrelated populations on one axis. For grouped_bar, all bars in a SERIES are the same metric.
+- Every `value_str` / `low_str` / `high_str` MUST be the figure COPIED EXACTLY as it appears in its \
+cited `finding` (e.g. "0.78", "0.65", "0.94", "53%") — if any number is not verbatim in that finding, \
+OMIT the chart. Set `unit` and a short `title`. Use 2–8 options. The prose/table is the answer; the \
+chart only sharpens a hard-to-see pattern."""

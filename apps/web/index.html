@@ -253,6 +253,10 @@
   .chart .c-lbl{fill:var(--ink);font-size:12px;}
   .chart .c-val{fill:var(--gold);font-size:12px;font-weight:700;}
   .chart .c-bar{fill:var(--gold);opacity:.85;}
+  .chart .c-wh{stroke:var(--muted);stroke-width:1.6;}       /* forest-plot CI whisker */
+  .chart .c-dot{fill:var(--gold);stroke:var(--bg);stroke-width:1;}  /* point estimate marker */
+  .chart .c-leg{fill:var(--muted);font-size:11px;} .chart .c-sw{font-size:12px;}
+  .chart .c-ref{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3;opacity:.6;}  /* forest null line */
   .answer.md .ref{color:var(--gold);font-weight:640;cursor:pointer;font-size:.68em;padding:0 .06em;vertical-align:super;}
   /* color highlights are OFF by default — a <mark> reads as plain text until the reader toggles
      them on (adds .hl-on to the answer). */
@@ -902,28 +906,81 @@ function mdInline(s){
   s = s.replace(/\[\[\/?[FRK]\]\]/g, "");
   return s;
 }
-// Render a grounded bar chart as inline SVG. XSS-safe by construction: every model-derived string
-// (label/value_str/title/unit) is esc()'d into <text> content, and every geometry attribute is a
-// COMPUTED NUMBER — no raw model markup ever reaches the DOM. Self-contained (no chart lib).
-function chartSvg(chart){
-  const pts = (chart && chart.points || []).filter(p => typeof p.value === "number" && isFinite(p.value));
-  if(pts.length < 2) return "";
-  const max = Math.max(...pts.map(p => Math.abs(p.value)), 0) || 1;
-  const rowH = 30, barX = 160, barMaxW = 240, W = barX + barMaxW + 70, H = pts.length*rowH + 26;
-  const rows = pts.map((p,i) => {
-    const y = 22 + i*rowH;
-    const bw = Math.max(2, Math.round(Math.abs(p.value)/max * barMaxW));
-    const lbl = String(p.label == null ? "" : p.label).slice(0,60);
-    const val = String(p.value_str || p.value);
-    return `<text x="${barX-8}" y="${y+14}" text-anchor="end" class="c-lbl">${esc(lbl)}</text>`
-      + `<rect x="${barX}" y="${y+3}" width="${bw}" height="17" rx="3" class="c-bar"></rect>`
-      + `<text x="${barX+bw+6}" y="${y+15}" class="c-val">${esc(val)}</text>`;
-  }).join("");
-  const title = chart.title
-    ? `<text x="2" y="12" class="c-title">${esc(String(chart.title))}${chart.unit?" ("+esc(String(chart.unit))+")":""}</text>`
-    : "";
+// Render a grounded chart as inline SVG. XSS-safe by construction: every model-derived string
+// (label/value_str/series/title/unit) is esc()'d into <text> content, and every geometry attribute is
+// a COMPUTED NUMBER — no raw model markup ever reaches the DOM. Self-contained (no chart lib).
+// Kinds: 'bar' (one value/option), 'grouped_bar' (a trade-off, 2+ series/option), 'interval' (a forest
+// plot — point estimate + CI/range per option). Series colors are fixed (not model-derived).
+const _CHART_COLS = ["var(--gold)", "#3b82c4", "#5b8f6a", "#b0693a", "#8a63b0"];
+function _chartWrap(W, H, chart, inner){
   return `<div class="tw chartwrap"><svg viewBox="0 0 ${W} ${H}" class="chart" preserveAspectRatio="xMinYMin meet"`
-    + ` role="img" aria-label="${esc(String(chart.title||"bar chart"))}">${title}${rows}</svg></div>`;
+    + ` role="img" aria-label="${esc(String(chart.title||"chart"))}">${inner}</svg></div>`;
+}
+function chartSvg(chart){
+  const bars = ((chart && (chart.bars || chart.points)) || [])
+    .filter(b => typeof b.value === "number" && isFinite(b.value));
+  if(bars.length < 2) return "";
+  const kind = (chart.kind || "bar");
+  const barX = 168, plotW = 240, W = barX + plotW + 78;
+  const E = s => esc(String(s == null ? "" : s));
+  const titleSvg = `<text x="2" y="12" class="c-title">${E(chart.title||"")}${chart.unit?" ("+E(chart.unit)+")":""}</text>`;
+
+  if(kind === "interval"){                     // forest plot: whisker low..high + marker at value
+    const Wi = barX + plotW + 150;             // wider right margin for the "value [low–high]" labels
+    let lo = Infinity, hi = -Infinity;
+    bars.forEach(b => { lo = Math.min(lo, b.low ?? b.value, b.value); hi = Math.max(hi, b.high ?? b.value, b.value); });
+    if(!isFinite(lo) || !(hi > lo)) hi = lo + 1;
+    const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;   // a little breathing room
+    const X = v => barX + Math.round((v - lo)/(hi - lo) * plotW);
+    const rowH = 30, H = bars.length*rowH + 30;
+    // a null reference line at 1.0 for ratio-type forest plots (HR/OR/RR) when the axis crosses it
+    const ref = (lo < 1 && 1 < hi) ? `<line x1="${X(1)}" y1="18" x2="${X(1)}" y2="${H-14}" class="c-ref"></line>`
+      + `<text x="${X(1)}" y="${H-4}" text-anchor="middle" class="c-leg">1.0</text>` : "";
+    const body = bars.map((b,i) => {
+      const cy = 30 + i*rowH, x1 = X(b.low ?? b.value), x2 = X(b.high ?? b.value), xm = X(b.value);
+      const ci = (b.low_str && b.high_str) ? " ["+E(b.low_str)+"–"+E(b.high_str)+"]" : "";
+      return `<text x="${barX-8}" y="${cy+4}" text-anchor="end" class="c-lbl">${E(String(b.label).slice(0,40))}</text>`
+        + `<line x1="${x1}" y1="${cy}" x2="${x2}" y2="${cy}" class="c-wh"></line>`
+        + `<line x1="${x1}" y1="${cy-4}" x2="${x1}" y2="${cy+4}" class="c-wh"></line>`
+        + `<line x1="${x2}" y1="${cy-4}" x2="${x2}" y2="${cy+4}" class="c-wh"></line>`
+        + `<circle cx="${xm}" cy="${cy}" r="4" class="c-dot"></circle>`
+        + `<text x="${barX+plotW+8}" y="${cy+4}" class="c-val">${E(b.value_str||b.value)}${ci}</text>`;
+    }).join("");
+    return _chartWrap(Wi, H, chart, titleSvg + ref + body);
+  }
+
+  if(kind === "grouped_bar"){                  // trade-off: sub-bar per series within each option group
+    const labels = [...new Set(bars.map(b => b.label))];
+    const series = [...new Set(bars.map(b => b.series || "value"))];
+    const max = Math.max(...bars.map(b => Math.abs(b.value)), 0) || 1;
+    const subH = 15, gap = 3, grpPad = 10, grpH = series.length*(subH+gap) + grpPad;
+    const H = labels.length*grpH + 42;
+    let y = 22, body = "";
+    labels.forEach(lb => {
+      series.forEach((sname, si) => {
+        const b = bars.find(x => x.label === lb && (x.series || "value") === sname);
+        if(!b) return;
+        const yy = y + si*(subH+gap), bw = Math.max(2, Math.round(Math.abs(b.value)/max * plotW));
+        body += `<rect x="${barX}" y="${yy}" width="${bw}" height="${subH}" rx="2" fill="${_CHART_COLS[si%_CHART_COLS.length]}" opacity=".9"></rect>`
+          + `<text x="${barX+bw+6}" y="${yy+12}" class="c-val" style="fill:${_CHART_COLS[si%_CHART_COLS.length]}">${E(b.value_str||b.value)}</text>`;
+      });
+      body += `<text x="${barX-8}" y="${y + series.length*(subH+gap)/2 + 2}" text-anchor="end" class="c-lbl">${E(String(lb).slice(0,40))}</text>`;
+      y += grpH;
+    });
+    const legend = series.map((s,i) => `<tspan class="c-sw" fill="${_CHART_COLS[i%_CHART_COLS.length]}">■</tspan> ${E(s)}`).join("   ");
+    return _chartWrap(W, H, chart, titleSvg + body + `<text x="2" y="${H-8}" class="c-leg">${legend}</text>`);
+  }
+
+  // default: single-series horizontal bars (use only when the ranking/spread across many options is the point)
+  const max = Math.max(...bars.map(b => Math.abs(b.value)), 0) || 1;
+  const rowH = 30, H = bars.length*rowH + 26;
+  const body = bars.map((b,i) => {
+    const yy = 22 + i*rowH, bw = Math.max(2, Math.round(Math.abs(b.value)/max * plotW));
+    return `<text x="${barX-8}" y="${yy+15}" text-anchor="end" class="c-lbl">${E(String(b.label).slice(0,40))}</text>`
+      + `<rect x="${barX}" y="${yy+3}" width="${bw}" height="17" rx="3" class="c-bar"></rect>`
+      + `<text x="${barX+bw+6}" y="${yy+15}" class="c-val">${E(b.value_str||b.value)}</text>`;
+  }).join("");
+  return _chartWrap(W, H, chart, titleSvg + body);
 }
 // Minimal, self-contained, XSS-safe markdown → HTML. We esc() the whole source FIRST,
 // so any HTML in the model output is neutralized before we add known-safe tags. Handles

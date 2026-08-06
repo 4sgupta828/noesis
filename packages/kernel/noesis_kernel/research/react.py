@@ -72,21 +72,31 @@ class AgentStep(BaseModel):
     claims: list[ClaimOut] = []
 
 
-class ChartPoint(BaseModel):
-    """One bar of a chart. `value` is what's plotted; `value_str` is the figure EXACTLY as it appears
-    in the cited finding (used to VERIFY the bar is grounded); `finding` is the 1-based finding index."""
+class ChartBar(BaseModel):
+    """One datum of a chart. `value` is plotted; `value_str` is that figure EXACTLY as it appears in the
+    cited finding (used to VERIFY it's grounded); `finding` is the 1-based finding index. `series` groups
+    bars for a grouped chart (e.g. "Efficacy" vs "Adverse events"). `low`/`high` (+ their *_str) are the
+    optional confidence-interval / range bounds for an INTERVAL (forest-plot) chart — each also grounded."""
     label: str
     value: float
     value_str: str = ""
     finding: int = 0
+    series: str = ""
+    low: float | None = None
+    low_str: str = ""
+    high: float | None = None
+    high_str: str = ""
 
 
 class ChartSpec(BaseModel):
-    """A simple horizontal-BAR chart built ONLY from verified findings. Every bar must be grounded
-    (its value_str must appear verbatim in its cited finding) or the whole chart is dropped."""
+    """A chart built ONLY from verified findings. Kinds: 'bar' (one value per option), 'grouped_bar'
+    (2+ series per option — e.g. benefit vs risk), 'interval' (point estimate + CI/range per option, a
+    forest plot). EVERY plotted number (value, and low/high when present) must appear verbatim in its
+    cited finding, or the whole chart is dropped. Meant for patterns hard to read from prose/tables."""
+    kind: str = "bar"            # "bar" | "grouped_bar" | "interval"
     title: str = ""
     unit: str = ""
-    points: list[ChartPoint] = []
+    bars: list[ChartBar] = []
 
 
 class ComposedAnswer(BaseModel):
@@ -104,26 +114,36 @@ class ComposedAnswer(BaseModel):
 
 
 def _validate_charts(charts: list[ChartSpec], verified: list["VerifiedClaim"]) -> list[dict]:
-    """Keep only charts whose EVERY bar is grounded: a valid finding index AND the bar's `value_str`
-    appears verbatim (case-insensitive) in that finding's text or quote. Fail-safe — any bad bar drops
-    the WHOLE chart (a partially-verified chart is worse than none). Returns plain dicts for the API."""
+    """Keep only charts whose EVERY plotted number is grounded: for each bar, the finding index is valid
+    AND its `value_str` (and `low_str`/`high_str` when present) appears verbatim (case-insensitive) in
+    that finding's text or quote. Fail-safe — any bad number drops the WHOLE chart (a partly-verified
+    chart is worse than none). Also enforces a real comparison (>=2 groups). Returns dicts for the API."""
+    def _grounded(s: str, finding: int) -> bool:
+        s = (s or "").strip().lower()
+        if not s or not (1 <= finding <= len(verified)):
+            return False
+        src = (verified[finding - 1].text + " " + verified[finding - 1].quote).lower()
+        return s in src
+
     out: list[dict] = []
     for ch in charts or []:
-        pts = ch.points or []
-        if len(pts) < 2:
-            continue                       # not a meaningful comparison
+        bars = ch.bars or []
+        # a chart needs >=2 distinct groups (labels) to be a comparison worth showing
+        if len({(b.label or "").strip() for b in bars}) < 2:
+            continue
         ok = True
-        for p in pts:
-            vs = (p.value_str or "").strip().lower()
-            if not (1 <= p.finding <= len(verified)) or not vs:
+        for b in bars:
+            if not _grounded(b.value_str, b.finding):
                 ok = False; break
-            src = (verified[p.finding - 1].text + " " + verified[p.finding - 1].quote).lower()
-            if vs not in src:              # the plotted figure must be present in the cited finding
+            # interval bounds, when given, must ALSO be grounded in the same cited finding
+            if (b.low is not None or b.low_str) and not _grounded(b.low_str, b.finding):
+                ok = False; break
+            if (b.high is not None or b.high_str) and not _grounded(b.high_str, b.finding):
                 ok = False; break
         if ok:
             out.append(ch.model_dump())
         else:
-            _log.warning("chart dropped: a bar's value_str not found in its cited finding (title=%r)", ch.title)
+            _log.warning("chart dropped: a plotted figure not found in its cited finding (title=%r)", ch.title)
     return out
 
 

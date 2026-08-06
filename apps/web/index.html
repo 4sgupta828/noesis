@@ -72,6 +72,11 @@
   button.go.loading::after{content:"";width:17px;height:17px;border-radius:50%;
     border:2px solid rgba(var(--on-accent-rgb),.35);border-top-color:var(--on-accent);animation:spin .7s linear infinite;}
   button.go:focus-visible,.pill:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+  button.go.stopmode{cursor:pointer;}   /* while running, the Go button is a Stop button */
+  .stopbtn{font-family:var(--mono);font-size:.7rem;color:var(--muted);background:transparent;
+    border:1px solid var(--hair);border-radius:999px;padding:.28rem .72rem;cursor:pointer;
+    margin-top:.75rem;transition:.12s;display:inline-flex;align-items:center;gap:.35rem;}
+  .stopbtn:hover{border-color:var(--gap);color:var(--gap);}
 
   .sources{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center;padding-left:.15rem;}
   .sources .lbl{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;
@@ -1027,9 +1032,10 @@ function render(data, target, opts){
   target = target || out;
   opts = opts || {};
   if(data._pending){   // conversation: the question shows immediately while it runs
-    target.innerHTML = STREAM_ENABLED
+    target.innerHTML = (STREAM_ENABLED
       ? `<div class="agenttrace"><div class="tstep tlive">Starting…</div></div>`
-      : `<div class="status">Searching sources and verifying evidence…</div>`;
+      : `<div class="status">Searching sources and verifying evidence…</div>`)
+      + `<button type="button" class="stopbtn" onclick="cancelResearch()">■ Stop</button>`;
     return;
   }
   // Ambiguous follow-up → the agent asks a clarifying question instead of answering. Render the
@@ -1564,10 +1570,22 @@ $("#camshot").addEventListener("click", capturePhoto);
 $("#camflip").addEventListener("click", async ()=>{ camFacing = camFacing==="environment"?"user":"environment"; try{ await startCam(); }catch(e){} });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !$("#cammodal").hidden) closeCamera(); });
 
+let CURRENT_ABORT = null;      // AbortController of the in-flight question (null when idle)
+let USER_CANCELLED = false;    // set when the user stops it (vs a real timeout)
+function cancelResearch(){
+  if(!CURRENT_ABORT) return;
+  USER_CANCELLED = true;
+  try{ CURRENT_ABORT.abort(); }catch(_){}
+}
 $("#ask").addEventListener("submit", e=>{
   e.preventDefault();
+  if(CURRENT_ABORT) return;               // a question is in flight — Enter/submit is a no-op (use Stop)
   const question = q.value.trim();
   if(question) askQuestion(question);
+});
+// While a question runs, the round Go button becomes a STOP button — click it to cancel.
+go.addEventListener("click", e=>{
+  if(CURRENT_ABORT){ e.preventDefault(); e.stopPropagation(); cancelResearch(); }
 });
 
 // ---- live agent trace (SSE) ----
@@ -1669,7 +1687,7 @@ async function askQuestion(question, opts){
     if(THREAD.session_id) payload.session_id = THREAD.session_id;
   }
   const body = JSON.stringify(payload);
-  go.disabled = true; go.classList.add("loading");
+  go.classList.add("loading", "stopmode"); go.title = "Stop";   // clickable STOP while running (not disabled)
   const sg = out.querySelector("#suggest"); if(sg) sg.remove();
   if(conv){
     // Show the question IMMEDIATELY as a pending turn — it never vanishes during the wait.
@@ -1677,9 +1695,10 @@ async function askQuestion(question, opts){
     THREAD.turns.push({question, _pending:true});
     renderThread();
   } else {
-    out.innerHTML = STREAM_ENABLED
+    out.innerHTML = (STREAM_ENABLED
       ? `<div class="agenttrace"><div class="tstep tlive">Starting…</div></div>`
-      : `<div class="status">Searching sources and verifying evidence…</div>`;
+      : `<div class="status">Searching sources and verifying evidence…</div>`)
+      + `<button type="button" class="stopbtn" onclick="cancelResearch()">■ Stop</button>`;
   }
   // finishTurn REPLACES the pending turn with the real (or error) result.
   const finishTurn = (data) => { THREAD.session_id = data.session_id || THREAD.session_id;
@@ -1694,6 +1713,7 @@ async function askQuestion(question, opts){
     coverage_gaps:[], source_stats:{}, _note:note});
   const traceEl = () => conv ? out.querySelector(".turn:last-child .agenttrace") : out.querySelector(".agenttrace");
   const ctrl = new AbortController();
+  CURRENT_ABORT = ctrl; USER_CANCELLED = false;          // enable the Stop button for this run
   // streaming keeps the connection alive with progress → a generous safety cap; else the hard 120s.
   const timer = setTimeout(()=>ctrl.abort(), STREAM_ENABLED ? 300000 : 120000);
   const evidenceFallback = async (note) => {             // single-mode: ranked evidence + gap-fill
@@ -1724,6 +1744,11 @@ async function askQuestion(question, opts){
     appendGapFallback(question);
   }catch(err){
     clearTimeout(timer);
+    if(USER_CANCELLED){                                   // the user stopped it — no error, just clean up
+      if(conv){ THREAD.turns.pop(); renderThread(); q.value = question; q.style.height="auto"; q.style.height=q.scrollHeight+"px"; }
+      else { out.innerHTML = `<div class="empty">Stopped. Ask again when you're ready.</div>`; }
+      return;
+    }
     const timedOut = err && err.name === "AbortError";
     if(conv){ finishTurn(errTurn(timedOut
         ? "The full answer timed out — try a narrower follow-up, or fill the gaps below."
@@ -1734,7 +1759,9 @@ async function askQuestion(question, opts){
     out.innerHTML = `<div class="empty">${timedOut?"No evidence in the corpus answers this question yet.":"Couldn't reach the research service. Is the server running?"}</div>`;
     appendGapFallback(question);
   }finally{
-    go.disabled = false; go.classList.remove("loading");
+    clearTimeout(timer);
+    CURRENT_ABORT = null;
+    go.classList.remove("loading", "stopmode"); go.title = "Research";
     if(conv) q.setAttribute("placeholder","");
   }
 }

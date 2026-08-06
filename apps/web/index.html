@@ -546,7 +546,19 @@
     .claim{padding:.9rem 1rem .85rem;}
     .cquote{font-size:.94rem;}
     .cfoot{gap:.5rem;} .src{margin-left:0;}
-    .answer.md .mdt{font-size:.82rem;}
+    /* big tables: give each column a sensible min-width so a WIDE (many-column) table grows past the
+       viewport and SCROLLS horizontally in its .tw wrapper (readable columns) instead of squishing
+       every column to unreadable slivers — while a small 2-column table still fits without scrolling.
+       Scales with column count: ~2 cols fit, ~4+ cols scroll. */
+    .answer.md .mdt{font-size:.82rem;width:auto;}
+    .answer.md .mdt th{padding:.4rem .55rem;min-width:6em;}
+    .answer.md .mdt td{padding:.45rem .55rem;line-height:1.45;min-width:6em;}
+    /* minimize the footprint of the "Explain in plain language" + "Generate briefing video" add-ons:
+       tighter boxes, drop the explanatory hint (the button label is self-explanatory), compact buttons. */
+    .vid, .plain{padding:.55rem .65rem;margin:.15rem 0 1rem;border-radius:10px;}
+    .plain .plain-hint{display:none;}                 /* explanatory fluff — the button label suffices */
+    .vid .vhint{font-size:.72rem;margin-top:.4rem;}   /* keep the video title, just tighten it */
+    .vid .vbtn, .plain .vbtn{width:100%;text-align:center;font-size:.72rem;padding:.45rem .7rem;}
   }
   /* bottom-left theme toggle — adapts to the active theme via the same tokens */
   .themebtn{position:fixed;left:1rem;bottom:1rem;z-index:60;font-family:var(--mono);font-size:.64rem;

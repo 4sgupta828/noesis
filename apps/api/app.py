@@ -97,6 +97,13 @@ def answer_focus_enabled() -> bool:
     return os.environ.get("NOESIS_ANSWER_FOCUS", "").lower() in ("1", "true", "yes")
 
 
+def followup_clarify_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON (and answer-focus on, with history), a genuinely AMBIGUOUS
+    follow-up returns a short CLARIFYING question instead of guessing/dumping (factra's CM pattern).
+    OFF → the resolver never asks; it always returns a best-guess standalone question."""
+    return os.environ.get("NOESIS_FOLLOWUP_CLARIFY", "").lower() in ("1", "true", "yes")
+
+
 def _resolve_audience(audience: str | None) -> str:
     """The audience actually used: 'patient' only when the flag is on AND explicitly requested;
     everything else → 'clinician' (the default, byte-identical path)."""
@@ -212,6 +219,7 @@ class ResearchOut(BaseModel):
     effort: float | None = None      # resolved effort multiplier (only set when the flag is on)
     audience: str | None = None      # resolved audience 'clinician'|'patient' (only set when flag on)
     resolved_question: str | None = None  # condensed follow-up question, if it differed (flag on only)
+    clarification: str | None = None      # a clarifying question when the follow-up was ambiguous
 
 
 def build_default_service() -> ResearchService:
@@ -418,6 +426,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "effort_stops": EFFORT_STOPS if effort_scale_enabled() else [],
             "patient_mode_enabled": patient_mode_enabled(),
             "answer_focus_enabled": answer_focus_enabled(),
+            "followup_clarify_enabled": followup_clarify_enabled(),
         }
 
     @app.post("/search")
@@ -510,7 +519,11 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             workspace_id=body.workspace_id, source_keys=body.sources,
             images=images, documents=docs, history=history, on_event=on_event,
             facets=_country_facets(body.countries), effort=effort, audience=audience,
-            answer_focus=focus)
+            answer_focus=focus, clarify=followup_clarify_enabled())
+        # Ambiguous follow-up → return the clarifying question; no research ran, nothing to persist.
+        if getattr(res, "clarification", ""):
+            return ResearchOut(grounded=False, answer="", claims=[], coverage_gaps=[], rejected=0,
+                               clarification=res.clarification)
         ui = getattr(app.state.service, "ui", None)
         def _url(c):
             fn = getattr(ui, "source_url", None)

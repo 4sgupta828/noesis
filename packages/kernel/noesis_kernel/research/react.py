@@ -161,6 +161,7 @@ class AnswerResult:
     stopped_reason: str = "answered"     # "answered" | "budget" | "max_steps"
     effort: float = 1.0                  # the resolved effort multiplier this run used (observability)
     resolved_question: str = ""          # condensed self-contained question (set only if it differed)
+    clarification: str = ""              # a clarifying question to ask instead of answering (ambiguous follow-up)
 
     @property
     def grounded(self) -> bool:

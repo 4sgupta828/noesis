@@ -17,6 +17,15 @@ from noesis_kernel.retrieval.multi import MultiSourceRetriever
 
 
 @dataclass
+class FollowupResolution:
+    """Structured resolution of a conversational follow-up (the Conversation-Manager output)."""
+    core_query: str                     # the follow-up rewritten as a self-contained question
+    subject: str = ""                   # the carried subject/entity (transparency)
+    needs_clarification: bool = False   # the follow-up is genuinely ambiguous → ask, don't guess
+    clarification: str = ""             # the clarifying question to put to the user
+
+
+@dataclass
 class ResearchService:
     llm: LLMClient
     embedder: Embedder
@@ -74,23 +83,34 @@ class ResearchService:
         effort: float = 1.0,                 # research-effort multiplier (1.0 = baseline no-op)
         audience: str = "clinician",         # "clinician" (default) | "patient" — selects the compose directive ONLY
         answer_focus: bool = False,          # condense elliptical follow-ups + ANSWER-scope compose (flag)
+        clarify: bool = False,               # ask a clarifying question when a follow-up is ambiguous (flag)
     ) -> AnswerResult:
-        # ANSWER-FOCUS (flag): resolve an elliptical FOLLOW-UP ("what dose?") into a self-contained
+        # ANSWER-FOCUS (flag): resolve a conversational FOLLOW-UP ("what dose?") into a self-contained
         # question carrying the subject from the conversation ("dose of TMP-SMX for PCP prophylaxis"),
         # BEFORE retrieval — so the query, the relevance ranking, AND compose all inherit the subject
         # (they all key off `question`). Only fires with history present; off/no-history → no-op. The
-        # condenser sees ONLY the conversation (never the corpus), so it can't inject retrieved content;
-        # the ORIGINAL question is preserved as `question_original` for echo/persistence.
+        # resolver sees ONLY the conversation (never the corpus), so it can't inject retrieved content;
+        # the ORIGINAL question is preserved as `question_original` for echo/persistence. With `clarify`,
+        # a genuinely ambiguous follow-up short-circuits into a clarifying question (no research run).
         question_original = question
         resolved_question = ""
         if answer_focus and history:
-            condensed = await self._condense_followup(question, history)
-            if condensed and condensed != question:
-                resolved_question = condensed
-                question = condensed
+            r = await self._resolve_followup(question, history, allow_clarify=clarify)
+            if r.needs_clarification and r.clarification:
                 if on_event is not None:
                     try:
-                        await on_event({"type": "resolved_question", "question": condensed})
+                        await on_event({"type": "clarify", "question": r.clarification})
+                    except Exception:
+                        pass
+                out = AnswerResult(stopped_reason="clarify")
+                out.clarification = r.clarification   # ask the user; skip the research run entirely
+                return out
+            if r.core_query and r.core_query != question:
+                resolved_question = r.core_query
+                question = r.core_query
+                if on_event is not None:
+                    try:
+                        await on_event({"type": "resolved_question", "question": question})
                     except Exception:
                         pass
         # Audience changes ONLY the compose directive — same retrieval, same persona/system_prompt,
@@ -163,17 +183,24 @@ class ResearchService:
         res.resolved_question = resolved_question # condensed question if it differed (observability)
         return res
 
-    async def _condense_followup(self, question: str, history: list[dict]) -> str:
-        """Rewrite an elliptical FOLLOW-UP into a self-contained question using the conversation.
-
-        Returns the rewritten question, or "" to keep the original (already self-contained, a topic
-        change, or any failure → fail-safe). Sees ONLY the conversation (never the corpus), so it can
-        add no retrieved content. Resolving the referent/subject is a coreference judgment — the LLM's
-        job (Rule 18), never a regex. Uses the fast planner model when available."""
+    async def _resolve_followup(self, question: str, history: list[dict],
+                                *, allow_clarify: bool) -> "FollowupResolution":
+        """Resolve a conversational FOLLOW-UP against the conversation in ONE structured LLM call
+        (factra's Conversation-Manager pattern). Returns a FollowupResolution with:
+          - core_query: the follow-up rewritten as a SELF-CONTAINED question (subject made explicit);
+          - subject: the carried subject/entity (transparency + future gating);
+          - needs_clarification + clarification: when the follow-up is genuinely ambiguous or has
+            multiple plausible subjects (only honored when allow_clarify) — ask, don't guess.
+        Sees ONLY the conversation (never the corpus), so it can inject no retrieved content —
+        resolving the referent is a coreference judgment, the LLM's job (Rule 18). Fail-safe: any
+        error → the original question, no clarification (never worse than today)."""
         from pydantic import BaseModel
 
-        class _Condensed(BaseModel):
-            question: str
+        class _Resolution(BaseModel):
+            core_query: str
+            subject: str = ""
+            needs_clarification: bool = False
+            clarification: str = ""
 
         convo = []
         for t in (history or []):
@@ -182,32 +209,44 @@ class ResearchService:
             if qy:
                 convo.append(f"Q: {qy}\nA: {an[:800]}" if an else f"Q: {qy}")
         if not convo:
-            return ""
-        sys = ("You rewrite a user's LATEST question into a single, SELF-CONTAINED question, using the "
-               "prior conversation to fill in the subject the latest question leaves implicit.")
+            return FollowupResolution(core_query=question)
+        clause = (
+            " (4) If the follow-up is genuinely AMBIGUOUS — the subject is unclear OR there are MULTIPLE "
+            "plausible subjects it could refer to — set needs_clarification=true and put ONE short, "
+            "specific clarifying question in `clarification` (naming the candidate options), and set "
+            "core_query to your best-guess standalone question anyway."
+            if allow_clarify else
+            " (4) Do NOT ask for clarification; always return your best-guess standalone core_query.")
+        sys = ("You resolve a user's LATEST question in a medical research chat into a single, "
+               "SELF-CONTAINED question, using the prior conversation to fill in the subject the latest "
+               "question leaves implicit. You never add facts — you only make the question standalone.")
         user = (
             "CONVERSATION SO FAR:\n" + "\n\n".join(convo) + "\n\n"
             f"LATEST QUESTION: {question}\n\n"
-            "Rewrite LATEST QUESTION as ONE standalone question that names its subject explicitly, so it "
-            "can be understood with NO conversation context (e.g. 'What dose?' after establishing "
-            "co-trimoxazole for PCP prophylaxis → 'What is the dose of co-trimoxazole for Pneumocystis "
-            "pneumonia prophylaxis?'). RULES: (1) If the latest question is ALREADY self-contained, "
-            "return it VERBATIM. (2) If it CHANGES the topic (introduces a new subject), return it "
-            "VERBATIM — do not graft on the old subject. (3) Only carry over the subject/entity that the "
-            "latest question is implicitly about; do NOT add facts, answers, or details from the prior "
-            "answers. Return ONLY the rewritten question.")
+            "Set core_query to LATEST QUESTION rewritten as ONE standalone question naming its subject "
+            "explicitly (e.g. 'What dose?' after establishing co-trimoxazole for PCP prophylaxis → "
+            "'What is the dose of co-trimoxazole for Pneumocystis pneumonia prophylaxis?'), and `subject` "
+            "to the carried subject/entity. RULES: (1) If LATEST QUESTION is ALREADY self-contained, set "
+            "core_query to it VERBATIM. (2) If it CHANGES the topic (a new subject), set core_query "
+            "VERBATIM — do not graft on the old subject. (3) Carry ONLY the subject the latest question is "
+            "implicitly about; do NOT add facts, answers, doses, or details from the prior answers."
+            + clause)
         planner = self.planner_llm or self.llm
         try:
             res = await planner.complete(system=sys, messages=[{"role": "user", "content": user}],
-                                         response_format=_Condensed, max_tokens=256)
-            out = (res.parsed.question or "").strip()
+                                         response_format=_Resolution, max_tokens=320)
+            r = res.parsed
+            cq = (r.core_query or "").strip()
         except Exception:
-            return ""      # fail-safe: any error → keep the original question
-        # Structural guards (code owns structure, not meaning): keep the rewrite only if it's non-empty
-        # and not implausibly long vs the original (a runaway rewrite = drop it).
-        if not out or len(out) > max(120, 4 * len(question)):
-            return ""
-        return out
+            return FollowupResolution(core_query=question)   # fail-safe → original
+        # Structural guards (code owns structure): drop an empty/runaway rewrite back to the original.
+        if not cq or len(cq) > max(160, 5 * len(question)):
+            cq = question
+        clar = (r.clarification or "").strip()
+        return FollowupResolution(
+            core_query=cq, subject=(r.subject or "").strip(),
+            needs_clarification=bool(allow_clarify and r.needs_clarification and clar),
+            clarification=clar if (allow_clarify and r.needs_clarification) else "")
 
     async def explain(self, *, question: str, answer: str) -> str:
         """On-demand plain-language rephrasing of a grounded answer (adds no new facts)."""

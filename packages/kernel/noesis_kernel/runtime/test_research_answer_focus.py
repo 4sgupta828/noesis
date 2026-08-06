@@ -16,10 +16,11 @@ SCOPE_MARK = "Directly ANSWER the specific question"   # only present under answ
 
 
 class FocusLLM:
-    def __init__(self, condensed="RESOLVED SUBJECT QUESTION"):
+    def __init__(self, condensed="RESOLVED SUBJECT QUESTION", clar="", subject=""):
         self.condensed = condensed
+        self.clar = clar
+        self.subject = subject
         self.compose_user = None
-        self.search_query = None
         self._loop = [
             AgentStep(action="search", query="metric value"),
             AgentStep(action="answer", claims=[
@@ -29,8 +30,10 @@ class FocusLLM:
 
     async def complete(self, *, system, messages, response_format, max_tokens=2048, temperature=None):
         name = getattr(response_format, "__name__", "")
-        if name == "_Condensed":                       # the condenser pre-step
-            return LLMResult(parsed=response_format(question=self.condensed), model="c")
+        if name == "_Resolution":                      # the follow-up resolver pre-step
+            return LLMResult(parsed=response_format(
+                core_query=self.condensed, subject=self.subject,
+                needs_clarification=bool(self.clar), clarification=self.clar), model="c")
         if response_format is ComposedAnswer:
             self.compose_user = messages[-1]["content"]
             return LLMResult(parsed=ComposedAnswer(answer="Value is 9.8 percent [1].",
@@ -38,11 +41,11 @@ class FocusLLM:
         return LLMResult(parsed=self._loop.pop(0), output_tokens=5, model="c")
 
 
-def _service(condensed="RESOLVED SUBJECT QUESTION"):
+def _service(condensed="RESOLVED SUBJECT QUESTION", clar="", subject=""):
     src = InMemoryRetrievalSource()
     src.add(IndexedBlock(block_id="b1", document_id="d1", tenant_id="A", text=_TEXT,
                          locator=Locator("block_span", "d1", {"block_id": "b1"})))
-    llm = FocusLLM(condensed)
+    llm = FocusLLM(condensed, clar, subject)
     return ResearchService(llm=llm, embedder=FakeEmbedder(dim=8), sources={"corpus": src}), llm
 
 
@@ -80,7 +83,25 @@ def test_no_history_skips_condense():
 
 
 def test_verbatim_rewrite_is_not_flagged_as_resolved():
-    svc, llm = _service("What dose?")                  # condenser returns it unchanged (self-contained)
+    svc, llm = _service("What dose?")                  # resolver returns it unchanged (self-contained)
     res = asyncio.run(svc.ask(question="What dose?", tenant_id="A", history=HIST, answer_focus=True))
     assert res.resolved_question == ""                 # unchanged → not surfaced as a rewrite
     assert "What dose?" in llm.compose_user
+
+
+def test_ambiguous_followup_returns_clarification_and_skips_research():
+    svc, llm = _service(condensed="best guess", clar="Which drug did you mean — A or B?")
+    res = asyncio.run(svc.ask(question="What dose?", tenant_id="A", history=HIST,
+                              answer_focus=True, clarify=True))
+    assert res.clarification == "Which drug did you mean — A or B?"
+    assert res.stopped_reason == "clarify"
+    assert not res.verified_claims                     # no research ran
+    assert llm.compose_user is None                    # compose never called
+
+
+def test_clarify_off_ignores_needs_clarification():
+    svc, llm = _service(condensed="best guess standalone", clar="Which drug?")
+    res = asyncio.run(svc.ask(question="What dose?", tenant_id="A", history=HIST,
+                              answer_focus=True, clarify=False))   # clarify flag OFF
+    assert res.clarification == ""                      # not honored
+    assert llm.compose_user is not None                # research + compose ran normally

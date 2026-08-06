@@ -381,6 +381,10 @@
   .rqnote{font-family:var(--mono);font-size:.72rem;color:var(--muted);margin:0 0 1rem;padding:.5rem .7rem;
     background:var(--panel);border-left:2px solid var(--gold);border-radius:0 4px 4px 0;}
   .rqnote b{color:var(--ink);font-weight:600;}
+  .clarify{border:1px solid var(--gold);border-radius:8px;padding:1.1rem 1.2rem;background:var(--panel);}
+  .clarify-h{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:.5rem;}
+  .clarify-q{font-family:var(--serif,Georgia,serif);font-size:1.12rem;line-height:1.45;color:var(--ink);}
+  .clarify-hint{font-family:var(--mono);font-size:.68rem;color:var(--muted);margin-top:.6rem;}
   .gpill{font-family:var(--mono);font-size:.66rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
     border-radius:999px;padding:.24rem .7rem;border:1px solid;}
   .gpill.on{color:var(--verified);border-color:rgba(87,184,145,.5);background:rgba(87,184,145,.09);}
@@ -901,8 +905,16 @@ function render(data, target, opts){
       : `<div class="status">Searching sources and verifying evidence…</div>`;
     return;
   }
+  // Ambiguous follow-up → the agent asks a clarifying question instead of answering. Render the
+  // prompt (not an answer) and stop; the user's next reply carries this in history so it resolves.
+  if(data.clarification){
+    target.innerHTML = `<div class="clarify"><div class="clarify-h">↳ One quick clarification</div>`
+      + `<div class="clarify-q">${esc(data.clarification)}</div>`
+      + `<div class="clarify-hint">Reply with the specifics and I'll answer.</div></div>`;
+    return;
+  }
   const parts = [];
-  const n = data.claims.length;
+  const n = (data.claims||[]).length;
   const sid = data.session_id || data.id || null;   // saved session → shareable permalink
   const showLink = sid && !opts.noLink;             // thread turns suppress per-turn link (one per thread)
   const hasHl = STRUCTURED && !!data.answer && /\[\[[FRK]\]\]/.test(data.answer);  // answer has markers
@@ -1401,6 +1413,7 @@ function traceLine(ev){
   if(ev.type==="effort")    return `<div class="tstep">⚡ Digging deeper — ${effortTier(ev.effort).name} · ${ev.effort}× effort</div>`;
   if(ev.type==="audience")  return `<div class="tstep">🧑‍⚕️ Answering for a ${ev.audience==="patient"?"patient":"clinician"}</div>`;
   if(ev.type==="resolved_question") return `<div class="tstep">↳ Interpreting your follow-up as: <span class="tq">${esc(ev.question||"")}</span></div>`;
+  if(ev.type==="clarify")   return `<div class="tstep">↳ Need a quick clarification…</div>`;
   if(ev.type==="step")      return `<div class="tstep">▸ Step ${ev.step}</div>`;
   if(ev.type==="search")    return `<div class="tstep">🔎 Searching <span class="tq">${esc(ev.query||"")}</span>${(ev.variants&&ev.variants.length)?` <span class="tvar">+${ev.variants.length} reformulations</span>`:""}</div>`;
   if(ev.type==="found")     return `<div class="tstep">📥 Found <b>${ev.total}</b> passage${ev.total===1?"":"s"}${(ev.sources&&ev.sources.length)?` <span class="tvar">${ev.sources.map(esc).join(" · ")}</span>`:""}</div>`;
@@ -1482,7 +1495,9 @@ async function askQuestion(question){
     // PRESERVE the question: the backend ResearchOut doesn't echo it, so replacing the pending turn
     // with `data` would blank the Q header AND send an empty question to /suggest (422 → no chips).
     THREAD.turns[THREAD.turns.length-1] = Object.assign({}, data, {question: data.question || prev.question || question});
-    renderThread(); loadSuggestions(); };
+    renderThread();
+    if(!data.clarification) loadSuggestions();   // a clarifying prompt has no answer to suggest from
+  };
   const errTurn = (note) => ({question, answer:"", grounded:false, claims:[],
     coverage_gaps:[], source_stats:{}, _note:note});
   const traceEl = () => conv ? out.querySelector(".turn:last-child .agenttrace") : out.querySelector(".agenttrace");
@@ -1539,7 +1554,9 @@ function appendGapFallback(question){
 }
 
 // ---- conversation (multi-turn thread) ----
-function threadHistoryPayload(){ return THREAD.turns.map(t=>({question:t.question, answer:t.answer||""})); }
+function threadHistoryPayload(){ return THREAD.turns.map(t=>({question:t.question,
+  // a clarification turn has no answer — feed its prompt into history so the user's reply resolves.
+  answer:t.answer || (t.clarification ? "(I asked to clarify) "+t.clarification : "")})); }
 function newConversation(){
   THREAD = {session_id:null, turns:[]};
   document.body.classList.remove("chatting"); out.style.paddingBottom = "";   // back to landing layout

@@ -204,6 +204,22 @@
     letter-spacing:.04em;cursor:pointer;background:transparent;border:1px solid var(--hair);border-radius:8px;
     padding:.35rem .6rem;color:var(--muted);}
   .sessions .sdel:hover{color:var(--gap);border-color:rgba(214,151,90,.6);}
+  /* session action toolbar — one compact iconized row BETWEEN the question and the answer */
+  .sactions{display:flex;flex-wrap:wrap;gap:.4rem;margin:0 0 1.4rem;}
+  .sactions:empty{display:none;}
+  .sact{display:inline-flex;align-items:center;gap:.35rem;font-family:var(--mono);font-size:.64rem;
+    text-transform:uppercase;letter-spacing:.04em;cursor:pointer;background:transparent;
+    border:1px solid var(--hair);border-radius:8px;padding:.34rem .55rem;color:var(--muted);transition:.12s;}
+  .sact:hover{color:var(--gold);border-color:rgba(var(--gold-rgb),.6);}
+  .sact .sact-i{font-size:.82rem;line-height:1;}
+  .sact.on{color:var(--gold);border-color:var(--gold);}
+  .sact.sact-danger:hover{color:var(--gap);border-color:rgba(214,151,90,.6);}
+  /* mobile: collapse to ICON-ONLY so a full toolbar never wraps into a tall stack */
+  @media (max-width:560px){
+    .sact{padding:.4rem .5rem;} .sact .sact-t{position:absolute;width:1px;height:1px;overflow:hidden;
+      clip:rect(0 0 0 0);white-space:nowrap;}
+    .sact .sact-i{font-size:.95rem;}
+  }
 
   /* ---- results ---- */
   #out{margin-top:2.4rem;}
@@ -1183,7 +1199,9 @@ function render(data, target, opts){
   const topbtns = `${hasHl?`<button type="button" class="copybtn hltoggle" id="hltoggle" title="Show color highlights (load-bearing facts, reasoning, key context)">✦ Highlights</button>`:""}`
     + `${showLink?`<button type="button" class="copybtn" id="linkbtn">🔗 Copy link</button>`:""}`
     + `${(data.answer||n)?`<button type="button" class="copybtn" id="copybtn">⧉ Copy</button>`:""}`;
-  if(topbtns.trim()) parts.push(`<div class="ansmeta ansmeta-top"><span class="metabtns">${topbtns}</span></div>`);
+  // noTopbtns: the session-detail view lifts turn-1's actions into a single toolbar above the answer
+  // (so they don't crowd the header question on mobile) — suppress the per-answer top bar there.
+  if(topbtns.trim() && !opts.noTopbtns) parts.push(`<div class="ansmeta ansmeta-top"><span class="metabtns">${topbtns}</span></div>`);
   if(data.coverage_gaps && data.coverage_gaps.length){
     parts.push(`<div class="gaps"><h4>Coverage gaps</h4><ul>` +
       data.coverage_gaps.map(g=>`<li>${esc(g)}</li>`).join("") + `</ul></div>`);
@@ -2043,18 +2061,19 @@ function showSessionDetail(row, rowEl){
   const who = row.user_name || row.user_email;
   // Render the WHOLE conversation (all follow-up turns), not just the first answer.
   const turns = (row.thread && row.thread.length) ? row.thread : [row];
+  // Header carries ONLY the question (full width — the actions used to sit beside it and crush it on
+  // mobile). All actions live in a single compact, iconized toolbar (#sactions) BETWEEN the question
+  // and the answer.
   sdetail.innerHTML = `<div class="sqhead">
-      <div class="qhrow"><div class="qq">${esc(row.question)}</div>
-        <span class="metabtns">
-          ${CONV_ENABLED?`<button type="button" class="copybtn" id="scont" title="Continue this conversation in the main chat">↳ Continue in chat</button>`:""}
-          <button type="button" class="sdel" id="sdel" title="Delete session">🗑 Delete</button></span></div>
+      <div class="qhrow"><div class="qq">${esc(row.question)}</div></div>
       <div class="qm">${who?`Asked by <b>${esc(row.user_name||"")}</b>${row.user_email?" · "+esc(row.user_email):""} · `:""}${fmtDate(row.created_at)}${turns.length>1?` · ${turns.length} turns`:""}</div>
-    </div><div id="sdbody"></div>`;
+    </div><div class="sactions" id="sactions"></div><div id="sdbody"></div>`;
   if(PATIENT_MODE_ENABLED && (row.audience||"clinician") === "patient"){
     const hq = sdetail.querySelector(".qq");
     if(hq) hq.insertAdjacentHTML("beforeend", ` <span class="audbadge patient">Patient</span>`);
   }
   const sdbody = $("#sdbody");
+  let firstAns = null, firstTurn = turns[0] || row;
   turns.forEach((t,i)=>{
     const block = document.createElement("div"); block.className = "turn";
     const ef = Number(t.effort) || 1;
@@ -2067,8 +2086,9 @@ function showSessionDetail(row, rowEl){
       const hq = sdetail.querySelector(".qq");
       if(hq) hq.insertAdjacentHTML("beforeend", ` <span class="efbadge">${effortTier(ef).name} · ${ef}×</span>`);
     }
-    // "Retry with more effort" — at the TOP, above the answer: re-ask THIS question at higher effort.
-    if(EFFORT_ENABLED){
+    // "Retry with more effort" — for follow-up turns it stays inline (above that turn's answer); for
+    // Q1 it lives in the #sactions toolbar instead (built below), so skip the inline one at i===0.
+    if(EFFORT_ENABLED && i>0){
       const nextEf = Math.min(2.5, Math.round((ef + 0.5)*4)/4);
       const rb = document.createElement("button");
       rb.type = "button"; rb.className = "retrydeep retrydeep-top";
@@ -2079,8 +2099,10 @@ function showSessionDetail(row, rowEl){
     }
     const ans = document.createElement("div"); block.appendChild(ans);
     sdbody.appendChild(block);
-    render(t, ans, {noLink:true, noConvo:true});
+    render(t, ans, {noLink:true, noConvo:true, noTopbtns:i===0});   // Q1's action buttons go in #sactions
+    if(i===0) firstAns = ans;
   });
+  buildSessionActions($("#sactions"), row, firstTurn, firstAns, rowEl);
   // Conversation-level box for the loaded session (session-level video/plain live on `row`).
   const lastTurn = turns[turns.length-1] || row;
   const actData = Object.assign({}, lastTurn, {
@@ -2089,16 +2111,57 @@ function showSessionDetail(row, rowEl){
   LAST = {question: row.question, answer: (lastTurn.answer||row.answer||""), session_id: row.id};
   const act = document.createElement("div"); act.innerHTML = convoActionsMarkup(actData);
   if(act.firstChild){ sdbody.appendChild(act); wireConvo(act, actData); }
-  const del = $("#sdel"); if(del) del.addEventListener("click", ()=>deleteSession(row.id, rowEl));
-  const cont = $("#scont"); if(cont) cont.addEventListener("click", ()=>{   // resume as a live thread
-    THREAD = {session_id: row.id, turns: turns.slice()};
-    if(PATIENT_MODE_ENABLED) setAudience(row.audience || "clinician");   // keep the thread's audience
+  sdetail.scrollTop = 0;
+  if(isMobileSess()){ sessionsEl.dataset.view = "detail"; setSback("← Sessions"); }  // drill into the answer
+}
+
+// One compact, ICONIZED action toolbar for a loaded session, placed between the question and the
+// answer (not beside the header, where it crushed the question on mobile). Gathers the Q1/session
+// actions: highlights toggle, copy, copy link, retry-with-more-effort, continue-in-chat, delete.
+// Each button shows an icon + short label; the label collapses to icon-only on narrow screens (CSS).
+function buildSessionActions(box, row, firstTurn, firstAns, rowEl){
+  if(!box) return;
+  const btn = (id, icon, label, title, cls) =>
+    `<button type="button" class="sact ${cls||""}" id="${id}" title="${esc(title)}">`
+    + `<span class="sact-i">${icon}</span><span class="sact-t">${esc(label)}</span></button>`;
+  const hasHl = STRUCTURED && !!(firstTurn.answer||"") && /\[\[[FRK]\]\]/.test(firstTurn.answer||"");
+  const hasAns = !!(firstTurn.answer) || (firstTurn.claims && firstTurn.claims.length);
+  const ef = Number(firstTurn.effort) || 1;
+  const nextEf = Math.min(2.5, Math.round((ef + 0.5)*4)/4);
+  const canRetry = EFFORT_ENABLED && nextEf > ef;
+  const bits = [];
+  if(hasHl) bits.push(btn("sa-hl", "✦", "Highlights", "Show color highlights (facts · reasoning · context)"));
+  if(hasAns) bits.push(btn("sa-copy", "⧉", "Copy", "Copy this answer"));
+  bits.push(btn("sa-link", "🔗", "Link", "Copy a shareable link to this session"));
+  if(canRetry) bits.push(btn("sa-retry", "↻", "More effort", `Retry at ${effortTier(nextEf).name} · ${nextEf}×`));
+  if(CONV_ENABLED) bits.push(btn("sa-cont", "↳", "Continue in chat", "Continue this conversation in the main chat"));
+  bits.push(btn("sa-del", "🗑", "Delete", "Delete session", "sact-danger"));
+  box.innerHTML = bits.join("");
+  // wiring
+  const hl = box.querySelector("#sa-hl");
+  if(hl) hl.addEventListener("click", ()=>{
+    const ans = firstAns && firstAns.querySelector(".answer.md");
+    const leg = firstAns && firstAns.querySelector(".hllegend");
+    const on = ans && ans.classList.toggle("hl-on");
+    hl.classList.toggle("on", !!on);
+    if(leg) leg.hidden = !on;
+  });
+  const cp = box.querySelector("#sa-copy");
+  if(cp) cp.addEventListener("click", ()=>copyAnswer(firstTurn, cp));
+  const lk = box.querySelector("#sa-link");
+  if(lk) lk.addEventListener("click", ()=>copyLink(row.id, lk));
+  const rt = box.querySelector("#sa-retry");
+  if(rt) rt.addEventListener("click", ()=>retryDeeper(firstTurn.question||row.question, nextEf));
+  const ct = box.querySelector("#sa-cont");
+  if(ct) ct.addEventListener("click", ()=>{
+    THREAD = {session_id: row.id, turns: (row.thread && row.thread.length ? row.thread : [row]).slice()};
+    if(PATIENT_MODE_ENABLED) setAudience(row.audience || "clinician");
     closeSessions();
     q.value=""; q.style.height="auto"; q.setAttribute("placeholder","");
     renderThread(); window.scrollTo({top:0}); q.focus();
   });
-  sdetail.scrollTop = 0;
-  if(isMobileSess()){ sessionsEl.dataset.view = "detail"; setSback("← Sessions"); }  // drill into the answer
+  const dl = box.querySelector("#sa-del");
+  if(dl) dl.addEventListener("click", ()=>deleteSession(row.id, rowEl));
 }
 // Re-ask a past question in the main chat at a higher effort — a fresh run (new thread), not an
 // append, so the deeper answer stands on its own next to the original in the session list.

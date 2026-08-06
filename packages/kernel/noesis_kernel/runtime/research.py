@@ -24,7 +24,8 @@ class ResearchService:
     planner_llm: LLMClient | None = None     # fast model for ReAct planning steps (compose uses llm)
     gating: GatingPolicy | None = None
     persona_prompt: str = "You are an evidence-grounded research agent."
-    answer_format: str | None = None        # vertical answer-structure directive (opaque)
+    answer_format: str | None = None        # vertical answer-structure directive (opaque, clinician)
+    patient_answer_format: str | None = None # vertical PATIENT-audience compose directive (opaque)
     vision_prompt: str | None = None        # vertical image-description directive (opaque)
     layman_prompt: str | None = None        # vertical layman-rephrasing directive (opaque)
     gap_prompt: str | None = None           # vertical gap-fill-planner directive (opaque)
@@ -71,7 +72,15 @@ class ResearchService:
         facets: dict | None = None,          # hard retrieval facet filter (e.g. source_country scope)
         max_steps: int = 8,
         effort: float = 1.0,                 # research-effort multiplier (1.0 = baseline no-op)
+        audience: str = "clinician",         # "clinician" (default) | "patient" — selects the compose directive ONLY
     ) -> AnswerResult:
+        # Audience changes ONLY the compose directive — same retrieval, same persona/system_prompt,
+        # same span/entailment gates. "patient" uses the vertical's patient directive when it supplies
+        # one; anything else (incl. an unknown value) falls back to the clinician directive → the
+        # default path is byte-identical.
+        directive = (self.patient_answer_format
+                     if audience == "patient" and self.patient_answer_format
+                     else self.answer_format)
         # Effort scales STRUCTURAL search knobs only (turns, results, context, citations, budget) —
         # never the grounding gates. At effort<=1.0 every value round-trips to today's exact defaults,
         # so this is a byte-identical no-op when the caller passes 1.0 (flag OFF).
@@ -120,7 +129,7 @@ class ResearchService:
             source=corpus_src, aux_source=web_src,
             tenant_id=tenant_id, workspace_id=workspace_id,
             budget=budget, gating=self.gating,
-            system_prompt=self.persona_prompt, answer_format=self.answer_format,
+            system_prompt=self.persona_prompt, answer_format=directive,
             attachment_context=attachment_context, history_context=history_context,
             planner_llm=self.planner_llm, on_event=on_event,
             claims_first=self.claims_first, extraction_lenses=self.extraction_lenses,

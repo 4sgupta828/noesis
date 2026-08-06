@@ -6,7 +6,11 @@ import os
 from noesis_kernel.contract.manifest import VerticalManifest
 
 from . import entities
-from .answer_format import MEDICAL_ANSWER_FORMAT, MEDICAL_CLINICAL_SYNTHESIS_FORMAT
+from .answer_format import (
+    MEDICAL_ANSWER_FORMAT,
+    MEDICAL_CLINICAL_SYNTHESIS_FORMAT,
+    MEDICAL_PATIENT_FORMAT,
+)
 from .vision import MEDICAL_VISION_PROMPT
 from .layman import MEDICAL_LAYMAN_PROMPT
 from .gaps import MEDICAL_GAP_PROMPT
@@ -50,6 +54,7 @@ def build_manifest() -> VerticalManifest:
         ui=MedicalUI(),
         answer_format=MEDICAL_ANSWER_FORMAT,
         clinical_answer_format=MEDICAL_CLINICAL_SYNTHESIS_FORMAT,
+        patient_answer_format=MEDICAL_PATIENT_FORMAT,
         vision_prompt=MEDICAL_VISION_PROMPT,
         layman_prompt=MEDICAL_LAYMAN_PROMPT,
         gap_prompt=MEDICAL_GAP_PROMPT,

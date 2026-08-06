@@ -556,16 +556,18 @@ async def run_react(
                 if _attempt + 1 < _COMPOSE_ATTEMPTS:
                     await asyncio.sleep(_COMPOSE_BACKOFF_S * (_attempt + 1))   # backoff for a transient error
         if text:
-            # Domain-free provenance check: if a structured directive produced an answer with a
-            # bad/absent [n] reference, retry ONCE directive-free (the proven-safe path). Best-effort:
-            # a failed fallback never overwrites the directive answer we already have.
+            # Domain-free provenance check: if a directive produced an answer with a bad/absent [n]
+            # reference, retry ONCE with the SAME directive (a fresh sample usually fixes an [n]
+            # fluke while preserving the directive's AUDIENCE/tone — a directive-free recompose would
+            # replace e.g. a patient answer with a generic clinician-toned one). Best-effort: a failed
+            # fallback never overwrites the answer we already have.
             if answer_format and not _refs_valid(text, n_findings):
                 try:
-                    alt = await _compose(None)
+                    alt = await _compose(answer_format)
                     if (alt.answer or "").strip():
                         parsed, text = alt, alt.answer.strip()
                 except Exception as _e:   # noqa: BLE001
-                    _log.warning("compose directive-free fallback failed: %r", _e)
+                    _log.warning("compose ref-retry failed: %r", _e)
             result.composed_answer = text
             # Honesty signal → coverage gap: a "grounded-on-analogues" answer still flags the gap,
             # so the UI shows the prominent fill-the-gaps affordance (LLM-owned judgment, no regex).

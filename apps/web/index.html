@@ -104,6 +104,24 @@
   .retrydeep:hover{background:var(--gold);color:var(--on-accent);}
   .retrydeep[disabled]{opacity:.5;cursor:default;}
 
+  /* audience switch — a two-segment control that reads as "who the answer is FOR", distinct from
+     the effort dial next to it (words, not a slider). */
+  .audsel{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin:.55rem 0 0;}
+  .audsel .lbl{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
+  .audsel .seg{display:inline-flex;border:1px solid var(--hair);border-radius:999px;overflow:hidden;}
+  .audsel .segbtn{font-family:var(--mono);font-size:.72rem;letter-spacing:.02em;cursor:pointer;border:0;
+    background:transparent;color:var(--muted);padding:.24rem .8rem;transition:.12s;}
+  .audsel .segbtn[aria-pressed="true"]{background:var(--gold);color:var(--on-accent);}
+  .audsel .segbtn:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+  .audsel .ahint{flex-basis:100%;font-family:var(--mono);font-size:.63rem;color:var(--muted);opacity:.85;}
+  /* audience badge on a saved session (row + detail) */
+  .audbadge{display:inline-block;font-family:var(--mono);font-size:.62rem;letter-spacing:.03em;
+    border:1px solid var(--hair);border-radius:999px;padding:.05rem .5rem;vertical-align:middle;margin-left:.4rem;color:var(--muted);}
+  .audbadge.patient{color:var(--gold);border-color:var(--gold);}
+  .sgroup{font-family:var(--mono);font-size:.64rem;text-transform:uppercase;letter-spacing:.11em;
+    color:var(--muted);margin:1.1rem .2rem .4rem;padding-bottom:.3rem;border-bottom:1px solid var(--hair);}
+  .sgroup:first-child{margin-top:.2rem;}
+
   /* image/PDF/DICOM attachments (vision) */
   button.attach{flex:none;width:44px;height:44px;border-radius:50%;cursor:pointer;background:transparent;
     border:1px solid var(--hair);color:var(--muted);display:grid;place-items:center;transition:.12s;}
@@ -605,6 +623,14 @@
       <span class="eval" id="effort-val">Standard · 1×</span>
       <span class="ehint" id="effort-hint">Standard depth. Raise it for a hard question — uses more credits and time.</span>
     </div>
+    <div class="audsel" id="audsel" role="group" aria-label="Answer audience" hidden>
+      <span class="lbl">Answering for</span>
+      <div class="seg">
+        <button type="button" class="segbtn" data-aud="clinician" aria-pressed="true">Clinician</button>
+        <button type="button" class="segbtn" data-aud="patient" aria-pressed="false">Patient</button>
+      </div>
+      <span class="ahint" id="aud-hint">Clinician view — structured, cited, for a medical audience.</span>
+    </div>
   </form>
 
   <section id="out" aria-live="polite">
@@ -692,6 +718,8 @@ let SUGGEST_ENABLED = false;// suggested follow-up questions after each answer
 let STREAM_ENABLED = false; // live agent trace via SSE (/research/stream)
 let EFFORT_ENABLED = false; // effort multiplier available (scales turns/results/depth/budget)
 let EFFORT = 1;             // current effort multiplier (1 = Standard); only sent when >1
+let PATIENT_MODE_ENABLED = false; // audience switch available (clinician vs patient answer)
+let AUDIENCE = "clinician"; // current answer audience; only sent when "patient"
 let THREAD = {session_id:null, turns:[]};   // the active conversation
 let BASE_PLACEHOLDER = "";                   // vertical console placeholder (restored on New)
 let EXAMPLES = [];                            // vertical example questions → random intake prompt
@@ -719,12 +747,19 @@ async function loadConfig(){
     SUGGEST_ENABLED = !!c.suggest_enabled;
     STREAM_ENABLED = !!c.stream_enabled;
     EFFORT_ENABLED = !!c.effort_scale_enabled;
+    PATIENT_MODE_ENABLED = !!c.patient_mode_enabled;
     VISION_ENABLED = !!c.vision_enabled;
     if(EFFORT_ENABLED){
       const wrap = $("#effort"), rng = $("#effort-range");
       wrap.hidden = false;
       rng.addEventListener("input", () => setEffort(parseFloat(rng.value)));
       setEffort(1);
+    }
+    if(PATIENT_MODE_ENABLED){
+      $("#audsel").hidden = false;
+      $("#audsel").querySelectorAll(".segbtn").forEach(b =>
+        b.addEventListener("click", () => setAudience(b.dataset.aud)));
+      setAudience("clinician");
     }
     if(VISION_ENABLED){
       $("#attach").hidden = false;
@@ -772,6 +807,18 @@ function setEffort(v){
     ? "Standard depth. Raise it for a hard question — uses more credits and time."
     : `Searches ~${EFFORT}× as hard (more turns, evidence & citations) — more credits and time.`;
 }
+// Audience switch: clinician (default, structured + cited) vs patient (plain-language, same evidence).
+function setAudience(a){
+  AUDIENCE = (a === "patient") ? "patient" : "clinician";
+  const sel = $("#audsel");
+  if(sel) sel.querySelectorAll(".segbtn").forEach(b =>
+    b.setAttribute("aria-pressed", b.dataset.aud === AUDIENCE ? "true" : "false"));
+  const hint = $("#aud-hint");
+  if(hint) hint.textContent = AUDIENCE === "patient"
+    ? "Patient view — plain language for a non-expert, same evidence and accuracy."
+    : "Clinician view — structured, cited, for a medical audience.";
+}
+const audienceName = a => (a === "patient" ? "Patient" : "Clinician");
 
 function esc(s){const d=document.createElement("div");d.textContent=s??"";return d.innerHTML;}
 
@@ -911,7 +958,8 @@ function render(data, target, opts){
     if(data.layman_answer){
       parts.push(`<details class="plain plain-d"><summary class="plain-h">◍ In plain language</summary>
         <div class="plain-b md">${mdToHtml(data.layman_answer)}</div></details>`);
-    } else if(LAYMAN_ENABLED && data.grounded){
+    } else if(LAYMAN_ENABLED && data.grounded && data.audience !== "patient"){
+      // In patient mode the answer is ALREADY plain-language, so the re-explain button is redundant.
       parts.push(`<div class="plain" id="plain">
         <button type="button" class="vbtn" id="plaingo">◍ Explain in plain language</button>
         <div class="plain-hint">The same answer, re-explained for a patient — plain words, same essence, no new claims.</div>
@@ -1167,6 +1215,7 @@ async function loadSharedSession(id){
     const row = await r.json();
     CURRENT_Q = row.question;
     const thread = row.thread || [];
+    if(PATIENT_MODE_ENABLED) setAudience(row.audience || "clinician");   // continue in the same audience
     if(CONV_ENABLED && thread.length){          // resume the shared conversation (continuable)
       THREAD = {session_id:id, turns:thread.slice()};
       q.value=""; q.style.height="auto"; q.setAttribute("placeholder","");
@@ -1324,6 +1373,7 @@ $("#ask").addEventListener("submit", e=>{
 // ---- live agent trace (SSE) ----
 function traceLine(ev){
   if(ev.type==="effort")    return `<div class="tstep">⚡ Digging deeper — ${effortTier(ev.effort).name} · ${ev.effort}× effort</div>`;
+  if(ev.type==="audience")  return `<div class="tstep">🧑‍⚕️ Answering for a ${ev.audience==="patient"?"patient":"clinician"}</div>`;
   if(ev.type==="step")      return `<div class="tstep">▸ Step ${ev.step}</div>`;
   if(ev.type==="search")    return `<div class="tstep">🔎 Searching <span class="tq">${esc(ev.query||"")}</span>${(ev.variants&&ev.variants.length)?` <span class="tvar">+${ev.variants.length} reformulations</span>`:""}</div>`;
   if(ev.type==="found")     return `<div class="tstep">📥 Found <b>${ev.total}</b> passage${ev.total===1?"":"s"}${(ev.sources&&ev.sources.length)?` <span class="tvar">${ev.sources.map(esc).join(" · ")}</span>`:""}</div>`;
@@ -1379,6 +1429,7 @@ async function askQuestion(question){
   const conv = CONV_ENABLED;
   const payload = {question, tenant_id:"demo", sources: chosen()};
   if(EFFORT_ENABLED && EFFORT > 1) payload.effort = EFFORT;
+  if(PATIENT_MODE_ENABLED && AUDIENCE === "patient") payload.audience = "patient";
   if(ATTACHMENTS.length) payload.attachments = ATTACHMENTS.slice();
   if(USER){ payload.user_name = USER.name; payload.user_email = USER.email; }
   if(conv){
@@ -1566,10 +1617,11 @@ async function loadSessionList(){
   try{
     const {sessions} = await (await fetch("/sessions?tenant_id=demo&limit=200&q="+encodeURIComponent(q))).json();
     if(!sessions || !sessions.length){ slist.innerHTML = `<div class="sempty">${q?"No matching sessions.":"No saved questions yet."}</div>`; return; }
-    slist.innerHTML = sessions.map(s=>{
+    const rowHtml = s => {
       const who = s.user_name || s.user_email;
+      const isPat = (s.audience||"clinician") === "patient";
       return `<button class="srow" data-id="${esc(s.id)}">
-        <div class="sq">${esc(s.question)}</div>
+        <div class="sq">${esc(s.question)}${PATIENT_MODE_ENABLED && isPat?`<span class="audbadge patient">Patient</span>`:""}</div>
         <div class="sm">
           ${who?`<span class="swho">${esc(who)}</span>`:""}
           ${s.grounded?'<span class="sg">✓ grounded</span>':'<span>ungrounded</span>'}
@@ -1577,7 +1629,17 @@ async function loadSessionList(){
           ${s.n_attach?`<span>📎 ${s.n_attach}</span>`:""}
           <span>${new Date(s.created_at).toLocaleDateString()}</span>
         </div></button>`;
-    }).join("");
+    };
+    if(PATIENT_MODE_ENABLED){
+      // Segment history into the two audience groups the user asked for.
+      const groups = [["clinician","Clinician Driven Q&A"], ["patient","Patient Driven Q&A"]];
+      slist.innerHTML = groups.map(([key,label])=>{
+        const rows = sessions.filter(s => (s.audience||"clinician") === key);
+        return rows.length ? `<div class="sgroup">${label}</div>` + rows.map(rowHtml).join("") : "";
+      }).join("");
+    } else {
+      slist.innerHTML = sessions.map(rowHtml).join("");
+    }
     slist.querySelectorAll(".srow").forEach(b=>b.addEventListener("click",()=>selectSession(b)));
     const first = slist.querySelector(".srow");    // desktop split shows the most recent by default;
     if(first && !isMobileSess()) selectSession(first);   // mobile stays on the list until a tap
@@ -1596,6 +1658,10 @@ function showSessionDetail(row, rowEl){
           <button type="button" class="sdel" id="sdel" title="Delete session">🗑 Delete</button></span></div>
       <div class="qm">${who?`Asked by <b>${esc(row.user_name||"")}</b>${row.user_email?" · "+esc(row.user_email):""} · `:""}${fmtDate(row.created_at)}${turns.length>1?` · ${turns.length} turns`:""}</div>
     </div><div id="sdbody"></div>`;
+  if(PATIENT_MODE_ENABLED && (row.audience||"clinician") === "patient"){
+    const hq = sdetail.querySelector(".qq");
+    if(hq) hq.insertAdjacentHTML("beforeend", ` <span class="audbadge patient">Patient</span>`);
+  }
   const sdbody = $("#sdbody");
   turns.forEach((t,i)=>{
     const block = document.createElement("div"); block.className = "turn";
@@ -1626,6 +1692,7 @@ function showSessionDetail(row, rowEl){
   const del = $("#sdel"); if(del) del.addEventListener("click", ()=>deleteSession(row.id, rowEl));
   const cont = $("#scont"); if(cont) cont.addEventListener("click", ()=>{   // resume as a live thread
     THREAD = {session_id: row.id, turns: turns.slice()};
+    if(PATIENT_MODE_ENABLED) setAudience(row.audience || "clinician");   // keep the thread's audience
     closeSessions();
     q.value=""; q.style.height="auto"; q.setAttribute("placeholder","");
     renderThread(); window.scrollTo({top:0}); q.focus();

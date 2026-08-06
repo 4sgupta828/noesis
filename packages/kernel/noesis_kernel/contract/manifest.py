@@ -62,6 +62,12 @@ class VerticalManifest:
     # Opaque prose; the kernel threads it in exactly like `answer_format`. None → fall back to
     # `answer_format` (so the flag is a no-op for verticals that don't supply this).
     clinical_answer_format: str | None = None
+    # Optional PATIENT-audience answer_format, selected per request when the asker chooses the
+    # patient view (flag NOESIS_PATIENT_MODE). Composes from the SAME verified findings — same gates —
+    # but in plain patient-facing language with the accuracy guardrails baked in. Opaque prose threaded
+    # exactly like `answer_format`. None → the vertical has no patient view (patient mode falls back to
+    # the clinician directive), so the flag is a safe no-op for verticals that don't supply this.
+    patient_answer_format: str | None = None
     # Optional vertical-supplied instruction for the VISION pre-step: how to DESCRIBE a
     # user-uploaded image (color/shape/borders/texture/distribution), producing a labeled
     # visual observation — never a diagnosis. Opaque prose; the kernel only threads it into

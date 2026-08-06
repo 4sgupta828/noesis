@@ -49,6 +49,7 @@ ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS attachments JSONB N
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS layman_answer TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS deleted BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS thread JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS audience TEXT NOT NULL DEFAULT 'clinician';
 CREATE INDEX IF NOT EXISTS idx_nrs_vertical_tenant_created
     ON noesis_research_session (vertical, tenant_id, created_at DESC);
 """
@@ -86,7 +87,8 @@ class SessionStore:
                    coverage_gaps: list[str], rejected: int, sources: list[str] | None,
                    user_name: str | None = None, user_email: str | None = None,
                    visual_observation: str | None = None,
-                   attachments: list[dict] | None = None) -> str:
+                   attachments: list[dict] | None = None,
+                   audience: str = "clinician") -> str:
         await self._ensure()
         sid = uuid.uuid4().hex
         # turn 0 also lives in `thread` so a conversation is one shareable row; the flat columns
@@ -94,33 +96,39 @@ class SessionStore:
         turn0 = {"question": question, "answer": answer, "grounded": grounded, "claims": claims,
                  "source_stats": source_stats, "coverage_gaps": coverage_gaps, "rejected": rejected,
                  "visual_observation": visual_observation, "attachments": attachments or []}
+        if audience and audience != "clinician":
+            turn0["audience"] = audience     # per-turn tag; the flat column drives list segmentation
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             await conn.execute(
                 """INSERT INTO noesis_research_session
                    (id, vertical, tenant_id, workspace_id, question, answer, grounded, claims,
                     source_stats, coverage_gaps, rejected, sources, user_name, user_email,
-                    visual_observation, attachments, thread)
+                    visual_observation, attachments, thread, audience)
                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12::jsonb,
-                           $13,$14,$15,$16::jsonb,$17::jsonb)""",
+                           $13,$14,$15,$16::jsonb,$17::jsonb,$18)""",
                 sid, self._vertical, tenant_id, workspace_id, question, answer, grounded,
                 json.dumps(claims), json.dumps(source_stats), json.dumps(coverage_gaps),
                 rejected, json.dumps(sources or []),
                 (user_name or None), (user_email or None),
                 (visual_observation or None), json.dumps(attachments or []),
-                json.dumps([turn0]),
+                json.dumps([turn0]), (audience or "clinician"),
             )
         return sid
 
-    async def append_turn(self, session_id: str, turn: dict) -> bool:
-        """Append a follow-up turn to a conversation thread (in place). Returns True if it matched."""
+    async def append_turn(self, session_id: str, turn: dict, *, audience: str = "clinician") -> bool:
+        """Append a follow-up turn to a conversation thread (in place). Returns True if it matched.
+
+        AUDIENCE-GUARDED: only appends when the session's audience matches `audience`. A mismatch
+        (e.g. the asker toggled clinician→patient mid-thread) returns False, so the caller saves a
+        FRESH session instead of corrupting a thread that mixes audiences."""
         await self._ensure()
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             res = await conn.execute(
                 "UPDATE noesis_research_session SET thread = thread || $3::jsonb "
-                "WHERE id=$1 AND vertical=$2 AND NOT deleted",
-                session_id, self._vertical, json.dumps([turn]))
+                "WHERE id=$1 AND vertical=$2 AND NOT deleted AND audience=$4",
+                session_id, self._vertical, json.dumps([turn]), (audience or "clinician"))
         return res.endswith("1")
 
     async def save_layman(self, session_id: str, text: str) -> bool:
@@ -154,7 +162,7 @@ class SessionStore:
         return res.endswith("1")   # "UPDATE 1" when a row matched
 
     async def list(self, *, tenant_id: str, limit: int = 50,
-                   q: str | None = None) -> list[dict[str, Any]]:
+                   q: str | None = None, audience: str | None = None) -> list[dict[str, Any]]:
         await self._ensure()
         pool = await self._get_pool()
         # optional full-text-ish search over the question + asker (name/email)
@@ -164,11 +172,14 @@ class SessionStore:
             params.append(f"%{q.strip()}%")
             where += (f" AND (question ILIKE ${len(params)} OR user_name ILIKE ${len(params)}"
                       f" OR user_email ILIKE ${len(params)})")
+        if audience in ("clinician", "patient"):
+            params.append(audience)
+            where += f" AND audience=${len(params)}"
         params.append(limit)
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 f"""SELECT id, question, grounded, video_filename, user_name, user_email,
-                           jsonb_array_length(attachments) AS n_attach, created_at
+                           jsonb_array_length(attachments) AS n_attach, audience, created_at
                     FROM noesis_research_session
                     WHERE {where} ORDER BY created_at DESC LIMIT ${len(params)}""",
                 *params)
@@ -176,6 +187,7 @@ class SessionStore:
             "id": r["id"], "question": r["question"], "grounded": r["grounded"],
             "has_video": bool(r["video_filename"]), "n_attach": r["n_attach"] or 0,
             "user_name": r["user_name"], "user_email": r["user_email"],
+            "audience": r["audience"] or "clinician",
             "created_at": r["created_at"].isoformat(),
         } for r in rows]
 
@@ -226,5 +238,6 @@ class SessionStore:
             "attachments": _j(r["attachments"], []),
             "layman_answer": r["layman_answer"],
             "thread": _j(r["thread"], []),
+            "audience": r["audience"] or "clinician",
             "created_at": r["created_at"].isoformat(),
         }

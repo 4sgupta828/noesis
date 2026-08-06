@@ -121,3 +121,48 @@ an efficacy or safety figure, an adverse effect, enrollment, or a phase/status.
 — e.g. why one line of evidence outranks another, or a "designed to test" vs "found" distinction.
 - [[K]]…[[/K]] KEY CONTEXT: the population, subgroup, timeframe, condition, or caveat that scopes \
 a claim and must not be overlooked."""
+
+
+# PATIENT-audience variant (flag NOESIS_PATIENT_MODE, default OFF — Rule 20 A/B seam). Selected per
+# request when the asker chooses "Patient" instead of the default "Clinician". It composes the answer
+# for a PATIENT directly from the SAME span-verified findings (identical retrieval + provenance gate),
+# so it changes only HOW the grounded facts are explained, never WHICH facts. The safety scaffolding of
+# the clinician format (efficacy/safety/population/evidence-quality/what-is-NOT-shown) is preserved as
+# plain-language REQUIREMENTS, not clinical headings — because "explain simply" is exactly the
+# instruction most likely to drop a caveat, round away a number, or soften a risk, and the span gate
+# CANNOT catch an omission (it only checks that emitted quotes exist). Inline [n] is mandated as
+# forcefully as the clinician format so evidence stays traceable and the compose ref-check never trips.
+MEDICAL_PATIENT_FORMAT = """\
+Write the answer for a PATIENT — a thoughtful person with no medical training — in plain, warm, \
+everyday language. You are the same clinician who reviewed the evidence, now explaining it to your \
+patient so they genuinely understand their issue and what the evidence says about the options, \
+investigations, or next steps. Use ONLY the verified findings above; do not add any fact, number, \
+drug, outcome, or reassurance that is not in them.
+
+NON-NEGOTIABLE accuracy rules (a simpler answer must never become a less accurate one):
+- Keep EVERY number, dose, rate, percentage, and timeframe exactly as a finding states it — never \
+round it away or replace it with a vague word ("often", "a lot", "usually") when the finding gives a \
+figure.
+- Preserve ALL uncertainty and everything the evidence does NOT show. If the findings don't answer \
+part of the question, say so plainly — do not fill the gap with general knowledge or optimism.
+- Do NOT reassure, promise, or downplay a risk beyond what the findings actually say. Report the \
+reported harms and side effects, not just the benefits.
+- This is general understanding of the research evidence, NOT personal medical advice. Gently remind \
+the reader to discuss their own situation with their own doctor.
+- Every factual sentence must still carry an inline [n] citation to the finding it comes from (so it \
+stays checkable). Do not stack repeated [n] on one point; cite once with the strongest source.
+
+How to make it understandable (structure ADAPTIVELY — use only what the findings support; short, \
+clear paragraphs or simple points, plain sentences, no clinical section headings):
+- Start with the bottom line in one or two plain sentences that directly answer the question [n].
+- Explain what the evidence shows about the options / solution / investigation, and what it means for \
+someone in this situation — in everyday terms [n]. The FIRST time an unavoidable medical term appears, \
+explain it in a few plain words (e.g. "an infarct — an area of tissue damaged by loss of blood flow").
+- Be honest about the side effects or risks the evidence reports, and about how strong or limited the \
+evidence is (e.g. "this comes from a single small study" or "this is early research"), in words a \
+non-expert follows [n].
+- Say plainly what the evidence does NOT cover for this question, so the reader knows the limits.
+- Close with a brief, non-alarming reminder to talk it through with their own doctor.
+
+Keep it warm, clear, and concise. Do not use the [[F]]/[[R]]/[[K]] highlight markers — they are for \
+the clinician view, not patients."""

@@ -81,6 +81,21 @@ def effort_scale_enabled() -> bool:
 EFFORT_STOPS = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
 
 
+def patient_mode_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, a request may choose audience='patient' to get a
+    patient-facing answer (same evidence + gates, a plain-language compose directive). OFF → audience
+    is forced 'clinician' and the toggle/echo are hidden (byte-identical to today)."""
+    return os.environ.get("NOESIS_PATIENT_MODE", "").lower() in ("1", "true", "yes")
+
+
+def _resolve_audience(audience: str | None) -> str:
+    """The audience actually used: 'patient' only when the flag is on AND explicitly requested;
+    everything else → 'clinician' (the default, byte-identical path)."""
+    if patient_mode_enabled() and (audience or "").lower() == "patient":
+        return "patient"
+    return "clinician"
+
+
 # Available source countries, echoed to /config when the flag is on (UI renders the toggle from this).
 AVAILABLE_COUNTRIES = [{"code": "US", "label": "United States"}, {"code": "IN", "label": "India"}]
 
@@ -123,6 +138,7 @@ class ResearchIn(BaseModel):
     session_id: str | None = None         # thread to append this turn to (conversation)
     countries: list[str] | None = None    # source-country scope (e.g. ["IN"]); None/[]=all (see flag)
     effort: float = Field(default=1.0, ge=1.0, le=2.5)   # effort multiplier; ignored unless flag on
+    audience: str = "clinician"           # "clinician" (default) | "patient"; ignored unless flag on
 
 
 class SuggestIn(BaseModel):
@@ -185,6 +201,7 @@ class ResearchOut(BaseModel):
     visual_observation: str = ""     # labeled AI image description (context, NOT a finding)
     attachment_notes: list[str] = [] # anything skipped when reading attachments
     effort: float | None = None      # resolved effort multiplier (only set when the flag is on)
+    audience: str | None = None      # resolved audience 'clinician'|'patient' (only set when flag on)
 
 
 def build_default_service() -> ResearchService:
@@ -247,7 +264,12 @@ def build_default_service() -> ResearchService:
         claims_first=claims_first, extraction_lenses=getattr(manifest, "extraction_lenses", ()),
         evidence_select=evidence_select, atom_cap=atom_cap,
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
-        answer_format=answer_format, vision_prompt=vision_prompt,
+        answer_format=answer_format,
+        # Patient directive resolved INDEPENDENTLY of structured_answers/clinical_synthesis — the
+        # patient view selects it per-request by audience, so it must be available even when the
+        # clinician structured-answer flags are off (else patient mode would silently no-op).
+        patient_answer_format=(manifest.patient_answer_format if patient_mode_enabled() else None),
+        vision_prompt=vision_prompt,
         layman_prompt=manifest.layman_prompt, gap_prompt=gap_prompt,
         suggest_prompt=suggest_prompt,
         vertical_name=manifest.name, ui=manifest.ui,
@@ -384,6 +406,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "countries": AVAILABLE_COUNTRIES if country_scope_enabled() else [],
             "effort_scale_enabled": effort_scale_enabled(),
             "effort_stops": EFFORT_STOPS if effort_scale_enabled() else [],
+            "patient_mode_enabled": patient_mode_enabled(),
         }
 
     @app.post("/search")
@@ -462,13 +485,17 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         history = body.history if conversation_enabled() else None
         # Effort is HONORED only when the flag is on; otherwise forced to 1.0 (byte-identical no-op).
         effort = body.effort if effort_scale_enabled() else 1.0
+        # Audience is HONORED only when the flag is on; otherwise forced 'clinician' (byte-identical).
+        audience = _resolve_audience(body.audience)
         if on_event is not None and effort > 1.0:
             await on_event({"type": "effort", "effort": effort})
+        if on_event is not None and audience == "patient":
+            await on_event({"type": "audience", "audience": audience})
         res = await app.state.service.ask(
             question=body.question, tenant_id=body.tenant_id,
             workspace_id=body.workspace_id, source_keys=body.sources,
             images=images, documents=docs, history=history, on_event=on_event,
-            facets=_country_facets(body.countries), effort=effort)
+            facets=_country_facets(body.countries), effort=effort, audience=audience)
         ui = getattr(app.state.service, "ui", None)
         def _url(c):
             fn = getattr(ui, "source_url", None)
@@ -492,9 +519,13 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     "visual_observation": res.visual_observation, "attachments": previews}
             if effort_scale_enabled():
                 turn["effort"] = res.effort    # per-turn badge on the session (JSONB, no migration)
+            if patient_mode_enabled():
+                turn["audience"] = audience    # per-turn audience tag (only under the flag)
             try:
+                # Audience-guarded append: only continue a thread whose audience MATCHES this turn's
+                # (mid-thread toggle → mismatch → save a fresh session instead of corrupting the thread).
                 if conversation_enabled() and body.session_id and \
-                        await store.append_turn(body.session_id, turn):
+                        await store.append_turn(body.session_id, turn, audience=audience):
                     session_id = body.session_id
                 else:
                     session_id = await store.save(
@@ -504,7 +535,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                         source_stats=res.source_stats, coverage_gaps=res.coverage_gaps,
                         rejected=len(res.rejected_claims), sources=body.sources,
                         user_name=body.user_name, user_email=body.user_email,
-                        visual_observation=res.visual_observation, attachments=previews)
+                        visual_observation=res.visual_observation, attachments=previews,
+                        audience=audience)
             except Exception:
                 session_id = None
         return ResearchOut(
@@ -515,6 +547,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             retried_empty=res.retried_empty, visual_observation=res.visual_observation,
             attachment_notes=attach_notes,
             effort=res.effort if effort_scale_enabled() else None,
+            audience=audience if patient_mode_enabled() else None,
         )
 
     @app.post("/research/stream")
@@ -733,13 +766,17 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         return {"queued": len(ids), "jobs": len(jobs)}
 
     @app.get("/sessions")
-    async def list_sessions(tenant_id: str = "demo", limit: int = 100, q: str = "") -> dict:
-        """Recent saved Q&A for this vertical + tenant (history), optional search `q`."""
+    async def list_sessions(tenant_id: str = "demo", limit: int = 100, q: str = "",
+                            audience: str = "") -> dict:
+        """Recent saved Q&A for this vertical + tenant (history), optional search `q` and, when the
+        patient-mode flag is on, an optional audience filter ('clinician'|'patient')."""
         store = _store()
         if store is None:
             return {"sessions": []}
+        aud = audience if (patient_mode_enabled() and audience in ("clinician", "patient")) else None
         try:
-            return {"sessions": await store.list(tenant_id=tenant_id, limit=min(limit, 300), q=q or None)}
+            return {"sessions": await store.list(tenant_id=tenant_id, limit=min(limit, 300),
+                                                 q=q or None, audience=aud)}
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"session store error: {e}") from e
 

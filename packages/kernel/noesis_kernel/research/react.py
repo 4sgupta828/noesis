@@ -856,6 +856,25 @@ async def run_react(
                         parsed, text = alt, alt.answer.strip()
                 except Exception as _e:   # noqa: BLE001
                     _log.warning("compose ref-retry failed: %r", _e)
+            # Reasoning-read reliability: the model sometimes writes the prose answer but SKIPS the
+            # structured reasoning fields (worse on dense, table-heavy answers with a long directive) —
+            # so the reasoning section is missing on some turns and present on others. When it's asked
+            # for but absent, recompose ONCE and GRAFT the reasoning onto the existing answer (the
+            # findings are fixed, so the retry's reasoning rests on the same evidence). Answer prose is
+            # preserved; only the missing reasoning fields are filled.
+            if reasoning_read and not (getattr(parsed, "interpretation", None)
+                                       or getattr(parsed, "confidence", None)):
+                if diag is not None:
+                    diag["retries"]["reasoning_retry"] = True
+                try:
+                    alt = await _compose(answer_format)
+                    if getattr(alt, "interpretation", None) or getattr(alt, "confidence", None):
+                        parsed.interpretation = alt.interpretation
+                        parsed.confidence = alt.confidence
+                        parsed.reasoning_purpose = alt.reasoning_purpose
+                        parsed.reasoning_conclusion = alt.reasoning_conclusion
+                except Exception as _e:   # noqa: BLE001 — best-effort; a failed retry leaves the answer intact
+                    _log.warning("compose reasoning-retry failed: %r", _e)
             result.composed_answer = text
             # Grounded charts: keep only bars whose figure appears in the cited finding (drop the whole
             # chart otherwise). Empty when the charts flag isn't driving the directive → no-op.

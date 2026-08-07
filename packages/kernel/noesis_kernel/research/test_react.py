@@ -377,6 +377,31 @@ def test_reasoning_conclusion_with_fabricated_number_is_dropped(monkeypatch):
     assert res.reasoning_conclusion == ""                                 # fabricated figure → dropped
 
 
+def test_reasoning_retry_grafts_missing_reasoning(monkeypatch):
+    # Reliability: the first compose writes the answer but SKIPS the reasoning fields (the Q2 bug);
+    # a retry supplies them and they're grafted onto the existing answer.
+    import noesis_kernel.research.react as react
+    monkeypatch.setattr(react, "_COMPOSE_BACKOFF_S", 0)
+    from noesis_kernel.research.react import (
+        ComposedAnswer, InterpretationItem, ConfidenceRead, ConfidenceDim)
+    src, make = _compose_setup()
+    def compose_fn(call_n):
+        if call_n == 1:   # first compose: good answer, NO reasoning (the failure mode)
+            return LLMResult(parsed=ComposedAnswer(answer="Metric value is 9.8 percent [1]."), output_tokens=5)
+        return LLMResult(parsed=ComposedAnswer(   # retry: supplies reasoning
+            answer="Metric value is 9.8 percent [1].",
+            reasoning_purpose="Whether the value is reliable.",
+            interpretation=[InterpretationItem(text="single source", kind="gap", basis_findings=[1])],
+            confidence=ConfidenceRead(factual=ConfidenceDim(level="low"))), output_tokens=5)
+    llm = make(compose_fn)
+    res = asyncio.run(run_react(question="what was the metric value?", llm=llm,
+        embedder=FakeEmbedder(dim=8), source=src, tenant_id="A",
+        budget=BudgetState(max_calls=20), reasoning_read=True))
+    assert res.composed_answer == "Metric value is 9.8 percent [1]."   # answer preserved
+    assert len(res.interpretation) == 1 and res.confidence   # reasoning grafted from the retry
+    assert llm.compose_calls == 2
+
+
 def test_reasoning_read_off_is_noop(monkeypatch):
     # OFF path (default): even if the model volunteers interpretation/confidence, the result surfaces
     # NEITHER — byte-identical to the pre-flag answer (Rule 20).

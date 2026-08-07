@@ -246,6 +246,28 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
 
     result.synthesis = text
     result.claims = [_vc_dict(vc) for vc in verified]
+    # The combined compose reliably malforms the structured `interpretation` (it's redundant with the
+    # "How the panel reasoned" prose) and the provider then drops it — leaving only Purpose. Recover it
+    # with ONE focused reasoning-read compose (a simpler task the model gets right). Only fires when needed.
+    if not (getattr(parsed, "interpretation", None) or []):
+        rr_user = (
+            f"ANSWER (already written by the panel):\n{text}\n\nVERIFIED FINDINGS (the ONLY citable facts):\n"
+            f"{findings}\n\nProduce ONLY the Reasoning Read for this answer — no new answer. Fill: "
+            "`reasoning_purpose` (the decision the panel is helping make); 2–5 `interpretation` factors "
+            "(each a JUDGMENT that rests on finding numbers via `basis_findings`, using no number absent "
+            "from the findings); `reasoning_conclusion` (the panel's informed judgment); and the "
+            "3-dimension `confidence`. Put a single space in `answer` (it is ignored here).")
+        try:
+            rr = (await llm.complete(system=chair_system_prompt,
+                                     messages=[{"role": "user", "content": rr_user}],
+                                     response_format=ComposedAnswer, max_tokens=1600)).parsed
+            if getattr(rr, "interpretation", None):
+                parsed.interpretation = rr.interpretation
+                parsed.confidence = getattr(rr, "confidence", None) or getattr(parsed, "confidence", None)
+                parsed.reasoning_purpose = getattr(rr, "reasoning_purpose", "") or getattr(parsed, "reasoning_purpose", "")
+                parsed.reasoning_conclusion = getattr(rr, "reasoning_conclusion", "") or getattr(parsed, "reasoning_conclusion", "")
+        except Exception as e:   # noqa: BLE001 — best-effort; the answer already stands
+            _log.warning("panel reasoning-read recovery failed: %r", e)
     # Grounding guards over the pooled findings — identical discipline to run_react's compose.
     result.interpretation = _validate_interpretation(getattr(parsed, "interpretation", []) or [], verified)
     conf = getattr(parsed, "confidence", None)

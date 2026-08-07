@@ -435,12 +435,19 @@
   .panelhist{margin-top:2.4rem;border-top:1px solid var(--hair);padding-top:1.2rem;}
   .panelhist-h{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.7rem;}
   .panelhist-l{display:flex;flex-direction:column;gap:.4rem;}
-  .panelhist-row{display:flex;align-items:baseline;gap:.8rem;justify-content:space-between;text-align:left;
-    background:var(--panel2);border:1px solid var(--hair);border-radius:9px;padding:.6rem .8rem;cursor:pointer;
-    font:inherit;transition:border-color .15s;}
+  .panelhist-row{display:flex;align-items:stretch;gap:.4rem;background:var(--panel2);border:1px solid var(--hair);
+    border-radius:9px;overflow:hidden;transition:border-color .15s;}
   .panelhist-row:hover{border-color:rgba(var(--gold-rgb),.5);}
+  .panelhist-row .ph-open{flex:1;display:flex;align-items:baseline;gap:.8rem;justify-content:space-between;
+    text-align:left;background:transparent;border:none;cursor:pointer;font:inherit;padding:.6rem .8rem;}
   .panelhist-row .ph-q{color:var(--ink);font-size:.88rem;line-height:1.4;}
   .panelhist-row .ph-m{font-family:var(--mono);font-size:.66rem;color:var(--muted);flex:none;}
+  .panelhist-row .ph-del{flex:none;background:transparent;border:none;border-left:1px solid var(--hair);cursor:pointer;
+    color:var(--muted);font-size:.85rem;padding:0 .7rem;opacity:.6;transition:opacity .15s, color .15s;}
+  .panelhist-row .ph-del:hover{opacity:1;color:#c0392b;}
+  .panelbtn.danger{border-color:var(--hair);color:var(--muted);}
+  .panelbtn.danger:hover{background:#c0392b;border-color:#c0392b;color:#fff;}
+  .spec-ev-l li.ev-hl{background:rgba(var(--gold-rgb),.14);border-radius:6px;transition:background .3s;}
   .panelstatus{max-width:760px;margin:2rem auto;text-align:center;color:var(--muted);font-size:.95rem;line-height:1.6;}
   .panelstatus .spin,.psynthstat .spin{display:inline-block;margin-right:.5rem;animation:spin 1.1s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
@@ -2130,13 +2137,21 @@ async function loadPanelHistory(){
     const {sessions} = await (await fetch("/sessions?tenant_id=demo&limit=100")).json();
     const panels = (sessions||[]).filter(s=>s.kind==="panel");
     if(!panels.length){ wrap.hidden = true; return; }
-    list.innerHTML = panels.map(s=>`<button type="button" class="panelhist-row" data-id="${esc(s.id)}">
-        <span class="ph-q">${esc(s.question)}</span>
-        <span class="ph-m">${new Date(s.created_at).toLocaleDateString()}</span></button>`).join("");
-    list.querySelectorAll(".panelhist-row").forEach(b=>b.addEventListener("click", async ()=>{
-      try{ const row = await (await fetch("/sessions/"+encodeURIComponent(b.dataset.id))).json(); openPanelSession(row); }
-      catch(e){}
-    }));
+    list.innerHTML = panels.map(s=>`<div class="panelhist-row" data-id="${esc(s.id)}">
+        <button type="button" class="ph-open"><span class="ph-q">${esc(s.question)}</span>
+          <span class="ph-m">${new Date(s.created_at).toLocaleDateString()}</span></button>
+        <button type="button" class="ph-del" title="Delete discussion" aria-label="Delete discussion">🗑</button></div>`).join("");
+    list.querySelectorAll(".panelhist-row").forEach(row=>{
+      const id = row.dataset.id;
+      row.querySelector(".ph-open").addEventListener("click", async ()=>{
+        try{ const r = await (await fetch("/sessions/"+encodeURIComponent(id))).json(); openPanelSession(r); }catch(e){}
+      });
+      row.querySelector(".ph-del").addEventListener("click", async (e)=>{
+        e.stopPropagation();
+        if(!confirm("Delete this panel discussion?")) return;
+        try{ const r = await fetch("/sessions/"+encodeURIComponent(id), {method:"DELETE"}); if(r.ok) row.remove(); if(!list.children.length) wrap.hidden=true; }catch(_){}
+      });
+    });
     wrap.hidden = false;
   }catch(e){ wrap.hidden = true; }
 }
@@ -2237,7 +2252,7 @@ function panelTakeHtml(t){
     return c.url ? `<a class="srclink" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer" title="Open source in a new tab">${lbl} ↗</a>`
                  : (c.source ? `<span class="spec-cs">${lbl}</span>` : ""); };
   const ev = cl.length ? `<div class="spec-ev"><div class="spec-ev-h">Evidence · ${cl.length}</div>
-    <ol class="spec-ev-l">${cl.map(c=>`<li><span class="spec-cq">${esc(c.quote||c.text||"")}</span> ${cite(c)}</li>`).join("")}</ol></div>` : "";
+    <ol class="spec-ev-l">${cl.map((c,i)=>`<li data-ev="${i+1}"><span class="spec-cq">${esc(c.quote||c.text||"")}</span> ${cite(c)}</li>`).join("")}</ol></div>` : "";
   const why = t.rationale ? `<div class="spec-why"><span class="spec-why-l">Convened for</span> ${esc(t.rationale)}</div>` : "";
   return `<details class="spec"><summary class="spec-h"><span class="spec-name">${esc(t.specialty)}</span>${badge}<span class="spec-toggle"></span></summary>
     <div class="spec-b">${why}<div class="answer md">${bodyHtml}</div>${ev}</div></details>`;
@@ -2259,13 +2274,14 @@ function renderPanelConversation(){
     <div class="panelhead">◈ Panel Case Conference <span class="panelmeta">${PANEL_THREAD.ids.length} specialist${PANEL_THREAD.ids.length===1?"":"s"} · ${PANEL_THREAD.turns.length} turn${PANEL_THREAD.turns.length===1?"":"s"}</span>${link}</div>
     <div class="panelturns">${turns}</div>
     <div class="panellive" id="panellive"></div>
-    <div class="panelfollow" id="panelfollow" hidden>
+    <div class="panelfollow" id="panelfollow" ${PANEL_THREAD.turns.length ? "" : "hidden"}>
       <div class="pf-row">
-        <textarea class="panelq" id="pfq" rows="1" placeholder="Ask the panel a follow-up…"></textarea>
+        <textarea class="panelq" id="pfq" rows="1" placeholder="Continue the discussion — ask the panel a follow-up…"></textarea>
         <button type="button" class="go pf-go" id="pfgo" aria-label="Ask the panel">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
       </div>
-      <div class="pf-actions"><button type="button" class="panelbtn" onclick="renderPanelLanding('')">＋ New case</button></div>
+      <div class="pf-actions"><button type="button" class="panelbtn" onclick="renderPanelLanding('')">＋ New case</button>
+        ${PANEL_THREAD.session_id ? `<button type="button" class="panelbtn danger" id="pdel">🗑 Delete discussion</button>` : ""}</div>
     </div>`;
   // render each completed turn's deliberation with the full machinery (reasoning read + evidence panel)
   PANEL_THREAD.turns.forEach((t,i)=>{
@@ -2283,7 +2299,36 @@ function renderPanelConversation(){
   if(PANEL_THREAD.session_id){
     setPanelHash(PANEL_THREAD.session_id);
     const pl = $("#plink"); if(pl) pl.addEventListener("click", e=>copyLinkUrl(panelUrl(PANEL_THREAD.session_id), e.currentTarget));
+    const pd = $("#pdel"); if(pd) pd.addEventListener("click", ()=>deletePanelSession(PANEL_THREAD.session_id));
   }
+  wirePanelRefs();
+}
+// A specialist's [n] citation scrolls to (and highlights) its evidence item BELOW that specialist's take.
+// Delegated once on the stable #panelbody; scoped to .spec so it never touches the synthesis citations.
+let _panelRefsWired = false;
+function wirePanelRefs(){
+  if(_panelRefsWired) return;
+  const bodyEl = pbody(); if(!bodyEl) return;
+  _panelRefsWired = true;
+  bodyEl.addEventListener("click", e=>{
+    const ref = e.target.closest(".ref"); if(!ref) return;
+    const spec = ref.closest(".spec"); if(!spec) return;   // only specialist refs; synthesis refs are handled by render()
+    e.preventDefault();
+    spec.open = true;                                       // expand the section if collapsed
+    const n = parseInt(ref.dataset.n, 10);
+    const li = spec.querySelector(`.spec-ev-l > li[data-ev="${n}"]`);
+    if(li){ li.scrollIntoView({behavior:"smooth", block:"center"});
+      li.classList.add("ev-hl"); setTimeout(()=>li.classList.remove("ev-hl"), 1700); }
+  });
+}
+// Delete a saved panel discussion (soft-delete via the shared endpoint), then return to the panel home.
+async function deletePanelSession(id){
+  if(!id || !confirm("Delete this panel discussion? It will be removed from your history.")) return;
+  try{
+    const r = await fetch("/sessions/"+encodeURIComponent(id), {method:"DELETE"});
+    if(!r.ok) throw new Error();
+    renderPanelLanding("");   // back to the panel home (its history refreshes without this one)
+  }catch(e){ alert("Couldn't delete that discussion."); }
 }
 // Open a saved PANEL session (from a shared #s/<id> link or Past Sessions) into the dedicated panel view.
 function openPanelSession(row){

@@ -76,6 +76,18 @@ class SpecialistTake:
     grounded: bool
     n_verified: int
     error: str = ""
+    claims: list = field(default_factory=list)   # this specialist's OWN verified findings (its [n] resolve here)
+
+
+# Each specialist is ONE voice on the panel — a focused, structured, SCANNABLE take (its full evidence
+# shows beneath it), not a full answer. The chair's executive summary is where it all comes together.
+_SPECIALIST_ANSWER_FORMAT = (
+    "You are ONE specialist on a panel — give a FOCUSED assessment from YOUR lens ONLY, not a full answer. "
+    "Stay in your lane; don't cover other specialties' angles. Be concise and STRUCTURED so a clinician "
+    "scans it fast:\n"
+    "- 3–5 short bullet points, each a single clinically-relevant point from your lens (grounded, cite [n]).\n"
+    "- End with one line: **Bottom line:** your lens's take in a sentence.\n"
+    "Every factual sentence carries an inline [n] referencing your findings.")
 
 
 @dataclass
@@ -128,7 +140,7 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
                     question=spec_q, llm=llm, embedder=embedder, source=corpus, aux_source=aux,
                     tenant_id=tenant_id, workspace_id=workspace_id, history_context=history_context,
                     budget=BudgetState(max_calls=_SPECIALIST_MAX_CALLS),
-                    system_prompt=spec.lens, answer_format=None, reasoning_read=False,
+                    system_prompt=spec.lens, answer_format=_SPECIALIST_ANSWER_FORMAT, reasoning_read=False,
                     max_steps=_SPECIALIST_MAX_STEPS, classify_evidence=classify_evidence,
                     evidence_ranker=evidence_ranker, evidence_fitness=evidence_fitness,
                     on_event=_spec_emit)
@@ -150,7 +162,8 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
         take = SpecialistTake(id=spec.id, specialty=spec.specialty,
                               answer=(res.composed_answer if res else ""),
                               grounded=bool(res and res.grounded),
-                              n_verified=len(res.verified_claims) if res else 0, error=err)
+                              n_verified=len(res.verified_claims) if res else 0, error=err,
+                              claims=([_vc_dict(vc) for vc in res.verified_claims] if res else []))
         result.takes.append(take)
         if res:
             for vc in res.verified_claims:

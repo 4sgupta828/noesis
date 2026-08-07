@@ -369,6 +369,13 @@
   .spec-toggle{margin-left:auto;font-family:var(--mono);font-size:.6rem;color:var(--on-accent);background:var(--gold);border-radius:12px;padding:.15rem .55rem;}
   .spec-toggle::after{content:"Show ▸";} .spec[open] .spec-toggle::after{content:"Hide ▾";}
   .spec-b{padding:.2rem .9rem 1rem;font-size:.9rem;line-height:1.6;color:var(--ink);}
+  .spec-b .answer.md{font-size:.88rem;}
+  .spec-ev{margin-top:.8rem;border-top:1px solid var(--hair);padding-top:.6rem;}
+  .spec-ev-h{font-family:var(--mono);font-size:.56rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.4rem;}
+  .spec-ev-l{margin:0;padding-left:1.3rem;display:flex;flex-direction:column;gap:.4rem;}
+  .spec-ev-l li{font-size:.8rem;line-height:1.5;color:var(--muted);}
+  .spec-cq{color:var(--ink);}
+  .spec-cs{font-family:var(--mono);font-size:.62rem;color:var(--muted);margin-left:.4rem;opacity:.8;}
   /* panel convene / plan screen */
   .panelcase{font-size:.92rem;color:var(--ink);margin:-.5rem 0 1rem;line-height:1.5;}
   .panelcase b{font-weight:600;}
@@ -710,6 +717,8 @@
   .sessions .srow .sm{font-family:var(--mono);font-size:.62rem;letter-spacing:.02em;color:var(--muted);
     margin-top:.4rem;display:flex;gap:.55rem;flex-wrap:wrap;align-items:center;}
   .sessions .srow .sg{color:var(--verified);} .sessions .srow .swho{color:var(--gold);}
+  .sessions .srow .skind{font-family:var(--mono);font-size:.56rem;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--gold);border:1px solid rgba(var(--gold-rgb),.4);border-radius:999px;padding:.05rem .4rem;vertical-align:middle;}
   .sessions .splaceholder{color:var(--muted);font-size:.9rem;margin-top:2.5rem;text-align:center;}
   .sessions .sempty{color:var(--muted);padding:1rem;font-size:.85rem;}
   @media (max-width:640px){
@@ -1776,6 +1785,7 @@ async function loadSharedSession(id){
     const r = await fetch("/sessions/"+encodeURIComponent(id));
     if(!r.ok) throw new Error("not found");
     const row = await r.json();
+    if(isPanelRow(row)){ openPanelSession(row); window.scrollTo({top:0}); return; }   // panel permalink → panel view
     CURRENT_Q = row.question;
     const thread = row.thread || [];
     if(PATIENT_MODE_ENABLED) setAudience(row.audience || "clinician");   // continue in the same audience
@@ -2170,21 +2180,24 @@ async function streamPanel(payload, onEvent, signal){
 // specialist's live status so a multi-minute run reads as progress, not a hang.
 // The panel is a STREAMING, MULTI-TURN CONVERSATION (mirrors the primary agent's thread). PANEL_THREAD
 // holds the convened set + completed turns; each turn streams its specialists' live traces, then commits.
-let PANEL_THREAD = {ids: [], turns: []};   // ids = convened specialists; turns = [{question, result}]
+let PANEL_THREAD = {ids: [], turns: [], session_id: null};   // convened specialists + committed turns + permalink
 
 // Entry from the convene screen: start a FRESH panel conversation with the confirmed specialists.
 function runPanel(question, ids){
-  PANEL_THREAD = {ids: ids.slice(), turns: []};
+  PANEL_THREAD = {ids: ids.slice(), turns: [], session_id: null};
   renderPanelConversation();
   runPanelTurn(question);
 }
-// One specialist's take (collapsible) — shared by every completed turn.
+// One specialist's take (collapsible) — its structured assessment + its OWN evidence (so its [n] resolve).
 function panelTakeHtml(t){
   const badge = t.grounded ? `<span class="spec-n">${t.n_verified} finding${t.n_verified===1?"":"s"}</span>`
     : `<span class="spec-n dim">${t.error?"error":"no grounded findings"}</span>`;
   const bodyHtml = t.answer ? mdToHtml(t.answer) : `<span class="dim">No grounded take.</span>`;
+  const cl = t.claims || [];
+  const ev = cl.length ? `<div class="spec-ev"><div class="spec-ev-h">Evidence · ${cl.length}</div>
+    <ol class="spec-ev-l">${cl.map(c=>`<li><span class="spec-cq">${esc(c.quote||c.text||"")}</span>${c.source?`<span class="spec-cs">${esc(c.source)}</span>`:""}</li>`).join("")}</ol></div>` : "";
   return `<details class="spec"><summary class="spec-h"><span class="spec-name">${esc(t.specialty)}</span>${badge}<span class="spec-toggle"></span></summary>
-    <div class="spec-b md">${bodyHtml}</div></details>`;
+    <div class="spec-b"><div class="answer md">${bodyHtml}</div>${ev}</div></details>`;
 }
 // Render the whole conversation: each completed turn (Q + conference), a live area for the in-flight turn,
 // and the docked follow-up composer — the same shape as the primary agent's threaded chat.
@@ -2198,8 +2211,9 @@ function renderPanelConversation(){
       <div class="paneltakes"><div class="paneltakes-h">Each specialist's assessment</div>${takes}</div>
     </div>`;
   }).join("");
+  const link = PANEL_THREAD.session_id ? `<span class="metabtns"><button type="button" class="copybtn" id="plink">🔗 Copy link</button></span>` : "";
   pbody().innerHTML = `<div class="panelwrap panelconv">
-    <div class="panelhead">◈ Panel Case Conference <span class="panelmeta">${PANEL_THREAD.ids.length} specialist${PANEL_THREAD.ids.length===1?"":"s"} · ${PANEL_THREAD.turns.length} turn${PANEL_THREAD.turns.length===1?"":"s"}</span></div>
+    <div class="panelhead">◈ Panel Case Conference <span class="panelmeta">${PANEL_THREAD.ids.length} specialist${PANEL_THREAD.ids.length===1?"":"s"} · ${PANEL_THREAD.turns.length} turn${PANEL_THREAD.turns.length===1?"":"s"}</span>${link}</div>
     <div class="panelturns">${turns}</div>
     <div class="panellive" id="panellive"></div>
     <div class="panelfollow" id="panelfollow" hidden>
@@ -2222,7 +2236,28 @@ function renderPanelConversation(){
     pfgo.addEventListener("click", send);
     pfq.addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } });
   }
+  // shareable permalink for the saved panel session (same #s/<id> scheme as the primary agent)
+  if(PANEL_THREAD.session_id){
+    setShareHash(PANEL_THREAD.session_id);
+    const pl = $("#plink"); if(pl) pl.addEventListener("click", e=>copyLink(PANEL_THREAD.session_id, e.currentTarget));
+  }
 }
+// Open a saved PANEL session (from a shared #s/<id> link or Past Sessions) into the dedicated panel view.
+function openPanelSession(row){
+  const thread = (row.thread || []).filter(t=>t);
+  // rebuild each saved turn back into {question, result}; ids derive from the last turn's specialists
+  const turns = thread.map(t=>({question: t.question, result: {
+    question: t.question, synthesis: t.answer||t.synthesis||"", claims: t.claims||[], takes: t.takes||[],
+    n_specialists: t.n_specialists||(t.takes||[]).length, interpretation: t.interpretation||[],
+    confidence: t.confidence||null, reasoning_purpose: t.reasoning_purpose||"",
+    reasoning_conclusion: t.reasoning_conclusion||""}}));
+  const lastTakes = turns.length ? (turns[turns.length-1].result.takes||[]) : [];
+  PANEL_THREAD = {ids: lastTakes.map(t=>t.id), turns, session_id: row.id};
+  const v = $("#panelview"); if(v){ v.hidden = false; document.body.style.overflow = "hidden"; }
+  renderPanelConversation();
+}
+// a saved session is a PANEL session when its first turn is tagged kind:"panel"
+function isPanelRow(row){ const th = row && row.thread; return !!(th && th[0] && th[0].kind === "panel"); }
 function renderPanelSynth(data, el){
   const synth = {answer:data.synthesis, claims:data.claims||[], grounded:!!(data.claims||[]).length,
     interpretation:data.interpretation||[], confidence:data.confidence||null,
@@ -2255,12 +2290,14 @@ async function runPanelTurn(question){
   const ctrl = new AbortController();
   const timer = setTimeout(()=>ctrl.abort(), 600000);   // 10-min hard cap
   try{
-    const result = await streamPanel({question, tenant_id:"demo", specialists: ids, history}, ev=>{
+    const result = await streamPanel({question, tenant_id:"demo", specialists: ids, history,
+        session_id: PANEL_THREAD.session_id}, ev=>{
       if(ev.type==="specialist_start") setRow(ev.id, "run", "reviewing evidence…");
       else if(ev.type==="specialist_trace") pushTrace(traceOf(ev.id), ev.ev);
       else if(ev.type==="specialist_done") setRow(ev.id, ev.error?"err":"done", ev.error?"failed":`${ev.verified} finding${ev.verified===1?"":"s"}`);
       else if(ev.type==="synthesizing"){ const ss=$("#psynthstat"); if(ss) ss.hidden=false; }
     }, ctrl.signal);
+    if(result.session_id) PANEL_THREAD.session_id = result.session_id;   // shareable thread (permalink)
     PANEL_THREAD.turns.push({question, result});
     renderPanelConversation();
     const ff2 = $("#panelfollow"); if(ff2) ff2.hidden = false;
@@ -2508,8 +2545,9 @@ async function loadSessionList(){
     }
     slist.innerHTML = sessions.map(s=>{
       const who = s.user_name || s.user_email;
-      return `<button class="srow" data-id="${esc(s.id)}">
-        <div class="sq">${esc(s.question)}</div>
+      const isPanel = s.kind === "panel";
+      return `<button class="srow" data-id="${esc(s.id)}" data-kind="${esc(s.kind||"research")}">
+        <div class="sq">${isPanel?'<span class="skind">◈ Panel</span> ':""}${esc(s.question)}</div>
         <div class="sm">
           ${who?`<span class="swho">${esc(who)}</span>`:""}
           ${s.grounded?'<span class="sg">✓ grounded</span>':'<span>ungrounded</span>'}
@@ -2519,11 +2557,14 @@ async function loadSessionList(){
         </div></button>`;
     }).join("");
     slist.querySelectorAll(".srow").forEach(b=>b.addEventListener("click",()=>selectSession(b)));
-    const first = slist.querySelector(".srow");    // desktop split shows the most recent by default;
-    if(first && !isMobileSess()) selectSession(first);   // mobile stays on the list until a tap
+    // desktop split shows the most recent by default — but never AUTO-open a panel session (that would
+    // jump into the panel view just from browsing); auto-preview the first non-panel row instead.
+    const first = [...slist.querySelectorAll(".srow")].find(b=>b.dataset.kind!=="panel");
+    if(first && !isMobileSess()) selectSession(first);
   }catch(e){ slist.innerHTML = `<div class="sempty">Couldn't load sessions.</div>`; }
 }
 function showSessionDetail(row, rowEl){
+  if(isPanelRow(row)){ closeSessions(); openPanelSession(row); return; }   // panel session → the panel view
   if(rowEl){ slist.querySelectorAll(".srow").forEach(r=>r.removeAttribute("aria-current")); rowEl.setAttribute("aria-current","true"); }
   CURRENT_Q = row.question;
   const who = row.user_name || row.user_email;

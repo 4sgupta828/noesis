@@ -94,7 +94,9 @@ class SessionStore:
                    confidence: dict | None = None,
                    reasoning_purpose: str = "",
                    reasoning_conclusion: str = "",
-                   diagnostics: dict | None = None) -> str:
+                   diagnostics: dict | None = None,
+                   kind: str = "research",
+                   extra: dict | None = None) -> str:
         await self._ensure()
         sid = uuid.uuid4().hex
         # turn 0 also lives in `thread` so a conversation is one shareable row; the flat columns
@@ -102,6 +104,10 @@ class SessionStore:
         turn0 = {"question": question, "answer": answer, "grounded": grounded, "claims": claims,
                  "source_stats": source_stats, "coverage_gaps": coverage_gaps, "rejected": rejected,
                  "visual_observation": visual_observation, "attachments": attachments or []}
+        if kind and kind != "research":
+            turn0["kind"] = kind             # e.g. "panel" — the reopen path renders it differently
+        if extra:
+            turn0.update(extra)              # kind-specific payload (e.g. panel takes / n_specialists)
         if audience and audience != "clinician":
             turn0["audience"] = audience     # per-turn tag; the flat column drives list segmentation
         if charts:
@@ -197,7 +203,8 @@ class SessionStore:
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 f"""SELECT id, question, grounded, video_filename, user_name, user_email,
-                           jsonb_array_length(attachments) AS n_attach, audience, created_at
+                           jsonb_array_length(attachments) AS n_attach, audience, created_at,
+                           thread->0->>'kind' AS kind
                     FROM noesis_research_session
                     WHERE {where} ORDER BY created_at DESC LIMIT ${len(params)}""",
                 *params)
@@ -206,6 +213,7 @@ class SessionStore:
             "has_video": bool(r["video_filename"]), "n_attach": r["n_attach"] or 0,
             "user_name": r["user_name"], "user_email": r["user_email"],
             "audience": r["audience"] or "clinician",
+            "kind": r["kind"] or "research",
             "created_at": r["created_at"].isoformat(),
         } for r in rows]
 

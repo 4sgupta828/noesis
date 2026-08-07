@@ -634,12 +634,39 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "session_id": session_id,
             "question": r.question, "n_specialists": r.n_specialists,
             "takes": [{"id": t.id, "specialty": t.specialty, "answer": t.answer,
-                       "grounded": t.grounded, "n_verified": t.n_verified, "error": t.error}
+                       "grounded": t.grounded, "n_verified": t.n_verified, "error": t.error,
+                       "claims": getattr(t, "claims", [])}
                       for t in r.takes],
             "synthesis": r.synthesis, "claims": r.claims,
             "interpretation": r.interpretation, "confidence": r.confidence,
             "reasoning_purpose": r.reasoning_purpose, "reasoning_conclusion": r.reasoning_conclusion,
         }
+
+    async def _persist_panel(body, r) -> str | None:
+        """Best-effort persist of a panel turn as a SHAREABLE session (mirrors _do_research). A follow-up
+        (session_id present) appends to the same thread; else a new row is created. kind='panel' so the
+        reopen path renders the case conference. Never breaks the response."""
+        store = _store()
+        if store is None:
+            return None
+        payload = _panel_payload(r)
+        turn = {"kind": "panel", "question": r.question, "answer": r.synthesis,
+                "grounded": bool(r.claims), "claims": r.claims, "takes": payload["takes"],
+                "n_specialists": r.n_specialists, "interpretation": r.interpretation,
+                "confidence": r.confidence, "reasoning_purpose": r.reasoning_purpose,
+                "reasoning_conclusion": r.reasoning_conclusion}
+        try:
+            if body.session_id and await store.append_turn(body.session_id, turn):
+                return body.session_id
+            return await store.save(
+                tenant_id=body.tenant_id, workspace_id=body.workspace_id,
+                question=r.question, answer=r.synthesis, grounded=bool(r.claims),
+                claims=r.claims, source_stats={}, coverage_gaps=[], rejected=0, sources=body.sources,
+                interpretation=r.interpretation, confidence=r.confidence,
+                reasoning_purpose=r.reasoning_purpose, reasoning_conclusion=r.reasoning_conclusion,
+                kind="panel", extra={"takes": payload["takes"], "n_specialists": r.n_specialists})
+        except Exception:   # noqa: BLE001 — persistence must never break the panel response
+            return None
 
     @app.post("/panel/ask")
     async def panel_ask(body: PanelIn) -> dict:
@@ -659,7 +686,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=503, detail="No model available in replay mode.") from e
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
-        return _panel_payload(r, session_id=body.session_id)
+        sid = await _persist_panel(body, r)
+        return _panel_payload(r, session_id=sid or body.session_id)
 
     @app.post("/panel/ask/stream")
     async def panel_ask_stream(body: PanelIn):
@@ -682,7 +710,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     question=body.question, tenant_id=body.tenant_id, workspace_id=body.workspace_id,
                     specialist_ids=body.specialists or None, source_keys=body.sources,
                     history=body.history, on_event=on_event)
-                await queue.put({"type": "final", "result": _panel_payload(r, session_id=body.session_id)})
+                sid = await _persist_panel(body, r)
+                await queue.put({"type": "final", "result": _panel_payload(r, session_id=sid or body.session_id)})
             except CassetteMiss:
                 await queue.put({"type": "error", "detail": "No model available in replay mode."})
             except Exception as e:   # noqa: BLE001

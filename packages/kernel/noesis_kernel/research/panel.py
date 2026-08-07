@@ -120,7 +120,8 @@ async def _emit(on_event, ev: dict) -> None:
 
 
 async def run_panel(*, question, specialists, llm, embedder, make_retrievers, tenant_id,
-                    workspace_id=None, synthesis_directive="", history_context="", rationales=None,
+                    workspace_id=None, synthesis_directive="", history_context="", attachment_context="",
+                    rationales=None,
                     chair_system_prompt="You are an evidence-grounded clinical research panel chair.",
                     classify_evidence=None, evidence_ranker=None, evidence_fitness=False,
                     on_event=None) -> PanelResult:
@@ -147,6 +148,7 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
                 res = await run_react(
                     question=spec_q, llm=llm, embedder=embedder, source=corpus, aux_source=aux,
                     tenant_id=tenant_id, workspace_id=workspace_id, history_context=history_context,
+                    attachment_context=attachment_context,
                     budget=BudgetState(max_calls=_SPECIALIST_MAX_CALLS),
                     system_prompt=spec.lens, answer_format=_SPECIALIST_ANSWER_FORMAT, reasoning_read=False,
                     max_steps=_SPECIALIST_MAX_STEPS, classify_evidence=classify_evidence,
@@ -209,8 +211,12 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
                   f"panel's COLLECTIVE reasoning (where the lenses agree, where they weigh evidence "
                   f"differently and how you reconcile it). This is REASONING CONTEXT, NOT citable evidence — "
                   f"cite ONLY the numbered findings below:\n{assessments}\n\n" if assessments else "")
+    # uploaded image/document context (frames the answer, never a citable finding)
+    attach = (attachment_context or "").strip()
+    attach_ctx = (f"ATTACHMENT CONTEXT (what the user uploaded — an image reading and/or document text; "
+                  f"use it to interpret the case, but it is NOT a citable finding):\n{attach}\n\n" if attach else "")
     synth_user = (
-        conv_ctx + assess_ctx
+        conv_ctx + attach_ctx + assess_ctx
         + f"Question: {question}\n\nVERIFIED PANEL FINDINGS (the ONLY facts you may cite, each tagged with "
         f"the specialist who found it):\n{findings}\n\n"
         "As the panel's OVERALL REASONER, integrate the specialist assessments and these findings into ONE "

@@ -256,15 +256,40 @@ class ResearchService:
 
     async def ask_panel(self, *, question: str, tenant_id: str, workspace_id: str | None = None,
                         specialist_ids: list[str] | None = None, source_keys: list[str] | None = None,
-                        history: list[dict] | None = None, rationales: dict | None = None, on_event=None):
+                        history: list[dict] | None = None, rationales: dict | None = None,
+                        images: list[dict] | None = None, documents: list[dict] | None = None, on_event=None):
         """Ask-Panel (Alpha): run the selected specialists (or the default set) as parallel grounded
         loops and synthesize their pooled findings. Provides the domain-free orchestrator with a
-        source-scoping callback so each specialist can prefer its own sources. `history` (prior panel
-        turns) threads in as context ONLY for a follow-up — same contract as ask()."""
+        source-scoping callback so each specialist can prefer its own sources. `history` threads in as
+        context for a follow-up; `images`/`documents` (uploaded attachments) are read ONCE (vision +
+        document text) and shared as context across all specialists — same contract as ask()."""
         from noesis_kernel.research.panel import run_panel
         roster = {getattr(s, "id", ""): s for s in self.panel_specialists}
         ids = [i for i in (specialist_ids or list(self.panel_default_ids)) if i in roster]
         specialists = [roster[i] for i in ids] or list(self.panel_specialists)
+        # ATTACHMENT CONTEXT (parity with ask()): describe images ONCE + gather document text, then share
+        # that context with every specialist (never re-describe per lens; never a citable finding).
+        visual_obs = ""
+        if images and self.vision_prompt:
+            from noesis_kernel.research.vision import observe_images
+            try:
+                visual_obs = await observe_images(llm=self.llm, vision_prompt=self.vision_prompt,
+                                                  images=images, budget=BudgetState(max_calls=4))
+            except Exception:   # noqa: BLE001 — a failed vision read must not break the panel
+                visual_obs = ""
+        _parts = []
+        if visual_obs:
+            _parts.append("IMAGE (automated visual description):\n" + visual_obs)
+        for d in documents or []:
+            txt = (d.get("text") or "").strip()
+            if txt:
+                _parts.append(f"DOCUMENT — {d.get('name') or 'document'} (user-provided text):\n{txt}")
+        attachment_context = "\n\n".join(_parts)
+        if visual_obs and on_event is not None:
+            try:
+                await on_event({"type": "visual_observation", "text": visual_obs})
+            except Exception:   # noqa: BLE001
+                pass
         # FOLLOW-UP RESOLUTION (same as ask()): rewrite an elliptical follow-up ("what if they also have
         # gout?") into a SELF-CONTAINED question carrying the case subject, BEFORE the specialists run — so
         # every specialist's retrieval + reasoning inherits the full context, not just a raw fragment.
@@ -293,7 +318,7 @@ class ResearchService:
             question=question, specialists=specialists, llm=self.llm, embedder=self.embedder,
             make_retrievers=make_retrievers, tenant_id=tenant_id, workspace_id=workspace_id,
             synthesis_directive=self.panel_synthesis_directive or "", history_context=history_context,
-            rationales=rationales, chair_system_prompt=self.persona_prompt,
+            attachment_context=attachment_context, rationales=rationales, chair_system_prompt=self.persona_prompt,
             classify_evidence=self.classify_evidence, evidence_ranker=self.evidence_ranker,
             evidence_fitness=self.evidence_fitness, on_event=on_event)
 

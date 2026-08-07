@@ -424,6 +424,11 @@
   .panelq:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.12);}
   .panelq.flash{animation:pflash .9s ease;}
   @keyframes pflash{0%,100%{border-color:var(--hair);}30%,60%{border-color:var(--gold);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.18);}}
+  .panelintake{display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;margin-top:.6rem;}
+  .pintk{font-family:var(--mono);font-size:.72rem;cursor:pointer;background:var(--panel2);border:1px solid var(--hair);
+    border-radius:8px;padding:.35rem .7rem;color:var(--ink);transition:border-color .15s;}
+  .pintk:hover{border-color:rgba(var(--gold-rgb),.5);}
+  .pintk-hint{font-size:.72rem;color:var(--muted);}
   .panelex{margin-top:.7rem;}
   .panelex-h{font-family:var(--mono);font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
   .panelex-row{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.45rem;}
@@ -1923,8 +1928,9 @@ q.addEventListener("paste", (e)=>{
     addPastedText(text);                            // big paste → attachment (keeps the box clean)
   }                                                 // else: small paste inserts inline (default)
 });
+let ATTN_BOX = "#attns";   // where attachment previews render — switches to the panel's box when it's active
 function renderAttachments(){
-  const box = $("#attns");
+  const box = $(ATTN_BOX); if(!box) return;
   if(!ATTACHMENTS.length){ box.hidden = true; box.innerHTML = ""; return; }
   box.hidden = false;
   box.innerHTML =
@@ -2081,6 +2087,7 @@ function openPanel(prefill){
 }
 function closePanel(){
   const v = $("#panelview"); if(v) v.hidden = true;
+  ATTN_BOX = "#attns";   // hand attachment rendering back to the Q&A intake
   if($("#sessions").hidden && $("#videos").hidden) document.body.style.overflow = "";
   // clear the panel hash (#panel or a #p/<id> session page) so the URL matches the view we return to
   if(location.hash === "#panel" || location.hash.indexOf("#p/") === 0)
@@ -2116,6 +2123,12 @@ function renderPanelLanding(prefill){
     <div class="panelqwrap">
       <div class="panelqlbl">The case before the panel</div>
       <textarea class="panelq" id="panelq" rows="3" placeholder="e.g. ${esc(ph)}">${esc(prefill||"")}</textarea>
+      ${VISION_ENABLED ? `<div class="panelintake">
+        <button type="button" class="pintk" id="panel-attach" title="Attach image, PDF, or DICOM">📎 Attach</button>
+        <button type="button" class="pintk" id="panel-camera" title="Take a photo" hidden>📷 Camera</button>
+        <span class="pintk-hint">or paste an image / a long note for context</span>
+      </div>
+      <div class="attns" id="panel-attns" hidden></div>` : ""}
       ${chipsHtml}
     </div>
     <div class="rosterhead"><span class="rh-h">The specialists</span>
@@ -2139,9 +2152,29 @@ function renderPanelLanding(prefill){
     ta.value = b.dataset.case; grow(); ta.focus();
   }));
   if(prefill) grow();
+  // attachment/camera/paste parity with the Q&A intake (reuses the global ATTACHMENTS pipeline)
+  if(VISION_ENABLED){
+    ATTN_BOX = "#panel-attns"; renderAttachments();
+    const ab = $("#panel-attach"); if(ab) ab.addEventListener("click", ()=>$("#file").click());
+    const cb = $("#panel-camera");
+    if(cb && navigator.mediaDevices && navigator.mediaDevices.getUserMedia){ cb.hidden = false; cb.addEventListener("click", openCamera); }
+    ta.addEventListener("paste", (e)=>{
+      const files = [...(e.clipboardData?.files || [])];
+      if(files.length){ e.preventDefault(); addFiles(files); return; }   // pasted screenshot/file → attach
+      const text = (e.clipboardData?.getData("text") || "");
+      const lines = text.split(/\r?\n/).length;
+      if((text.length >= PASTE_MIN_CHARS || lines >= PASTE_MIN_LINES) && ATTACHMENTS.length < 4){
+        e.preventDefault(); addPastedText(text); grow();               // big paste → context attachment
+      }
+    });
+  }
   $("#panelconvene").addEventListener("click", ()=>{
     const question = (ta.value||"").trim();
     if(!question){ ta.focus(); ta.classList.add("flash"); setTimeout(()=>ta.classList.remove("flash"), 900); return; }
+    if(ATTACHMENTS.length && !($("#consent")||{}).checked){   // require the no-PII consent before sending
+      const c = $("#consent"); if(c){ c.focus(); c.parentElement.style.color = "var(--gap)"; } return;
+    }
+    PANEL_ATTACHMENTS = ATTACHMENTS.slice();   // carry the case attachments into the run (first turn)
     // any specialists the user pre-selected on the landing seed the triage as a manual hint
     const manual = [...pbody().querySelectorAll(".pcard")].filter(l=>l.querySelector(".pchk").checked).map(l=>l.dataset.id);
     askPanel(question, manual);
@@ -2253,6 +2286,7 @@ async function streamPanel(payload, onEvent, signal){
 // The panel is a STREAMING, MULTI-TURN CONVERSATION (mirrors the primary agent's thread). PANEL_THREAD
 // holds the convened set + completed turns; each turn streams its specialists' live traces, then commits.
 let PANEL_THREAD = {ids: [], turns: [], session_id: null, rationales: {}};   // + why each specialist was convened
+let PANEL_ATTACHMENTS = [];   // attachments captured on the landing → sent with the first (case) turn
 
 // Entry from the convene screen: start a FRESH panel conversation with the confirmed specialists.
 function runPanel(question, ids, rationales){
@@ -2482,8 +2516,9 @@ async function runPanelTurn(question){
   const stopBtn = $("#pstop");
   if(stopBtn) stopBtn.addEventListener("click", ()=>{ userStopped = true; try{ ctrl.abort(); }catch(_){} });
   try{
+    const attachments = (PANEL_THREAD.turns.length === 0 && PANEL_ATTACHMENTS.length) ? PANEL_ATTACHMENTS.slice() : undefined;
     const result = await streamPanel({question, tenant_id:"demo", specialists: ids, history,
-        session_id: PANEL_THREAD.session_id, rationales: PANEL_THREAD.rationales}, ev=>{
+        session_id: PANEL_THREAD.session_id, rationales: PANEL_THREAD.rationales, attachments}, ev=>{
       if(ev.type==="specialist_start") setRow(ev.id, "run", "reviewing evidence…");
       else if(ev.type==="specialist_trace") pushTrace(traceOf(ev.id), ev.ev);
       else if(ev.type==="specialist_done") setRow(ev.id, ev.error?"err":"done", ev.error?"failed":`${ev.verified} finding${ev.verified===1?"":"s"}`);
@@ -2492,6 +2527,7 @@ async function runPanelTurn(question){
         if(rq){ rq.hidden=false; rq.innerHTML = `↳ Interpreting your follow-up as: <span class="tq">${esc(ev.question||"")}</span>`; } }
     }, ctrl.signal);
     if(result.session_id) PANEL_THREAD.session_id = result.session_id;   // shareable thread (permalink)
+    if(attachments){ PANEL_ATTACHMENTS = []; ATTACHMENTS = []; }          // consumed by the case turn
     PANEL_THREAD.turns.push({question, result});
     renderPanelConversation();
     const ff2 = $("#panelfollow"); if(ff2) ff2.hidden = false;

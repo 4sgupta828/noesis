@@ -19,9 +19,13 @@ class SpecialistConfig:
     source_keys: tuple[str, ...] = ()   # preferred sources (empty = all available)
 
 
-# The full roster. The default Alpha panel is the first 3 (cross-cutting, question-agnostic: safety +
-# rigor + integration). Condition specialists below can be swapped in from the UI.
+# The roster. TWO cross-cutting methodology lenses (Clinical Pharmacology = safety/dosing, Evidence-Based
+# Medicine = rigor) form the grounding backbone; the rest are the TOP-10 most-frequented clinical
+# specialties worldwide (by patient-visit volume: primary care, pediatrics, OB/GYN, cardiology, psychiatry,
+# dermatology, orthopedics, gastroenterology, endocrinology, infectious disease). The default Alpha panel is
+# the first 3 (safety + rigor + whole-patient integration); triage auto-selects the fitting specialties per case.
 SPECIALISTS: tuple[SpecialistConfig, ...] = (
+    # --- cross-cutting methodology lenses (the default trio's backbone, with primary care) ---
     SpecialistConfig(
         id="clinical_pharmacology", specialty="Clinical Pharmacology",
         lens=("You are a clinical pharmacologist on a case panel. Evaluate the question ONLY through the "
@@ -38,6 +42,7 @@ SPECIALISTS: tuple[SpecialistConfig, ...] = (
               "evidence is weak, conflicting, or absent. Do not recommend treatment — appraise the evidence."),
         focus="systematic review, meta-analysis, randomized controlled trial, clinical practice guideline, evidence quality, risk of bias, GRADE",
         source_keys=("europepmc", "clinicaltrials", "web")),
+    # --- top-10 most-frequented clinical specialties worldwide (triage picks the fitting ones per case) ---
     SpecialistConfig(
         id="primary_care", specialty="Primary Care / Internal Medicine",
         lens=("You are a primary-care internist on a case panel. Evaluate through the whole-patient lens: the "
@@ -45,7 +50,21 @@ SPECIALISTS: tuple[SpecialistConfig, ...] = (
               "and how the pieces integrate for a real patient. Ground every statement in the evidence."),
         focus="first-line management, standard of care, clinical practice guideline, practical management, comorbidities",
         source_keys=()),
-    # --- condition specialists (swappable from the UI; not in the default set) ---
+    SpecialistConfig(
+        id="pediatrics", specialty="Pediatrics",
+        lens=("You are a pediatrician on a case panel. Evaluate ONLY the pediatric dimension: age- and "
+              "weight-based dosing, neonatal/child-specific safety, growth and development, and conditions and "
+              "presentations particular to infants, children, and adolescents. Ground every statement in the evidence."),
+        focus="pediatric, children, infant, adolescent, weight-based dosing, neonatal safety, growth and development",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="obgyn", specialty="Obstetrics & Gynecology",
+        lens=("You are an obstetrician–gynecologist on a case panel. Evaluate ONLY the obstetric and "
+              "gynecologic dimension: pregnancy and lactation safety, contraception and fertility, menstrual "
+              "and menopausal health, and management specific to pregnant or gynecologic patients. Ground "
+              "every statement in the evidence."),
+        focus="pregnancy, lactation, teratogenicity, contraception, obstetric, gynecologic, menopause, maternal-fetal safety",
+        source_keys=("europepmc", "clinicaltrials", "dailymed", "web")),
     SpecialistConfig(
         id="cardiology", specialty="Cardiology",
         lens=("You are a cardiologist on a case panel. Evaluate ONLY the cardiovascular dimension: "
@@ -54,11 +73,40 @@ SPECIALISTS: tuple[SpecialistConfig, ...] = (
         focus="cardiovascular outcomes, heart failure hospitalization, mortality, cardiac safety, cardiovascular risk",
         source_keys=("europepmc", "clinicaltrials", "web")),
     SpecialistConfig(
-        id="nephrology", specialty="Nephrology",
-        lens=("You are a nephrologist on a case panel. Evaluate ONLY the renal dimension: effects on kidney "
-              "function (eGFR, CKD progression, albuminuria), renal dose adjustment, and nephrotoxicity. "
-              "Ground every statement in the evidence."),
-        focus="kidney function, eGFR decline, CKD progression, albuminuria, renal dose adjustment, nephrotoxicity",
+        id="psychiatry", specialty="Psychiatry / Mental Health",
+        lens=("You are a psychiatrist on a case panel. Evaluate ONLY the psychiatric dimension: diagnosis and "
+              "pharmacotherapy of mental-health conditions, psychotropic efficacy and adverse effects, "
+              "interactions, and behavioral management. Ground every statement in the evidence."),
+        focus="psychiatric, antidepressant, antipsychotic, mood stabilizer, anxiolytic, psychotropic adverse effects, mental health",
+        source_keys=("europepmc", "clinicaltrials", "dailymed", "web")),
+    SpecialistConfig(
+        id="dermatology", specialty="Dermatology",
+        lens=("You are a dermatologist on a case panel. Evaluate ONLY the dermatologic dimension: skin, hair, "
+              "and nail conditions, topical and systemic therapy for dermatoses, and cutaneous adverse drug "
+              "reactions. Ground every statement in the evidence."),
+        focus="dermatologic, skin condition, topical therapy, cutaneous adverse reaction, psoriasis eczema acne, biologics for skin",
+        source_keys=("europepmc", "clinicaltrials", "dailymed", "web")),
+    SpecialistConfig(
+        id="orthopedics", specialty="Orthopedics / Musculoskeletal",
+        lens=("You are an orthopedic and musculoskeletal specialist on a case panel. Evaluate ONLY the "
+              "musculoskeletal dimension: bone, joint, and soft-tissue conditions, fracture and injury "
+              "management, osteoarthritis and back/joint pain, and surgical vs conservative options. Ground "
+              "every statement in the evidence."),
+        focus="musculoskeletal, orthopedic, fracture, osteoarthritis, joint pain, back pain, conservative versus surgical management",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="gastroenterology", specialty="Gastroenterology",
+        lens=("You are a gastroenterologist on a case panel. Evaluate ONLY the GI/hepatic dimension: disorders "
+              "of the esophagus, stomach, bowel, liver, and pancreas, GI pharmacotherapy, and hepatic "
+              "considerations in drug use. Ground every statement in the evidence."),
+        focus="gastrointestinal, hepatic, inflammatory bowel disease, GERD, hepatitis, liver function, GI bleeding, endoscopy",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="endocrinology", specialty="Endocrinology",
+        lens=("You are an endocrinologist on a case panel. Evaluate ONLY the endocrine/metabolic dimension: "
+              "diabetes, thyroid and adrenal disorders, bone-mineral and pituitary conditions, and hormonal "
+              "therapy. Ground every statement in the evidence."),
+        focus="endocrine, diabetes, thyroid, insulin, glycemic control, osteoporosis, hormone therapy, metabolic",
         source_keys=("europepmc", "clinicaltrials", "dailymed", "web")),
     SpecialistConfig(
         id="infectious_disease", specialty="Infectious Disease",

@@ -38,7 +38,25 @@ def _grade_text(s: str) -> str:
     return ""
 
 
-def classify(source_key: str, facets: dict[str, str] | None, title: str = "") -> str:
+_TIER_RANK = {"systematic_review": 6, "guideline": 6, "rct": 5, "cohort": 4,
+              "cross_sectional": 3, "case_series": 2, "case_report": 1}
+
+
+def strongest_pub_type(pub_types: list[str]) -> str:
+    """From a publication-type list, return the one whose declared design grades HIGHEST (so a stored
+    facet keeps 'Randomized Controlled Trial' over 'Journal Article'). Falls back to the first if none
+    grade. Used at ingest so the corpus captures the discriminating design, not just pubType[0]."""
+    if not pub_types:
+        return ""
+    best, best_rank = pub_types[0], -1
+    for pt in pub_types:
+        r = _TIER_RANK.get(_grade_text(pt), 0)
+        if r > best_rank:
+            best, best_rank = pt, r
+    return best
+
+
+def classify(source_key: str, facets: dict[str, str] | None, title: str = "", text: str = "") -> str:
     """Return an `authority.py` evidence-kind key (or "" when unclassifiable).
 
     Precedence: an explicit publication/study TYPE (pub_type, else the TITLE's self-declared design)
@@ -68,6 +86,13 @@ def classify(source_key: str, facets: dict[str, str] | None, title: str = "") ->
         return "guideline"        # CDC/public-health guidance is normative
     if src_kind == "adverse_event" or sk == "faers":
         return "cohort"           # pharmacovigilance = observational safety signal
+
+    # 4) STOPGAP (until EuropePMC is re-ingested with the strongest pubType — see europepmc.py): for
+    # existing literature whose stored pub_type is generic and whose title doesn't self-label, read an
+    # explicit design declaration from the ABSTRACT. Conservative — only unambiguous phrases; strongest-
+    # first via _grade_text. Remove once the corpus carries a gradeable pub_type facet.
+    if sk == "europepmc" or src_kind == "article":
+        return _grade_text((text or "").lower())
 
     return ""                     # unknown → rank 0 (never boosts, never demotes)
 

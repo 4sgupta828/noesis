@@ -58,6 +58,28 @@ def test_title_fallback_grades_generic_pubtype():
     assert classify("europepmc", {"pub_type": "journal-article"}, "Statins and cardiovascular outcomes") == ""
 
 
+def test_strongest_pub_type_keeps_the_design_label():
+    from noesis_vertical_medical.evidence_kind import strongest_pub_type
+    # the discriminating design beats the generic first entry (the ingest fix)
+    assert strongest_pub_type(["journal article", "randomized controlled trial"]) == "randomized controlled trial"
+    assert strongest_pub_type(["research-article", "systematic review"]) == "systematic review"
+    assert strongest_pub_type(["journal article"]) == "journal article"   # none grade → keep first
+    assert strongest_pub_type([]) == ""
+
+
+def test_abstract_fallback_grades_generic_literature():
+    # STOPGAP: recover the tier from the abstract when pub_type + title are generic (existing corpus).
+    assert classify("europepmc", {"pub_type": "journal-article"}, "Statins and outcomes",
+                    "In this randomized, double-blind, placebo-controlled trial we enrolled 500 patients.") == "rct"
+    assert classify("europepmc", {"pub_type": "review"}, "Statins",
+                    "We performed a systematic review and meta-analysis of 40 trials.") == "systematic_review"
+    # a genuinely ungradeable abstract stays "" (no over-grading)
+    assert classify("europepmc", {"pub_type": "journal-article"}, "Statins",
+                    "We report an observed association between statin use and outcomes.") == ""
+    # the abstract fallback does NOT apply to non-literature sources
+    assert classify("web", {}, "", "a randomized controlled trial found...") == ""
+
+
 def test_recency_year():
     assert recency_year({"year": "2024"}) == 2024
     assert recency_year({"year": 2019}) == 2019

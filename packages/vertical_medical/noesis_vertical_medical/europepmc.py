@@ -63,9 +63,14 @@ def _facets(r: dict) -> dict:
     jt = r.get("journalTitle") or (r.get("journalInfo") or {}).get("journal", {}).get("title")
     if jt:
         f["journal"] = jt.lower()
+    # Store the STRONGEST publication type, not just pubType[0]. EuropePMC lists e.g.
+    # ["Journal Article", "Randomized Controlled Trial"] — taking [0] dropped the design label and
+    # left the block ungradeable. Rank each via the evidence pyramid and keep the highest-tier one.
     pt = r.get("pubTypeList", {}).get("pubType") if isinstance(r.get("pubTypeList"), dict) else None
     if pt:
-        f["pub_type"] = (pt[0] if isinstance(pt, list) else pt).lower()
+        from .evidence_kind import strongest_pub_type
+        types = pt if isinstance(pt, list) else [pt]
+        f["pub_type"] = strongest_pub_type([str(t).lower() for t in types])
     return {k: v for k, v in f.items() if v}
 
 

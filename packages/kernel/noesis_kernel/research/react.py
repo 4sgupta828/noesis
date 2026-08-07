@@ -491,7 +491,7 @@ async def run_react(
         kind = ""
         if classify_evidence is not None:
             try:
-                kind = classify_evidence(atom.source_key, atom.facets, atom.document_title) or ""
+                kind = classify_evidence(atom.source_key, atom.facets, atom.document_title, atom.text) or ""
             except Exception:   # noqa: BLE001 — classification must never break grounding
                 kind = ""
         return VerifiedClaim(text, atom_id, quote, atom.source_key, atom.document_title,

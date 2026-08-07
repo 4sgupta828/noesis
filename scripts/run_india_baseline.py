@@ -24,6 +24,7 @@ URL = os.environ.get("NOESIS_URL", "https://noesis-api-production.up.railway.app
 TENANT = os.environ.get("TENANT", "demo")
 SUBSET = {s.strip() for s in os.environ.get("SUBSET", "").split(",") if s.strip()}
 COUNTRIES = [c for c in os.environ.get("COUNTRIES", "").split(",") if c.strip()]   # e.g. IN (needs the flag on)
+REQ_TIMEOUT = int(os.environ.get("REQ_TIMEOUT", "300"))   # per-request timeout (prod can be slow under load)
 RISK_W = {"low": 1, "med": 3, "high": 8}
 
 
@@ -35,7 +36,7 @@ def ask(q):
     for attempt in range(3):
         try:
             req = urllib.request.Request(URL, json.dumps(body).encode(), {"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=240) as r:
+            with urllib.request.urlopen(req, timeout=REQ_TIMEOUT) as r:
                 return json.load(r)
         except Exception as e:   # noqa: BLE001
             last = e

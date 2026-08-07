@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from noesis_kernel.research.budget import BudgetState
 from noesis_kernel.research.react import (
     ComposedAnswer, _refs_valid, _unsupported_prose_tokens, _validate_interpretation, run_react,
+    strip_control_tags,
 )
 
 _log = logging.getLogger(__name__)
@@ -210,7 +211,7 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
     for attempt in range(3):
         try:
             parsed = await _compose()
-            text = (parsed.answer or "").strip()
+            text = strip_control_tags((parsed.answer or "").strip())
             if text and _refs_valid(text, len(verified)):
                 break
         except Exception as e:   # noqa: BLE001

@@ -519,3 +519,18 @@ def test_rank_claims_fail_safe_on_embed_error():
     claims = [VerifiedClaim(f"c{i}", f"a{i}", "q") for i in range(5)]
     got = asyncio.run(_rank_claims_by_relevance("x", claims, _Bad(), 2))
     assert got == claims[:2]
+
+
+def test_strip_control_tags_removes_leaked_serialization():
+    """A completion that bleeds the tool-call/structured-output tags into the answer string must be
+    truncated at the first control tag — the real answer precedes it (the specialist-review leak)."""
+    from noesis_kernel.research.react import strip_control_tags as s
+    leak = ("Bottom line: The stepwise plan is well aligned [1][2].</answer> "
+            "<directly_addresses>true</directly_addresses> <gap_note></gap_note> </invoke>")
+    assert s(leak) == "Bottom line: The stepwise plan is well aligned [1][2]."
+    # clean answers are untouched (byte-identical, no-op)
+    clean = "Use metformin first-line [1]. Titrate to eGFR [2]."
+    assert s(clean) == clean
+    # a legitimate less-than is NOT a control tag
+    assert s("Give if CrCl < 30 mL/min [1].") == "Give if CrCl < 30 mL/min [1]."
+    assert s("") == ""

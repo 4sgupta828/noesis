@@ -265,6 +265,22 @@ def _validate_interpretation(items: list["InterpretationItem"],
     return out
 
 
+_CONTROL_TAG_RE = re.compile(
+    r'</?\s*(?:answer|directly_addresses|gap_note|reasoning_purpose|reasoning_conclusion|'
+    r'interpretation|confidence|charts|invoke|function_calls|parameter|antml:[\w:-]+)\b[^>]*>',
+    re.IGNORECASE)
+
+
+def strip_control_tags(text: str) -> str:
+    """Defensive cleanup: some completions bleed the tool-call / structured-output serialization into the
+    answer STRING (e.g. a trailing '… [1].</answer> <directly_addresses>true</directly_addresses> </invoke>').
+    Truncate at the first such control tag — the real answer precedes it. No-op on a clean answer."""
+    if not text:
+        return text
+    m = _CONTROL_TAG_RE.search(text)
+    return (text[:m.start()] if m else text).rstrip()
+
+
 def _refs_valid(text: str, n_findings: int) -> bool:
     """Domain-free provenance check on a composed answer: it must cite at least one
     finding and every inline [n] must resolve to a real finding (1..n_findings).
@@ -845,7 +861,7 @@ async def run_react(
         for _attempt in range(_COMPOSE_ATTEMPTS):
             try:
                 cand = await _compose(answer_format)
-                text = (cand.answer or "").strip()   # a malformed/empty parse raises or stays "" →
+                text = strip_control_tags((cand.answer or "").strip())   # a malformed/empty parse raises or stays "" →
                 parsed = cand                         # counted as this attempt's outcome, inside the try
                 if text:
                     break                             # got a real answer — done
@@ -866,7 +882,7 @@ async def run_react(
                 try:
                     alt = await _compose(answer_format)
                     if (alt.answer or "").strip():
-                        parsed, text = alt, alt.answer.strip()
+                        parsed, text = alt, strip_control_tags(alt.answer.strip())
                 except Exception as _e:   # noqa: BLE001
                     _log.warning("compose ref-retry failed: %r", _e)
             # Reasoning-read reliability: the model sometimes writes the prose answer but SKIPS the

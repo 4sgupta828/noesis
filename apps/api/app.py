@@ -629,15 +629,31 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
 
+    def _with_urls(claims):
+        """Attach the canonical source URL to each panel claim (same as the primary evidence panel) so
+        the FE can render clickable links. claim dicts carry document_id + quote (from _vc_dict)."""
+        ui = getattr(app.state.service, "ui", None)
+        fn = getattr(ui, "source_url", None)
+        out = []
+        for c in (claims or []):
+            u = None
+            try:
+                if fn and c.get("document_id"):
+                    u = fn(c.get("document_id"), c.get("quote"))
+            except Exception:   # noqa: BLE001
+                u = None
+            out.append({**c, "url": u})
+        return out
+
     def _panel_payload(r, session_id=None) -> dict:
         return {
             "session_id": session_id,
             "question": r.question, "n_specialists": r.n_specialists,
             "takes": [{"id": t.id, "specialty": t.specialty, "answer": t.answer,
                        "grounded": t.grounded, "n_verified": t.n_verified, "error": t.error,
-                       "claims": getattr(t, "claims", [])}
+                       "claims": _with_urls(getattr(t, "claims", []))}
                       for t in r.takes],
-            "synthesis": r.synthesis, "claims": r.claims,
+            "synthesis": r.synthesis, "claims": _with_urls(r.claims),
             "interpretation": r.interpretation, "confidence": r.confidence,
             "reasoning_purpose": r.reasoning_purpose, "reasoning_conclusion": r.reasoning_conclusion,
         }
@@ -650,8 +666,9 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if store is None:
             return None
         payload = _panel_payload(r)
+        pooled = payload["claims"]   # URL-enriched, so a reopened session keeps clickable links
         turn = {"kind": "panel", "question": r.question, "answer": r.synthesis,
-                "grounded": bool(r.claims), "claims": r.claims, "takes": payload["takes"],
+                "grounded": bool(pooled), "claims": pooled, "takes": payload["takes"],
                 "n_specialists": r.n_specialists, "interpretation": r.interpretation,
                 "confidence": r.confidence, "reasoning_purpose": r.reasoning_purpose,
                 "reasoning_conclusion": r.reasoning_conclusion}
@@ -660,8 +677,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 return body.session_id
             return await store.save(
                 tenant_id=body.tenant_id, workspace_id=body.workspace_id,
-                question=r.question, answer=r.synthesis, grounded=bool(r.claims),
-                claims=r.claims, source_stats={}, coverage_gaps=[], rejected=0, sources=body.sources,
+                question=r.question, answer=r.synthesis, grounded=bool(pooled),
+                claims=pooled, source_stats={}, coverage_gaps=[], rejected=0, sources=body.sources,
                 interpretation=r.interpretation, confidence=r.confidence,
                 reasoning_purpose=r.reasoning_purpose, reasoning_conclusion=r.reasoning_conclusion,
                 kind="panel", extra={"takes": payload["takes"], "n_specialists": r.n_specialists})

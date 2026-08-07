@@ -2194,8 +2194,11 @@ function panelTakeHtml(t){
     : `<span class="spec-n dim">${t.error?"error":"no grounded findings"}</span>`;
   const bodyHtml = t.answer ? mdToHtml(t.answer) : `<span class="dim">No grounded take.</span>`;
   const cl = t.claims || [];
+  const cite = c => { const lbl = esc(c.source||"source");
+    return c.url ? `<a class="srclink" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer" title="Open source in a new tab">${lbl} ↗</a>`
+                 : (c.source ? `<span class="spec-cs">${lbl}</span>` : ""); };
   const ev = cl.length ? `<div class="spec-ev"><div class="spec-ev-h">Evidence · ${cl.length}</div>
-    <ol class="spec-ev-l">${cl.map(c=>`<li><span class="spec-cq">${esc(c.quote||c.text||"")}</span>${c.source?`<span class="spec-cs">${esc(c.source)}</span>`:""}</li>`).join("")}</ol></div>` : "";
+    <ol class="spec-ev-l">${cl.map(c=>`<li><span class="spec-cq">${esc(c.quote||c.text||"")}</span> ${cite(c)}</li>`).join("")}</ol></div>` : "";
   return `<details class="spec"><summary class="spec-h"><span class="spec-name">${esc(t.specialty)}</span>${badge}<span class="spec-toggle"></span></summary>
     <div class="spec-b"><div class="answer md">${bodyHtml}</div>${ev}</div></details>`;
 }

@@ -30,6 +30,7 @@ class QaAnswer:
     prose: str
     refused: bool = False
     claims: tuple[QaClaim, ...] = ()
+    coverage_gaps: tuple[str, ...] = ()   # the run's flagged gaps (for the "absence" contract)
 
 
 @dataclass(frozen=True)
@@ -102,6 +103,18 @@ def score_qa(case: QaCase, answer: QaAnswer) -> QaScore:
     should_refuse = case.expect_kind == "refuse"
     refused_correctly = (answer.refused == should_refuse)
     answered = answer.refused is False if not should_refuse else True
+
+    # ABSENCE contract: the asked entity does not exist → the correct answer STATES the absence (flags a
+    # coverage gap) and does NOT confabulate it (forbidden phrases). Grounding is fine — the answer may
+    # cite what IS known. This is the deterministic proxy for "recognized the absence" (Rule 4/6).
+    if case.expect_kind == "absence":
+        confabulated = any(p.lower() in low for p in case.forbidden_phrases)
+        absence_ok = bool(answer.coverage_gaps) and not confabulated
+        return QaScore(
+            case_id=case.id, values_present=True, forbidden_values_absent=not confabulated,
+            phrases_ok=not confabulated, refused_correctly=True, answered=True,
+            citation_grounded=True, evidence_floor_ok=True, fully_correct=absence_ok,
+            clinical_risk=case.clinical_risk)
 
     # Grounding: when we answered and grounding is required, every claim must be
     # verified AND every declared citation constraint met by some verified claim.

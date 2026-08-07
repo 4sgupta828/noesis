@@ -26,6 +26,7 @@ def _answer_from_result(res: AnswerResult) -> QaAnswer:
     return QaAnswer(
         prose=prose,
         refused=not res.grounded,
+        coverage_gaps=tuple(getattr(res, "coverage_gaps", ()) or ()),
         claims=tuple(
             QaClaim(text=c.text, verified=True,
                     citation_facets=dict(getattr(c, "facets", {}) or {},

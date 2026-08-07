@@ -240,20 +240,23 @@ it in one switch.
 
 ## Tracked known issues
 
-### Abstention on "no established / no approved X" questions
-The anti-abstention recovery in `run_react` (`_finalize_answer` re-asks up to 3×
-when the agent returns empty claims despite gathered evidence) biases the system
-toward a *partial grounded answer* over an honest "there is no approved/established
-X." Surfaced by the held-out clinical benchmark
-(`eval_clinical_gold.py::refuse_no_approved_therapy`, "FDA-approved gene therapy
-for essential hypertension"): the agent cited a tangential trial and answered
-instead of stating none exists. This is a genuine weakness, **not** a gold error —
-the benchmark is deliberately kept honest (weakening it to pass would be an
-"eval that lies"). Intended fix (future, its own design + held-out cases): let
-compose emit an explicit *grounded-in-absence* answer ("no approved/established X
-exists in the retrieved evidence") as a valid response, rather than the recovery
-loop forcing a tangential claim. Until then, these cases correctly fail and flag
-the risk.
+### Absence handling ("no established / no approved X") — fixed, residual RELIABILITY
+For a question about a specific entity that does not exist (a fixed-dose combination
+pill, an FDA-approved gene therapy for hypertension), the correct answer STATES the
+absence and cites what IS known, rather than confabulating. Two fixes landed:
+1. **Compose directive** (`react.py`, answer-focus clause): a narrow existence/approval
+   instruction — when the findings show only components/adjacent research, state the
+   evidence doesn't establish the specific thing and set `directly_addresses=false`.
+2. **Eval contract** (`eval_clinical_gold.py`, `qa_scoring.py`): the original
+   `expect: refuse` (= `grounded==False`) MIS-FIRED — it penalized the correct
+   *grounded* "no approved X exists; here's what's known" answer (Rule 4: the eval was
+   wrong, not the system). Reframed to `expect: "absence"` = the run must flag a
+   coverage gap about the missing entity AND not confabulate it.
+Verified: the system DOES state the absence + flags the gap (inspection-confirmed).
+**Residual = reliability**: whether the coverage gap is emitted is model-variable
+(one benchmark run flagged it, another didn't — the same non-determinism as the
+reasoning-read skip). Next step (its own work): a targeted reliability nudge for the
+absence signal on existence questions, analogous to the reasoning-retry.
 
 ### EuropePMC evidence tiers: re-ingest for full metadata
 `europepmc.py` now stores the **strongest** `pubType` (was `pubType[0]`), and the

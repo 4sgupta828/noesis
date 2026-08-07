@@ -39,6 +39,23 @@ def test_evidence_floor_skipped_on_refusal_and_when_unset():
     assert score_qa(nofloor, _ans("5 mg daily", [QaClaim("x", True)])).evidence_floor_ok
 
 
+def test_absence_contract():
+    case = QaCase(id="a", expect_kind="absence",
+                  forbidden_phrases=("the approved product is",))
+    # correct: flags a coverage gap + doesn't confabulate → pass (grounding on context is fine)
+    ok = score_qa(case, QaAnswer(prose="There is no approved therapy; here is the related research.",
+                                 claims=(QaClaim("x", True),),
+                                 coverage_gaps=("no approved therapy exists",)))
+    assert ok.fully_correct
+    # did NOT recognize the absence (no gap flagged) → fail
+    nogap = score_qa(case, QaAnswer(prose="Here are some options.", claims=(QaClaim("x", True),)))
+    assert not nogap.fully_correct
+    # confabulated that it exists → fail even with a gap
+    confab = score_qa(case, QaAnswer(prose="The approved product is drugX.",
+                                     coverage_gaps=("partial",)))
+    assert not confab.fully_correct
+
+
 def test_summarize_risk_weight_and_critical_gate():
     # one high-risk FAIL + two low-risk passes: overall not ok (critical gate), weighted rate reflects risk
     scores = {

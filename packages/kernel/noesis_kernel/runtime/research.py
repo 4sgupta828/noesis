@@ -265,6 +265,22 @@ class ResearchService:
         roster = {getattr(s, "id", ""): s for s in self.panel_specialists}
         ids = [i for i in (specialist_ids or list(self.panel_default_ids)) if i in roster]
         specialists = [roster[i] for i in ids] or list(self.panel_specialists)
+        # FOLLOW-UP RESOLUTION (same as ask()): rewrite an elliptical follow-up ("what if they also have
+        # gout?") into a SELF-CONTAINED question carrying the case subject, BEFORE the specialists run — so
+        # every specialist's retrieval + reasoning inherits the full context, not just a raw fragment.
+        if history:
+            try:
+                r = await self._resolve_followup(question, history, allow_clarify=False)
+                if r and r.core_query and r.core_query != question:
+                    question = r.core_query
+                    if on_event is not None:
+                        try:
+                            await on_event({"type": "resolved_question", "question": question})
+                        except Exception:   # noqa: BLE001
+                            pass
+            except Exception as e:   # noqa: BLE001 — fail-safe: keep the original follow-up
+                import logging
+                logging.getLogger(__name__).warning("panel follow-up resolution failed: %r", e)
         # episodic memory on: a follow-up should build on findings the panel already established
         history_context = build_history_context(history, answer_focus=True) or ""
 

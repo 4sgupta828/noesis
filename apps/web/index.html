@@ -469,6 +469,11 @@
   .prow-trace:not(:empty){max-height:180px;padding:.1rem .8rem .6rem 1.5rem;border-top:1px solid var(--hair);}
   .prow-trace .tstep{font-size:.76rem;}
   .psynthstat{color:var(--muted);font-size:.9rem;margin-top:.7rem;}
+  .pstop{margin-left:.7rem;font-family:var(--mono);font-size:.68rem;font-weight:640;cursor:pointer;
+    border:1px solid var(--hair);background:var(--panel2);color:var(--ink);border-radius:8px;padding:.25rem .6rem;}
+  .pstop:hover{border-color:#c0392b;color:#c0392b;}
+  .presolved{margin:.5rem 0 .3rem;font-size:.82rem;color:var(--muted);}
+  .presolved .tq{color:var(--ink);font-style:italic;}
   /* multi-turn panel conversation */
   .panelconv .panelturns{display:flex;flex-direction:column;gap:1.6rem;}
   .panelconv-pane{max-width:none;}   /* in the sessions pane the conference fills the detail column */
@@ -2427,7 +2432,9 @@ async function runPanelTurn(question){
   const live = $("#panellive");
   live.innerHTML = `<div class="panelturn live">
     ${follow ? `<div class="panelq-echo"><span class="pqt">Follow-up</span> <b>${esc(question)}</b></div>` : ""}
-    <div class="planintro">The panel is reviewing the evidence — each specialist through its own lens.</div>
+    <div class="planintro">The panel is reviewing the evidence — each specialist through its own lens.
+      <button type="button" class="pstop" id="pstop">■ Stop</button></div>
+    <div class="presolved" id="presolved" hidden></div>
     <div class="prows">${ids.map(id=>`<div class="prow" data-id="${esc(id)}">
         <div class="prow-h"><span class="prow-dot"></span><span class="prow-name">${esc((specById[id]||{}).specialty||id)}</span><span class="prow-st">waiting…</span></div>
         <div class="prow-trace" data-trace="${esc(id)}"></div></div>`).join("")}</div>
@@ -2440,7 +2447,10 @@ async function runPanelTurn(question){
   const history = PANEL_THREAD.turns.map(t=>({question:t.question, answer:t.result.synthesis||"",
     claims:(t.result.claims||[]).slice(0,8).map(c=>({text:c.text||""}))}));
   const ctrl = new AbortController();
+  let userStopped = false;
   const timer = setTimeout(()=>ctrl.abort(), 600000);   // 10-min hard cap
+  const stopBtn = $("#pstop");
+  if(stopBtn) stopBtn.addEventListener("click", ()=>{ userStopped = true; try{ ctrl.abort(); }catch(_){} });
   try{
     const result = await streamPanel({question, tenant_id:"demo", specialists: ids, history,
         session_id: PANEL_THREAD.session_id, rationales: PANEL_THREAD.rationales}, ev=>{
@@ -2448,6 +2458,8 @@ async function runPanelTurn(question){
       else if(ev.type==="specialist_trace") pushTrace(traceOf(ev.id), ev.ev);
       else if(ev.type==="specialist_done") setRow(ev.id, ev.error?"err":"done", ev.error?"failed":`${ev.verified} finding${ev.verified===1?"":"s"}`);
       else if(ev.type==="synthesizing"){ const ss=$("#psynthstat"); if(ss) ss.hidden=false; }
+      else if(ev.type==="resolved_question"){ const rq=$("#presolved");   // followed the context intelligently
+        if(rq){ rq.hidden=false; rq.innerHTML = `↳ Interpreting your follow-up as: <span class="tq">${esc(ev.question||"")}</span>`; } }
     }, ctrl.signal);
     if(result.session_id) PANEL_THREAD.session_id = result.session_id;   // shareable thread (permalink)
     PANEL_THREAD.turns.push({question, result});
@@ -2455,10 +2467,16 @@ async function runPanelTurn(question){
     const ff2 = $("#panelfollow"); if(ff2) ff2.hidden = false;
     const last = pbody().querySelectorAll(".panelturn"); if(last.length) last[last.length-1].scrollIntoView({behavior:"smooth", block:"start"});
   }catch(e){
-    const msg = ctrl.signal.aborted ? "The panel timed out." : esc(String(e.message||e));
-    live.innerHTML = `<div class="panelstatus">The panel couldn't complete. ${msg}
-      <div style="margin-top:1rem"><button type="button" class="panelbtn" onclick="runPanelTurn(${JSON.stringify(question)})">↻ Retry</button>
-        <button type="button" class="panelbtn" onclick="renderPanelLanding('')" style="margin-left:.5rem;">＋ New case</button></div></div>`;
+    if(userStopped){   // user pressed Stop — leave the thread intact and re-offer the composer
+      live.innerHTML = `<div class="panelstatus">Panel stopped.
+        <div style="margin-top:1rem"><button type="button" class="panelbtn" onclick="runPanelTurn(${JSON.stringify(question)})">↻ Run again</button></div></div>`;
+      const ff3 = $("#panelfollow"); if(ff3 && PANEL_THREAD.turns.length) ff3.hidden = false;
+    } else {
+      const msg = ctrl.signal.aborted ? "The panel timed out." : esc(String(e.message||e));
+      live.innerHTML = `<div class="panelstatus">The panel couldn't complete. ${msg}
+        <div style="margin-top:1rem"><button type="button" class="panelbtn" onclick="runPanelTurn(${JSON.stringify(question)})">↻ Retry</button>
+          <button type="button" class="panelbtn" onclick="renderPanelLanding('')" style="margin-left:.5rem;">＋ New case</button></div></div>`;
+    }
   }finally{ clearTimeout(timer); }
 }
 

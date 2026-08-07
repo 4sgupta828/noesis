@@ -120,6 +120,19 @@ SPECIALISTS: tuple[SpecialistConfig, ...] = (
 _BY_ID = {s.id: s for s in SPECIALISTS}
 DEFAULT_PANEL_IDS: tuple[str, ...] = ("clinical_pharmacology", "ebm_methodologist", "primary_care")
 
+# Sample cases seeded into the panel intake (the FE rotates/shows a few). Each is a MULTI-SPECIALTY
+# vignette that genuinely benefits from a panel — chosen so triage convenes different specialist sets.
+PANEL_EXAMPLE_CASES: tuple[str, ...] = (
+    "72-year-old with heart failure with reduced EF and CKD stage 3 on metformin — how should guideline-directed therapy be optimized?",
+    "28-year-old woman with epilepsy on valproate who is planning pregnancy — how should her regimen be managed?",
+    "65-year-old with type 2 diabetes, established ASCVD, and obesity — which glucose-lowering therapy best reduces cardiovascular and renal risk?",
+    "8-year-old with moderate atopic dermatitis not controlled on topical corticosteroids — what are the next-line options?",
+    "70-year-old with atrial fibrillation, a prior GI bleed, and CKD — how should anticoagulation be approached?",
+    "45-year-old with treatment-resistant depression and untreated hypothyroidism — how should therapy be adjusted?",
+    "60-year-old starting a biologic for rheumatoid arthritis — what infection screening and prophylaxis are needed first?",
+    "55-year-old with knee osteoarthritis, hypertension, and CKD stage 3 — how should chronic pain be managed safely?",
+)
+
 
 def specialist(id: str) -> SpecialistConfig | None:
     return _BY_ID.get(id)

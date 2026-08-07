@@ -384,6 +384,7 @@ def build_default_service() -> ResearchService:
         panel_specialists=getattr(manifest, "panel_specialists", ()),
         panel_default_ids=getattr(manifest, "panel_default_ids", ()),
         panel_synthesis_directive=getattr(manifest, "panel_synthesis_directive", None),
+        panel_examples=getattr(manifest, "panel_examples", ()),
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
         answer_format=answer_format,
         # Patient directive resolved INDEPENDENTLY of structured_answers/clinical_synthesis — the
@@ -541,6 +542,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                  "focus": getattr(s, "focus", ""),   # the specialist's expertise, shown on the panel roster
                  "default": getattr(s, "id", "") in set(getattr(svc, "panel_default_ids", ()))}
                 for s in getattr(svc, "panel_specialists", ())] if ask_panel_enabled() else []),
+            "panel_examples": (list(getattr(svc, "panel_examples", ())) if ask_panel_enabled() else []),
             "refine_enabled": refine_enabled() and bool(getattr(svc, "refine_prompt", None)),
         }
 

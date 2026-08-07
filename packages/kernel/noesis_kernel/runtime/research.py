@@ -87,6 +87,7 @@ class ResearchService:
     panel_specialists: tuple = ()           # Ask-Panel roster (vertical-supplied specialist configs)
     panel_default_ids: tuple = ()           # ids the default panel runs
     panel_synthesis_directive: str | None = None
+    panel_examples: tuple = ()              # sample multi-specialty cases seeded into the panel intake
 
     def _retriever(self, source_keys: list[str] | None) -> MultiSourceRetriever:
         chosen = {k: v for k, v in self.sources.items()

@@ -118,6 +118,7 @@ class VerticalManifest:
     panel_specialists: tuple = ()
     panel_default_ids: tuple = ()          # which specialists the default panel runs
     panel_synthesis_directive: str | None = None
+    panel_examples: tuple = ()             # sample multi-specialty cases seeded into the panel intake
 
     # Optional STRUCTURAL evidence-tier classifier: (source_key, facets) -> evidence_kind str (Rule 18 —
     # maps computable per-source metadata onto the authority pyramid, no semantic judgment). Used to

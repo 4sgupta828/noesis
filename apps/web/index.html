@@ -367,6 +367,8 @@
   .spec-toggle::after{content:"Show ▸";} .spec[open] .spec-toggle::after{content:"Hide ▾";}
   .spec-b{padding:.2rem .9rem 1rem;font-size:.9rem;line-height:1.6;color:var(--ink);}
   .spec-b .answer.md{font-size:.88rem;}
+  .spec-why{font-size:.8rem;color:var(--muted);line-height:1.5;margin:0 0 .6rem;padding-bottom:.5rem;border-bottom:1px dotted var(--hair);}
+  .spec-why-l{font-family:var(--mono);font-size:.56rem;text-transform:uppercase;letter-spacing:.08em;color:var(--gold);margin-right:.35rem;}
   .spec-ev{margin-top:.8rem;border-top:1px solid var(--hair);padding-top:.6rem;}
   .spec-ev-h{font-family:var(--mono);font-size:.56rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.4rem;}
   .spec-ev-l{margin:0;padding-left:1.3rem;display:flex;flex-direction:column;gap:.4rem;}
@@ -2150,7 +2152,9 @@ function renderPanelPlan(question, data, manual){
   pbody().querySelectorAll(".pchk").forEach(c=>c.addEventListener("change", refresh));
   $("#panelrun").addEventListener("click", ()=>{
     const ids = [...pbody().querySelectorAll(".pcard")].filter(l=>l.querySelector(".pchk").checked).map(l=>l.dataset.id);
-    if(ids.length) runPanel(question, ids);
+    // carry the triage's why-selected rationale for each chosen specialist (manual adds → left blank)
+    const rationales = {}; ids.forEach(id=>{ if(ration[id]) rationales[id]=ration[id]; });
+    if(ids.length) runPanel(question, ids, rationales);
   });
   refresh();
 }
@@ -2183,11 +2187,11 @@ async function streamPanel(payload, onEvent, signal){
 // specialist's live status so a multi-minute run reads as progress, not a hang.
 // The panel is a STREAMING, MULTI-TURN CONVERSATION (mirrors the primary agent's thread). PANEL_THREAD
 // holds the convened set + completed turns; each turn streams its specialists' live traces, then commits.
-let PANEL_THREAD = {ids: [], turns: [], session_id: null};   // convened specialists + committed turns + permalink
+let PANEL_THREAD = {ids: [], turns: [], session_id: null, rationales: {}};   // + why each specialist was convened
 
 // Entry from the convene screen: start a FRESH panel conversation with the confirmed specialists.
-function runPanel(question, ids){
-  PANEL_THREAD = {ids: ids.slice(), turns: [], session_id: null};
+function runPanel(question, ids, rationales){
+  PANEL_THREAD = {ids: ids.slice(), turns: [], session_id: null, rationales: rationales || {}};
   renderPanelConversation();
   runPanelTurn(question);
 }
@@ -2202,8 +2206,9 @@ function panelTakeHtml(t){
                  : (c.source ? `<span class="spec-cs">${lbl}</span>` : ""); };
   const ev = cl.length ? `<div class="spec-ev"><div class="spec-ev-h">Evidence · ${cl.length}</div>
     <ol class="spec-ev-l">${cl.map(c=>`<li><span class="spec-cq">${esc(c.quote||c.text||"")}</span> ${cite(c)}</li>`).join("")}</ol></div>` : "";
+  const why = t.rationale ? `<div class="spec-why"><span class="spec-why-l">Convened for</span> ${esc(t.rationale)}</div>` : "";
   return `<details class="spec"><summary class="spec-h"><span class="spec-name">${esc(t.specialty)}</span>${badge}<span class="spec-toggle"></span></summary>
-    <div class="spec-b"><div class="answer md">${bodyHtml}</div>${ev}</div></details>`;
+    <div class="spec-b">${why}<div class="answer md">${bodyHtml}</div>${ev}</div></details>`;
 }
 // Render the whole conversation: each completed turn (Q + conference), a live area for the in-flight turn,
 // and the docked follow-up composer — the same shape as the primary agent's threaded chat.
@@ -2258,7 +2263,8 @@ function openPanelSession(row){
     confidence: t.confidence||null, reasoning_purpose: t.reasoning_purpose||"",
     reasoning_conclusion: t.reasoning_conclusion||""}}));
   const lastTakes = turns.length ? (turns[turns.length-1].result.takes||[]) : [];
-  PANEL_THREAD = {ids: lastTakes.map(t=>t.id), turns, session_id: row.id};
+  const rationales = {}; lastTakes.forEach(t=>{ if(t.rationale) rationales[t.id]=t.rationale; });
+  PANEL_THREAD = {ids: lastTakes.map(t=>t.id), turns, session_id: row.id, rationales};
   // the panel is its OWN page — clear any Q&A view underneath so closing it never reveals stale content
   try{ out.innerHTML = ""; document.body.classList.remove("chatting"); }catch(e){}
   const v = $("#panelview"); if(v){ v.hidden = false; document.body.style.overflow = "hidden"; }
@@ -2299,7 +2305,7 @@ async function runPanelTurn(question){
   const timer = setTimeout(()=>ctrl.abort(), 600000);   // 10-min hard cap
   try{
     const result = await streamPanel({question, tenant_id:"demo", specialists: ids, history,
-        session_id: PANEL_THREAD.session_id}, ev=>{
+        session_id: PANEL_THREAD.session_id, rationales: PANEL_THREAD.rationales}, ev=>{
       if(ev.type==="specialist_start") setRow(ev.id, "run", "reviewing evidence…");
       else if(ev.type==="specialist_trace") pushTrace(traceOf(ev.id), ev.ev);
       else if(ev.type==="specialist_done") setRow(ev.id, ev.error?"err":"done", ev.error?"failed":`${ev.verified} finding${ev.verified===1?"":"s"}`);

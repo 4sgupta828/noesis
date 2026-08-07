@@ -221,6 +221,7 @@ class PanelIn(BaseModel):
     sources: list[str] | None = None
     history: list[dict] | None = None      # prior panel turns [{question, answer, claims}] for a follow-up
     session_id: str | None = None          # the panel thread this turn continues (echoed back)
+    rationales: dict | None = None         # {specialist_id: why-selected} from triage, shown per specialist
 
 
 class SuggestIn(BaseModel):
@@ -651,6 +652,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "question": r.question, "n_specialists": r.n_specialists,
             "takes": [{"id": t.id, "specialty": t.specialty, "answer": t.answer,
                        "grounded": t.grounded, "n_verified": t.n_verified, "error": t.error,
+                       "rationale": getattr(t, "rationale", ""),
                        "claims": _with_urls(getattr(t, "claims", []))}
                       for t in r.takes],
             "synthesis": r.synthesis, "claims": _with_urls(r.claims),
@@ -698,7 +700,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         try:
             r = await app.state.service.ask_panel(
                 question=body.question, tenant_id=body.tenant_id, workspace_id=body.workspace_id,
-                specialist_ids=body.specialists or None, source_keys=body.sources, history=body.history)
+                specialist_ids=body.specialists or None, source_keys=body.sources, history=body.history,
+                rationales=body.rationales)
         except CassetteMiss as e:
             raise HTTPException(status_code=503, detail="No model available in replay mode.") from e
         except Exception as e:   # noqa: BLE001
@@ -726,7 +729,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 r = await app.state.service.ask_panel(
                     question=body.question, tenant_id=body.tenant_id, workspace_id=body.workspace_id,
                     specialist_ids=body.specialists or None, source_keys=body.sources,
-                    history=body.history, on_event=on_event)
+                    history=body.history, rationales=body.rationales, on_event=on_event)
                 sid = await _persist_panel(body, r)
                 await queue.put({"type": "final", "result": _panel_payload(r, session_id=sid or body.session_id)})
             except CassetteMiss:

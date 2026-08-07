@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from dataclasses import dataclass, field
 
 from pydantic import BaseModel
@@ -42,12 +43,17 @@ async def plan_panel(*, question, roster, llm) -> list[dict]:
     Fail-safe: any error → a sensible default subset so the panel still convenes."""
     by_id = {r["id"]: r for r in roster}
     catalog = "\n".join(f"- {r['id']} — {r['specialty']}: {(r.get('lens') or '')[:180]}" for r in roster)
-    system = ("You are the chair of a clinical case panel. Given a case, decide WHICH specialists should "
-              "review it — pick the 2–5 whose lens is genuinely relevant; do not convene a specialist "
-              "whose lens the case does not touch. Always include at least one whole-patient integrator "
-              "(e.g. primary care) and the evidence-quality lens.")
-    user = (f"Case / question:\n{question}\n\nAvailable specialists:\n{catalog}\n\nReturn the specialists "
-            "to convene, each with a ONE-LINE rationale specific to this case. 2–5 specialists.")
+    system = ("You are the chair of a clinical case panel. Choose the FEWEST specialists whose lenses "
+              "TOGETHER cover the clinically important dimensions THIS case actually raises — a MINIMAL "
+              "covering set, not a full roster. Add a specialist ONLY when it covers a dimension that no "
+              "already-chosen lens covers; never pad the panel with a lens the case does not touch. A "
+              "focused single-issue case may need only 2; a genuinely multi-system case needs more. Always "
+              "include the evidence-quality lens (rigor). Prefer the smallest set that still gives good "
+              "coverage — minimal specialists, best coverage.")
+    user = (f"Case / question:\n{question}\n\nAvailable specialists:\n{catalog}\n\nReturn the minimal "
+            "covering set to convene. For EACH, give a ONE-LINE rationale naming the specific dimension of "
+            "THIS case that this specialist covers (why it's needed). Do not include a specialist you "
+            "cannot justify with a distinct dimension.")
     try:
         comp = await llm.complete(system=system, messages=[{"role": "user", "content": user}],
                                   response_format=PanelPlan, max_tokens=1200)
@@ -63,6 +69,7 @@ async def plan_panel(*, question, roster, llm) -> list[dict]:
         out.append({"id": p.id, "specialty": by_id[p.id]["specialty"], "rationale": p.rationale.strip()})
     return out
 
+_REF_RE = re.compile(r"\[\d+\]")   # strip a specialist's OWN local [n] refs when feeding its prose to the chair
 _SPECIALIST_MAX_STEPS = 4       # narrower than a full answer (each lens is scoped)
 _SPECIALIST_MAX_CALLS = 12      # per-specialist budget ceiling (panel = N × this, hard-capped)
 _PANEL_CONCURRENCY = 3
@@ -78,6 +85,7 @@ class SpecialistTake:
     n_verified: int
     error: str = ""
     claims: list = field(default_factory=list)   # this specialist's OWN verified findings (its [n] resolve here)
+    rationale: str = ""                          # why this specialist was convened for THIS case (triage)
 
 
 # Each specialist is ONE voice on the panel — a focused, structured, SCANNABLE take (its full evidence
@@ -113,7 +121,7 @@ async def _emit(on_event, ev: dict) -> None:
 
 
 async def run_panel(*, question, specialists, llm, embedder, make_retrievers, tenant_id,
-                    workspace_id=None, synthesis_directive="", history_context="",
+                    workspace_id=None, synthesis_directive="", history_context="", rationales=None,
                     chair_system_prompt="You are an evidence-grounded clinical research panel chair.",
                     classify_evidence=None, evidence_ranker=None, evidence_fitness=False,
                     on_event=None) -> PanelResult:
@@ -164,7 +172,8 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
                               answer=(res.composed_answer if res else ""),
                               grounded=bool(res and res.grounded),
                               n_verified=len(res.verified_claims) if res else 0, error=err,
-                              claims=([_vc_dict(vc) for vc in res.verified_claims] if res else []))
+                              claims=([_vc_dict(vc) for vc in res.verified_claims] if res else []),
+                              rationale=(rationales or {}).get(spec.id, ""))
         result.takes.append(take)
         if res:
             for vc in res.verified_claims:
@@ -192,12 +201,25 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
     conv_ctx = (f"CONVERSATION SO FAR (prior questions and answers in this panel thread; context to "
                 f"interpret the CURRENT question — NOT evidence, NEVER cite it as a finding):\n{conv}\n\n"
                 if conv else "")
+    # Each specialist's OWN reasoning (their take) — the raw material for the COLLECTIVE reasoning. The
+    # overall reasoner reads HOW each lens reasoned; but this is CONTEXT, not citable (only the numbered
+    # findings are). Local [n] refs stripped so they don't collide with the pooled numbering.
+    def _assess(t):
+        head = f"{t.specialty} (convened for: {t.rationale})" if t.rationale else t.specialty
+        return f"{head}:\n{_REF_RE.sub('', t.answer).strip()}"
+    assessments = "\n\n".join(_assess(t) for t in result.takes if t.answer)
+    assess_ctx = (f"SPECIALIST ASSESSMENTS — how EACH lens reasoned about THIS case. Use this to build the "
+                  f"panel's COLLECTIVE reasoning (where the lenses agree, where they weigh evidence "
+                  f"differently and how you reconcile it). This is REASONING CONTEXT, NOT citable evidence — "
+                  f"cite ONLY the numbered findings below:\n{assessments}\n\n" if assessments else "")
     synth_user = (
-        conv_ctx
-        + f"Question: {question}\n\nVERIFIED PANEL FINDINGS (from the specialists — the ONLY facts you may "
-        f"use, each tagged with the specialist who found it):\n{findings}\n\n"
-        "Synthesize these into ONE coherent panel answer. Reference each finding inline as [n]. Use ONLY "
-        "the findings above — add no fact, figure, dose, or claim not present in them."
+        conv_ctx + assess_ctx
+        + f"Question: {question}\n\nVERIFIED PANEL FINDINGS (the ONLY facts you may cite, each tagged with "
+        f"the specialist who found it):\n{findings}\n\n"
+        "As the panel's OVERALL REASONER, integrate the specialist assessments and these findings into ONE "
+        "collective answer. Reference each finding inline as [n]. Every FACTUAL statement must rest on a "
+        "finding above — add no fact, figure, dose, or claim not present in them (the assessments guide the "
+        "REASONING, never introduce a new fact)."
         + reason_anchor
         + (("\n\n" + synthesis_directive) if synthesis_directive else ""))
 

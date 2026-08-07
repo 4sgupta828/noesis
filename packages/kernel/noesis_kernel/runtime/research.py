@@ -256,7 +256,7 @@ class ResearchService:
 
     async def ask_panel(self, *, question: str, tenant_id: str, workspace_id: str | None = None,
                         specialist_ids: list[str] | None = None, source_keys: list[str] | None = None,
-                        history: list[dict] | None = None, on_event=None):
+                        history: list[dict] | None = None, rationales: dict | None = None, on_event=None):
         """Ask-Panel (Alpha): run the selected specialists (or the default set) as parallel grounded
         loops and synthesize their pooled findings. Provides the domain-free orchestrator with a
         source-scoping callback so each specialist can prefer its own sources. `history` (prior panel
@@ -277,7 +277,7 @@ class ResearchService:
             question=question, specialists=specialists, llm=self.llm, embedder=self.embedder,
             make_retrievers=make_retrievers, tenant_id=tenant_id, workspace_id=workspace_id,
             synthesis_directive=self.panel_synthesis_directive or "", history_context=history_context,
-            chair_system_prompt=self.persona_prompt,
+            rationales=rationales, chair_system_prompt=self.persona_prompt,
             classify_evidence=self.classify_evidence, evidence_ranker=self.evidence_ranker,
             evidence_fitness=self.evidence_fitness, on_event=on_event)
 

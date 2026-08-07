@@ -625,10 +625,23 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
 
+    def _panel_payload(r) -> dict:
+        return {
+            "question": r.question, "n_specialists": r.n_specialists,
+            "takes": [{"id": t.id, "specialty": t.specialty, "answer": t.answer,
+                       "grounded": t.grounded, "n_verified": t.n_verified, "error": t.error}
+                      for t in r.takes],
+            "synthesis": r.synthesis, "claims": r.claims,
+            "interpretation": r.interpretation, "confidence": r.confidence,
+            "reasoning_purpose": r.reasoning_purpose, "reasoning_conclusion": r.reasoning_conclusion,
+        }
+
     @app.post("/panel/ask")
     async def panel_ask(body: PanelIn) -> dict:
         """Ask-Panel (Alpha): convene the selected AI specialists (or the default set) — each runs its
-        own grounded, lens-scoped research — and return each specialist's take + the synthesized panel."""
+        own grounded, lens-scoped research — and return each specialist's take + the synthesized panel.
+        NOTE: a full panel runs for several minutes; browsers should use /panel/ask/stream, which keeps
+        the connection alive with SSE keepalives (a plain POST this long is cut by the edge proxy → 502)."""
         if not ask_panel_enabled():
             raise HTTPException(status_code=404, detail="ask panel not enabled")
         if app.state.service is None:
@@ -641,15 +654,54 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=503, detail="No model available in replay mode.") from e
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
-        return {
-            "question": r.question, "n_specialists": r.n_specialists,
-            "takes": [{"id": t.id, "specialty": t.specialty, "answer": t.answer,
-                       "grounded": t.grounded, "n_verified": t.n_verified, "error": t.error}
-                      for t in r.takes],
-            "synthesis": r.synthesis, "claims": r.claims,
-            "interpretation": r.interpretation, "confidence": r.confidence,
-            "reasoning_purpose": r.reasoning_purpose, "reasoning_conclusion": r.reasoning_conclusion,
-        }
+        return _panel_payload(r)
+
+    @app.post("/panel/ask/stream")
+    async def panel_ask_stream(body: PanelIn):
+        """Live SSE for a panel run: emits specialist_start / specialist_done progress as each lens runs,
+        then a `final` event carrying the full panel payload. The keepalive `: ping` comments keep the
+        edge proxy from cutting the (multi-minute) connection — the fix for the plain-POST 502."""
+        if not ask_panel_enabled():
+            raise HTTPException(status_code=404, detail="ask panel not enabled")
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        from fastapi.responses import StreamingResponse
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def on_event(ev: dict) -> None:
+            await queue.put(ev)
+
+        async def run() -> None:
+            try:
+                r = await app.state.service.ask_panel(
+                    question=body.question, tenant_id=body.tenant_id, workspace_id=body.workspace_id,
+                    specialist_ids=body.specialists or None, source_keys=body.sources, on_event=on_event)
+                await queue.put({"type": "final", "result": _panel_payload(r)})
+            except CassetteMiss:
+                await queue.put({"type": "error", "detail": "No model available in replay mode."})
+            except Exception as e:   # noqa: BLE001
+                await queue.put({"type": "error", "detail": f"provider error: {e}"})
+            finally:
+                await queue.put(None)   # sentinel: stream complete
+
+        async def gen():
+            task = asyncio.create_task(run())
+            try:
+                yield ": open\n\n"                        # flush headers immediately
+                while True:
+                    try:
+                        ev = await asyncio.wait_for(queue.get(), timeout=15)
+                    except asyncio.TimeoutError:
+                        yield ": ping\n\n"; continue      # keepalive so proxies don't cut the stream
+                    if ev is None:
+                        break
+                    yield f"data: {json.dumps(ev)}\n\n"
+            finally:
+                if not task.done():
+                    task.cancel()
+
+        return StreamingResponse(gen(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
 
     async def _do_research(body: ResearchIn, on_event=None) -> ResearchOut:
         """Shared research core: attachments → ask (optional live on_event) → persist → ResearchOut.

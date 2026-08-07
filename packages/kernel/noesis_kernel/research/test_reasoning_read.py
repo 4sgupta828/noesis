@@ -80,3 +80,11 @@ def test_empty_is_noop():
 def test_extract_hard_tokens_normalizes():
     toks = extract_hard_tokens("53% response, 5 mg dose, on 2026-07-01, and $4.2M")
     assert "53" in toks and "5mg" in toks and "2026-07-01" in toks
+
+
+def test_extract_hard_tokens_ignores_letter_adjacent_digits():
+    # drug/identifier names must NOT yield spurious figure tokens (the prod PCSK9 false-positive)
+    toks = extract_hard_tokens("PCSK9 inhibitors, vitamin B12, COVID19, and CoQ10")
+    assert toks == set(), toks
+    # a real figure next to a name is still caught
+    assert "40" in extract_hard_tokens("PCSK9 inhibitors cut LDL by 40%")

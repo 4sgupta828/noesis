@@ -209,11 +209,14 @@ def _validate_charts(charts: list[ChartSpec], verified: list["VerifiedClaim"]) -
 # percentages/decimals/integers, ISO and US dates, $ amounts, and dose-like "5 mg" / "10mg".
 _HARD_TOKEN_RE = re.compile(
     r"""(?xi)
-    \d{4}-\d{2}-\d{2}                       # 2026-07-01 (longest first)
-    | \$?\d{1,3}(?:,\d{3})+(?:\.\d+)?       # 1,234 / $1,234.56
-    | \d+(?:\.\d+)?\s?(?:mg|mcg|µg|g|ml|kg|units?|iu)\b   # 5 mg / 10mg / 250 mcg (dose)
-    | \$?\d+(?:\.\d+)?%?                     # 9.5 / 9.5% / $4.2 / 42
-    | \d{1,2}/\d{1,2}/\d{2,4}              # 7/1/2026
+    (?<![A-Za-z0-9])                        # NOT letter/digit-adjacent → skip PCSK9, B12, COVID19, CoQ10
+    (?:
+      \d{4}-\d{2}-\d{2}                       # 2026-07-01 (longest first)
+      | \$?\d{1,3}(?:,\d{3})+(?:\.\d+)?       # 1,234 / $1,234.56
+      | \d+(?:\.\d+)?\s?(?:mg|mcg|µg|g|ml|kg|units?|iu)\b   # 5 mg / 10mg / 250 mcg (dose)
+      | \$?\d+(?:\.\d+)?%?                     # 9.5 / 9.5% / $4.2 / 42
+      | \d{1,2}/\d{1,2}/\d{2,4}              # 7/1/2026
+    )
     """,
 )
 

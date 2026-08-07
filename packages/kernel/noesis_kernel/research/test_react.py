@@ -441,6 +441,50 @@ def test_diagnostics_off_is_none():
     assert res.diagnostics is None
 
 
+def test_evidence_fitness_boosts_stronger_tier_on_ties():
+    # Two equally-relevant claims (identical embeddings); the guideline tier is boosted above the case
+    # report into the top-1 cap. Boost-only: without a ranker, order is preserved.
+    from noesis_kernel.research.react import _rank_claims_by_relevance, VerifiedClaim
+    class _FE:
+        def dim(self): return 2
+        def embed(self, texts): return [[1.0, 0.0] for _ in texts]   # everything identical → pure tie
+    weak = VerifiedClaim("weak", "a1", "q", evidence_kind="case_report")
+    strong = VerifiedClaim("strong", "a2", "q", evidence_kind="guideline")
+    claims = [weak, strong]                                  # weak first
+    rank = {"case_report": 1, "guideline": 6}.get
+    top1 = asyncio.run(_rank_claims_by_relevance("q", claims, _FE(), 1, evidence_ranker=lambda k: rank(k, 0)))
+    assert top1[0].evidence_kind == "guideline"             # stronger tier won the tie
+    # no ranker → boost is a no-op → the relevance order (stable) is kept
+    noboost = asyncio.run(_rank_claims_by_relevance("q", claims, _FE(), 1))
+    assert noboost[0].evidence_kind == "case_report"
+
+
+def test_prose_hard_token_scan_flags_unsupported_figure():
+    from noesis_kernel.research.react import _unsupported_prose_tokens, VerifiedClaim
+    v = [VerifiedClaim("response was 53%", "a1", "response was 53%")]
+    assert _unsupported_prose_tokens("The response rate was 53%.", v) == set()      # supported
+    assert "70" in _unsupported_prose_tokens("Response could reach 70%.", v)        # fabricated in prose
+    assert _unsupported_prose_tokens("", v) == set()                                # no answer → nothing
+
+
+def test_evidence_fitness_reported_in_diagnostics(monkeypatch):
+    # With fitness + diagnostics on, the trace reports the evidence-tier histogram and the prose scan.
+    import noesis_kernel.research.react as react
+    monkeypatch.setattr(react, "_COMPOSE_BACKOFF_S", 0)
+    from noesis_kernel.research.react import ComposedAnswer
+    src, make = _compose_setup()
+    def compose_fn(call_n):
+        return LLMResult(parsed=ComposedAnswer(answer="Metric value is 9.8 percent [1]."), output_tokens=5)
+    llm = make(compose_fn)
+    res = asyncio.run(run_react(question="what was the metric value?", llm=llm,
+        embedder=FakeEmbedder(dim=8), source=src, tenant_id="A", budget=BudgetState(max_calls=20),
+        collect_diagnostics=True, classify_evidence=lambda sk, f: "rct",
+        evidence_fitness=True, evidence_ranker=lambda k: 5 if k == "rct" else 0))
+    assert res.grounded
+    assert res.diagnostics["evidence_tiers"].get("rct") == 1
+    assert res.diagnostics["prose_unsupported_tokens"] == []   # 9.8 is in the finding
+
+
 def test_rank_claims_fail_safe_on_embed_error():
     # Any embedding failure must degrade to today's behavior (first `top`), never crash the answer.
     from noesis_kernel.research.react import _rank_claims_by_relevance, VerifiedClaim

@@ -276,12 +276,21 @@ def _refs_valid(text: str, n_findings: int) -> bool:
     return all(1 <= r <= n_findings for r in refs)
 
 
-async def _rank_claims_by_relevance(question, claims, embedder, top):
+# Evidence-fitness (flag): a small, BOUNDED tier boost added on top of the dense relevance score, so
+# when two findings are similarly relevant the stronger tier (guideline/SR > RCT > cohort > case report)
+# surfaces into the compose cap. Boost-only + small weight so cosine still dominates and an unknown tier
+# (rank 0) is a no-op → never demotes a finding below its relevance rank. Max authority rank = 6.
+_EVIDENCE_FITNESS_WEIGHT = 0.15
+_EVIDENCE_MAX_RANK = 6
+
+
+async def _rank_claims_by_relevance(question, claims, embedder, top, *,
+                                    evidence_ranker=None):
     """Keep the `top` verified claims most RELEVANT to the question, by dense cosine similarity of
-    claim↔question embeddings. This replaces first-come truncation so compose gets the BEST findings,
-    not the first ones retrieved. A dense embedding score is a computable relevance signal (Rule 18 —
-    NOT a regex/keyword semantic heuristic); it never touches the span/entailment gates, so which
-    claims are ELIGIBLE is unchanged — only which of the already-verified ones survive the cap.
+    claim↔question embeddings (Rule 18 — a computable relevance signal, not a keyword heuristic). When
+    `evidence_ranker` is supplied (evidence-fitness on), a SMALL bounded evidence-tier boost is added so
+    a stronger-tier finding wins ties — boost-only, never demoting below the relevance baseline. Neither
+    touches the span/entailment gates; only which already-verified claims survive the cap changes.
     Fail-safe: any embedding error → the original order's first `top` (never worse than today)."""
     import asyncio
     import math
@@ -294,13 +303,22 @@ async def _rank_claims_by_relevance(question, claims, embedder, top):
     qv = vecs[0]
     qn = math.sqrt(sum(x * x for x in qv)) or 1.0
 
-    def _cos(i: int) -> float:
+    def _boost(i: int) -> float:
+        if evidence_ranker is None:
+            return 0.0
+        try:
+            r = evidence_ranker(getattr(claims[i], "evidence_kind", "") or "")
+        except Exception:   # noqa: BLE001 — ranking must never break selection
+            return 0.0
+        return _EVIDENCE_FITNESS_WEIGHT * (max(0, int(r)) / _EVIDENCE_MAX_RANK)
+
+    def _score(i: int) -> float:
         v = vecs[1 + i]
         dot = sum(a * b for a, b in zip(qv, v))
         vn = math.sqrt(sum(x * x for x in v)) or 1.0
-        return dot / (qn * vn)
+        return dot / (qn * vn) + _boost(i)          # cosine + bounded tier boost (boost-only)
 
-    order = sorted(range(len(claims)), key=_cos, reverse=True)
+    order = sorted(range(len(claims)), key=_score, reverse=True)
     return [claims[i] for i in order[:top]]
 
 
@@ -408,6 +426,8 @@ async def run_react(
     reasoning_read: bool = False,             # surface the validated interpretation + confidence layer (flag)
     collect_diagnostics: bool = False,        # capture a troubleshooting trace (turns/tools/retries/failures)
     classify_evidence=None,                   # vertical hook (source_key, facets) -> evidence_kind str (Rule 18: structural)
+    evidence_fitness: bool = False,           # boost stronger evidence tiers into the compose cap (flag)
+    evidence_ranker=None,                     # vertical hook: evidence_kind -> int rank (the authority pyramid)
 ) -> AnswerResult:
     import asyncio
     atoms = AtomStore()
@@ -725,14 +745,16 @@ async def run_react(
             if diag is not None:
                 diag["failures"].append({"stage": "extraction", "detail": repr(_ex)[:200]})
 
-    # Evidence SELECTION (flag): compose is capped for cost/scannability, so WHICH verified findings
+    # Evidence SELECTION (flags): compose is capped for cost/scannability, so WHICH verified findings
     # survive the cap matters. Default = first-come. Under evidence-select, keep the findings most
-    # RELEVANT to the question (span+entailment already passed → provenance unchanged; this only
-    # reorders/trims already-verified claims). Applies to the whole set (loop + fallback + extraction).
-    if evidence_select and len(result.verified_claims) > compose_claim_cap:
+    # RELEVANT to the question; under evidence-fitness, additionally boost stronger evidence TIERS into
+    # the cap (span+entailment already passed → provenance unchanged; this only reorders/trims already-
+    # verified claims). Either flag triggers the ranking pass.
+    if (evidence_select or evidence_fitness) and len(result.verified_claims) > compose_claim_cap:
         await emit({"type": "selecting", "from": len(result.verified_claims), "to": compose_claim_cap})
         result.verified_claims = await _rank_claims_by_relevance(
-            question, result.verified_claims, embedder, compose_claim_cap)
+            question, result.verified_claims, embedder, compose_claim_cap,
+            evidence_ranker=(evidence_ranker if evidence_fitness else None))
 
     # Compose a synthesized answer FROM the verified findings only (factra "living
     # answer" model). Grounded by construction: the composer sees only the verified
@@ -906,6 +928,32 @@ async def run_react(
         diag["stopped_reason"] = result.stopped_reason
         diag["retried_empty"] = result.retried_empty
         diag["compose_failed"] = result.compose_failed
+        # A4: evidence-tier histogram of the cited findings (prod-observable evidence-fitness signal).
+        tiers: dict[str, int] = {}
+        for vc in result.verified_claims:
+            k = getattr(vc, "evidence_kind", "") or "unclassified"
+            tiers[k] = tiers.get(k, 0) + 1
+        diag["evidence_tiers"] = tiers
+        # A6: hard-token scan of the PROSE answer — a number/dose/date/% in the prose that is NOT in any
+        # verified finding is a potential fabrication the structured guards can't see. Report it (never
+        # auto-drop the answer). Deterministic, no model call.
+        unsupported = _unsupported_prose_tokens(result.composed_answer, result.verified_claims)
+        if unsupported:
+            diag["failures"].append({"stage": "prose_grounding",
+                                     "detail": "unsupported figures in prose: " + ", ".join(sorted(unsupported))})
+        diag["prose_unsupported_tokens"] = sorted(unsupported)
         diag["duration_ms"] = int((time.monotonic() - _diag_t0) * 1000)
         result.diagnostics = diag
     return result
+
+
+def _unsupported_prose_tokens(prose: str, verified: list["VerifiedClaim"]) -> set[str]:
+    """Hard tokens (number/dose/date/%) in the composed PROSE that appear in NO verified finding's
+    text/quote — i.e. figures the prose introduced that the evidence doesn't support. Structural
+    (Rule 18); the compose fail-note has none, so a failed compose reports nothing. Inline citation
+    markers [n] are STRIPPED first (they're references, not figures)."""
+    if not prose:
+        return set()
+    clean = re.sub(r"\[\d+\]", " ", prose)          # citation refs are not evidence figures
+    src = " ".join((vc.text + " " + vc.quote) for vc in verified)
+    return extract_hard_tokens(clean) - extract_hard_tokens(src)

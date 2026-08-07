@@ -111,6 +111,14 @@ def answer_visuals_enabled() -> bool:
     return os.environ.get("NOESIS_ANSWER_VISUALS", "").lower() in ("1", "true", "yes")
 
 
+def evidence_fitness_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, the relevance-selection step additionally BOOSTS stronger
+    evidence tiers (guideline/systematic-review > RCT > cohort > case report, via the medical authority
+    pyramid) into the compose cap — so the answer rests on the best-tier evidence, not just the most
+    similar text. Boost-only, provenance untouched. OFF → ranking is relevance-only (byte-identical)."""
+    return os.environ.get("NOESIS_EVIDENCE_FITNESS", "").lower() in ("1", "true", "yes")
+
+
 def diag_trace_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, each research run captures a troubleshooting trace
     (per-turn steps, tool-call breakdown, the grounding funnel, retries, failures, budget, timing)
@@ -354,6 +362,8 @@ def build_default_service() -> ResearchService:
         reasoning_read=reasoning_read_enabled(),
         collect_diagnostics=diag_trace_enabled(),
         classify_evidence=getattr(manifest, "evidence_classifier", None),
+        evidence_fitness=evidence_fitness_enabled(),
+        evidence_ranker=getattr(getattr(manifest, "authority_policy", None), "rank", None),
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
         answer_format=answer_format,
         # Patient directive resolved INDEPENDENTLY of structured_answers/clinical_synthesis — the
@@ -504,6 +514,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "answer_charts_enabled": answer_charts_enabled(),
             "reasoning_read_enabled": reasoning_read_enabled() and structured_answers(),
             "diag_trace_enabled": diag_trace_enabled(),
+            "evidence_fitness_enabled": evidence_fitness_enabled(),
             "refine_enabled": refine_enabled() and bool(getattr(svc, "refine_prompt", None)),
         }
 

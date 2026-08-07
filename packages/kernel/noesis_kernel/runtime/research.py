@@ -59,6 +59,8 @@ class ResearchService:
     reasoning_read: bool = False            # surface the validated interpretation + confidence layer (flag)
     collect_diagnostics: bool = False       # capture a troubleshooting trace (turns/tools/retries/failures) (flag)
     classify_evidence: object | None = None # vertical structural evidence-tier classifier (source_key, facets) -> kind
+    evidence_fitness: bool = False          # boost stronger evidence tiers into the compose cap (flag)
+    evidence_ranker: object | None = None   # vertical authority pyramid: evidence_kind -> int rank
 
     def _retriever(self, source_keys: list[str] | None) -> MultiSourceRetriever:
         chosen = {k: v for k, v in self.sources.items()
@@ -220,6 +222,7 @@ class ResearchService:
             answer_focus=answer_focus, reasoning_read=self.reasoning_read,
             collect_diagnostics=self.collect_diagnostics,
             classify_evidence=self.classify_evidence,
+            evidence_fitness=self.evidence_fitness, evidence_ranker=self.evidence_ranker,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)
         res.effort = sc.effort                   # echo the resolved multiplier (observability)

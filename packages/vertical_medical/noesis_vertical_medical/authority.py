@@ -2,8 +2,11 @@
 
 Controls which evidence outranks which (systematic review > RCT > cohort >
 case report), plus trial-specific grading (completed-with-results > phase 3 >
-earlier phase). The verification gate's criteria consume this so a case report
-never outranks a systematic review for a clinical claim.
+earlier phase). Under the evidence-fitness flag, `rank()` is consumed by the
+research loop's relevance-selection step (`_rank_claims_by_relevance`) as a
+bounded, boost-only tier signal — so a stronger-tier finding surfaces into the
+compose cap ahead of a similarly-relevant weaker one. It never gates the span/
+entailment provenance checks (those are tier-agnostic).
 """
 from __future__ import annotations
 

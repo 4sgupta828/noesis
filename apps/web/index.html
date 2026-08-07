@@ -392,6 +392,7 @@
   /* dedicated Specialist Panel destination (full-screen surface, mirrors .videos) */
   .panelnav{color:var(--gold);border-color:rgba(var(--gold-rgb),.4);}
   .panelnav:hover{color:var(--on-accent);background:var(--gold);border-color:var(--gold);}
+  .panelview[hidden]{display:none;}   /* author display:flex would otherwise beat the UA [hidden] rule */
   .panelview{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;
     background-image:radial-gradient(120% 60% at 85% -10%, rgba(var(--gold-rgb),.07), transparent 60%);}
   .panelview .vhd{display:flex;align-items:center;gap:.9rem;padding:.85rem 1.2rem;border-bottom:1px solid var(--hair);flex:none;}

@@ -792,7 +792,20 @@ async def run_react(
                    "subject, drug, population, or topic than the question, use ONLY the findings about "
                    "the asked subject and ignore the rest — do not enumerate unrelated findings. If the "
                    "findings do not contain the specific answer the question asks for, say so explicitly "
-                   "as a gap; do NOT substitute a list of unrelated findings." if answer_focus else "")
+                   "as a gap; do NOT substitute a list of unrelated findings."
+                   # EXISTENCE/APPROVAL questions (narrow): when the question asks whether a SPECIFIC
+                   # thing EXISTS / is APPROVED / is ESTABLISHED (a named product, a fixed-dose
+                   # combination, an approved therapy) and the findings describe only ADJACENT or
+                   # COMPONENT evidence — the individual drugs, related research — but NOT that specific
+                   # thing, do NOT present the adjacent evidence as if it answered: state plainly that
+                   # the evidence does not establish the specific thing asked about, and set
+                   # directly_addresses=false. (This targets 'is there an approved X for Y' / 'what is
+                   # the dose of the combined X+Y pill' — it does NOT apply when the findings do address
+                   # the asked entity.)
+                   " If the question asks whether a SPECIFIC product/combination/approved therapy EXISTS "
+                   "and the findings show only its components or adjacent research rather than that "
+                   "specific thing, state plainly that the evidence does not establish it — do not "
+                   "describe the adjacent research as though it were the answer." if answer_focus else "")
                 + "\n\nSEPARATELY (metadata, not part of the answer prose): set directly_addresses=false "
                 "if the findings only address the question by analogy/adjacent topic rather than "
                 "DIRECTLY (e.g. no evidence on the exact intervention/population/outcome asked); then "

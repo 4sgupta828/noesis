@@ -219,6 +219,8 @@ class PanelIn(BaseModel):
     workspace_id: str | None = None
     specialists: list[str] | None = None   # specialist ids to convene; None = the default panel
     sources: list[str] | None = None
+    history: list[dict] | None = None      # prior panel turns [{question, answer, claims}] for a follow-up
+    session_id: str | None = None          # the panel thread this turn continues (echoed back)
 
 
 class SuggestIn(BaseModel):
@@ -625,8 +627,9 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
 
-    def _panel_payload(r) -> dict:
+    def _panel_payload(r, session_id=None) -> dict:
         return {
+            "session_id": session_id,
             "question": r.question, "n_specialists": r.n_specialists,
             "takes": [{"id": t.id, "specialty": t.specialty, "answer": t.answer,
                        "grounded": t.grounded, "n_verified": t.n_verified, "error": t.error}
@@ -649,12 +652,12 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         try:
             r = await app.state.service.ask_panel(
                 question=body.question, tenant_id=body.tenant_id, workspace_id=body.workspace_id,
-                specialist_ids=body.specialists or None, source_keys=body.sources)
+                specialist_ids=body.specialists or None, source_keys=body.sources, history=body.history)
         except CassetteMiss as e:
             raise HTTPException(status_code=503, detail="No model available in replay mode.") from e
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
-        return _panel_payload(r)
+        return _panel_payload(r, session_id=body.session_id)
 
     @app.post("/panel/ask/stream")
     async def panel_ask_stream(body: PanelIn):
@@ -675,8 +678,9 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             try:
                 r = await app.state.service.ask_panel(
                     question=body.question, tenant_id=body.tenant_id, workspace_id=body.workspace_id,
-                    specialist_ids=body.specialists or None, source_keys=body.sources, on_event=on_event)
-                await queue.put({"type": "final", "result": _panel_payload(r)})
+                    specialist_ids=body.specialists or None, source_keys=body.sources,
+                    history=body.history, on_event=on_event)
+                await queue.put({"type": "final", "result": _panel_payload(r, session_id=body.session_id)})
             except CassetteMiss:
                 await queue.put({"type": "error", "detail": "No model available in replay mode."})
             except Exception as e:   # noqa: BLE001

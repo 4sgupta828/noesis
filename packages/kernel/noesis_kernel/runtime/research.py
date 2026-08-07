@@ -21,6 +21,29 @@ class _PlainAnswer(BaseModel):
     text: str
 
 
+def build_history_context(history, *, answer_focus: bool = False) -> str | None:
+    """Prior conversation turns → a compact context block (a follow-up can be elliptical). Context ONLY —
+    it frames search/interpretation and NEVER becomes a citable claim. Shared by ask() and ask_panel() so
+    both thread history identically. `history` is a list of {question, answer, claims?}."""
+    if not history:
+        return None
+    turns = []
+    for t in history:
+        qy = (t.get("question") or "").strip()
+        an = (t.get("answer") or "").strip()
+        if not qy:
+            continue
+        block = f"Q: {qy}\nA: {an[:1200]}" if an else f"Q: {qy}"
+        if answer_focus:   # EPISODIC MEMORY: surface prior structured findings so the loop builds on them
+            cl = t.get("claims") or []
+            estab = "; ".join((c.get("text") or "").strip()
+                              for c in cl[:8] if isinstance(c, dict) and c.get("text"))
+            if estab:
+                block += f"\n[already established: {estab[:1000]}]"
+        turns.append(block)
+    return "\n\n".join(turns) or None
+
+
 @dataclass
 class FollowupResolution:
     """Structured resolution of a conversational follow-up (the Conversation-Manager output)."""
@@ -185,28 +208,7 @@ class ResearchService:
 
         # Prior conversation turns → a compact context block (a follow-up can be elliptical). This
         # only frames search/interpretation; it never becomes a grounded claim (like attachments).
-        history_context = None
-        if history:
-            turns = []
-            for t in history:
-                qy = (t.get("question") or "").strip()
-                an = (t.get("answer") or "").strip()
-                if not qy:
-                    continue
-                block = f"Q: {qy}\nA: {an[:1200]}" if an else f"Q: {qy}"
-                # EPISODIC MEMORY (answer-focus): surface the prior turn's STRUCTURED findings (not just
-                # the truncated prose) so the planner builds ON established evidence and decides what is
-                # NEW to search. Labeled context ONLY — like all history it is NEVER a citable finding;
-                # a follow-up that uses it still re-retrieves + span-verifies (the resolved question makes
-                # that reliable). Capped to keep the planner prompt bounded.
-                if answer_focus:
-                    cl = t.get("claims") or []
-                    estab = "; ".join((c.get("text") or "").strip()
-                                      for c in cl[:8] if isinstance(c, dict) and c.get("text"))
-                    if estab:
-                        block += f"\n[already established: {estab[:1000]}]"
-                turns.append(block)
-            history_context = "\n\n".join(turns) or None
+        history_context = build_history_context(history, answer_focus=answer_focus)
 
         corpus_src, web_src = self._split_retriever(source_keys)
         res = await run_react(
@@ -253,14 +255,17 @@ class ResearchService:
 
     async def ask_panel(self, *, question: str, tenant_id: str, workspace_id: str | None = None,
                         specialist_ids: list[str] | None = None, source_keys: list[str] | None = None,
-                        on_event=None):
+                        history: list[dict] | None = None, on_event=None):
         """Ask-Panel (Alpha): run the selected specialists (or the default set) as parallel grounded
         loops and synthesize their pooled findings. Provides the domain-free orchestrator with a
-        source-scoping callback so each specialist can prefer its own sources."""
+        source-scoping callback so each specialist can prefer its own sources. `history` (prior panel
+        turns) threads in as context ONLY for a follow-up — same contract as ask()."""
         from noesis_kernel.research.panel import run_panel
         roster = {getattr(s, "id", ""): s for s in self.panel_specialists}
         ids = [i for i in (specialist_ids or list(self.panel_default_ids)) if i in roster]
         specialists = [roster[i] for i in ids] or list(self.panel_specialists)
+        # episodic memory on: a follow-up should build on findings the panel already established
+        history_context = build_history_context(history, answer_focus=True) or ""
 
         def make_retrievers(spec_source_keys):
             # a specialist's preferred sources ∩ the request's chosen sources (None = all)
@@ -270,7 +275,7 @@ class ResearchService:
         return await run_panel(
             question=question, specialists=specialists, llm=self.llm, embedder=self.embedder,
             make_retrievers=make_retrievers, tenant_id=tenant_id, workspace_id=workspace_id,
-            synthesis_directive=self.panel_synthesis_directive or "",
+            synthesis_directive=self.panel_synthesis_directive or "", history_context=history_context,
             chair_system_prompt=self.persona_prompt,
             classify_evidence=self.classify_evidence, evidence_ranker=self.evidence_ranker,
             evidence_fitness=self.evidence_fitness, on_event=on_event)

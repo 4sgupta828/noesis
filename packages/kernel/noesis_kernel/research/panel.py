@@ -100,12 +100,15 @@ async def _emit(on_event, ev: dict) -> None:
 
 
 async def run_panel(*, question, specialists, llm, embedder, make_retrievers, tenant_id,
-                    workspace_id=None, synthesis_directive="",
+                    workspace_id=None, synthesis_directive="", history_context="",
                     chair_system_prompt="You are an evidence-grounded clinical research panel chair.",
                     classify_evidence=None, evidence_ranker=None, evidence_fitness=False,
                     on_event=None) -> PanelResult:
     """`make_retrievers(source_keys) -> (corpus_source, aux_source)` lets each specialist scope its
-    sources without this module knowing the source registry (domain-free seam)."""
+    sources without this module knowing the source registry (domain-free seam). `history_context` is the
+    prior conversation (context ONLY, never citable) so a follow-up turn reasons in context — same
+    contract as run_react's history. `on_event` streams live progress: specialist_start/_done plus each
+    specialist's own run_react trace wrapped as {type: specialist_trace, id, ev}."""
     result = PanelResult(question=question, n_specialists=len(specialists))
 
     # 1) Each specialist runs its own grounded loop, IN PARALLEL (capped). The focus terms steer
@@ -115,21 +118,27 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
     async def _run(spec):
         async with sem:
             await _emit(on_event, {"type": "specialist_start", "id": spec.id, "specialty": spec.specialty})
+            # forward this specialist's OWN run_react trace, tagged so the UI routes it to its row
+            async def _spec_emit(ev, _sid=spec.id):
+                await _emit(on_event, {"type": "specialist_trace", "id": _sid, "ev": ev})
             try:
                 corpus, aux = make_retrievers(list(spec.source_keys) or None)
                 spec_q = f"{question}\n\n[Panel focus — {spec.specialty}: {spec.focus}]"
                 res = await run_react(
                     question=spec_q, llm=llm, embedder=embedder, source=corpus, aux_source=aux,
-                    tenant_id=tenant_id, workspace_id=workspace_id,
+                    tenant_id=tenant_id, workspace_id=workspace_id, history_context=history_context,
                     budget=BudgetState(max_calls=_SPECIALIST_MAX_CALLS),
                     system_prompt=spec.lens, answer_format=None, reasoning_read=False,
                     max_steps=_SPECIALIST_MAX_STEPS, classify_evidence=classify_evidence,
-                    evidence_ranker=evidence_ranker, evidence_fitness=evidence_fitness)
+                    evidence_ranker=evidence_ranker, evidence_fitness=evidence_fitness,
+                    on_event=_spec_emit)
                 await _emit(on_event, {"type": "specialist_done", "id": spec.id,
                                        "verified": len(res.verified_claims)})
                 return spec, res, ""
             except Exception as e:   # noqa: BLE001 — one specialist failing must not sink the panel
                 _log.warning("panel specialist %s failed: %r", spec.id, e)
+                await _emit(on_event, {"type": "specialist_done", "id": spec.id, "verified": 0,
+                                       "error": repr(e)[:120]})
                 return spec, None, repr(e)[:200]
 
     ran = await asyncio.gather(*[_run(s) for s in specialists])
@@ -158,13 +167,20 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
         for i, (spec, vc) in enumerate(pooled, 1))
 
     # 3) Grounded synthesis: ONE compose over the pooled findings (reasoning read on for the panel view).
+    await _emit(on_event, {"type": "synthesizing", "findings": len(verified)})
     reason_anchor = (
         "\n\nSEPARATELY, populate the STRUCTURED Reasoning Read fields for the PANEL: `reasoning_purpose` "
         "(the decision the panel is helping make), 2–5 `interpretation` factors (each resting on the "
         "finding numbers it uses via `basis_findings`, no number not in those findings), "
         "`reasoning_conclusion` (the panel's informed judgment), and the 3-dimension `confidence` read.")
+    # prior conversation (context ONLY — never a citable finding), same contract as run_react's history
+    conv = (history_context or "").strip()
+    conv_ctx = (f"CONVERSATION SO FAR (prior questions and answers in this panel thread; context to "
+                f"interpret the CURRENT question — NOT evidence, NEVER cite it as a finding):\n{conv}\n\n"
+                if conv else "")
     synth_user = (
-        f"Question: {question}\n\nVERIFIED PANEL FINDINGS (from the specialists — the ONLY facts you may "
+        conv_ctx
+        + f"Question: {question}\n\nVERIFIED PANEL FINDINGS (from the specialists — the ONLY facts you may "
         f"use, each tagged with the specialist who found it):\n{findings}\n\n"
         "Synthesize these into ONE coherent panel answer. Reference each finding inline as [n]. Use ONLY "
         "the findings above — add no fact, figure, dose, or claim not present in them."

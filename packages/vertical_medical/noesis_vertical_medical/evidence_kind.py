@@ -48,16 +48,31 @@ def _grade_text(s: str) -> str:
 _TIER_RANK = {"systematic_review": 6, "guideline": 6, "rct": 5, "cohort": 4,
               "cross_sectional": 3, "case_series": 2, "case_report": 1}
 
+# EuropePMC/PubMed controlled-vocabulary publication types that ARE guidelines. On the pub_type field
+# (a controlled vocab), the bare word "guideline" is a reliable signal — unlike in a free title, where
+# it's noisy ("guideline-directed medical therapy"), so this set is used ONLY for the pub_type field.
+_GUIDELINE_PUBTYPES = {"guideline", "practice guideline", "clinical practice guideline",
+                       "consensus development conference", "consensus development conference, nih"}
+
+
+def _pub_tier(pub: str) -> str:
+    """Grade a controlled-vocab PUBLICATION TYPE (stricter source than a free title): the canonical
+    guideline pubTypes count as guideline; everything else defers to the shared self-label grader."""
+    p = (pub or "").strip().lower()
+    if p in _GUIDELINE_PUBTYPES:
+        return "guideline"
+    return _grade_text(p)
+
 
 def strongest_pub_type(pub_types: list[str]) -> str:
     """From a publication-type list, return the one whose declared design grades HIGHEST (so a stored
-    facet keeps 'Randomized Controlled Trial' over 'Journal Article'). Falls back to the first if none
-    grade. Used at ingest so the corpus captures the discriminating design, not just pubType[0]."""
+    facet keeps 'Randomized Controlled Trial'/'Guideline' over 'Journal Article'). Falls back to the
+    first if none grade. Used at ingest so the corpus captures the discriminating design, not pubType[0]."""
     if not pub_types:
         return ""
     best, best_rank = pub_types[0], -1
     for pt in pub_types:
-        r = _TIER_RANK.get(_grade_text(pt), 0)
+        r = _TIER_RANK.get(_pub_tier(pt), 0)
         if r > best_rank:
             best, best_rank = pt, r
     return best
@@ -77,8 +92,8 @@ def classify(source_key: str, facets: dict[str, str] | None, title: str = "", te
     pub = (f.get("pub_type") or "").lower()
     study = (f.get("study_type") or "").lower()
 
-    # 1) Explicit publication type (most specific), then the title's declared design as a fallback.
-    graded = _grade_text(pub) or _grade_text((title or "").lower())
+    # 1) Explicit publication type (controlled vocab — most specific), then the title's declared design.
+    graded = _pub_tier(pub) or _grade_text((title or "").lower())
     if graded:
         return graded
 

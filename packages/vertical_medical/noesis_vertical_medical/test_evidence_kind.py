@@ -58,6 +58,18 @@ def test_title_fallback_grades_generic_pubtype():
     assert classify("europepmc", {"pub_type": "journal-article"}, "Statins and cardiovascular outcomes") == ""
 
 
+def test_guidelines_grade_source_agnostically():
+    # a clinical guideline is top-tier whatever the source (trusted-domain web OR a Europe PMC article).
+    assert classify("web", {}, "2025 AHA/ACC Guideline for the pharmacological treatment of hypertension") == "guideline"
+    assert classify("europepmc", {"pub_type": "journal-article"},
+                    "2024 Thai guidelines on the treatment of hypertension.") == "guideline"
+    assert classify("web", {}, "ACC/AHA Consensus Statement on anticoagulation") == "guideline"
+    assert A.rank(classify("web", {}, "Society Guideline for COPD")) == 6   # apex tier
+    # not everything mentioning guidance over-grades: a plain trial stays a trial
+    assert classify("web", {}, "A Randomized Controlled Trial of Empagliflozin") == "rct"
+    assert classify("web", {}, "Statins and cardiovascular outcomes") == ""
+
+
 def test_strongest_pub_type_keeps_the_design_label():
     from noesis_vertical_medical.evidence_kind import strongest_pub_type
     # the discriminating design beats the generic first entry (the ingest fix)

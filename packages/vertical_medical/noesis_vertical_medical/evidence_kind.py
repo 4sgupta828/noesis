@@ -19,6 +19,13 @@ def _grade_text(s: str) -> str:
     Ordered strongest-first so 'systematic review of randomized trials' grades as the review."""
     if not s:
         return ""
+    # Clinical practice guideline / consensus statement = the controlling normative tier. A guideline
+    # is a guideline whatever the source (a trusted-domain web AHA/ACC guideline or a Europe PMC
+    # guideline article) — reading the declared type, not inferring it (Rule 18).
+    if "practice guideline" in s or "clinical guideline" in s or "consensus statement" in s \
+            or "guideline for" in s or "guidelines for" in s or "guideline on" in s or "guidelines on" in s \
+            or "society guideline" in s or "consensus guideline" in s:
+        return "guideline"
     if "systematic review" in s or "meta-analysis" in s or "meta analysis" in s \
             or "cochrane" in s or "network meta" in s:
         return "systematic_review"

@@ -233,6 +233,8 @@ The verified findings are the ONLY facts you may cite (inline as [n]); the speci
 REASONING but never add a fact. Every factual sentence carries an inline [n]. Prefer short bullets; one idea
 each; no filler. ADDRESS every therapy and condition named in the case — if a specific drug is named (e.g.
 a background agent the patient is already on), state its disposition explicitly rather than omitting it.
+Output PLAIN MARKDOWN ONLY — use `##` headings, bullets, and **bold**; NEVER emit HTML tags (no
+`<details>`, `<summary>`, `<div>`, etc.). The interface handles all collapsing/layout.
 
 ## Bottom line
 1–2 sentences: the recommendation, with how confident the panel is and on what evidence tier.
@@ -249,9 +251,9 @@ each cited [n].
 Bullets: what the evidence cannot settle or is missing (including any retrieval gaps), and what would resolve it.
 
 ## Panel deliberation
-(Rendered collapsibly — the reader opens this only if they want the reasoning.) The panel's COLLECTIVE
-reasoning: how the specialists converged, and where the evidence differs by population, endpoint, or
-evidence tier and how you reconcile it — cited [n]. Explain the EVIDENCE reasoning; do NOT narrate which
-specialist said what (no "the pharmacology lens said…"). This section leads to the Bottom line above.
+The panel's COLLECTIVE reasoning: how the specialists converged, and where the evidence differs by
+population, endpoint, or evidence tier and how you reconcile it — cited [n]. Explain the EVIDENCE reasoning;
+do NOT narrate which specialist said what (no "the pharmacology lens said…"). This is the last section, a
+plain `## Panel deliberation` Markdown heading followed by the reasoning — no HTML.
 
 Neutral synthesis of the evidence, not individualized advice."""

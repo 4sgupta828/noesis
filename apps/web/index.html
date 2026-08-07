@@ -2427,8 +2427,16 @@ function renderPanelSynth(data, el){
   // Split off the "Panel deliberation" section → a COLLAPSIBLE block, so the clinical answer leads and the
   // reasoning is available on demand (busy clinicians want the synthesis; the reasoning stays one click away).
   let answer = data.synthesis || "", delib = "";
-  const m = answer.match(/\n#{1,4}\s*Panel deliberation\b[^\n]*\n/i);
-  if(m){ delib = answer.slice(m.index + m[0].length).trim(); answer = answer.slice(0, m.index).trim(); }
+  // Case A: the model emitted a literal <details>…Panel deliberation…</details> block (it sometimes does)
+  const dm = answer.match(/<details[^>]*>[\s\S]*?<\/details>/i);
+  if(dm && /panel deliberation/i.test(dm[0])){
+    delib = dm[0].replace(/<\/?details[^>]*>/gi, "").replace(/<summary[^>]*>[\s\S]*?<\/summary>/i, "").trim();
+    answer = (answer.slice(0, dm.index) + answer.slice(dm.index + dm[0].length)).trim();
+  } else {
+    // Case B: the intended Markdown heading
+    const m = answer.match(/\n#{1,4}\s*Panel deliberation\b[^\n]*\n/i);
+    if(m){ delib = answer.slice(m.index + m[0].length).trim(); answer = answer.slice(0, m.index).trim(); }
+  }
   const synth = {answer, claims:data.claims||[], grounded:!!(data.claims||[]).length,
     interpretation:data.interpretation||[], confidence:data.confidence||null,
     reasoning_purpose:data.reasoning_purpose||"", reasoning_conclusion:data.reasoning_conclusion||"",

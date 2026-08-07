@@ -87,6 +87,30 @@ def test_panel_survives_a_failing_specialist():
     assert len(r.takes) == 2 and r.synthesis          # panel still synthesizes
 
 
+def test_plan_panel_selects_and_ignores_unknown():
+    from noesis_kernel.research.panel import plan_panel, PanelPlan, SpecialistPick
+    roster = [{"id": "pharm", "specialty": "Clinical Pharmacology", "lens": "dosing"},
+              {"id": "ebm", "specialty": "Evidence-Based Medicine", "lens": "evidence quality"},
+              {"id": "cards", "specialty": "Cardiology", "lens": "cardiovascular"}]
+    class _LLM:
+        async def complete(self, *, system, messages, response_format, max_tokens=2048, temperature=None):
+            return LLMResult(parsed=PanelPlan(specialists=[
+                SpecialistPick(id="cards", rationale="heart failure component"),
+                SpecialistPick(id="pharm", rationale="renal dosing"),
+                SpecialistPick(id="bogus", rationale="not in roster")]), output_tokens=5)
+    sel = asyncio.run(plan_panel(question="HF + CKD case", roster=roster, llm=_LLM()))
+    ids = [s["id"] for s in sel]
+    assert ids == ["cards", "pharm"] and sel[0]["specialty"] == "Cardiology" and "heart failure" in sel[0]["rationale"]
+
+
+def test_plan_panel_failsafe_on_error():
+    from noesis_kernel.research.panel import plan_panel
+    class _Bad:
+        async def complete(self, **k): raise RuntimeError("triage down")
+    assert asyncio.run(plan_panel(question="q", roster=[{"id": "x", "specialty": "X", "lens": ""}],
+                                  llm=_Bad())) == []   # empty → caller applies the default set
+
+
 def test_panel_no_evidence_says_so():
     empty = InMemoryRetrievalSource()   # nothing to retrieve → no verified claims anywhere
     class _Empty:

@@ -232,6 +232,25 @@ class ResearchService:
         res.resolved_question = resolved_question # condensed question if it differed (observability)
         return res
 
+    def panel_roster(self) -> list[dict]:
+        """The available specialists + their lens/expertise (for the UI roster view)."""
+        return [{"id": getattr(s, "id", ""), "specialty": getattr(s, "specialty", ""),
+                 "lens": getattr(s, "lens", ""), "focus": getattr(s, "focus", ""),
+                 "default": getattr(s, "id", "") in set(self.panel_default_ids)}
+                for s in self.panel_specialists]
+
+    async def plan_panel(self, *, question: str) -> dict:
+        """Phase 1: auto-select the specialists for this case (LLM triage) + return the full roster so
+        the UI can show the proposed panel and let the user adjust. Fail-safe → the default set."""
+        from noesis_kernel.research.panel import plan_panel as _plan
+        roster = self.panel_roster()
+        selected = await _plan(question=question, roster=roster, llm=self.llm) if roster else []
+        if not selected:   # triage empty/failed → default set (never leave the panel empty)
+            by_id = {r["id"]: r for r in roster}
+            selected = [{"id": i, "specialty": by_id[i]["specialty"],
+                         "rationale": "core panel lens"} for i in self.panel_default_ids if i in by_id]
+        return {"selected": selected, "roster": roster}
+
     async def ask_panel(self, *, question: str, tenant_id: str, workspace_id: str | None = None,
                         specialist_ids: list[str] | None = None, source_keys: list[str] | None = None,
                         on_event=None):

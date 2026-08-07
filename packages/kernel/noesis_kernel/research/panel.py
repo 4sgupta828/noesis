@@ -13,12 +13,54 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 
+from pydantic import BaseModel
+
 from noesis_kernel.research.budget import BudgetState
 from noesis_kernel.research.react import (
     ComposedAnswer, _refs_valid, _unsupported_prose_tokens, _validate_interpretation, run_react,
 )
 
 _log = logging.getLogger(__name__)
+
+
+# ---- Phase 1: auto-selection (triage) ------------------------------------------------------------
+
+class SpecialistPick(BaseModel):
+    id: str                 # a roster specialist id
+    rationale: str          # one line: why THIS specialist matters for THIS case
+
+
+class PanelPlan(BaseModel):
+    specialists: list[SpecialistPick] = []
+
+
+async def plan_panel(*, question, roster, llm) -> list[dict]:
+    """Auto-select the specialists whose lens is most relevant to the case (an LLM triage — a semantic
+    judgment, Rule 18). `roster` is a list of {id, specialty, lens}. Returns the selected picks (each
+    {id, specialty, rationale}); always includes an integrator/EBM baseline if the model omits everything.
+    Fail-safe: any error → a sensible default subset so the panel still convenes."""
+    by_id = {r["id"]: r for r in roster}
+    catalog = "\n".join(f"- {r['id']} — {r['specialty']}: {(r.get('lens') or '')[:180]}" for r in roster)
+    system = ("You are the chair of a clinical case panel. Given a case, decide WHICH specialists should "
+              "review it — pick the 2–5 whose lens is genuinely relevant; do not convene a specialist "
+              "whose lens the case does not touch. Always include at least one whole-patient integrator "
+              "(e.g. primary care) and the evidence-quality lens.")
+    user = (f"Case / question:\n{question}\n\nAvailable specialists:\n{catalog}\n\nReturn the specialists "
+            "to convene, each with a ONE-LINE rationale specific to this case. 2–5 specialists.")
+    try:
+        comp = await llm.complete(system=system, messages=[{"role": "user", "content": user}],
+                                  response_format=PanelPlan, max_tokens=1200)
+        picks = [p for p in (comp.parsed.specialists or []) if p.id in by_id]
+    except Exception as e:   # noqa: BLE001 — triage must never block convening
+        _log.warning("panel triage failed: %r", e)
+        picks = []
+    seen, out = set(), []
+    for p in picks:
+        if p.id in seen:
+            continue
+        seen.add(p.id)
+        out.append({"id": p.id, "specialty": by_id[p.id]["specialty"], "rationale": p.rationale.strip()})
+    return out
 
 _SPECIALIST_MAX_STEPS = 4       # narrower than a full answer (each lens is scoped)
 _SPECIALIST_MAX_CALLS = 12      # per-specialist budget ceiling (panel = N × this, hard-capped)

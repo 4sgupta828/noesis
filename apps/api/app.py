@@ -609,6 +609,21 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception as e:   # provider errors (auth, credits, rate limit, timeout)
             raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
 
+    @app.post("/panel/plan")
+    async def panel_plan(body: PanelIn) -> dict:
+        """Phase 1 (Convene): auto-select the specialists for this case + return the full roster (each
+        with its lens/expertise) so the UI can show the proposed panel and let the user adjust."""
+        if not ask_panel_enabled():
+            raise HTTPException(status_code=404, detail="ask panel not enabled")
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        try:
+            return await app.state.service.plan_panel(question=body.question)
+        except CassetteMiss as e:
+            raise HTTPException(status_code=503, detail="No model available in replay mode.") from e
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
+
     @app.post("/panel/ask")
     async def panel_ask(body: PanelIn) -> dict:
         """Ask-Panel (Alpha): convene the selected AI specialists (or the default set) — each runs its

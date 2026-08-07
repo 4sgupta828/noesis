@@ -43,17 +43,17 @@ async def plan_panel(*, question, roster, llm) -> list[dict]:
     Fail-safe: any error → a sensible default subset so the panel still convenes."""
     by_id = {r["id"]: r for r in roster}
     catalog = "\n".join(f"- {r['id']} — {r['specialty']}: {(r.get('lens') or '')[:180]}" for r in roster)
-    system = ("You are the chair of a clinical case panel. Choose the FEWEST specialists whose lenses "
-              "TOGETHER cover the clinically important dimensions THIS case actually raises — a MINIMAL "
-              "covering set, not a full roster. Add a specialist ONLY when it covers a dimension that no "
-              "already-chosen lens covers; never pad the panel with a lens the case does not touch. A "
-              "focused single-issue case may need only 2; a genuinely multi-system case needs more. Always "
-              "include the evidence-quality lens (rigor). Prefer the smallest set that still gives good "
-              "coverage — minimal specialists, best coverage.")
-    user = (f"Case / question:\n{question}\n\nAvailable specialists:\n{catalog}\n\nReturn the minimal "
-            "covering set to convene. For EACH, give a ONE-LINE rationale naming the specific dimension of "
-            "THIS case that this specialist covers (why it's needed). Do not include a specialist you "
-            "cannot justify with a distinct dimension.")
+    system = ("You are the chair of a clinical case panel. COVERAGE FIRST: convene a lens for EVERY "
+              "clinically important dimension THIS case raises — never leave a dimension uncovered. Each "
+              "distinct organ system, condition, or safety axis the case spans needs a lens that covers it "
+              "(e.g. a case spanning heart failure + kidney disease + diabetes needs the cardiac, renal, "
+              "AND metabolic lenses — not just one). THEN MINIMAL: among panels that fully cover the case, "
+              "pick the smallest — never add a lens the case does not touch, and don't use two lenses where "
+              "one covers the dimension. Always include the evidence-quality lens for rigor. A focused "
+              "single-issue case may need only 2; a multi-system case needs one lens per system.")
+    user = (f"Case / question:\n{question}\n\nAvailable specialists:\n{catalog}\n\nReturn the specialists "
+            "that TOGETHER fully cover this case with no redundancy — every important dimension covered, no "
+            "padding. For EACH, a ONE-LINE rationale naming the specific dimension of THIS case it covers.")
     try:
         comp = await llm.complete(system=system, messages=[{"role": "user", "content": user}],
                                   response_format=PanelPlan, max_tokens=1200)

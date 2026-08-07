@@ -18,9 +18,18 @@ from pydantic import BaseModel
 
 from noesis_kernel.research.budget import BudgetState
 from noesis_kernel.research.react import (
-    ComposedAnswer, _refs_valid, _unsupported_prose_tokens, _validate_interpretation, run_react,
-    strip_control_tags,
+    ComposedAnswer, ConfidenceRead, InterpretationItem, _refs_valid, _unsupported_prose_tokens,
+    _validate_interpretation, run_react, strip_control_tags,
 )
+
+
+class _ReasoningReadOut(BaseModel):
+    """Compact schema for the panel's focused reasoning-read recovery — NO `answer` field (that's what
+    truncated the ComposedAnswer recovery), so the model emits only the structured reasoning read."""
+    reasoning_purpose: str = ""
+    interpretation: list[InterpretationItem] = []
+    reasoning_conclusion: str = ""
+    confidence: ConfidenceRead | None = None
 
 _log = logging.getLogger(__name__)
 
@@ -252,15 +261,14 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
     if not (getattr(parsed, "interpretation", None) or []):
         rr_user = (
             f"ANSWER (already written by the panel):\n{text}\n\nVERIFIED FINDINGS (the ONLY citable facts):\n"
-            f"{findings}\n\nProduce ONLY the Reasoning Read for this answer — no new answer. Fill: "
-            "`reasoning_purpose` (the decision the panel is helping make); 2–5 `interpretation` factors "
-            "(each a JUDGMENT that rests on finding numbers via `basis_findings`, using no number absent "
-            "from the findings); `reasoning_conclusion` (the panel's informed judgment); and the "
-            "3-dimension `confidence`. Put a single space in `answer` (it is ignored here).")
+            f"{findings}\n\nProduce the Reasoning Read for this answer. Fill: `reasoning_purpose` (the "
+            "decision the panel is helping make); 2–5 `interpretation` factors (each a JUDGMENT that rests "
+            "on finding numbers via `basis_findings`, using no number absent from the findings); "
+            "`reasoning_conclusion` (the panel's informed judgment); and the 3-dimension `confidence`.")
         try:
             rr = (await llm.complete(system=chair_system_prompt,
                                      messages=[{"role": "user", "content": rr_user}],
-                                     response_format=ComposedAnswer, max_tokens=1600)).parsed
+                                     response_format=_ReasoningReadOut, max_tokens=2500)).parsed
             if getattr(rr, "interpretation", None):
                 parsed.interpretation = rr.interpretation
                 parsed.confidence = getattr(rr, "confidence", None) or getattr(parsed, "confidence", None)

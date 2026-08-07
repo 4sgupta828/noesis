@@ -31,6 +31,7 @@ from .europepmc import EuropePmcConnector
 from .faers import FaersConnector
 from .dailymed import DailyMedConnector
 from .cdc import CdcConnector
+from .india_guidelines import IndiaGuidelinesConnector
 from .eval_gold import GOLD
 from .fixtures import sample_studies
 from .gating import MedicalGatingPolicy
@@ -53,6 +54,7 @@ def build_manifest() -> VerticalManifest:
             "faers": FaersConnector(),
             "dailymed": DailyMedConnector(),
             "cdc": CdcConnector(),
+            "india_guidelines": IndiaGuidelinesConnector(),   # ICMR + national-programme + society (source_country=IN)
         },
         retrieval_sources={"clinicaltrials": MedicalRetrievalSource()},
         gating_policy=MedicalGatingPolicy(),

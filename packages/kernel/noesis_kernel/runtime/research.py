@@ -61,6 +61,9 @@ class ResearchService:
     classify_evidence: object | None = None # vertical structural evidence-tier classifier (source_key, facets) -> kind
     evidence_fitness: bool = False          # boost stronger evidence tiers into the compose cap (flag)
     evidence_ranker: object | None = None   # vertical authority pyramid: evidence_kind -> int rank
+    panel_specialists: tuple = ()           # Ask-Panel roster (vertical-supplied specialist configs)
+    panel_default_ids: tuple = ()           # ids the default panel runs
+    panel_synthesis_directive: str | None = None
 
     def _retriever(self, source_keys: list[str] | None) -> MultiSourceRetriever:
         chosen = {k: v for k, v in self.sources.items()
@@ -228,6 +231,30 @@ class ResearchService:
         res.effort = sc.effort                   # echo the resolved multiplier (observability)
         res.resolved_question = resolved_question # condensed question if it differed (observability)
         return res
+
+    async def ask_panel(self, *, question: str, tenant_id: str, workspace_id: str | None = None,
+                        specialist_ids: list[str] | None = None, source_keys: list[str] | None = None,
+                        on_event=None):
+        """Ask-Panel (Alpha): run the selected specialists (or the default set) as parallel grounded
+        loops and synthesize their pooled findings. Provides the domain-free orchestrator with a
+        source-scoping callback so each specialist can prefer its own sources."""
+        from noesis_kernel.research.panel import run_panel
+        roster = {getattr(s, "id", ""): s for s in self.panel_specialists}
+        ids = [i for i in (specialist_ids or list(self.panel_default_ids)) if i in roster]
+        specialists = [roster[i] for i in ids] or list(self.panel_specialists)
+
+        def make_retrievers(spec_source_keys):
+            # a specialist's preferred sources ∩ the request's chosen sources (None = all)
+            keys = spec_source_keys if spec_source_keys else source_keys
+            return self._split_retriever(keys)
+
+        return await run_panel(
+            question=question, specialists=specialists, llm=self.llm, embedder=self.embedder,
+            make_retrievers=make_retrievers, tenant_id=tenant_id, workspace_id=workspace_id,
+            synthesis_directive=self.panel_synthesis_directive or "",
+            chair_system_prompt=self.persona_prompt,
+            classify_evidence=self.classify_evidence, evidence_ranker=self.evidence_ranker,
+            evidence_fitness=self.evidence_fitness, on_event=on_event)
 
     async def _resolve_followup(self, question: str, history: list[dict],
                                 *, allow_clarify: bool) -> "FollowupResolution":

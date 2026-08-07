@@ -111,6 +111,13 @@ def answer_visuals_enabled() -> bool:
     return os.environ.get("NOESIS_ANSWER_VISUALS", "").lower() in ("1", "true", "yes")
 
 
+def ask_panel_enabled() -> bool:
+    """Flag (default OFF, Rule 20 — ALPHA): when ON, a clinician can convene an AI specialist panel
+    (`POST /panel/ask`) — each specialist runs its own grounded, lens-scoped research and the panel
+    synthesizes their pooled verified findings. Costs N× a single answer; OFF → the endpoint 404s."""
+    return os.environ.get("NOESIS_ASK_PANEL", "").lower() in ("1", "true", "yes")
+
+
 def evidence_fitness_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, the relevance-selection step additionally BOOSTS stronger
     evidence tiers (guideline/systematic-review > RCT > cohort > case report, via the medical authority
@@ -204,6 +211,14 @@ class ResearchIn(BaseModel):
     countries: list[str] | None = None    # source-country scope (e.g. ["IN"]); None/[]=all (see flag)
     effort: float = Field(default=1.0, ge=1.0, le=2.5)   # effort multiplier; ignored unless flag on
     audience: str = "clinician"           # "clinician" (default) | "patient"; ignored unless flag on
+
+
+class PanelIn(BaseModel):
+    question: str                          # the clinician's issue / condition description
+    tenant_id: str = "demo"
+    workspace_id: str | None = None
+    specialists: list[str] | None = None   # specialist ids to convene; None = the default panel
+    sources: list[str] | None = None
 
 
 class SuggestIn(BaseModel):
@@ -364,6 +379,9 @@ def build_default_service() -> ResearchService:
         classify_evidence=getattr(manifest, "evidence_classifier", None),
         evidence_fitness=evidence_fitness_enabled(),
         evidence_ranker=getattr(getattr(manifest, "authority_policy", None), "rank", None),
+        panel_specialists=getattr(manifest, "panel_specialists", ()),
+        panel_default_ids=getattr(manifest, "panel_default_ids", ()),
+        panel_synthesis_directive=getattr(manifest, "panel_synthesis_directive", None),
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
         answer_format=answer_format,
         # Patient directive resolved INDEPENDENTLY of structured_answers/clinical_synthesis — the
@@ -515,6 +533,11 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "reasoning_read_enabled": reasoning_read_enabled() and structured_answers(),
             "diag_trace_enabled": diag_trace_enabled(),
             "evidence_fitness_enabled": evidence_fitness_enabled(),
+            "ask_panel_enabled": ask_panel_enabled(),
+            "panel_specialists": ([
+                {"id": getattr(s, "id", ""), "specialty": getattr(s, "specialty", ""),
+                 "default": getattr(s, "id", "") in set(getattr(svc, "panel_default_ids", ()))}
+                for s in getattr(svc, "panel_specialists", ())] if ask_panel_enabled() else []),
             "refine_enabled": refine_enabled() and bool(getattr(svc, "refine_prompt", None)),
         }
 
@@ -585,6 +608,32 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 "cassettes first.")) from e
         except Exception as e:   # provider errors (auth, credits, rate limit, timeout)
             raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
+
+    @app.post("/panel/ask")
+    async def panel_ask(body: PanelIn) -> dict:
+        """Ask-Panel (Alpha): convene the selected AI specialists (or the default set) — each runs its
+        own grounded, lens-scoped research — and return each specialist's take + the synthesized panel."""
+        if not ask_panel_enabled():
+            raise HTTPException(status_code=404, detail="ask panel not enabled")
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        try:
+            r = await app.state.service.ask_panel(
+                question=body.question, tenant_id=body.tenant_id, workspace_id=body.workspace_id,
+                specialist_ids=body.specialists or None, source_keys=body.sources)
+        except CassetteMiss as e:
+            raise HTTPException(status_code=503, detail="No model available in replay mode.") from e
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
+        return {
+            "question": r.question, "n_specialists": r.n_specialists,
+            "takes": [{"id": t.id, "specialty": t.specialty, "answer": t.answer,
+                       "grounded": t.grounded, "n_verified": t.n_verified, "error": t.error}
+                      for t in r.takes],
+            "synthesis": r.synthesis, "claims": r.claims,
+            "interpretation": r.interpretation, "confidence": r.confidence,
+            "reasoning_purpose": r.reasoning_purpose, "reasoning_conclusion": r.reasoning_conclusion,
+        }
 
     async def _do_research(body: ResearchIn, on_event=None) -> ResearchOut:
         """Shared research core: attachments → ask (optional live on_event) → persist → ResearchOut.

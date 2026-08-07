@@ -113,6 +113,12 @@ class VerticalManifest:
     # in ONE extraction call (not fanned out). Empty → generic "extract every fact". Kernel-neutral.
     extraction_lenses: tuple[str, ...] = ()
 
+    # Ask-Panel (Alpha): the vertical's specialist roster (duck-typed configs with .id/.specialty/.lens/
+    # .focus/.source_keys) + the grounded-synthesis directive. Empty → no panel for this vertical.
+    panel_specialists: tuple = ()
+    panel_default_ids: tuple = ()          # which specialists the default panel runs
+    panel_synthesis_directive: str | None = None
+
     # Optional STRUCTURAL evidence-tier classifier: (source_key, facets) -> evidence_kind str (Rule 18 —
     # maps computable per-source metadata onto the authority pyramid, no semantic judgment). Used to
     # stamp each verified claim's evidence tier (for evidence-fitness ranking + the eval's evidence_floor).

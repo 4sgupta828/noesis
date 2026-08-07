@@ -238,6 +238,31 @@ That flag-driven, prod-observable loop is the payoff of all the discipline in
 boldly, because when you're wrong the system tells you honestly and you can undo
 it in one switch.
 
+## Tracked known issues
+
+### Abstention on "no established / no approved X" questions
+The anti-abstention recovery in `run_react` (`_finalize_answer` re-asks up to 3×
+when the agent returns empty claims despite gathered evidence) biases the system
+toward a *partial grounded answer* over an honest "there is no approved/established
+X." Surfaced by the held-out clinical benchmark
+(`eval_clinical_gold.py::refuse_no_approved_therapy`, "FDA-approved gene therapy
+for essential hypertension"): the agent cited a tangential trial and answered
+instead of stating none exists. This is a genuine weakness, **not** a gold error —
+the benchmark is deliberately kept honest (weakening it to pass would be an
+"eval that lies"). Intended fix (future, its own design + held-out cases): let
+compose emit an explicit *grounded-in-absence* answer ("no approved/established X
+exists in the retrieved evidence") as a valid response, rather than the recovery
+loop forcing a tangential claim. Until then, these cases correctly fail and flag
+the risk.
+
+### EuropePMC evidence tiers: re-ingest for full metadata
+`europepmc.py` now stores the **strongest** `pubType` (was `pubType[0]`), and the
+classifier reads an abstract self-label as a stopgap — but the ~213k **already-
+ingested** EuropePMC blocks still carry the generic first `pubType`. The durable
+fix is a re-ingest so the corrected metadata lands on existing blocks; the
+gap-healing loop also corrects it gradually. Remove the abstract-scan stopgap in
+`evidence_kind.classify` once the re-ingest completes.
+
 ---
 
 ← Back to the [README map](README.md)

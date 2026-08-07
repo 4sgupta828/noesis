@@ -471,6 +471,8 @@
   .psynthstat{color:var(--muted);font-size:.9rem;margin-top:.7rem;}
   /* multi-turn panel conversation */
   .panelconv .panelturns{display:flex;flex-direction:column;gap:1.6rem;}
+  .panelconv-pane{max-width:none;}   /* in the sessions pane the conference fills the detail column */
+  .panelconv-pane .panelturn{border-top:none;padding-top:.4rem;}
   .panelturn{border-top:1px solid var(--hair);padding-top:1.2rem;}
   .panelturn:first-child{border-top:none;padding-top:0;}
   .panelturn.live{border-top:1px dashed var(--hair);}
@@ -1789,6 +1791,12 @@ async function copyLinkUrl(url, btn){
   }
 }
 const copyLink = (id, btn) => copyLinkUrl(shareUrl(id), btn);
+async function copyText(text, btn){   // copy arbitrary text (e.g. the panel conclusion), with button feedback
+  const done = () => { const t = btn.textContent; btn.textContent = "✓ Copied"; setTimeout(()=>btn.textContent = t, 1400); };
+  try{ await navigator.clipboard.writeText(text||""); done(); }
+  catch(e){ const ta=document.createElement("textarea"); ta.value=text||""; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select(); try{ document.execCommand("copy"); done(); }catch(_){ } ta.remove(); }
+}
 // A PANEL session opens straight into its own page (the panel view) — it never touches the Q&A view.
 async function loadPanelSession(id){
   try{
@@ -2304,23 +2312,26 @@ function renderPanelConversation(){
   wirePanelRefs();
 }
 // A specialist's [n] citation scrolls to (and highlights) its evidence item BELOW that specialist's take.
-// Delegated once on the stable #panelbody; scoped to .spec so it never touches the synthesis citations.
+// Delegated on DOCUMENT (once) so it works wherever a .spec renders — the panel view OR the sessions pane;
+// scoped to .spec so it never touches the synthesis citations (those are wired by render()).
 let _panelRefsWired = false;
 function wirePanelRefs(){
   if(_panelRefsWired) return;
-  const bodyEl = pbody(); if(!bodyEl) return;
   _panelRefsWired = true;
-  bodyEl.addEventListener("click", e=>{
+  document.addEventListener("click", e=>{
     const ref = e.target.closest(".ref"); if(!ref) return;
-    const spec = ref.closest(".spec"); if(!spec) return;   // only specialist refs; synthesis refs are handled by render()
+    const spec = ref.closest(".spec"); if(!spec) return;   // only specialist refs; synthesis refs handled elsewhere
     e.preventDefault();
-    spec.open = true;                                       // expand the section if collapsed
+    if(spec.tagName === "DETAILS") spec.open = true;        // expand the section if collapsed
     const n = parseInt(ref.dataset.n, 10);
-    const li = spec.querySelector(`.spec-ev-l > li[data-ev="${n}"]`);
+    const items = spec.querySelectorAll(".spec-ev-l > li");
+    const li = spec.querySelector(`.spec-ev-l > li[data-ev="${n}"]`) || items[n-1] ||
+               spec.querySelector(".spec-ev");   // fall back to the evidence block if that index is absent
     if(li){ li.scrollIntoView({behavior:"smooth", block:"center"});
       li.classList.add("ev-hl"); setTimeout(()=>li.classList.remove("ev-hl"), 1700); }
   });
 }
+wirePanelRefs();   // active for the whole session, independent of any panel render
 // Delete a saved panel discussion (soft-delete via the shared endpoint), then return to the panel home.
 async function deletePanelSession(id){
   if(!id || !confirm("Delete this panel discussion? It will be removed from your history.")) return;
@@ -2349,6 +2360,56 @@ function openPanelSession(row){
 }
 // a saved session is a PANEL session when its first turn is tagged kind:"panel"
 function isPanelRow(row){ const th = row && row.thread; return !!(th && th[0] && th[0].kind === "panel"); }
+// Render a saved PANEL session INSIDE the Past-Sessions right pane (like a Q&A session) — the case
+// conference + a session toolbar. "Continue in chat" opens the full panel view to add a follow-up.
+function renderPanelSessionDetail(row){
+  const turns = (row.thread && row.thread.length) ? row.thread : [row];
+  const who = row.user_name || row.user_email;
+  const turnsHtml = turns.map((t,i)=>{
+    const takes = (t.takes||[]).map(panelTakeHtml).join("");
+    return `<div class="panelturn">
+      ${i>0?`<div class="panelq-echo"><span class="pqt">Follow-up</span> <b>${esc(t.question||"")}</b></div>`:""}
+      <div class="panelsynth" id="pd-synth-${i}"></div>
+      <div class="paneltakes"><div class="paneltakes-h">Each specialist's assessment</div>${takes}</div>
+    </div>`;
+  }).join("");
+  sdetail.innerHTML = `<div class="sqhead">
+      <div class="qhrow"><div class="qq"><span class="skind">◈ Panel</span> ${esc(row.question)}</div></div>
+      <div class="qm">${who?`Asked by <b>${esc(row.user_name||"")}</b>${row.user_email?" · "+esc(row.user_email):""} · `:""}${fmtDate(row.created_at)}${turns.length>1?` · ${turns.length} turns`:""}</div>
+    </div>
+    <div class="sactions" id="pd-actions"></div>
+    <div class="panelconv panelconv-pane">${turnsHtml}</div>`;
+  // render each turn's synthesis (deliberation) with the full machinery
+  turns.forEach((t,i)=>{ const el = $("#pd-synth-"+i);
+    if(el) renderPanelSynth({synthesis: t.answer||t.synthesis||"", claims: t.claims||[],
+      interpretation: t.interpretation||[], confidence: t.confidence||null,
+      reasoning_purpose: t.reasoning_purpose||"", reasoning_conclusion: t.reasoning_conclusion||"",
+      question: t.question}, el); });
+  buildPanelSessionActions($("#pd-actions"), row);
+  sdetail.scrollTop = 0;
+  if(isMobileSess()){ sessionsEl.dataset.view = "detail"; setSback("← Sessions"); }
+}
+// The panel session's action toolbar in the pane — the panel-relevant subset of the Q&A actions.
+function buildPanelSessionActions(box, row){
+  if(!box) return;
+  const btn = (id, icon, label, title) => `<button type="button" class="sact" id="${id}" title="${esc(title)}">`
+    + `<span class="sact-i">${icon}</span><span class="sact-t">${esc(label)}</span></button>`;
+  box.innerHTML = btn("pd-copy","⧉","Copy","Copy the panel conclusion")
+    + btn("pd-link","🔗","Link","Copy a link to this panel discussion")
+    + btn("pd-cont","↳","Continue in chat","Continue the discussion — ask the panel a follow-up")
+    + btn("pd-del","🗑","Delete","Delete this panel discussion");
+  const syn = ((row.thread && row.thread.length ? row.thread[row.thread.length-1] : row).answer) || "";
+  $("#pd-copy").addEventListener("click", e=>copyText(syn, e.currentTarget));
+  $("#pd-link").addEventListener("click", e=>copyLinkUrl(panelUrl(row.id), e.currentTarget));
+  $("#pd-cont").addEventListener("click", ()=>{ closeSessions(); openPanelSession(row); });   // full view → follow-up
+  $("#pd-del").addEventListener("click", async ()=>{
+    if(!confirm("Delete this panel discussion?")) return;
+    try{ const r = await fetch("/sessions/"+encodeURIComponent(row.id), {method:"DELETE"});
+      if(r.ok){ const rowEl=[...slist.querySelectorAll(".srow")].find(b=>b.dataset.id===row.id); if(rowEl) rowEl.remove();
+        if(isMobileSess()) backToSessionList(); else { const nx=slist.querySelector(".srow"); if(nx) selectSession(nx); else sdetail.innerHTML=`<div class="splaceholder">No sessions.</div>`; } }
+    }catch(e){ alert("Couldn't delete that discussion."); }
+  });
+}
 function renderPanelSynth(data, el){
   const synth = {answer:data.synthesis, claims:data.claims||[], grounded:!!(data.claims||[]).length,
     interpretation:data.interpretation||[], confidence:data.confidence||null,
@@ -2648,16 +2709,16 @@ async function loadSessionList(){
         </div></button>`;
     }).join("");
     slist.querySelectorAll(".srow").forEach(b=>b.addEventListener("click",()=>selectSession(b)));
-    // desktop split shows the most recent by default — but never AUTO-open a panel session (that would
-    // jump into the panel view just from browsing); auto-preview the first non-panel row instead.
-    const first = [...slist.querySelectorAll(".srow")].find(b=>b.dataset.kind!=="panel");
+    // desktop split previews the most recent by default (panels now render in-pane too, so no redirect)
+    const first = slist.querySelector(".srow");
     if(first && !isMobileSess()) selectSession(first);
   }catch(e){ slist.innerHTML = `<div class="sempty">Couldn't load sessions.</div>`; }
 }
 function showSessionDetail(row, rowEl){
-  if(isPanelRow(row)){ closeSessions(); openPanelSession(row); return; }   // panel session → the panel view
   if(rowEl){ slist.querySelectorAll(".srow").forEach(r=>r.removeAttribute("aria-current")); rowEl.setAttribute("aria-current","true"); }
   CURRENT_Q = row.question;
+  if(isPanelRow(row)){ renderPanelSessionDetail(row); return; }   // panel session renders IN the pane, like Q&A
+
   const who = row.user_name || row.user_email;
   // Render the WHOLE conversation (all follow-up turns), not just the first answer.
   const turns = (row.thread && row.thread.length) ? row.thread : [row];

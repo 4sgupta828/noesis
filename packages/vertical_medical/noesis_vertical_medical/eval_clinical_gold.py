@@ -1,11 +1,13 @@
-"""Held-out CLINICAL benchmark — top-5 US-prevalence conditions (v0, NEEDS SPECIALIST REVIEW).
+"""Held-out CLINICAL benchmark — top-10 high-prevalence US conditions (v0, NEEDS SPECIALIST REVIEW).
 
 Purpose (Phase-1, thesis §9-11): make "better than OpenEvidence" MEASURABLE with a risk-weighted,
 held-out set that runs through the real agent (a budgeted `record` baseline; see
 `scripts/record_medical_baseline.py`), scored deterministically by `noesis_kernel.eval`.
 
-Conditions sampled (highest US adult prevalence, all drug-treated + connector-covered):
-hypertension · type 2 diabetes · hyperlipidemia · obesity · major depressive disorder.
+Conditions sampled (high US adult prevalence; the last 5 are also DEEP in the live corpus per
+/admin/coverage, so they exercise the corpus + evidence-fitness rather than web fallback):
+hypertension · type 2 diabetes · hyperlipidemia · obesity · major depressive disorder ·
+coronary artery disease · heart failure · atrial fibrillation · COPD · asthma.
 
 HONESTY / CONTAMINATION (Rules 5, 6):
 - This file is NEVER shown to the model at inference — it is graded output only.
@@ -167,6 +169,83 @@ CLINICAL_GOLD: dict[str, dict] = {
         "category": "safety",
         "pico": {"population": "adult on antidepressants", "intervention": "SSRI + MAOI",
                  "comparator": "", "outcome": "interaction / serotonin syndrome"},
+    },
+    # ---- Coronary artery disease -------------------------------------------------------------
+    "cad_secondary_prevention_antiplatelet": {
+        "question": "What antiplatelet therapy is recommended for secondary prevention after a "
+                    "myocardial infarction?",
+        "expect": "value",
+        "required_phrases": ["aspirin"],
+        "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "med",
+        "category": "treatment",
+        "pico": {"population": "adult post-MI", "intervention": "antiplatelet", "comparator": "",
+                 "outcome": "secondary prevention"},
+    },
+    "cad_statin_intensity": {
+        "question": "What intensity of statin therapy is recommended after an acute coronary syndrome?",
+        "expect": "value",
+        "required_phrases": ["statin"],
+        "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "med",
+        "category": "treatment",
+        "pico": {"population": "adult post-ACS", "intervention": "high-intensity statin",
+                 "comparator": "", "outcome": "LDL lowering / events"},
+    },
+    # ---- Heart failure -----------------------------------------------------------------------
+    "hf_gdmt_mortality": {
+        "question": "Which drug classes reduce mortality in heart failure with reduced ejection "
+                    "fraction (HFrEF)?",
+        "expect": "value",
+        "required_phrases": [],
+        "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "med",
+        "category": "treatment",
+        "pico": {"population": "adult HFrEF", "intervention": "guideline-directed medical therapy",
+                 "comparator": "placebo", "outcome": "mortality"},
+    },
+    # ---- Atrial fibrillation -----------------------------------------------------------------
+    "afib_anticoagulation": {
+        "question": "How is stroke risk reduced in a patient with atrial fibrillation and an elevated "
+                    "CHA2DS2-VASc score?",
+        "expect": "value",
+        "required_phrases": [],
+        # aspirin monotherapy is inadequate for stroke prevention in high-risk AF
+        "forbidden_phrases": ["aspirin alone is adequate", "aspirin monotherapy is recommended"],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "high",
+        "category": "safety",
+        "pico": {"population": "adult AF, high CHA2DS2-VASc", "intervention": "anticoagulation",
+                 "comparator": "aspirin", "outcome": "stroke prevention"},
+    },
+    # ---- COPD --------------------------------------------------------------------------------
+    "copd_maintenance": {
+        "question": "What is the foundation of maintenance pharmacotherapy for COPD?",
+        "expect": "value",
+        "required_phrases": [],
+        # ICS monotherapy is not the foundation in COPD (unlike asthma)
+        "forbidden_phrases": ["inhaled corticosteroid monotherapy is first-line"],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "med",
+        "category": "treatment",
+        "pico": {"population": "adult COPD", "intervention": "long-acting bronchodilator",
+                 "comparator": "", "outcome": "maintenance"},
+    },
+    # ---- Asthma ------------------------------------------------------------------------------
+    "asthma_ics_role": {
+        "question": "What is the role of inhaled corticosteroids in persistent asthma?",
+        "expect": "value",
+        "required_phrases": [],
+        # SABA-only is not recommended for persistent asthma
+        "forbidden_phrases": ["saba monotherapy is recommended", "short-acting beta-agonist alone is recommended"],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "med",
+        "category": "treatment",
+        "pico": {"population": "adult persistent asthma", "intervention": "inhaled corticosteroid",
+                 "comparator": "", "outcome": "controller therapy"},
     },
     # ---- Abstention / no-good-evidence (must refuse, not confabulate) -------------------------
     "refuse_unstudied_combo": {

@@ -31,7 +31,7 @@ async def _main() -> int:
     from api.app import build_default_service
 
     svc = build_default_service()
-    tenant = os.environ.get("NOESIS_EVAL_TENANT", "public")
+    tenant = os.environ.get("NOESIS_EVAL_TENANT", "demo")   # the corpus lives under the "demo" tenant
     scores = await run_qa_eval(svc.ask, CLINICAL_GOLD, tenant_id=tenant)
     summary = summarize(scores)
 

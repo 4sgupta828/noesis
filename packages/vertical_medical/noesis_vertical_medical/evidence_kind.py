@@ -12,11 +12,39 @@ and the held-out eval's `evidence_floor` checks the top cited finding meets a ti
 from __future__ import annotations
 
 
-def classify(source_key: str, facets: dict[str, str] | None) -> str:
+def _grade_text(s: str) -> str:
+    """Map an explicit study-design self-label found in a pub_type OR a title to an authority tier.
+    Structural (Rule 18): the work DECLARES its own design ("...: A Systematic Review", pubType
+    'Randomized Controlled Trial') — we read that label, we don't infer meaning. Returns "" if none.
+    Ordered strongest-first so 'systematic review of randomized trials' grades as the review."""
+    if not s:
+        return ""
+    if "systematic review" in s or "meta-analysis" in s or "meta analysis" in s \
+            or "cochrane" in s or "network meta" in s:
+        return "systematic_review"
+    if "randomized controlled trial" in s or "randomised controlled trial" in s \
+            or "randomized clinical trial" in s or "randomised clinical trial" in s \
+            or "randomized, " in s or "randomised, " in s or "double-blind" in s or "placebo-controlled" in s:
+        return "rct"
+    if "cohort" in s or "case-control" in s or "case control" in s \
+            or "longitudinal study" in s or "prospective study" in s or "registry" in s:
+        return "cohort"
+    if "cross-sectional" in s or "cross sectional" in s:
+        return "cross_sectional"
+    if "case series" in s:
+        return "case_series"
+    if "case report" in s:
+        return "case_report"
+    return ""
+
+
+def classify(source_key: str, facets: dict[str, str] | None, title: str = "") -> str:
     """Return an `authority.py` evidence-kind key (or "" when unclassifiable).
 
-    Precedence: an explicit publication/study TYPE wins over a source default, because a systematic
-    review indexed via EuropePMC is stronger than the "article" source default.
+    Precedence: an explicit publication/study TYPE (pub_type, else the TITLE's self-declared design)
+    wins over a source default, because a systematic review indexed via EuropePMC is stronger than the
+    generic "article" source default. The title fallback recovers literature whose FIRST stored
+    pub_type was generic (EuropePMC stores only pubType[0], often "journal-article").
     """
     f = facets or {}
     sk = (source_key or "").lower()
@@ -24,21 +52,10 @@ def classify(source_key: str, facets: dict[str, str] | None) -> str:
     pub = (f.get("pub_type") or "").lower()
     study = (f.get("study_type") or "").lower()
 
-    # 1) Literature publication type is the most specific structural signal (EuropePMC etc.).
-    if pub:
-        if "systematic" in pub or "meta-analysis" in pub or "meta analysis" in pub:
-            return "systematic_review"
-        if "randomized" in pub or "randomised" in pub or "rct" in pub:
-            return "rct"
-        if "cohort" in pub or "case-control" in pub or "case control" in pub:
-            return "cohort"
-        if "cross-sectional" in pub or "cross sectional" in pub:
-            return "cross_sectional"
-        if "case series" in pub:
-            return "case_series"
-        if "case report" in pub:
-            return "case_report"
-        # any other pub_type (e.g. "journal-article", "review") is too generic to grade → fall through
+    # 1) Explicit publication type (most specific), then the title's declared design as a fallback.
+    graded = _grade_text(pub) or _grade_text((title or "").lower())
+    if graded:
+        return graded
 
     # 2) Trial registry: interventional = RCT-graded (weight by phase in the ranker); else observational.
     if sk == "clinicaltrials" or study:

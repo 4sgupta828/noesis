@@ -44,6 +44,20 @@ def test_tiers_order_via_authority():
         > A.rank(classify("faers", {"source_kind": "adverse_event"}))              # RCT > pharmacovigilance
 
 
+def test_title_fallback_grades_generic_pubtype():
+    # EuropePMC stores only the FIRST pub_type (often generic); recover the tier from the title's
+    # explicit self-declared design (v1.1 lever).
+    assert classify("europepmc", {"pub_type": "journal-article"},
+                    "Statins for primary prevention: A Systematic Review and Meta-Analysis") == "systematic_review"
+    assert classify("europepmc", {"pub_type": "research-article"},
+                    "A Randomized Controlled Trial of Empagliflozin in Heart Failure") == "rct"
+    assert classify("europepmc", {"pub_type": "review"},
+                    "A prospective cohort study of statin adherence") == "cohort"
+    # explicit pub_type still wins over title, and a generic title stays unclassified
+    assert classify("europepmc", {"pub_type": "Meta-Analysis"}, "Some vague title") == "systematic_review"
+    assert classify("europepmc", {"pub_type": "journal-article"}, "Statins and cardiovascular outcomes") == ""
+
+
 def test_recency_year():
     assert recency_year({"year": "2024"}) == 2024
     assert recency_year({"year": 2019}) == 2019

@@ -478,7 +478,7 @@ def test_evidence_fitness_reported_in_diagnostics(monkeypatch):
     llm = make(compose_fn)
     res = asyncio.run(run_react(question="what was the metric value?", llm=llm,
         embedder=FakeEmbedder(dim=8), source=src, tenant_id="A", budget=BudgetState(max_calls=20),
-        collect_diagnostics=True, classify_evidence=lambda sk, f: "rct",
+        collect_diagnostics=True, classify_evidence=lambda sk, f, t=None: "rct",
         evidence_fitness=True, evidence_ranker=lambda k: 5 if k == "rct" else 0))
     assert res.grounded
     assert res.diagnostics["evidence_tiers"].get("rct") == 1

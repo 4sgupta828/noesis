@@ -84,7 +84,7 @@ def test_classifier_stamps_evidence_kind_end_to_end():
                          locator=Locator("block_span", "d1", {"block_id": "b1"}),
                          facets={"study_type": "interventional", "phase": "phase3"}))
 
-    def classify(source_key, facets):
+    def classify(source_key, facets, title=""):
         return "rct" if (facets or {}).get("study_type") == "interventional" else ""
 
     llm = _Scripted([

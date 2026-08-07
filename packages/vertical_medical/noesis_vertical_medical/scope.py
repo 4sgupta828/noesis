@@ -1,6 +1,6 @@
 """Medical scope model — condition (disease area) is the primary narrowing dim.
 
-Unlike regulatory (jurisdiction=US state), medical scope is the CONDITION the
+Medical scope is the CONDITION the
 question is about. The validator is permissive (free-text condition), lowercased;
 routing/coverage keys on it. A closed ontology (MeSH/SNOMED) would replace the
 free-text normalize once the terminology backbone is wired.

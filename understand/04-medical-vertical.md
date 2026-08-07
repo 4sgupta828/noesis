@@ -115,7 +115,7 @@ implements the `GatingPolicy` protocol (`gating.py:12-34`):
 
 Adjacent domain vocabulary:
 - `scope.py` sets `SCOPE_DIMENSION = "condition"` (`scope.py:10`) — the disease is
-  the primary narrowing dimension (a regulatory vertical would use jurisdiction).
+  the primary narrowing dimension.
 - `entities.py` declares `ENTITY_TYPES = ("trial","intervention","condition",
   "drug","guideline")` and the *structural* `NCT_RE` regex (`entities.py:6`,
   `:17`) — a computable format check, not a semantic heuristic.

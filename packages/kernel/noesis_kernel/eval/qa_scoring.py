@@ -4,10 +4,8 @@ Kept from the prior system's qa scorer: value-present (with the standalone-numbe
 guard so "3.8" doesn't match inside "13.8"), forbidden-values-absent, required/
 forbidden phrases, refused-correctly, answered, and citation-grounded.
 
-REMOVED (were welded to the regulatory OH cutover): the corpus-vs-ingest recall
-gate, `state_bleed`, and `LEGAL_SOURCE_FAMILIES`-in-core. Attribution to a
-required source class is now a GENERIC citation constraint the vertical supplies
-per case (facet requirement), not a hardcoded legal-family gate.
+Attribution to a required source class is a GENERIC citation constraint the
+vertical supplies per case (a facet requirement), not a hardcoded domain gate.
 """
 from __future__ import annotations
 

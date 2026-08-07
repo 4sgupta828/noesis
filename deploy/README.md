@@ -6,7 +6,7 @@ One vertical per deployment. The image serves the API + research console.
 
 | Var | Purpose | Example |
 |---|---|---|
-| `NOESIS_ACTIVE_VERTICAL` | which installed vertical to activate | `regulatory` |
+| `NOESIS_ACTIVE_VERTICAL` | which installed vertical to activate | `medical` |
 | `NOESIS_PROVIDER_MODE` | `replay` (offline/free) · `record` (real + save cassette) · `live` (real) | `live` in prod |
 | `PORT` | HTTP port | `8000` (Railway sets this) |
 | `ANTHROPIC_API_KEY` | LLM (record/live only) | secret |
@@ -26,8 +26,8 @@ One vertical per deployment. The image serves the API + research console.
 ## Local
 
 ```bash
-NOESIS_ACTIVE_VERTICAL=regulatory NOESIS_PROVIDER_MODE=replay \
-  PYTHONPATH=packages/kernel:packages/vertical_regulatory:apps \
+NOESIS_ACTIVE_VERTICAL=medical NOESIS_PROVIDER_MODE=replay \
+  PYTHONPATH=packages/kernel:packages/vertical_medical:apps \
   .venv/bin/uvicorn api.app:create_app --factory --port 8000
 ```
 

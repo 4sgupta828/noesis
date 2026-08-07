@@ -27,7 +27,7 @@ if [ -z "${NOESIS_PROVIDER_MODE:-}" ]; then
     export NOESIS_PROVIDER_MODE=replay
   fi
 fi
-export PYTHONPATH="packages/kernel:packages/vertical_medical:packages/vertical_regulatory:apps"
+export PYTHONPATH="packages/kernel:packages/vertical_medical:apps"
 PY="${PY:-.venv/bin/python}"
 
 echo "[serve] vertical=$NOESIS_ACTIVE_VERTICAL mode=$NOESIS_PROVIDER_MODE corpus=${NOESIS_CORPUS_DSN:+pg}${NOESIS_CORPUS_DSN:-fixture} port=$PORT"

@@ -25,7 +25,6 @@ generic sockets.
 packages/
   kernel/noesis_kernel/          ← domain-FREE. Knows nothing about medicine.
   vertical_medical/              ← the medical domain, as a plugin
-  vertical_regulatory/           ← a second domain (proves the seam is real)
 apps/
   api/                           ← the FastAPI app that wires it all together
 ```
@@ -68,7 +67,7 @@ A deployment activates **exactly one** vertical. The kernel discovers installed
 verticals through Python's entry-point mechanism (`build.py:63`,
 `load_active_vertical()`): it looks up the `noesis.verticals` entry-point group
 and picks the one named by the `NOESIS_ACTIVE_VERTICAL` environment variable
-(`build.py:68-75`). So switching a deployment from medical to regulatory is an
+(`build.py:68-75`). So switching a deployment to another vertical is an
 env var + a `pip install`, not a code change.
 
 > **Why `Protocol`s instead of base classes?** Structural typing means the

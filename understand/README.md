@@ -16,8 +16,8 @@ architecture splits cleanly into a **domain-free kernel**
 (`packages/kernel/noesis_kernel/`) that knows nothing about medicine, law, or
 finance, and a **vertical** (`packages/vertical_medical/`) that teaches the
 kernel one domain by supplying data connectors, prompts, and UI declarations.
-Medicine is the first vertical; a second (`packages/vertical_regulatory/`) exists
-to prove the seam is real.
+Medicine is the active vertical; the kernel stays domain-free so another vertical
+could plug in without touching it.
 
 **The big idea is a strict division of ownership: the LLM owns MEANING, code owns
 STRUCTURE and PROVENANCE.** Any judgment that requires understanding — "is this

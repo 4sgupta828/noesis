@@ -117,9 +117,8 @@ boost + findings annotation + prose token scan + diagnostics) · `authority.py` 
 A pytest that runs ~40–60 held-out medical cases through the agent with **scripted LLMs** (free, CI) and
 scores them deterministically; plus a one-time `record`-mode baseline script (the single budgeted-credit
 run). Reports pass-rate, **risk-weighted** score, and a hard **"zero critical failures"** gate. The
-infra already exists (`run_qa_eval`/`summarize` in `eval/runner.py`, `score_qa` in `qa_scoring.py`) and
-already runs offline for the regulatory vertical (`vertical_regulatory/test_eval_run.py`) — this ports
-that pattern to medical and enriches the gold schema.
+infra already exists (`run_qa_eval`/`summarize` in `eval/runner.py`, `score_qa` in `qa_scoring.py`) —
+this enriches the gold schema and authors the held-out medical case set.
 
 ### B1. Gold schema (extend `eval_gold.py` GOLD; most fields already supported by `QaCase`)
 Per case:
@@ -161,7 +160,7 @@ only**, never the pass gate (Rule 6: provenance ≠ correctness).
 
 ### B5. Tests + baseline
 - `packages/vertical_medical/noesis_vertical_medical/test_eval_run.py` — scripted-LLM CI run (free),
-  mirroring the regulatory test; asserts the suite passes on known-good scripted answers and FAILS on a
+  asserts the suite passes on known-good scripted answers and FAILS on a
   fabricated/wrong-tier answer (regression proof).
 - `scripts/record_medical_baseline.py` — one budgeted `record` run against the real model to capture the
   live baseline pass-rate + risk-weighted score (the North-Star proxy number).

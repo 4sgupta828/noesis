@@ -2,13 +2,13 @@
 
 A **vertical-agnostic evidence & research platform**. A domain-agnostic **kernel**
 (ingest → corpus → retrieval → research → synthesis) with a **vertical plug-in
-contract** on top. The first vertical is **regulatory commissions**; the platform
-is designed so other verticals (financial/SEC, legislative) plug in without
-touching the kernel.
+contract** on top. The active vertical is **medical** (evidence-grounded clinical
+research); the platform is designed so other verticals plug in without touching
+the kernel.
 
-> This repo is the ground-up rebuild of the prior `factra` system, extracting a
-> clean kernel from an entangled regulatory product. See `docs/` for the full
-> architecture spec and phased implementation plan.
+> The kernel is domain-agnostic by construction; all clinical vocabulary and
+> policy live in the medical vertical. See `understand/` for the architecture
+> walkthrough and `docs/verticals/` for medical-vertical specifics.
 
 ## The one rule that defines the architecture
 
@@ -42,30 +42,23 @@ packages/kernel/               # noesis_kernel — the domain-agnostic platform
     eval/                      # generic scoring (lookup port; qa re-authored)
     conformance/               # VerticalConformance suite (CI gate for any vertical)
     observability/             # cost/breaker metrics + admin API
-packages/vertical_regulatory/  # noesis_vertical_regulatory — vertical #1 (reference impl)
+packages/vertical_medical/     # noesis_vertical_medical — the active clinical vertical
 apps/{api,web,workers}/        # vertical-neutral product shells
-evals/                         # held-out eval gold + runners
 tools/                         # check_kernel_invariant.sh (+ dev tooling)
-docs/                          # architecture-spec.md, implementation-plan.md
+understand/                    # architecture walkthrough
+docs/verticals/                # medical-vertical specifics (sources, coverage)
 ```
 
 ## Key decisions (locked)
 
-- **Ingestion-based for all sources incl. Ohio** — OH is a clean connector +
-  `WarmedResidentialBrowserStrategy` on the generic pipeline; **no legacy DB,
-  pipeline, or download-bridge carryover.**
-- **Lift-and-refactor** the proven research core (ReAct loop, span-check,
-  retrieval fusion, comparison composer, cost governor) under clean contracts;
-  **rewrite** only the domain-welded control flow (gating/routing/coverage).
+- **Grounding is non-negotiable** — every claim/number is code-validated against
+  its source (verbatim span gate + no-new-facts guards) before it ships.
+- **The LLM owns meaning; code owns structure** — classification, attribution,
+  and interpretation are the model's; parsing, IDs, and validation are code's.
 - **Single vertical per deployment** — a deployment activates one vertical
-  manifest at boot; verticals get separate deployments + DBs.
-- **Second vertical = Financial** (XBRL + fact-coordinate verification), built
-  as a conformance proof to keep the abstraction honest.
-
-## Status
-
-Bootstrapping (plan phase **P0**). See `docs/implementation-plan.md` for the
-P0–P5 phases and gates, and `docs/architecture-spec.md` for the full design.
+  manifest at boot.
+- **Ship behind flags, default OFF** — user-visible changes are flag-gated so
+  they roll out and back in prod without a redeploy.
 
 ## Dev
 

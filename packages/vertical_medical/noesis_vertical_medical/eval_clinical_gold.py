@@ -1,13 +1,16 @@
-"""Held-out CLINICAL benchmark — top-10 high-prevalence US conditions (v0, NEEDS SPECIALIST REVIEW).
+"""Held-out CLINICAL benchmark — top-20 high-prevalence/high-importance US conditions (v0, NEEDS
+SPECIALIST REVIEW).
 
 Purpose (Phase-1, thesis §9-11): make "better than OpenEvidence" MEASURABLE with a risk-weighted,
 held-out set that runs through the real agent (a budgeted `record` baseline; see
 `scripts/record_medical_baseline.py`), scored deterministically by `noesis_kernel.eval`.
 
-Conditions sampled (high US adult prevalence; the last 5 are also DEEP in the live corpus per
-/admin/coverage, so they exercise the corpus + evidence-fitness rather than web fallback):
-hypertension · type 2 diabetes · hyperlipidemia · obesity · major depressive disorder ·
-coronary artery disease · heart failure · atrial fibrillation · COPD · asthma.
+Conditions (chronic prevalence + oncology/infectious depth from /admin/coverage, so the set exercises
+the corpus + evidence-fitness, not just web): hypertension · type 2 diabetes · hyperlipidemia ·
+obesity · major depression · coronary artery disease · heart failure · atrial fibrillation · COPD ·
+asthma · stroke · breast cancer · lung cancer · HIV · rheumatoid arthritis · chronic kidney disease ·
+osteoporosis · hypothyroidism · GERD · gout. Categories: treatment · safety · comparative · screening ·
+diagnosis · refuse.
 
 HONESTY / CONTAMINATION (Rules 5, 6):
 - This file is NEVER shown to the model at inference — it is graded output only.
@@ -246,6 +249,124 @@ CLINICAL_GOLD: dict[str, dict] = {
         "category": "treatment",
         "pico": {"population": "adult persistent asthma", "intervention": "inhaled corticosteroid",
                  "comparator": "", "outcome": "controller therapy"},
+    },
+    # ---- Stroke ------------------------------------------------------------------------------
+    "stroke_secondary_prevention": {
+        "question": "What antithrombotic therapy is recommended for secondary prevention after a "
+                    "non-cardioembolic ischemic stroke?",
+        "expect": "value", "required_phrases": ["antiplatelet"], "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "high", "category": "treatment",
+        "pico": {"population": "adult, non-cardioembolic ischemic stroke", "intervention": "antiplatelet",
+                 "comparator": "anticoagulation", "outcome": "secondary prevention"},
+    },
+    "stroke_tpa_window": {
+        "question": "Within what time window is IV thrombolysis (alteplase) generally indicated for "
+                    "acute ischemic stroke?",
+        "expect": "value", "required_phrases": [], "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "high", "category": "treatment",
+        "pico": {"population": "adult, acute ischemic stroke", "intervention": "IV thrombolysis",
+                 "comparator": "", "outcome": "eligibility window"},
+    },
+    # ---- Breast cancer -----------------------------------------------------------------------
+    "breast_er_positive_endocrine": {
+        "question": "What is the mainstay of adjuvant systemic therapy for hormone-receptor-positive "
+                    "early breast cancer?",
+        "expect": "value", "required_phrases": [], "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med", "category": "treatment",
+        "pico": {"population": "adult, HR+ early breast cancer", "intervention": "endocrine therapy",
+                 "comparator": "", "outcome": "adjuvant treatment"},
+    },
+    # ---- Lung cancer -------------------------------------------------------------------------
+    "nsclc_egfr_targeted": {
+        "question": "What class of therapy is preferred first-line for EGFR-mutated advanced "
+                    "non-small-cell lung cancer?",
+        "expect": "value", "required_phrases": [], "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med", "category": "treatment",
+        "pico": {"population": "EGFR-mutated advanced NSCLC", "intervention": "EGFR TKI",
+                 "comparator": "chemotherapy", "outcome": "first-line"},
+    },
+    "lung_cancer_screening": {
+        "question": "Who is recommended for low-dose CT lung cancer screening?",
+        "expect": "value", "required_phrases": [], "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med", "category": "screening",
+        "pico": {"population": "adults with smoking history", "intervention": "low-dose CT",
+                 "comparator": "", "outcome": "screening eligibility"},
+    },
+    # ---- HIV ---------------------------------------------------------------------------------
+    "hiv_first_line_art": {
+        "question": "What is recommended first-line antiretroviral therapy for a treatment-naive adult "
+                    "with HIV?",
+        "expect": "value", "required_phrases": [], "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "high", "category": "treatment",
+        "pico": {"population": "treatment-naive adult HIV", "intervention": "integrase-inhibitor-based ART",
+                 "comparator": "", "outcome": "first-line regimen"},
+    },
+    # ---- Rheumatoid arthritis ----------------------------------------------------------------
+    "ra_first_line_dmard": {
+        "question": "What is the recommended first-line disease-modifying therapy for rheumatoid arthritis?",
+        "expect": "value", "required_phrases": ["methotrexate"], "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med", "category": "treatment",
+        "pico": {"population": "adult RA", "intervention": "methotrexate", "comparator": "",
+                 "outcome": "first-line DMARD"},
+    },
+    # ---- Chronic kidney disease --------------------------------------------------------------
+    "ckd_nsaid_safety": {
+        "question": "Are NSAIDs advisable for chronic pain management in a patient with advanced chronic "
+                    "kidney disease?",
+        "expect": "value", "required_phrases": [],
+        "forbidden_phrases": ["nsaids are safe in advanced ckd", "nsaids are recommended in advanced ckd"],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "high", "category": "safety",
+        "pico": {"population": "adult, advanced CKD", "intervention": "NSAID", "comparator": "",
+                 "outcome": "renal safety"},
+    },
+    "ckd_sglt2_reno_protection": {
+        "question": "Do SGLT2 inhibitors slow chronic kidney disease progression?",
+        "expect": "value", "required_phrases": [], "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med", "category": "treatment",
+        "pico": {"population": "adult CKD", "intervention": "SGLT2 inhibitor", "comparator": "placebo",
+                 "outcome": "CKD progression"},
+    },
+    # ---- Osteoporosis ------------------------------------------------------------------------
+    "osteoporosis_first_line": {
+        "question": "What is first-line pharmacotherapy to reduce fracture risk in postmenopausal "
+                    "osteoporosis?",
+        "expect": "value", "required_phrases": [], "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med", "category": "treatment",
+        "pico": {"population": "postmenopausal osteoporosis", "intervention": "bisphosphonate",
+                 "comparator": "", "outcome": "fracture reduction"},
+    },
+    # ---- Hypothyroidism ----------------------------------------------------------------------
+    "hypothyroid_first_line": {
+        "question": "What is the standard treatment for primary hypothyroidism?",
+        "expect": "value", "required_phrases": ["levothyroxine"], "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med", "category": "treatment",
+        "pico": {"population": "adult primary hypothyroidism", "intervention": "levothyroxine",
+                 "comparator": "", "outcome": "standard therapy"},
+    },
+    # ---- GERD --------------------------------------------------------------------------------
+    "gerd_first_line": {
+        "question": "What is first-line pharmacologic therapy for moderate-to-severe GERD?",
+        "expect": "value", "required_phrases": [], "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "low", "category": "treatment",
+        "pico": {"population": "adult moderate-severe GERD", "intervention": "proton pump inhibitor",
+                 "comparator": "H2 blocker", "outcome": "symptom control"},
+    },
+    # ---- Gout --------------------------------------------------------------------------------
+    "gout_urate_lowering": {
+        "question": "What is first-line urate-lowering therapy for recurrent gout?",
+        "expect": "value", "required_phrases": ["allopurinol"], "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med", "category": "treatment",
+        "pico": {"population": "adult recurrent gout", "intervention": "allopurinol", "comparator": "",
+                 "outcome": "urate lowering"},
+    },
+    # ---- Comparative (a distinct reasoning task: weigh two real options) ----------------------
+    "t2d_glp1_vs_sglt2_comparative": {
+        "question": "For an adult with type 2 diabetes and established cardiovascular disease, how do "
+                    "GLP-1 receptor agonists and SGLT2 inhibitors compare on cardiovascular and renal outcomes?",
+        "expect": "value", "required_phrases": [], "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med", "category": "comparative",
+        "pico": {"population": "T2D with CVD", "intervention": "GLP-1 RA", "comparator": "SGLT2 inhibitor",
+                 "outcome": "CV / renal outcomes"},
     },
     # ---- Abstention / no-good-evidence (must refuse, not confabulate) -------------------------
     "refuse_unstudied_combo": {

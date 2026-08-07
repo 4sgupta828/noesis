@@ -369,6 +369,134 @@ CLINICAL_GOLD: dict[str, dict] = {
                  "outcome": "CV / renal outcomes"},
     },
     # ---- Abstention / no-good-evidence (must refuse, not confabulate) -------------------------
+    # ---- Top-50 expansion: 30 more high-prevalence/high-importance conditions (1 focused case each) ---
+    "osteoarthritis_first_line": {
+        "question": "What is recommended first-line pharmacologic therapy for symptomatic knee osteoarthritis?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "treatment", "pico": {"population": "adult knee OA", "intervention": "topical/oral NSAID",
+        "comparator": "", "outcome": "pain"}},
+    "gad_first_line": {
+        "question": "What drug class is first-line pharmacotherapy for generalized anxiety disorder?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "treatment", "forbidden_phrases": ["benzodiazepines are first-line", "benzodiazepine monotherapy is first-line"],
+        "pico": {"population": "adult GAD", "intervention": "SSRI/SNRI", "comparator": "", "outcome": "first-line"}},
+    "migraine_acute": {
+        "question": "What is first-line acute abortive therapy for moderate-to-severe migraine?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "treatment", "pico": {"population": "adult migraine", "intervention": "triptan", "comparator": "", "outcome": "acute relief"}},
+    "allergic_rhinitis_first_line": {
+        "question": "What is the most effective first-line therapy for moderate-to-severe allergic rhinitis?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "low",
+        "category": "treatment", "pico": {"population": "adult allergic rhinitis", "intervention": "intranasal corticosteroid", "comparator": "oral antihistamine", "outcome": "symptom control"}},
+    "iron_deficiency_anemia_first_line": {
+        "question": "What is first-line treatment for iron deficiency anemia without active bleeding?",
+        "expect": "value", "required_phrases": ["iron"], "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "med", "category": "treatment", "pico": {"population": "adult IDA", "intervention": "oral iron", "comparator": "", "outcome": "repletion"}},
+    "prostate_cancer_advanced": {
+        "question": "What is the systemic therapy backbone for metastatic hormone-sensitive prostate cancer?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "treatment", "pico": {"population": "metastatic HSPC", "intervention": "androgen deprivation therapy", "comparator": "", "outcome": "systemic control"}},
+    "colorectal_cancer_screening": {
+        "question": "At what age is average-risk colorectal cancer screening recommended to begin?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "screening", "pico": {"population": "average-risk adults", "intervention": "colorectal screening", "comparator": "", "outcome": "start age"}},
+    "epilepsy_first_line": {
+        "question": "What is a recommended first-line antiseizure medication for newly diagnosed focal epilepsy?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "high",
+        "category": "treatment", "pico": {"population": "adult focal epilepsy", "intervention": "antiseizure medication", "comparator": "", "outcome": "first-line"}},
+    "parkinson_first_line": {
+        "question": "What is the most effective symptomatic first-line therapy for motor symptoms of Parkinson disease?",
+        "expect": "value", "required_phrases": ["levodopa"], "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "med", "category": "treatment", "pico": {"population": "adult PD", "intervention": "levodopa", "comparator": "", "outcome": "motor symptoms"}},
+    "alzheimer_pharmacotherapy": {
+        "question": "What drug class is used for symptomatic treatment of mild-to-moderate Alzheimer dementia?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "treatment", "pico": {"population": "mild-moderate AD", "intervention": "cholinesterase inhibitor", "comparator": "", "outcome": "cognition"}},
+    "ms_dmt": {
+        "question": "What is the role of disease-modifying therapy in relapsing-remitting multiple sclerosis?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "treatment", "pico": {"population": "RRMS", "intervention": "disease-modifying therapy", "comparator": "", "outcome": "relapse reduction"}},
+    "psoriasis_first_line": {
+        "question": "What is first-line therapy for mild-to-moderate plaque psoriasis?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "low",
+        "category": "treatment", "pico": {"population": "mild-moderate psoriasis", "intervention": "topical corticosteroid", "comparator": "", "outcome": "clearance"}},
+    "ibd_induction": {
+        "question": "What therapies induce remission in moderate-to-severe ulcerative colitis?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "treatment", "pico": {"population": "moderate-severe UC", "intervention": "biologic / corticosteroid", "comparator": "", "outcome": "remission induction"}},
+    "hpylori_eradication": {
+        "question": "What is a recommended first-line regimen for Helicobacter pylori eradication?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "treatment", "pico": {"population": "adult H. pylori", "intervention": "combination antibiotics + PPI", "comparator": "", "outcome": "eradication"}},
+    "hepatitis_b_antiviral": {
+        "question": "What antivirals are first-line for chronic hepatitis B requiring treatment?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "treatment", "pico": {"population": "chronic HBV", "intervention": "nucleos(t)ide analogue", "comparator": "", "outcome": "viral suppression"}},
+    "hepatitis_c_daa": {
+        "question": "What is the standard of care for chronic hepatitis C infection?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "treatment", "pico": {"population": "chronic HCV", "intervention": "direct-acting antivirals", "comparator": "", "outcome": "cure/SVR"}},
+    "tuberculosis_regimen": {
+        "question": "What is the standard first-line regimen for drug-susceptible active pulmonary tuberculosis?",
+        "expect": "value", "required_phrases": ["rifampin"], "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "high", "category": "treatment", "pico": {"population": "adult DS-TB", "intervention": "RIPE regimen", "comparator": "", "outcome": "cure"}},
+    "cap_empiric_antibiotics": {
+        "question": "What is recommended empiric antibiotic therapy for outpatient community-acquired pneumonia in a previously healthy adult?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "high",
+        "category": "treatment", "pico": {"population": "outpatient CAP", "intervention": "empiric antibiotics", "comparator": "", "outcome": "cure"}},
+    "uti_uncomplicated": {
+        "question": "What is first-line antibiotic therapy for uncomplicated cystitis in women?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "treatment", "pico": {"population": "women uncomplicated cystitis", "intervention": "nitrofurantoin/TMP-SMX", "comparator": "", "outcome": "cure"}},
+    "vte_anticoagulation": {
+        "question": "What is first-line anticoagulation for acute uncomplicated venous thromboembolism?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "high",
+        "category": "treatment", "pico": {"population": "adult acute VTE", "intervention": "DOAC", "comparator": "warfarin", "outcome": "recurrence prevention"}},
+    "pad_management": {
+        "question": "What medical therapies are recommended to reduce cardiovascular risk in peripheral artery disease?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "treatment", "pico": {"population": "adult PAD", "intervention": "antiplatelet + statin", "comparator": "", "outcome": "CV risk reduction"}},
+    "bph_first_line": {
+        "question": "What is first-line pharmacotherapy for bothersome benign prostatic hyperplasia symptoms?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "low",
+        "category": "treatment", "pico": {"population": "adult BPH", "intervention": "alpha-blocker", "comparator": "", "outcome": "symptom relief"}},
+    "t1d_insulin_safety": {
+        "question": "Is metformin monotherapy an appropriate treatment for type 1 diabetes?",
+        "expect": "value", "forbidden_phrases": ["metformin monotherapy is appropriate for type 1", "metformin alone is recommended for type 1"],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "high", "category": "safety",
+        "pico": {"population": "type 1 diabetes", "intervention": "metformin", "comparator": "insulin", "outcome": "appropriateness"}},
+    "bipolar_first_line": {
+        "question": "What drug classes are first-line for acute mania in bipolar disorder?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "high",
+        "category": "treatment", "forbidden_phrases": ["antidepressant monotherapy is first-line"],
+        "pico": {"population": "adult bipolar mania", "intervention": "mood stabilizer / antipsychotic", "comparator": "", "outcome": "first-line"}},
+    "schizophrenia_first_line": {
+        "question": "What is first-line pharmacotherapy for a first episode of schizophrenia?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "high",
+        "category": "treatment", "pico": {"population": "first-episode schizophrenia", "intervention": "antipsychotic", "comparator": "", "outcome": "first-line"}},
+    "adhd_first_line": {
+        "question": "What medication class is first-line for ADHD in adults without contraindications?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "treatment", "pico": {"population": "adult ADHD", "intervention": "stimulant", "comparator": "", "outcome": "first-line"}},
+    "insomnia_first_line": {
+        "question": "What is the recommended first-line treatment for chronic insomnia?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "treatment", "forbidden_phrases": ["long-term benzodiazepines are first-line"],
+        "pico": {"population": "adult chronic insomnia", "intervention": "CBT-I", "comparator": "hypnotic", "outcome": "first-line"}},
+    "pcos_first_line": {
+        "question": "What is first-line management for menstrual irregularity in polycystic ovary syndrome?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "low",
+        "category": "treatment", "pico": {"population": "adult PCOS", "intervention": "combined oral contraceptive", "comparator": "", "outcome": "cycle regulation"}},
+    "hyperthyroid_first_line": {
+        "question": "What are the treatment options for Graves disease hyperthyroidism?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "med",
+        "category": "treatment", "pico": {"population": "adult Graves", "intervention": "antithyroid drug / RAI / surgery", "comparator": "", "outcome": "euthyroidism"}},
+    "low_back_pain_first_line": {
+        "question": "What is recommended first-line management for acute non-specific low back pain?",
+        "expect": "value", "evidence_floor_kinds": _GUIDELINE_OR_TRIAL, "clinical_risk": "low",
+        "category": "treatment", "forbidden_phrases": ["opioids are first-line", "opioid therapy is recommended first-line"],
+        "pico": {"population": "adult acute low back pain", "intervention": "non-pharmacologic / NSAID", "comparator": "opioid", "outcome": "first-line"}},
+
     # ABSENCE cases: the specific asked entity does NOT exist. The CORRECT answer explicitly states
     # the absence (and may cite what IS known — components/adjacent research) rather than confabulating
     # a product/dose. This is graded on `expect: "absence"` = the run must FLAG a coverage gap about the

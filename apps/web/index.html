@@ -389,6 +389,38 @@
   .panelrun:hover{background:var(--gold-strong);}
   .panelrun:disabled{opacity:.5;cursor:default;background:transparent;color:var(--muted);border-color:var(--hair);}
   .panelrun-n{font-weight:400;opacity:.85;margin-left:.3rem;}
+  /* dedicated Specialist Panel destination (full-screen surface, mirrors .videos) */
+  .panelnav{color:var(--gold);border-color:rgba(var(--gold-rgb),.4);}
+  .panelnav:hover{color:var(--on-accent);background:var(--gold);border-color:var(--gold);}
+  .panelview{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;
+    background-image:radial-gradient(120% 60% at 85% -10%, rgba(var(--gold-rgb),.07), transparent 60%);}
+  .panelview .vhd{display:flex;align-items:center;gap:.9rem;padding:.85rem 1.2rem;border-bottom:1px solid var(--hair);flex:none;}
+  .panelview .sback{font-family:var(--mono);font-size:.66rem;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;
+    background:transparent;border:1px solid var(--hair);border-radius:8px;padding:.4rem .75rem;color:var(--ink);}
+  .panelview .sback:hover{border-color:var(--gold);color:var(--gold);}
+  .panelview .stitle{font-family:var(--serif);font-size:1.15rem;color:var(--ink);display:flex;align-items:center;gap:.55rem;}
+  .panelview .alpha{font-family:var(--mono);font-size:.55rem;text-transform:uppercase;letter-spacing:.12em;
+    color:var(--gold);border:1px solid rgba(var(--gold-rgb),.5);border-radius:999px;padding:.1rem .5rem;}
+  .panelbody{flex:1;overflow-y:auto;padding:1.6rem 1.2rem 3rem;}
+  .panelbody>.panelwrap,.panellanding{max-width:760px;margin:0 auto;}
+  .panellead{font-family:var(--serif);font-size:1.5rem;line-height:1.3;color:var(--ink);margin:.4rem 0 .5rem;}
+  .panelsub{font-size:.9rem;color:var(--muted);line-height:1.6;margin-bottom:1.5rem;}
+  .panelqwrap{margin-bottom:1.7rem;}
+  .panelqlbl{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.5rem;}
+  .panelq{width:100%;box-sizing:border-box;resize:vertical;min-height:5.2rem;font:inherit;font-size:1rem;line-height:1.55;
+    color:var(--ink);background:var(--panel);border:1px solid var(--hair);border-radius:12px;padding:.8rem .95rem;}
+  .panelq:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.12);}
+  .panelq.flash{animation:pflash .9s ease;}
+  @keyframes pflash{0%,100%{border-color:var(--hair);}30%,60%{border-color:var(--gold);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.18);}}
+  .rosterhead{display:flex;align-items:baseline;justify-content:space-between;gap:.6rem;margin-bottom:.7rem;}
+  .rosterhead .rh-h{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
+  .rosterhead .rh-n{font-size:.78rem;color:var(--muted);}
+  .rostergrid{display:grid;gap:.6rem;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));}
+  .pcard-def{font-family:var(--mono);font-size:.53rem;text-transform:uppercase;letter-spacing:.08em;color:var(--gold);
+    border:1px solid rgba(var(--gold-rgb),.4);border-radius:999px;padding:.05rem .4rem;margin-left:.4rem;vertical-align:middle;}
+  .panelstatus{max-width:760px;margin:2rem auto;text-align:center;color:var(--muted);font-size:.95rem;line-height:1.6;}
+  .panelstatus .spin{display:inline-block;margin-right:.5rem;animation:spin 1.1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
   /* confidence read: three dimensions, each = [name · level · gloss] then a rationale below it */
   .rconf{margin-top:.95rem;padding-top:.75rem;border-top:1px solid var(--hair);}
   .rconf-h{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.6rem;}
@@ -796,6 +828,7 @@
     <a class="histbtn" href="/admin" style="margin-left:0;text-decoration:none;">Coverage</a>
     <button type="button" class="histbtn" id="vidbtn" style="margin-left:0;">Videos</button>
     <button type="button" class="histbtn" id="histbtn" style="margin-left:0;">Past Sessions</button>
+    <button type="button" class="histbtn panelnav" id="panelnav" style="margin-left:0;" hidden>◈ Specialist Panel</button>
   </header>
 
   <h1 id="heading">What does the evidence show?</h1>
@@ -897,6 +930,13 @@
     <video id="vlvideo" controls playsinline></video>
   </div>
 </div>
+<section class="panelview" id="panelview" hidden aria-label="Specialist panel">
+  <div class="vhd">
+    <button type="button" class="sback" id="pback">← Back</button>
+    <span class="stitle">◈ Specialist Panel <span class="alpha">Alpha</span></span>
+  </div>
+  <div class="panelbody" id="panelbody"></div>
+</section>
 
 <!-- identity gate: capture name + email at landing, stored against each session -->
 <div class="idmodal" id="idmodal" hidden>
@@ -975,17 +1015,12 @@ async function loadConfig(){
     REASONING_ENABLED = !!c.reasoning_read_enabled;
     ASK_PANEL_ENABLED = !!c.ask_panel_enabled;
     PANEL_SPECIALISTS = c.panel_specialists || [];
-    if(ASK_PANEL_ENABLED){ const pb = $("#panelbar"); if(pb) pb.hidden = false;
-      const pg = $("#panelgo"); if(pg) pg.addEventListener("click", ()=>{
-        if(CURRENT_ABORT) return;                       // a request is already in flight
-        const question = q.value.trim();
-        if(!question){                                   // no question yet → prompt for one (not a silent no-op)
-          q.focus(); const f = q.closest(".field"); if(f){ f.classList.add("flash"); setTimeout(()=>f.classList.remove("flash"), 900); }
-          const ph = $("#panelhint"); if(ph){ const t = ph.textContent; ph.textContent = "Type your clinical question above first, then convene the panel."; setTimeout(()=>ph.textContent = t, 2600); }
-          return;
-        }
-        askPanel(question);
-      }); }
+    if(ASK_PANEL_ENABLED){
+      const pn = $("#panelnav"); if(pn){ pn.hidden = false; pn.addEventListener("click", ()=>openPanel(q.value.trim())); }
+      const pb = $("#panelbar"); if(pb) pb.hidden = false;
+      // the console shortcut now opens the dedicated panel surface, prefilled with any typed question
+      const pg = $("#panelgo"); if(pg) pg.addEventListener("click", ()=>openPanel(q.value.trim()));
+    }
     VISION_ENABLED = !!c.vision_enabled;
     if(EFFORT_ENABLED){
       const wrap = $("#effort"), rng = $("#effort-range");
@@ -1943,72 +1978,124 @@ function renderRefineChips(original, refs){
   box.querySelectorAll(".chip-q").forEach(b=>b.addEventListener("click",()=>askQuestion(b.dataset.q,{skipRefine:true})));
   syncComposerPad();
 }
-// Ask Panel (Alpha): convene the AI specialist panel and render each take + the synthesized verdict.
-let PANEL_CASE = "";           // the case under panel review
-// Phase 1 — CONVENE: auto-select the specialists and let the user adjust before running.
-async function askPanel(question){
+// Ask Panel (Alpha) — a DEDICATED destination (#panelview overlay). All panel states render into
+// #panelbody (never the console `out`): landing (roster + case) → convene (auto-select + adjust) →
+// case conference. A clinician describes a case; specialists each review the evidence through their own
+// lens (lens-scoped retrieval, not general search); the chair synthesizes the pooled verified findings.
+let PANEL_CASE = "";                       // the case under panel review
+const pbody = () => $("#panelbody");       // the dedicated surface every panel state renders into
+
+function openPanel(prefill){
+  const v = $("#panelview"); if(!v) return;
+  v.hidden = false; document.body.style.overflow = "hidden";
+  if(location.hash !== "#panel") history.pushState(null, "", "#panel");
+  renderPanelLanding(prefill || PANEL_CASE || "");
+}
+function closePanel(){
+  const v = $("#panelview"); if(v) v.hidden = true;
+  if($("#sessions").hidden && $("#videos").hidden) document.body.style.overflow = "";
+  if(location.hash === "#panel") history.replaceState(null, "", location.pathname + location.search);
+}
+// A card for one specialist. `mode`: 'lens' shows its expertise (landing); 'why' shows the case rationale (convene).
+function specCard(s, on, mode, rationale){
+  const detail = mode === "why" ? (rationale || s.focus || s.lens || "")
+                                : (s.focus || s.lens || "");
+  const def = (mode === "lens" && s.default) ? `<span class="pcard-def">Default</span>` : "";
+  return `<label class="pcard${on?" on":""}" data-id="${esc(s.id)}">
+      <input type="checkbox" class="pchk" ${on?"checked":""} />
+      <span class="pcard-b"><span class="pcard-name">${esc(s.specialty)}${def}</span>
+        <span class="pcard-lens">${esc(detail)}</span></span></label>`;
+}
+// Landing: the full roster up front (each specialist + its lens/expertise, defaults pre-selected) and a
+// case box. "Convene panel" runs the LLM triage to auto-select the specialists that fit THIS case.
+function renderPanelLanding(prefill){
+  const roster = PANEL_SPECIALISTS || [];
+  pbody().scrollTop = 0;
+  pbody().innerHTML = `<div class="panellanding">
+    <div class="panellead">Convene a specialist panel</div>
+    <div class="panelsub">Describe the clinical case. A panel of AI specialists each reviews the evidence
+      through its own lens — dosing, evidence quality, cardiovascular, renal, and more — then the chair
+      synthesizes their verified findings into a case-conference conclusion. Every statement is grounded
+      in retrieved evidence.</div>
+    <div class="panelqwrap">
+      <div class="panelqlbl">The case before the panel</div>
+      <textarea class="panelq" id="panelq" rows="3" placeholder="e.g. 72-year-old with HFrEF and CKD stage 3 on metformin — how should GDMT be optimized?">${esc(prefill||"")}</textarea>
+    </div>
+    <div class="rosterhead"><span class="rh-h">The specialists</span>
+      <span class="rh-n">${roster.length} available · defaults marked · the panel is auto-selected per case</span></div>
+    <div class="rostergrid">${roster.map(s=>specCard(s, !!s.default, "lens")).join("")}</div>
+    <button type="button" class="panelrun" id="panelconvene" style="margin-top:1.5rem;">Convene panel ▶</button>
+  </div>`;
+  const upd = () => pbody().querySelectorAll(".pcard").forEach(l=>l.classList.toggle("on", l.querySelector(".pchk").checked));
+  pbody().querySelectorAll(".pchk").forEach(c=>c.addEventListener("change", upd));
+  $("#panelconvene").addEventListener("click", ()=>{
+    const ta = $("#panelq"); const question = (ta.value||"").trim();
+    if(!question){ ta.focus(); ta.classList.add("flash"); setTimeout(()=>ta.classList.remove("flash"), 900); return; }
+    // any specialists the user pre-selected on the landing seed the triage as a manual hint
+    const manual = [...pbody().querySelectorAll(".pcard")].filter(l=>l.querySelector(".pchk").checked).map(l=>l.dataset.id);
+    askPanel(question, manual);
+  });
+}
+// Phase 1 — CONVENE: auto-select the specialists (LLM triage) and let the user adjust before running.
+async function askPanel(question, manual){
   CURRENT_Q = question; PANEL_CASE = question;
-  out.innerHTML = `<div class="status">◈ Convening a panel — selecting the specialists whose expertise fits this case…</div>`;
-  window.scrollTo({top:0});
+  pbody().scrollTop = 0;
+  pbody().innerHTML = `<div class="panelstatus"><span class="spin">◈</span> Convening a panel — selecting the specialists whose expertise fits this case…</div>`;
   try{
     const resp = await fetch("/panel/plan", {method:"POST", headers:{"content-type":"application/json"},
       body: JSON.stringify({question, tenant_id:"demo"})});
     if(!resp.ok) throw new Error("HTTP "+resp.status);
-    renderPanelPlan(question, await resp.json());
+    renderPanelPlan(question, await resp.json(), manual||[]);
   }catch(e){
-    out.innerHTML = `<div class="empty">Couldn't convene the panel. ${esc(String(e.message||e))}</div>`;
+    pbody().innerHTML = `<div class="panelstatus">Couldn't convene the panel. ${esc(String(e.message||e))}
+      <div style="margin-top:1rem"><button type="button" class="panelbtn" onclick="renderPanelLanding(PANEL_CASE)">← Back</button></div></div>`;
   }
 }
-// The convene screen: the auto-selected panel (with rationale) + the rest of the roster to add, each
+// The convene screen: the auto-selected panel (with case rationale) + the rest of the roster to add, each
 // showing its lens/expertise. The user restricts/expands the set, then runs the analysis.
-function renderPanelPlan(question, data){
+function renderPanelPlan(question, data, manual){
   const selIds = new Set((data.selected||[]).map(s=>s.id));
+  (manual||[]).forEach(id=>selIds.add(id));   // respect any specialists the user pre-picked on the landing
   const ration = {}; (data.selected||[]).forEach(s=>ration[s.id]=s.rationale);
-  const card = (s, on) => `<label class="pcard${on?" on":""}" data-id="${esc(s.id)}">
-      <input type="checkbox" class="pchk" ${on?"checked":""} />
-      <span class="pcard-b"><span class="pcard-name">${esc(s.specialty)}</span>
-        <span class="pcard-lens">${esc(ration[s.id] || s.focus || s.lens || "")}</span></span></label>`;
   const chosen = (data.roster||[]).filter(s=>selIds.has(s.id));
   const rest = (data.roster||[]).filter(s=>!selIds.has(s.id));
-  out.innerHTML = `<div class="panelwrap">
-    <div class="panelhead">◈ Specialist Panel</div>
+  pbody().scrollTop = 0;
+  pbody().innerHTML = `<div class="panelwrap">
+    <div class="panelhead">◈ Convening the panel</div>
     <div class="panelcase">Case: <b>${esc(question)}</b></div>
-    <div class="planintro">For this case I'll convene these specialists — each reviews the evidence through
+    <div class="planintro">For this case I've selected these specialists — each reviews the evidence through
       its own lens. Adjust the panel, then run the analysis.</div>
     <div class="planblock"><div class="planblock-h">Convening (${chosen.length})</div>
-      <div class="pcards">${chosen.map(s=>card(s,true)).join("")}</div></div>
+      <div class="pcards">${chosen.map(s=>specCard(s,true,"why",ration[s.id])).join("")}</div></div>
     ${rest.length?`<div class="planblock"><div class="planblock-h">Also available</div>
-      <div class="pcards">${rest.map(s=>card(s,false)).join("")}</div></div>`:""}
+      <div class="pcards">${rest.map(s=>specCard(s,false,"lens")).join("")}</div></div>`:""}
     <button type="button" class="panelrun" id="panelrun">▶ Run Panel Analysis <span class="panelrun-n"></span></button>
   </div>`;
   const refresh = () => {
-    out.querySelectorAll(".pcard").forEach(l=>l.classList.toggle("on", l.querySelector(".pchk").checked));
-    const n = out.querySelectorAll(".pchk:checked").length;
+    pbody().querySelectorAll(".pcard").forEach(l=>l.classList.toggle("on", l.querySelector(".pchk").checked));
+    const n = pbody().querySelectorAll(".pchk:checked").length;
     const rb = $("#panelrun"); rb.disabled = n===0;
     rb.querySelector(".panelrun-n").textContent = n ? `· ${n} specialist${n===1?"":"s"}` : "· pick at least one";
   };
-  out.querySelectorAll(".pchk").forEach(c=>c.addEventListener("change", refresh));
+  pbody().querySelectorAll(".pchk").forEach(c=>c.addEventListener("change", refresh));
   $("#panelrun").addEventListener("click", ()=>{
-    const ids = [...out.querySelectorAll(".pcard")].filter(l=>l.querySelector(".pchk").checked).map(l=>l.dataset.id);
+    const ids = [...pbody().querySelectorAll(".pcard")].filter(l=>l.querySelector(".pchk").checked).map(l=>l.dataset.id);
     if(ids.length) runPanel(question, ids);
   });
   refresh();
 }
 // Phase 2 — DELIBERATE: run the confirmed panel and render the case conference.
 async function runPanel(question, ids){
-  go.classList.add("loading", "stopmode"); go.title = "Stop";
-  out.innerHTML = `<div class="status">◈ The panel is deliberating — ${ids.length} specialist${ids.length===1?"":"s"} reviewing the evidence, then the chair synthesizes…</div>`;
-  window.scrollTo({top:0});
+  pbody().scrollTop = 0;
+  pbody().innerHTML = `<div class="panelstatus"><span class="spin">◈</span> The panel is deliberating — ${ids.length} specialist${ids.length===1?"":"s"} reviewing the evidence through their lenses, then the chair synthesizes… <div style="margin-top:.5rem;font-size:.82rem;opacity:.8">This takes a few minutes.</div></div>`;
   try{
     const resp = await fetch("/panel/ask", {method:"POST", headers:{"content-type":"application/json"},
-      body: JSON.stringify({question, tenant_id:"demo", specialists: ids, sources: chosen()})});
+      body: JSON.stringify({question, tenant_id:"demo", specialists: ids})});
     if(!resp.ok) throw new Error("HTTP "+resp.status);
     renderPanel(await resp.json());
   }catch(e){
-    out.innerHTML = `<div class="empty">The panel couldn't complete. ${esc(String(e.message||e))}
-      <div style="margin-top:.7rem"><button type="button" class="panelbtn" onclick="askPanel(PANEL_CASE)">← Back to panel setup</button></div></div>`;
-  }finally{
-    go.classList.remove("loading", "stopmode"); go.title = "";
+    pbody().innerHTML = `<div class="panelstatus">The panel couldn't complete. ${esc(String(e.message||e))}
+      <div style="margin-top:1rem"><button type="button" class="panelbtn" onclick="askPanel(PANEL_CASE)">← Back to panel setup</button></div></div>`;
   }
 }
 function renderPanel(data){
@@ -2019,12 +2106,14 @@ function renderPanel(data){
     return `<details class="spec"><summary class="spec-h"><span class="spec-name">${esc(t.specialty)}</span>${badge}<span class="spec-toggle"></span></summary>
       <div class="spec-b md">${bodyHtml}</div></details>`;
   }).join("");
-  out.innerHTML = `<div class="panelwrap">
+  pbody().scrollTop = 0;
+  pbody().innerHTML = `<div class="panelwrap">
     <div class="panelhead">◈ Panel Case Conference <span class="panelmeta">${(data.takes||[]).length} specialists</span></div>
     <div class="panelcase">Case: <b>${esc(data.question||PANEL_CASE)}</b></div>
     <div class="panelsynth" id="panelsynth"></div>
     <div class="paneltakes"><div class="paneltakes-h">Each specialist's assessment</div>${takes}</div>
-    <div style="margin-top:1.1rem"><button type="button" class="panelbtn" onclick="askPanel(PANEL_CASE)">↺ Re-convene / adjust panel</button></div>
+    <div style="margin-top:1.1rem"><button type="button" class="panelbtn" onclick="askPanel(PANEL_CASE)">↺ Re-convene / adjust panel</button>
+      <button type="button" class="panelbtn" onclick="renderPanelLanding('')" style="margin-left:.5rem;">＋ New case</button></div>
   </div>`;
   // the deliberation + conclusion (markdown) rendered with the full machinery (reasoning read + evidence)
   const synth = {answer:data.synthesis, claims:data.claims||[], grounded:!!(data.claims||[]).length,
@@ -2456,7 +2545,8 @@ $("#vidbtn").addEventListener("click", openVideos);
 $("#vback").addEventListener("click", closeVideos);
 $("#vlclose").addEventListener("click", closeLight);
 $("#vlight").addEventListener("click", e=>{ if(e.target === vlight) closeLight(); });
-document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ if(!vlight.hidden) closeLight(); else if(!videosEl.hidden) closeVideos(); } });
+$("#pback").addEventListener("click", closePanel);
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ if(!vlight.hidden) closeLight(); else if(!videosEl.hidden) closeVideos(); else if(!$("#panelview").hidden) closePanel(); } });
 async function deleteSession(id, rowEl){
   if(!confirm("Delete this session? It will be removed from your history.")) return;
   try{
@@ -2511,6 +2601,7 @@ function routeHash(){    // #s/<id> → open a shared answer/thread; #sessions �
   const m = location.hash.match(/^#s\/(.+)$/);
   if(m){ loadSharedSession(decodeURIComponent(m[1])); }
   else if(location.hash === "#sessions"){ openSessions(); }
+  else if(location.hash === "#panel" && ASK_PANEL_ENABLED){ openPanel(""); }
 }
 // route only AFTER config loads, so CONV_ENABLED is known (shared threads render as conversations)
 loadConfig().then(routeHash);

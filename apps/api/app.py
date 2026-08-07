@@ -536,6 +536,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "ask_panel_enabled": ask_panel_enabled(),
             "panel_specialists": ([
                 {"id": getattr(s, "id", ""), "specialty": getattr(s, "specialty", ""),
+                 "focus": getattr(s, "focus", ""),   # the specialist's expertise, shown on the panel roster
                  "default": getattr(s, "id", "") in set(getattr(svc, "panel_default_ids", ()))}
                 for s in getattr(svc, "panel_specialists", ())] if ask_panel_enabled() else []),
             "refine_enabled": refine_enabled() and bool(getattr(svc, "refine_prompt", None)),

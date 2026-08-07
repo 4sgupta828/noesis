@@ -345,6 +345,29 @@
   @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .rkind.k-change{color:#c39ee0;}}
   .rtext{font-size:.94rem;line-height:1.58;color:var(--ink);}
   .reasoning .rref{color:var(--gold);font-weight:640;cursor:pointer;font-size:.72em;vertical-align:super;padding:0 .05em;}
+  /* Ask Panel (Alpha) */
+  .panelbar{display:flex;align-items:center;gap:.7rem;margin-top:.7rem;flex-wrap:wrap;}
+  .panelbtn{font-family:var(--mono);font-size:.72rem;font-weight:600;letter-spacing:.03em;cursor:pointer;
+    border:1px solid var(--gold);color:var(--gold);background:transparent;border-radius:9px;padding:.42rem .8rem;}
+  .panelbtn:hover{background:var(--gold);color:var(--on-accent);}
+  .panelhint{font-size:.72rem;color:var(--muted);}
+  @media (max-width:560px){ .panelhint{display:none;} }
+  .panelhead{font-family:var(--mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);
+    display:flex;align-items:center;gap:.6rem;margin:.2rem 0 1.1rem;}
+  .panelhead .panelmeta{color:var(--muted);text-transform:none;letter-spacing:0;font-size:.68rem;}
+  .panelsynth{margin-bottom:1.6rem;}
+  .paneltakes{border-top:1px solid var(--hair);padding-top:1.1rem;}
+  .paneltakes-h{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.7rem;}
+  .spec{border:1px solid var(--hair);border-left:3px solid var(--gold);border-radius:10px;background:var(--panel2);margin-bottom:.6rem;overflow:hidden;}
+  .spec>summary{list-style:none;cursor:pointer;padding:.7rem .9rem;display:flex;align-items:center;gap:.6rem;}
+  .spec>summary::-webkit-details-marker{display:none;}
+  .spec>summary:hover{background:rgba(var(--gold-rgb),.05);}
+  .spec-name{font-weight:640;color:var(--ink);font-size:.92rem;}
+  .spec-n{font-family:var(--mono);font-size:.62rem;color:var(--verified);background:rgba(19,122,84,.1);border-radius:999px;padding:.1rem .5rem;}
+  .spec-n.dim{color:var(--muted);background:var(--hair-soft);}
+  .spec-toggle{margin-left:auto;font-family:var(--mono);font-size:.6rem;color:var(--on-accent);background:var(--gold);border-radius:12px;padding:.15rem .55rem;}
+  .spec-toggle::after{content:"Show ▸";} .spec[open] .spec-toggle::after{content:"Hide ▾";}
+  .spec-b{padding:.2rem .9rem 1rem;font-size:.9rem;line-height:1.6;color:var(--ink);}
   /* confidence read: three dimensions, each = [name · level · gloss] then a rationale below it */
   .rconf{margin-top:.95rem;padding-top:.75rem;border-top:1px solid var(--hair);}
   .rconf-h{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.6rem;}
@@ -797,6 +820,10 @@
       </div>
       <span class="ahint" id="aud-hint">Clinician view — structured, cited, for a medical audience.</span>
     </div>
+    <div class="panelbar" id="panelbar" hidden>
+      <button type="button" class="panelbtn" id="panelgo">◈ Ask a Specialist Panel</button>
+      <span class="panelhint" id="panelhint">Alpha · convenes AI specialists — each reviews the evidence through its own lens, then the panel synthesizes.</span>
+    </div>
   </form>
 
   <section id="out" aria-live="polite">
@@ -893,6 +920,8 @@ let AUDIENCE = "clinician"; // current answer audience; only sent when "patient"
 let SESS_AUDIENCE = "clinician"; // active Past-Sessions audience tab (clinician | patient)
 let REFINE_ENABLED = false;     // pre-answer question refinement (offer sharper versions to pick)
 let REASONING_ENABLED = false;  // reasoning-read interpretation + confidence layer (server-validated)
+let ASK_PANEL_ENABLED = false;  // AI specialist panel (Alpha)
+let PANEL_SPECIALISTS = [];      // roster from /config [{id, specialty, default}]
 let THREAD = {session_id:null, turns:[]};   // the active conversation
 let BASE_PLACEHOLDER = "";                   // vertical console placeholder (restored on New)
 let EXAMPLES = [];                            // vertical example questions → random intake prompt
@@ -923,6 +952,10 @@ async function loadConfig(){
     PATIENT_MODE_ENABLED = !!c.patient_mode_enabled;
     REFINE_ENABLED = !!c.refine_enabled;
     REASONING_ENABLED = !!c.reasoning_read_enabled;
+    ASK_PANEL_ENABLED = !!c.ask_panel_enabled;
+    PANEL_SPECIALISTS = c.panel_specialists || [];
+    if(ASK_PANEL_ENABLED){ const pb = $("#panelbar"); if(pb) pb.hidden = false;
+      const pg = $("#panelgo"); if(pg) pg.addEventListener("click", ()=>{ const question=q.value.trim(); if(question) askPanel(question); }); }
     VISION_ENABLED = !!c.vision_enabled;
     if(EFFORT_ENABLED){
       const wrap = $("#effort"), rng = $("#effort-range");
@@ -1880,6 +1913,45 @@ function renderRefineChips(original, refs){
   box.querySelectorAll(".chip-q").forEach(b=>b.addEventListener("click",()=>askQuestion(b.dataset.q,{skipRefine:true})));
   syncComposerPad();
 }
+// Ask Panel (Alpha): convene the AI specialist panel and render each take + the synthesized verdict.
+async function askPanel(question){
+  CURRENT_Q = question;
+  go.classList.add("loading", "stopmode"); go.title = "Stop";
+  const sg = out.querySelector("#suggest"); if(sg) sg.remove();
+  out.innerHTML = `<div class="status">◈ Convening the specialist panel — each specialist is reviewing the evidence through its own lens…</div>`;
+  window.scrollTo({top:0});
+  try{
+    const resp = await fetch("/panel/ask", {method:"POST", headers:{"content-type":"application/json"},
+      body: JSON.stringify({question, tenant_id:"demo", sources: chosen()})});
+    if(!resp.ok) throw new Error("HTTP "+resp.status);
+    renderPanel(await resp.json());
+  }catch(e){
+    out.innerHTML = `<div class="empty">Couldn't reach the specialist panel. ${esc(String(e.message||e))}</div>`;
+  }finally{
+    go.classList.remove("loading", "stopmode"); go.title = "";
+  }
+}
+function renderPanel(data){
+  const takes = (data.takes||[]).map(t=>{
+    const badge = t.grounded ? `<span class="spec-n">${t.n_verified} finding${t.n_verified===1?"":"s"}</span>`
+      : `<span class="spec-n dim">${t.error?"error":"no grounded findings"}</span>`;
+    const bodyHtml = t.answer ? mdToHtml(t.answer) : `<span class="dim">No grounded take.</span>`;
+    return `<details class="spec"><summary class="spec-h"><span class="spec-name">${esc(t.specialty)}</span>${badge}<span class="spec-toggle"></span></summary>
+      <div class="spec-b md">${bodyHtml}</div></details>`;
+  }).join("");
+  out.innerHTML = `<div class="panelwrap">
+    <div class="panelhead">◈ Specialist Panel <span class="panelmeta">${(data.takes||[]).length} specialists</span></div>
+    <div class="panelsynth" id="panelsynth"></div>
+    <div class="paneltakes"><div class="paneltakes-h">Specialist perspectives</div>${takes}</div>
+  </div>`;
+  // synthesized panel verdict rendered with the full answer machinery (reasoning read + evidence)
+  const synth = {answer:data.synthesis, claims:data.claims||[], grounded:!!(data.claims||[]).length,
+    interpretation:data.interpretation||[], confidence:data.confidence||null,
+    reasoning_purpose:data.reasoning_purpose||"", reasoning_conclusion:data.reasoning_conclusion||"",
+    coverage_gaps:[], source_stats:{}, rejected:0, question:data.question};
+  render(synth, $("#panelsynth"), {noConvo:true, noLink:true});
+}
+
 async function askQuestion(question, opts){
   opts = opts || {};
   if(ATTACHMENTS.length && !($("#consent")||{}).checked){

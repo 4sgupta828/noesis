@@ -7,14 +7,46 @@ dev/CI/eval replay for free; this only spends credits in record/live mode.
 """
 from __future__ import annotations
 
+import json
 import os
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from .llm import LLMResult
 
 DEFAULT_MODEL = os.environ.get("NOESIS_LLM_MODEL", "claude-sonnet-5")
+
+
+def _recover_stringified(raw, model: type[BaseModel]) -> BaseModel | None:
+    """Recover from a known model quirk: the model emits a container field (or the whole object) as a
+    JSON *string* instead of a real list/object, so `model_validate` fails on an otherwise-correct
+    answer. Runs ONLY after a real ValidationError, so the happy path is untouched. Returns a validated
+    instance or None (caller then raises the original error). Observed on PanelPlan; general to any schema."""
+    if not isinstance(raw, dict):
+        return None
+    # (a) un-stringify any field whose value is a JSON string ("[...]" or "{...}")
+    coerced = {}
+    for k, v in raw.items():
+        if isinstance(v, str) and v.strip()[:1] in "[{":
+            try:
+                coerced[k] = json.loads(v)
+            except (ValueError, TypeError):
+                coerced[k] = v
+        else:
+            coerced[k] = v
+    try:
+        return model.model_validate(coerced)
+    except ValidationError:
+        pass
+    # (b) the model wrapped the WHOLE object as one field's (stringified) value — validate the inner dict
+    for v in coerced.values():
+        if isinstance(v, dict):
+            try:
+                return model.model_validate(v)
+            except ValidationError:
+                continue
+    return None
 
 
 class AnthropicLLM:
@@ -72,7 +104,14 @@ class AnthropicLLM:
         parsed = None
         for block in resp.content:
             if getattr(block, "type", None) == "tool_use" and block.name == "emit":
-                parsed = response_format.model_validate(block.input)
+                try:
+                    parsed = response_format.model_validate(block.input)
+                except ValidationError:
+                    # the model sometimes stringifies a container field (or the whole object) — recover
+                    # from that specific quirk rather than fail-safing an otherwise-correct answer.
+                    parsed = _recover_stringified(block.input, response_format)
+                    if parsed is None:
+                        raise
                 break
         if parsed is None:
             raise RuntimeError("Anthropic response contained no 'emit' tool_use block")

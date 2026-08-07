@@ -47,3 +47,43 @@ def test_normal_completion_parses():
                                    response_format=ComposedAnswer, max_tokens=8000))
     assert out.parsed.answer == "The answer [1]."
     assert out.output_tokens == 20
+
+
+def test_recovers_whole_object_stringified_in_one_field():
+    """Observed PanelPlan quirk: the model emits {"specialists": "<the whole JSON as a string>"} — the
+    provider must recover it instead of fail-safing an otherwise-correct triage."""
+    from noesis_kernel.research.panel import PanelPlan
+    inner = '{"specialists": [{"id": "cardiology", "rationale": "HF component"}]}'
+    resp = SimpleNamespace(
+        stop_reason="tool_use",
+        content=[SimpleNamespace(type="tool_use", name="emit", input={"specialists": inner})],
+        usage=SimpleNamespace(input_tokens=10, output_tokens=20))
+    out = asyncio.run(_llm_with(resp).complete(system="s", messages=[{"role": "user", "content": "q"}],
+                                               response_format=PanelPlan, max_tokens=1200))
+    assert [s.id for s in out.parsed.specialists] == ["cardiology"]
+
+
+def test_recovers_container_field_stringified():
+    """The list field itself arrives as a JSON string: {"specialists": "[{...}]"} → un-stringify it."""
+    from noesis_kernel.research.panel import PanelPlan
+    resp = SimpleNamespace(
+        stop_reason="tool_use",
+        content=[SimpleNamespace(type="tool_use", name="emit",
+                                 input={"specialists": '[{"id": "nephrology", "rationale": "CKD3"}]'})],
+        usage=SimpleNamespace(input_tokens=10, output_tokens=20))
+    out = asyncio.run(_llm_with(resp).complete(system="s", messages=[{"role": "user", "content": "q"}],
+                                               response_format=PanelPlan, max_tokens=1200))
+    assert [s.id for s in out.parsed.specialists] == ["nephrology"]
+
+
+def test_unrecoverable_reraises_original():
+    """A genuinely malformed input (not a stringified-container quirk) must still raise ValidationError."""
+    from pydantic import ValidationError
+    from noesis_kernel.research.panel import PanelPlan
+    resp = SimpleNamespace(
+        stop_reason="tool_use",
+        content=[SimpleNamespace(type="tool_use", name="emit", input={"specialists": 42})],
+        usage=SimpleNamespace(input_tokens=10, output_tokens=20))
+    with pytest.raises(ValidationError):
+        asyncio.run(_llm_with(resp).complete(system="s", messages=[{"role": "user", "content": "q"}],
+                                             response_format=PanelPlan, max_tokens=1200))

@@ -69,10 +69,12 @@ def test_panel_runs_specialists_and_grounds_synthesis():
     # both specialists produced grounded takes
     assert r.n_specialists == 2 and len(r.takes) == 2
     assert all(t.grounded and t.n_verified >= 1 for t in r.takes)
-    # synthesis is grounded in the pooled findings, cites [1], and carries a reasoning read
+    # synthesis is grounded in the pooled findings and cites [1]
     assert "5 mg once daily" in r.synthesis and "[1]" in r.synthesis
-    assert r.claims and len(r.interpretation) == 1 and r.confidence
-    assert r.reasoning_conclusion  # grounded (5 mg is in the pool)
+    assert r.claims
+    # the structured reasoning-read layer is intentionally OFF for the panel (reasoning lives in the
+    # answer's "How the panel reasoned" narrative) — so these stay empty
+    assert r.interpretation == [] and r.confidence is None
 
 
 def test_panel_survives_a_failing_specialist():

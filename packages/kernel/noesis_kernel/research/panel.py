@@ -18,18 +18,8 @@ from pydantic import BaseModel
 
 from noesis_kernel.research.budget import BudgetState
 from noesis_kernel.research.react import (
-    ComposedAnswer, ConfidenceRead, InterpretationItem, _refs_valid, _unsupported_prose_tokens,
-    _validate_interpretation, run_react, strip_control_tags,
+    ComposedAnswer, _refs_valid, _unsupported_prose_tokens, run_react, strip_control_tags,
 )
-
-
-class _ReasoningReadOut(BaseModel):
-    """Compact schema for the panel's focused reasoning-read recovery — NO `answer` field (that's what
-    truncated the ComposedAnswer recovery), so the model emits only the structured reasoning read."""
-    reasoning_purpose: str = ""
-    interpretation: list[InterpretationItem] = []
-    reasoning_conclusion: str = ""
-    confidence: ConfidenceRead | None = None
 
 _log = logging.getLogger(__name__)
 
@@ -198,13 +188,11 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
         f"[{i}] ({spec}) {vc.text}  (quote: \"{vc.quote}\" — {vc.source_key})"
         for i, (spec, vc) in enumerate(pooled, 1))
 
-    # 3) Grounded synthesis: ONE compose over the pooled findings (reasoning read on for the panel view).
+    # 3) Grounded synthesis: ONE compose over the pooled findings. The panel's reasoning lives in the
+    # answer's "How the panel reasoned" section (the collective reasoning) — we do NOT also request the
+    # structured reasoning-read layer here: it's redundant with that narrative and the model reliably
+    # malforms it when asked for both (Rule 10 — stop patching, remove the redundancy).
     await _emit(on_event, {"type": "synthesizing", "findings": len(verified)})
-    reason_anchor = (
-        "\n\nSEPARATELY, populate the STRUCTURED Reasoning Read fields for the PANEL: `reasoning_purpose` "
-        "(the decision the panel is helping make), 2–5 `interpretation` factors (each resting on the "
-        "finding numbers it uses via `basis_findings`, no number not in those findings), "
-        "`reasoning_conclusion` (the panel's informed judgment), and the 3-dimension `confidence` read.")
     # prior conversation (context ONLY — never a citable finding), same contract as run_react's history
     conv = (history_context or "").strip()
     conv_ctx = (f"CONVERSATION SO FAR (prior questions and answers in this panel thread; context to "
@@ -229,7 +217,6 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
         "collective answer. Reference each finding inline as [n]. Every FACTUAL statement must rest on a "
         "finding above — add no fact, figure, dose, or claim not present in them (the assessments guide the "
         "REASONING, never introduce a new fact)."
-        + reason_anchor
         + (("\n\n" + synthesis_directive) if synthesis_directive else ""))
 
     async def _compose():
@@ -255,34 +242,8 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
 
     result.synthesis = text
     result.claims = [_vc_dict(vc) for vc in verified]
-    # The combined compose reliably malforms the structured `interpretation` (it's redundant with the
-    # "How the panel reasoned" prose) and the provider then drops it — leaving only Purpose. Recover it
-    # with ONE focused reasoning-read compose (a simpler task the model gets right). Only fires when needed.
-    if not (getattr(parsed, "interpretation", None) or []):
-        rr_user = (
-            f"ANSWER (already written by the panel):\n{text}\n\nVERIFIED FINDINGS (the ONLY citable facts):\n"
-            f"{findings}\n\nProduce the Reasoning Read for this answer. Fill: `reasoning_purpose` (the "
-            "decision the panel is helping make); 2–5 `interpretation` factors (each a JUDGMENT that rests "
-            "on finding numbers via `basis_findings`, using no number absent from the findings); "
-            "`reasoning_conclusion` (the panel's informed judgment); and the 3-dimension `confidence`.")
-        try:
-            rr = (await llm.complete(system=chair_system_prompt,
-                                     messages=[{"role": "user", "content": rr_user}],
-                                     response_format=_ReasoningReadOut, max_tokens=2500)).parsed
-            if getattr(rr, "interpretation", None):
-                parsed.interpretation = rr.interpretation
-                parsed.confidence = getattr(rr, "confidence", None) or getattr(parsed, "confidence", None)
-                parsed.reasoning_purpose = getattr(rr, "reasoning_purpose", "") or getattr(parsed, "reasoning_purpose", "")
-                parsed.reasoning_conclusion = getattr(rr, "reasoning_conclusion", "") or getattr(parsed, "reasoning_conclusion", "")
-        except Exception as e:   # noqa: BLE001 — best-effort; the answer already stands
-            _log.warning("panel reasoning-read recovery failed: %r", e)
-    # Grounding guards over the pooled findings — identical discipline to run_react's compose.
-    result.interpretation = _validate_interpretation(getattr(parsed, "interpretation", []) or [], verified)
-    conf = getattr(parsed, "confidence", None)
-    result.confidence = conf.model_dump() if conf is not None else None
-    _all_tok = _pooled_tokens(verified)
-    result.reasoning_purpose = _grounded(getattr(parsed, "reasoning_purpose", ""), _all_tok)
-    result.reasoning_conclusion = _grounded(getattr(parsed, "reasoning_conclusion", ""), _all_tok)
+    # Reasoning lives in the answer's "How the panel reasoned" section (purpose, integration, conclusion,
+    # and confidence-in-prose) — the structured reasoning-read layer is intentionally OFF for the panel.
     unsupported = _unsupported_prose_tokens(text, verified)
     if unsupported:
         _log.warning("panel synthesis prose introduced unsupported figures: %s", sorted(unsupported))

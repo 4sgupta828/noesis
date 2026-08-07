@@ -346,13 +346,10 @@
   .rtext{font-size:.94rem;line-height:1.58;color:var(--ink);}
   .reasoning .rref{color:var(--gold);font-weight:640;cursor:pointer;font-size:.72em;vertical-align:super;padding:0 .05em;}
   /* Ask Panel (Alpha) */
-  .panelbar{display:flex;align-items:center;gap:.7rem;margin-top:.7rem;flex-wrap:wrap;}
   .panelbtn{font-family:var(--mono);font-size:.72rem;font-weight:600;letter-spacing:.03em;cursor:pointer;
     border:1px solid var(--gold);color:var(--gold);background:transparent;border-radius:9px;padding:.42rem .8rem;}
   .panelbtn:hover{background:var(--gold);color:var(--on-accent);}
-  .panelhint{font-size:.72rem;color:var(--muted);}
   .field.flash{box-shadow:0 0 0 3px rgba(var(--gold-rgb),.35);transition:box-shadow .15s;}
-  @media (max-width:560px){ .panelhint{display:none;} }
   .panelhead{font-family:var(--mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);
     display:flex;align-items:center;gap:.6rem;margin:.2rem 0 1.1rem;}
   .panelhead .panelmeta{color:var(--muted);text-transform:none;letter-spacing:0;font-size:.68rem;}
@@ -922,10 +919,6 @@
       </div>
       <span class="ahint" id="aud-hint">Clinician view — structured, cited, for a medical audience.</span>
     </div>
-    <div class="panelbar" id="panelbar" hidden>
-      <button type="button" class="panelbtn" id="panelgo">◈ Ask a Specialist Panel</button>
-      <span class="panelhint" id="panelhint">Alpha · convenes AI specialists — each reviews the evidence through its own lens, then the panel synthesizes.</span>
-    </div>
   </form>
 
   <section id="out" aria-live="polite">
@@ -1066,10 +1059,8 @@ async function loadConfig(){
     PANEL_SPECIALISTS = c.panel_specialists || [];
     PANEL_EXAMPLES = c.panel_examples || [];
     if(ASK_PANEL_ENABLED){
+      // the header destination '◈ Specialist Panel' is the single entry point (prefilled with any typed question)
       const pn = $("#panelnav"); if(pn){ pn.hidden = false; pn.addEventListener("click", ()=>openPanel(q.value.trim())); }
-      const pb = $("#panelbar"); if(pb) pb.hidden = false;
-      // the console shortcut now opens the dedicated panel surface, prefilled with any typed question
-      const pg = $("#panelgo"); if(pg) pg.addEventListener("click", ()=>openPanel(q.value.trim()));
     }
     VISION_ENABLED = !!c.vision_enabled;
     if(EFFORT_ENABLED){

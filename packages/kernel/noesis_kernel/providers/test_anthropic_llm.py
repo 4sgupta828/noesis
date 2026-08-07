@@ -76,6 +76,21 @@ def test_recovers_container_field_stringified():
     assert [s.id for s in out.parsed.specialists] == ["nephrology"]
 
 
+def test_recovers_by_dropping_malformed_optional_field():
+    """The model bled tool-call XML into the optional `interpretation` field — validation must not kill the
+    whole answer; drop the malformed field and salvage the answer (the panel-synthesis failure)."""
+    resp = SimpleNamespace(
+        stop_reason="tool_use",
+        content=[SimpleNamespace(type="tool_use", name="emit", input={
+            "answer": "The panel recommends X [1].", "directly_addresses": True, "gap_note": "",
+            "interpretation": '\n<parameter name="kind">what_would_change_this'})],   # malformed str, not a list
+        usage=SimpleNamespace(input_tokens=10, output_tokens=20))
+    out = asyncio.run(_llm_with(resp).complete(system="s", messages=[{"role": "user", "content": "q"}],
+                                               response_format=ComposedAnswer, max_tokens=8000))
+    assert out.parsed.answer == "The panel recommends X [1]."
+    assert out.parsed.interpretation == []   # dropped → default
+
+
 def test_unrecoverable_reraises_original():
     """A genuinely malformed input (not a stringified-container quirk) must still raise ValidationError."""
     from pydantic import ValidationError

@@ -35,10 +35,11 @@ def _recover_stringified(raw, model: type[BaseModel]) -> BaseModel | None:
                 coerced[k] = v
         else:
             coerced[k] = v
+    err0 = None
     try:
         return model.model_validate(coerced)
-    except ValidationError:
-        pass
+    except ValidationError as e:
+        err0 = e   # keep it — the except-scoped name is cleared at block exit
     # (b) the model wrapped the WHOLE object as one field's (stringified) value — validate the inner dict
     for v in coerced.values():
         if isinstance(v, dict):
@@ -46,7 +47,25 @@ def _recover_stringified(raw, model: type[BaseModel]) -> BaseModel | None:
                 return model.model_validate(v)
             except ValidationError:
                 continue
+    # (c) a COSMETIC enhancement field (reasoning-read / charts) came back malformed — e.g. the model bled
+    # tool-call XML into `interpretation`. Drop ONLY those known-optional fields and salvage the answer;
+    # never drop core payload (a broken PanelPlan.specialists still raises, not silently empties).
+    pruned, changed = dict(coerced), False
+    for err in err0.errors():
+        loc = err.get("loc") or ()
+        if loc and loc[0] in _DROPPABLE_FIELDS and loc[0] in pruned:
+            pruned.pop(loc[0], None)
+            changed = True
+    if changed:
+        try:
+            return model.model_validate(pruned)
+        except ValidationError:
+            pass
     return None
+
+
+# enhancement fields that must never sink an otherwise-valid answer if the model malforms them
+_DROPPABLE_FIELDS = {"interpretation", "confidence", "charts", "reasoning_purpose", "reasoning_conclusion"}
 
 
 class AnthropicLLM:

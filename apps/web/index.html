@@ -351,6 +351,7 @@
     border:1px solid var(--gold);color:var(--gold);background:transparent;border-radius:9px;padding:.42rem .8rem;}
   .panelbtn:hover{background:var(--gold);color:var(--on-accent);}
   .panelhint{font-size:.72rem;color:var(--muted);}
+  .field.flash{box-shadow:0 0 0 3px rgba(var(--gold-rgb),.35);transition:box-shadow .15s;}
   @media (max-width:560px){ .panelhint{display:none;} }
   .panelhead{font-family:var(--mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);
     display:flex;align-items:center;gap:.6rem;margin:.2rem 0 1.1rem;}
@@ -955,7 +956,16 @@ async function loadConfig(){
     ASK_PANEL_ENABLED = !!c.ask_panel_enabled;
     PANEL_SPECIALISTS = c.panel_specialists || [];
     if(ASK_PANEL_ENABLED){ const pb = $("#panelbar"); if(pb) pb.hidden = false;
-      const pg = $("#panelgo"); if(pg) pg.addEventListener("click", ()=>{ const question=q.value.trim(); if(question) askPanel(question); }); }
+      const pg = $("#panelgo"); if(pg) pg.addEventListener("click", ()=>{
+        if(CURRENT_ABORT) return;                       // a request is already in flight
+        const question = q.value.trim();
+        if(!question){                                   // no question yet → prompt for one (not a silent no-op)
+          q.focus(); const f = q.closest(".field"); if(f){ f.classList.add("flash"); setTimeout(()=>f.classList.remove("flash"), 900); }
+          const ph = $("#panelhint"); if(ph){ const t = ph.textContent; ph.textContent = "Type your clinical question above first, then convene the panel."; setTimeout(()=>ph.textContent = t, 2600); }
+          return;
+        }
+        askPanel(question);
+      }); }
     VISION_ENABLED = !!c.vision_enabled;
     if(EFFORT_ENABLED){
       const wrap = $("#effort"), rng = $("#effort-range");

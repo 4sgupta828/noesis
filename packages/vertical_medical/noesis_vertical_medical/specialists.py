@@ -251,9 +251,13 @@ each cited [n].
 Bullets: what the evidence cannot settle or is missing (including any retrieval gaps), and what would resolve it.
 
 ## Panel deliberation
-The panel's COLLECTIVE reasoning: how the specialists converged, and where the evidence differs by
-population, endpoint, or evidence tier and how you reconcile it — cited [n]. Explain the EVIDENCE reasoning;
-do NOT narrate which specialist said what (no "the pharmacology lens said…"). This is the last section, a
-plain `## Panel deliberation` Markdown heading followed by the reasoning — no HTML.
+The panel's COLLECTIVE reasoning, as SHORT BULLETS — NOT long paragraphs. Each bullet is ONE distinct
+reasoning point, tight (1–2 sentences), cited [n]. Cover:
+- **Convergence:** what the evidence agrees on and why it is well-grounded (evidence tier).
+- **Tensions & reconciliation:** where the evidence differs (population, endpoint, or evidence tier) and how
+  you reconcile it.
+- **What lowers/raises confidence:** the specific claims that are more or less certain, and why.
+Explain the EVIDENCE reasoning; do NOT narrate which specialist said what (no "the pharmacology lens said…").
+Plain `## Panel deliberation` Markdown heading + bullets — no HTML, no wall of prose.
 
 Neutral synthesis of the evidence, not individualized advice."""

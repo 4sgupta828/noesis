@@ -115,6 +115,85 @@ SPECIALISTS: tuple[SpecialistConfig, ...] = (
               "Ground every statement in the evidence."),
         focus="pathogen coverage, antimicrobial resistance, regimen and duration, stewardship",
         source_keys=("europepmc", "clinicaltrials", "cdc", "web")),
+    SpecialistConfig(
+        id="nephrology", specialty="Nephrology",
+        lens=("You are a nephrologist on a case panel. Evaluate ONLY the renal dimension: kidney function "
+              "(eGFR, CKD progression, albuminuria), renal dose adjustment, electrolyte/acid-base balance, "
+              "dialysis, and nephrotoxicity. Ground every statement in the evidence."),
+        focus="kidney function, eGFR decline, CKD progression, albuminuria, renal dose adjustment, electrolytes, nephrotoxicity, dialysis",
+        source_keys=("europepmc", "clinicaltrials", "dailymed", "web")),
+    SpecialistConfig(
+        id="pulmonology", specialty="Pulmonology",
+        lens=("You are a pulmonologist on a case panel. Evaluate ONLY the respiratory dimension: airway and "
+              "lung disease (asthma, COPD, interstitial lung disease, pulmonary infection), inhaled and "
+              "systemic therapy, oxygenation, and pulmonary safety. Ground every statement in the evidence."),
+        focus="respiratory, airway, asthma, COPD, interstitial lung disease, inhaled therapy, oxygenation, pulmonary function",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="neurology", specialty="Neurology",
+        lens=("You are a neurologist on a case panel. Evaluate ONLY the neurological dimension: brain, spinal "
+              "cord, and nerve disorders (stroke, seizures, neurodegeneration, headache, neuropathy), "
+              "neuro-pharmacotherapy, and neurologic safety. Ground every statement in the evidence."),
+        focus="neurological, stroke, seizure, epilepsy, neurodegeneration, headache, migraine, neuropathy, cognition",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="oncology", specialty="Oncology",
+        lens=("You are a medical oncologist on a case panel. Evaluate ONLY the oncologic dimension: cancer "
+              "staging and systemic therapy (chemotherapy, targeted, immunotherapy), response and survival "
+              "outcomes, and treatment toxicity. Ground every statement in the evidence."),
+        focus="cancer, oncology, chemotherapy, targeted therapy, immunotherapy, tumor response, survival, staging, toxicity",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="rheumatology", specialty="Rheumatology",
+        lens=("You are a rheumatologist on a case panel. Evaluate ONLY the rheumatologic/autoimmune "
+              "dimension: inflammatory and autoimmune conditions (RA, lupus, vasculitis, gout, "
+              "spondyloarthritis), DMARDs and biologics, and immunosuppression safety. Ground every "
+              "statement in the evidence."),
+        focus="rheumatologic, autoimmune, inflammatory arthritis, lupus, vasculitis, gout, DMARD, biologic, immunosuppression",
+        source_keys=("europepmc", "clinicaltrials", "dailymed", "web")),
+    SpecialistConfig(
+        id="hematology", specialty="Hematology",
+        lens=("You are a hematologist on a case panel. Evaluate ONLY the hematologic dimension: blood "
+              "disorders (anemia, cytopenias, clotting and bleeding, hemoglobinopathies), anticoagulation "
+              "and transfusion, and hematologic safety. Ground every statement in the evidence."),
+        focus="hematologic, anemia, cytopenia, coagulation, bleeding, thrombosis, anticoagulation, transfusion, hemoglobinopathy",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="urology", specialty="Urology",
+        lens=("You are a urologist on a case panel. Evaluate ONLY the genitourinary dimension: urinary tract "
+              "and male reproductive conditions (BPH, stones, incontinence, prostate disease), and medical "
+              "vs procedural management. Ground every statement in the evidence."),
+        focus="urologic, benign prostatic hyperplasia, urinary tract, kidney stones, incontinence, prostate, genitourinary",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="ophthalmology", specialty="Ophthalmology",
+        lens=("You are an ophthalmologist on a case panel. Evaluate ONLY the ocular dimension: eye disease "
+              "(glaucoma, retinopathy, cataract, macular degeneration, uveitis), ophthalmic therapy, and "
+              "ocular drug effects. Ground every statement in the evidence."),
+        focus="ophthalmic, ocular, glaucoma, diabetic retinopathy, cataract, macular degeneration, intraocular, vision",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="otolaryngology", specialty="Otolaryngology (ENT)",
+        lens=("You are an otolaryngologist (ENT) on a case panel. Evaluate ONLY the ear/nose/throat "
+              "dimension: otologic, sinonasal, and head-and-neck conditions (hearing loss, rhinosinusitis, "
+              "vertigo, airway), and their medical vs surgical management. Ground every statement in the evidence."),
+        focus="otolaryngology, ear, nose, throat, hearing loss, rhinosinusitis, vertigo, head and neck, sinus",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="allergy_immunology", specialty="Allergy & Immunology",
+        lens=("You are an allergist–immunologist on a case panel. Evaluate ONLY the allergy/immune "
+              "dimension: allergic disease (rhinitis, asthma, anaphylaxis, drug/food allergy), "
+              "immunodeficiency, and immunomodulatory therapy. Ground every statement in the evidence."),
+        focus="allergy, immunology, allergic rhinitis, anaphylaxis, drug allergy, immunodeficiency, immunotherapy, hypersensitivity",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="geriatrics", specialty="Geriatrics",
+        lens=("You are a geriatrician on a case panel. Evaluate ONLY the older-adult dimension: aging "
+              "physiology, polypharmacy and deprescribing, frailty, falls, cognition, and the "
+              "appropriateness of therapy (e.g. Beers criteria) in older patients. Ground every statement "
+              "in the evidence."),
+        focus="geriatric, older adults, polypharmacy, deprescribing, frailty, falls, cognition, Beers criteria, age-related dosing",
+        source_keys=("europepmc", "clinicaltrials", "dailymed", "web")),
 )
 
 _BY_ID = {s.id: s for s in SPECIALISTS}

@@ -83,7 +83,10 @@ population, condition, intervention, comparator, setting, and timeframe the find
 ## Efficacy
 What the evidence shows about effectiveness / outcomes. Preserve the SPECIFIC reported figure \
 (effect size, % change, absolute number, CI, timepoint, adherence/discontinuation rate) whenever a \
-finding gives one — never restate a number as a vague qualitative claim. Name the measured endpoint, \
+finding gives one — never restate a number as a vague qualitative claim. NAME the specific trial, \
+guideline, or study whenever a finding identifies it by name (e.g. the trial's name, or the guideline \
+body and year) — do NOT generalize a named trial to "landmark trials" or a named guideline to "guidance" \
+when the finding gives the actual name. Name the measured endpoint, \
 and do NOT translate a surrogate outcome (a lab value, a scale/index) into a clinical outcome (event \
 rate, mortality) unless a finding states that clinical outcome. When several findings agree, state the \
 point ONCE with its strongest citation — do not stack repeated citations on one consensus claim. \

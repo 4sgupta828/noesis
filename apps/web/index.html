@@ -354,6 +354,14 @@
     display:flex;align-items:center;gap:.6rem;margin:.2rem 0 1.1rem;}
   .panelhead .panelmeta{color:var(--muted);text-transform:none;letter-spacing:0;font-size:.68rem;}
   .panelsynth{margin-bottom:1.6rem;}
+  .panel-delib{margin-top:1.1rem;border:1px solid var(--hair);border-left:3px solid var(--gold);border-radius:10px;background:var(--panel2);overflow:hidden;}
+  .panel-delib>summary{list-style:none;cursor:pointer;padding:.7rem .9rem;font-family:var(--mono);font-size:.66rem;
+    text-transform:uppercase;letter-spacing:.08em;color:var(--gold);}
+  .panel-delib>summary::-webkit-details-marker{display:none;}
+  .panel-delib>summary:hover{background:rgba(var(--gold-rgb),.05);}
+  .panel-delib[open]>summary .panel-delib-s,.panel-delib>summary{display:inline;}
+  .panel-delib[open]>summary{border-bottom:1px solid var(--hair);}
+  .panel-delib-b{padding:.4rem .9rem 1rem;font-size:.88rem;}
   .paneltakes{border-top:1px solid var(--hair);padding-top:1.1rem;}
   .paneltakes-h{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.7rem;}
   .spec{border:1px solid var(--hair);border-left:3px solid var(--gold);border-radius:10px;background:var(--panel2);margin-bottom:.6rem;overflow:hidden;}
@@ -2416,11 +2424,28 @@ function buildPanelSessionActions(box, row){
   });
 }
 function renderPanelSynth(data, el){
-  const synth = {answer:data.synthesis, claims:data.claims||[], grounded:!!(data.claims||[]).length,
+  // Split off the "Panel deliberation" section → a COLLAPSIBLE block, so the clinical answer leads and the
+  // reasoning is available on demand (busy clinicians want the synthesis; the reasoning stays one click away).
+  let answer = data.synthesis || "", delib = "";
+  const m = answer.match(/\n#{1,4}\s*Panel deliberation\b[^\n]*\n/i);
+  if(m){ delib = answer.slice(m.index + m[0].length).trim(); answer = answer.slice(0, m.index).trim(); }
+  const synth = {answer, claims:data.claims||[], grounded:!!(data.claims||[]).length,
     interpretation:data.interpretation||[], confidence:data.confidence||null,
     reasoning_purpose:data.reasoning_purpose||"", reasoning_conclusion:data.reasoning_conclusion||"",
     coverage_gaps:[], source_stats:{}, rejected:0, question:data.question};
   render(synth, el, {noConvo:true, noLink:true});
+  if(delib){
+    const d = document.createElement("details"); d.className = "panel-delib";
+    d.innerHTML = `<summary class="panel-delib-s">▸ How the panel reasoned</summary>`
+      + `<div class="answer md panel-delib-b">${mdToHtml(delib)}</div>`;
+    el.appendChild(d);
+    // the deliberation cites the SAME pooled findings — wire its [n] to the evidence dossier render() built in `el`
+    d.querySelectorAll(".ref").forEach(r=>r.addEventListener("click", ()=>{
+      const ev = el.querySelector("#evblock"); if(ev) ev.open = true;
+      const f = el.querySelector("#f"+r.dataset.n);
+      if(f){ f.scrollIntoView({behavior:"smooth", block:"center"}); f.classList.add("flash"); setTimeout(()=>f.classList.remove("flash"), 1200); }
+    }));
+  }
 }
 // Run ONE turn (first or follow-up): stream each specialist's live trace into #panellive, then commit the
 // completed conference into the thread. Prior turns are sent as `history` (context only, never re-cited).

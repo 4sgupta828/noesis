@@ -1765,11 +1765,12 @@ async function copyAnswer(data, btn){
   }
 }
 
-// ---- shareable session permalinks (#s/<id>) ----
+// ---- shareable session permalinks — Q&A: #s/<id> · Panel: #p/<id> (its OWN page, never the Q&A view) ----
 const shareUrl = id => location.origin + location.pathname + "#s/" + encodeURIComponent(id);
+const panelUrl = id => location.origin + location.pathname + "#p/" + encodeURIComponent(id);
 function setShareHash(id){ try{ history.replaceState(null, "", "#s/"+encodeURIComponent(id)); }catch(e){} }
-async function copyLink(id, btn){
-  const url = shareUrl(id);
+function setPanelHash(id){ try{ history.replaceState(null, "", "#p/"+encodeURIComponent(id)); }catch(e){} }
+async function copyLinkUrl(url, btn){
   const done = () => { const t = btn.textContent; btn.textContent = "✓ Link copied"; setTimeout(()=>btn.textContent = t, 1500); };
   try{ await navigator.clipboard.writeText(url); done(); }
   catch(e){
@@ -1777,6 +1778,15 @@ async function copyLink(id, btn){
     ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select();
     try{ document.execCommand("copy"); done(); }catch(_){ } ta.remove();
   }
+}
+const copyLink = (id, btn) => copyLinkUrl(shareUrl(id), btn);
+// A PANEL session opens straight into its own page (the panel view) — it never touches the Q&A view.
+async function loadPanelSession(id){
+  try{
+    const row = await (await fetch("/sessions/"+encodeURIComponent(id))).json();
+    if(isPanelRow(row)) openPanelSession(row);
+    else out.innerHTML = `<div class="empty">That panel session is no longer available.</div>`;
+  }catch(e){ /* leave the current view */ }
 }
 // Open a shared session as a permalink: render its answer (or whole conversation thread).
 async function loadSharedSession(id){
@@ -2045,7 +2055,9 @@ function openPanel(prefill){
 function closePanel(){
   const v = $("#panelview"); if(v) v.hidden = true;
   if($("#sessions").hidden && $("#videos").hidden) document.body.style.overflow = "";
-  if(location.hash === "#panel") history.replaceState(null, "", location.pathname + location.search);
+  // clear the panel hash (#panel or a #p/<id> session page) so the URL matches the view we return to
+  if(location.hash === "#panel" || location.hash.indexOf("#p/") === 0)
+    history.replaceState(null, "", location.pathname + location.search);
 }
 // A card for one specialist. `mode`: 'lens' shows its expertise (landing); 'why' shows the case rationale (convene).
 function specCard(s, on, mode, rationale){
@@ -2239,10 +2251,10 @@ function renderPanelConversation(){
     pfgo.addEventListener("click", send);
     pfq.addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } });
   }
-  // shareable permalink for the saved panel session (same #s/<id> scheme as the primary agent)
+  // shareable permalink — the panel has its OWN page (#p/<id>), never the Q&A #s/ route
   if(PANEL_THREAD.session_id){
-    setShareHash(PANEL_THREAD.session_id);
-    const pl = $("#plink"); if(pl) pl.addEventListener("click", e=>copyLink(PANEL_THREAD.session_id, e.currentTarget));
+    setPanelHash(PANEL_THREAD.session_id);
+    const pl = $("#plink"); if(pl) pl.addEventListener("click", e=>copyLinkUrl(panelUrl(PANEL_THREAD.session_id), e.currentTarget));
   }
 }
 // Open a saved PANEL session (from a shared #s/<id> link or Past Sessions) into the dedicated panel view.
@@ -2256,6 +2268,8 @@ function openPanelSession(row){
     reasoning_conclusion: t.reasoning_conclusion||""}}));
   const lastTakes = turns.length ? (turns[turns.length-1].result.takes||[]) : [];
   PANEL_THREAD = {ids: lastTakes.map(t=>t.id), turns, session_id: row.id};
+  // the panel is its OWN page — clear any Q&A view underneath so closing it never reveals stale content
+  try{ out.innerHTML = ""; document.body.classList.remove("chatting"); }catch(e){}
   const v = $("#panelview"); if(v){ v.hidden = false; document.body.style.overflow = "hidden"; }
   renderPanelConversation();
 }
@@ -2791,9 +2805,11 @@ $("#idgo").addEventListener("click", ()=>{
 $("#idmodal").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#idgo").click(); });
 
 initIdentity();
-function routeHash(){    // #s/<id> → open a shared answer/thread; #sessions → the panel
+function routeHash(){    // #s/<id> → Q&A answer/thread · #p/<id> → panel session page · #sessions/#panel
+  const mp = location.hash.match(/^#p\/(.+)$/);
   const m = location.hash.match(/^#s\/(.+)$/);
-  if(m){ loadSharedSession(decodeURIComponent(m[1])); }
+  if(mp){ loadPanelSession(decodeURIComponent(mp[1])); }
+  else if(m){ loadSharedSession(decodeURIComponent(m[1])); }   // legacy #s/<panelid> still self-routes to the panel
   else if(location.hash === "#sessions"){ openSessions(); }
   else if(location.hash === "#panel" && ASK_PANEL_ENABLED){ openPanel(""); }
 }
@@ -2801,6 +2817,8 @@ function routeHash(){    // #s/<id> → open a shared answer/thread; #sessions �
 loadConfig().then(routeHash);
 // pasted link / back-forward within the tab (our own writes use replaceState → no event)
 window.addEventListener("hashchange", ()=>{
+  const mp = location.hash.match(/^#p\/(.+)$/);
+  if(mp){ loadPanelSession(decodeURIComponent(mp[1])); return; }
   const m = location.hash.match(/^#s\/(.+)$/);
   if(m) loadSharedSession(decodeURIComponent(m[1]));
 });

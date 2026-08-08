@@ -154,6 +154,15 @@
   .audsel .segbtn[aria-pressed="true"]{background:var(--gold);color:var(--on-accent);}
   .audsel .segbtn:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
   .audsel .ahint{flex-basis:100%;font-family:var(--mono);font-size:.63rem;color:var(--muted);opacity:.85;}
+  /* Mode switch — Quick Q&A ⇄ Specialist Panel (one segmented control, shared look in both views) */
+  .modeswitch{display:none;justify-content:center;margin:.15rem 0 1.15rem;}
+  .modeswitch.on{display:flex;}
+  .modeseg{display:inline-flex;border:1px solid var(--hair);border-radius:999px;overflow:hidden;background:var(--panel2);}
+  .modeseg .mbtn{font-family:var(--mono);font-size:.72rem;letter-spacing:.04em;cursor:pointer;border:0;white-space:nowrap;
+    background:transparent;color:var(--muted);padding:.34rem 1.05rem;transition:.12s;display:inline-flex;align-items:center;gap:.35rem;}
+  .modeseg .mbtn[aria-selected="true"]{background:var(--gold);color:var(--on-accent);}
+  .modeseg .mbtn:hover:not([aria-selected="true"]){color:var(--ink);}
+  .modeseg .mbtn:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
   /* audience badge on a saved session (row + detail) */
   .audbadge{display:inline-block;font-family:var(--mono);font-size:.62rem;letter-spacing:.03em;
     border:1px solid var(--hair);border-radius:999px;padding:.05rem .5rem;vertical-align:middle;margin-left:.4rem;color:var(--muted);}
@@ -401,8 +410,6 @@
   .panelrun:disabled{opacity:.5;cursor:default;background:transparent;color:var(--muted);border-color:var(--hair);}
   .panelrun-n{font-weight:400;opacity:.85;margin-left:.3rem;}
   /* dedicated Specialist Panel destination (full-screen surface, mirrors .videos) */
-  .panelnav{color:var(--gold);border-color:rgba(var(--gold-rgb),.4);}
-  .panelnav:hover{color:var(--on-accent);background:var(--gold);border-color:var(--gold);}
   .panelview[hidden]{display:none;}   /* author display:flex would otherwise beat the UA [hidden] rule */
   .panelview{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;
     background-image:radial-gradient(120% 60% at 85% -10%, rgba(var(--gold-rgb),.07), transparent 60%);}
@@ -429,32 +436,10 @@
     border-radius:8px;padding:.35rem .7rem;color:var(--ink);transition:border-color .15s;}
   .pintk:hover{border-color:rgba(var(--gold-rgb),.5);}
   .pintk-hint{font-size:.72rem;color:var(--muted);}
-  .panelex{margin-top:.7rem;}
-  .panelex-h{font-family:var(--mono);font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
-  .panelex-row{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.45rem;}
-  .panelex-chip{text-align:left;font:inherit;font-size:.78rem;line-height:1.35;color:var(--muted);cursor:pointer;
-    background:var(--panel2);border:1px solid var(--hair);border-radius:999px;padding:.35rem .7rem;max-width:100%;
-    transition:border-color .15s, color .15s;}
-  .panelex-chip:hover{border-color:rgba(var(--gold-rgb),.5);color:var(--ink);}
   .rosterhead{display:flex;align-items:baseline;justify-content:space-between;gap:.6rem;margin-bottom:.7rem;}
   .rosterhead .rh-h{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
   .rosterhead .rh-n{font-size:.78rem;color:var(--muted);}
   .rostergrid{display:grid;gap:.6rem;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));}
-  .pcard-def{font-family:var(--mono);font-size:.53rem;text-transform:uppercase;letter-spacing:.08em;color:var(--gold);
-    border:1px solid rgba(var(--gold-rgb),.4);border-radius:999px;padding:.05rem .4rem;margin-left:.4rem;vertical-align:middle;}
-  .panelhist{margin-top:2.4rem;border-top:1px solid var(--hair);padding-top:1.2rem;}
-  .panelhist-h{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.7rem;}
-  .panelhist-l{display:flex;flex-direction:column;gap:.4rem;}
-  .panelhist-row{display:flex;align-items:stretch;gap:.4rem;background:var(--panel2);border:1px solid var(--hair);
-    border-radius:9px;overflow:hidden;transition:border-color .15s;}
-  .panelhist-row:hover{border-color:rgba(var(--gold-rgb),.5);}
-  .panelhist-row .ph-open{flex:1;display:flex;align-items:baseline;gap:.8rem;justify-content:space-between;
-    text-align:left;background:transparent;border:none;cursor:pointer;font:inherit;padding:.6rem .8rem;}
-  .panelhist-row .ph-q{color:var(--ink);font-size:.88rem;line-height:1.4;}
-  .panelhist-row .ph-m{font-family:var(--mono);font-size:.66rem;color:var(--muted);flex:none;}
-  .panelhist-row .ph-del{flex:none;background:transparent;border:none;border-left:1px solid var(--hair);cursor:pointer;
-    color:var(--muted);font-size:.85rem;padding:0 .7rem;opacity:.6;transition:opacity .15s, color .15s;}
-  .panelhist-row .ph-del:hover{opacity:1;color:#c0392b;}
   .panelbtn.danger{border-color:var(--hair);color:var(--muted);}
   .panelbtn.danger:hover{background:#c0392b;border-color:#c0392b;color:#fff;}
   .spec-ev-l li.ev-hl{background:rgba(var(--gold-rgb),.14);border-radius:6px;transition:background .3s;}
@@ -908,10 +893,15 @@
     <a class="histbtn" href="/admin" style="margin-left:0;text-decoration:none;">Coverage</a>
     <button type="button" class="histbtn" id="vidbtn" style="margin-left:0;">Videos</button>
     <button type="button" class="histbtn" id="histbtn" style="margin-left:0;">Past Sessions</button>
-    <button type="button" class="histbtn panelnav" id="panelnav" style="margin-left:0;" hidden>◈ Specialist Panel</button>
   </header>
 
   <h1 id="heading">What does the evidence show?</h1>
+  <div class="modeswitch" id="modeswitch">
+    <div class="modeseg" role="tablist" aria-label="Answer mode">
+      <button type="button" class="mbtn" data-mode="qa" role="tab" aria-selected="true">Quick Q&amp;A</button>
+      <button type="button" class="mbtn" data-mode="panel" role="tab" aria-selected="false">◈ Specialist Panel</button>
+    </div>
+  </div>
   <form id="ask">
     <div class="field">
       <textarea id="q" rows="1" placeholder="e.g. What treatments are being studied for type 2 diabetes?"
@@ -1009,7 +999,11 @@
 <section class="panelview" id="panelview" hidden aria-label="Specialist panel">
   <div class="vhd">
     <button type="button" class="sback" id="pback">← Back</button>
-    <span class="stitle">◈ Specialist Panel <span class="alpha">Alpha</span></span>
+    <div class="modeseg" id="panelmode" role="tablist" aria-label="Answer mode">
+      <button type="button" class="mbtn" data-mode="qa" role="tab" aria-selected="false">Quick Q&amp;A</button>
+      <button type="button" class="mbtn" data-mode="panel" role="tab" aria-selected="true">◈ Specialist Panel</button>
+    </div>
+    <span class="alpha">Alpha</span>
   </div>
   <div class="panelbody" id="panelbody"></div>
 </section>
@@ -1055,6 +1049,7 @@ let EFFORT = 1;             // current effort multiplier (1 = Standard); only se
 let PATIENT_MODE_ENABLED = false; // audience switch available (clinician vs patient answer)
 let AUDIENCE = "clinician"; // current answer audience; only sent when "patient"
 let SESS_AUDIENCE = "clinician"; // active Past-Sessions audience tab (clinician | patient)
+let SESS_TAB = null;             // active Past-Sessions tab {key, aud, kind, label} (see buildSessionTabs)
 let REFINE_ENABLED = false;     // pre-answer question refinement (offer sharper versions to pick)
 let REASONING_ENABLED = false;  // reasoning-read interpretation + confidence layer (server-validated)
 let ASK_PANEL_ENABLED = false;  // AI specialist panel (Alpha)
@@ -1094,8 +1089,11 @@ async function loadConfig(){
     PANEL_SPECIALISTS = c.panel_specialists || [];
     PANEL_EXAMPLES = c.panel_examples || [];
     if(ASK_PANEL_ENABLED){
-      // the header destination '◈ Specialist Panel' is the single entry point (prefilled with any typed question)
-      const pn = $("#panelnav"); if(pn){ pn.hidden = false; pn.addEventListener("click", ()=>openPanel(q.value.trim())); }
+      // Two modes with a bidirectional switch: Quick Q&A (the console) ⇄ Specialist Panel (the panel view).
+      // The console switch reveals the panel (prefilled with any typed question); the panel switch returns.
+      $("#modeswitch").classList.add("on");
+      wireModeSwitch($("#modeswitch"), null, () => openPanel(q.value.trim()));
+      wireModeSwitch($("#panelmode"), () => closePanel(), null);
     }
     VISION_ENABLED = !!c.vision_enabled;
     if(EFFORT_ENABLED){
@@ -1109,15 +1107,10 @@ async function loadConfig(){
       $("#audsel").querySelectorAll(".segbtn").forEach(b =>
         b.addEventListener("click", () => setAudience(b.dataset.aud)));
       setAudience("clinician");
-      // Past-Sessions audience tabs (Clinician | Patient)
-      const tabs = $("#stabs"); tabs.hidden = false;
-      tabs.querySelectorAll(".stab").forEach(t => t.addEventListener("click", () => {
-        SESS_AUDIENCE = t.dataset.aud === "patient" ? "patient" : "clinician";
-        tabs.querySelectorAll(".stab").forEach(x =>
-          x.setAttribute("aria-selected", x.dataset.aud === SESS_AUDIENCE ? "true" : "false"));
-        loadSessionList();
-      }));
     }
+    // Past-Sessions tabs — audience (Clinician | Patient) and/or session-kind (Q&A | Specialist Panel),
+    // built from whichever flags are on. Panels get their own tab so they don't clutter the Q&A list.
+    buildSessionTabs();
     if(VISION_ENABLED){
       $("#attach").hidden = false;
       if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) $("#camera").hidden = false;
@@ -2079,6 +2072,15 @@ function renderRefineChips(original, refs){
 let PANEL_CASE = "";                       // the case under panel review
 const pbody = () => $("#panelbody");       // the dedicated surface every panel state renders into
 
+// Wire one mode-switch control: clicking the OTHER mode invokes its handler (same mode is a no-op — you're
+// already there). Used for both the console switch and the panel-view switch so they behave identically.
+function wireModeSwitch(el, onQa, onPanel){
+  if(!el) return;
+  el.querySelectorAll(".mbtn").forEach(b => b.addEventListener("click", () => {
+    if(b.dataset.mode === "panel"){ if(onPanel) onPanel(); }
+    else if(onQa){ onQa(); }
+  }));
+}
 function openPanel(prefill){
   const v = $("#panelview"); if(!v) return;
   v.hidden = false; document.body.style.overflow = "hidden";
@@ -2097,22 +2099,19 @@ function closePanel(){
 function specCard(s, on, mode, rationale){
   const detail = mode === "why" ? (rationale || s.focus || s.lens || "")
                                 : (s.focus || s.lens || "");
-  const def = (mode === "lens" && s.default) ? `<span class="pcard-def">Default</span>` : "";
   return `<label class="pcard${on?" on":""}" data-id="${esc(s.id)}">
       <input type="checkbox" class="pchk" ${on?"checked":""} />
-      <span class="pcard-b"><span class="pcard-name">${esc(s.specialty)}${def}</span>
+      <span class="pcard-b"><span class="pcard-name">${esc(s.specialty)}</span>
         <span class="pcard-lens">${esc(detail)}</span></span></label>`;
 }
-// Landing: the full roster up front (each specialist + its lens/expertise, defaults pre-selected) and a
+// Landing: the full roster up front (each specialist + its lens/expertise) and a
 // case box. "Convene panel" runs the LLM triage to auto-select the specialists that fit THIS case.
 function renderPanelLanding(prefill){
   const roster = PANEL_SPECIALISTS || [];
-  // fresh sample cases every time: shuffle the examples, seed a rotating placeholder + a few clickable chips
+  // A fresh random sample case seeds the placeholder each time (no clickable chips — the placeholder alone
+  // shows the intake's shape). The panel is auto-selected per case, so nothing is pre-checked.
   const shuffled = (PANEL_EXAMPLES || []).slice().sort(()=>Math.random()-0.5);
   const ph = shuffled.length ? shuffled[0] : "72-year-old with HFrEF and CKD stage 3 on metformin — how should GDMT be optimized?";
-  const chips = shuffled.slice(0, 3);
-  const chipsHtml = chips.length ? `<div class="panelex"><span class="panelex-h">Try a sample case</span>
-      <div class="panelex-row">${chips.map(c=>`<button type="button" class="panelex-chip" data-case="${esc(c)}">${esc(c.length>96?c.slice(0,96)+"…":c)}</button>`).join("")}</div></div>` : "";
   pbody().scrollTop = 0;
   pbody().innerHTML = `<div class="panellanding">
     <div class="panellead">Convene a specialist panel</div>
@@ -2129,28 +2128,18 @@ function renderPanelLanding(prefill){
         <span class="pintk-hint">or paste an image / a long note for context</span>
       </div>
       <div class="attns" id="panel-attns" hidden></div>` : ""}
-      ${chipsHtml}
     </div>
     <div class="rosterhead"><span class="rh-h">The specialists</span>
-      <span class="rh-n">${roster.length} available · defaults marked · the panel is auto-selected per case</span></div>
-    <div class="rostergrid">${roster.map(s=>specCard(s, !!s.default, "lens")).join("")}</div>
+      <span class="rh-n">${roster.length} available · the panel is auto-selected per case</span></div>
+    <div class="rostergrid">${roster.map(s=>specCard(s, false, "lens")).join("")}</div>
     <button type="button" class="panelrun" id="panelconvene" style="margin-top:1.5rem;">Convene panel ▶</button>
-    <div class="panelhist" id="panelhist" hidden>
-      <div class="panelhist-h">Recent panel discussions</div>
-      <div class="panelhist-l" id="panelhist-l"></div>
-    </div>
   </div>`;
-  loadPanelHistory();
   const upd = () => pbody().querySelectorAll(".pcard").forEach(l=>l.classList.toggle("on", l.querySelector(".pchk").checked));
   pbody().querySelectorAll(".pchk").forEach(c=>c.addEventListener("change", upd));
   // intake grows to fit the text (expandable to text size)
   const ta = $("#panelq");
   const grow = () => { ta.style.height="auto"; ta.style.height=Math.min(ta.scrollHeight, 320)+"px"; };
   ta.addEventListener("input", grow);
-  // sample-case chips fill the intake (and size it to fit)
-  pbody().querySelectorAll(".panelex-chip").forEach(b=>b.addEventListener("click", ()=>{
-    ta.value = b.dataset.case; grow(); ta.focus();
-  }));
   if(prefill) grow();
   // attachment/camera/paste parity with the Q&A intake (reuses the global ATTACHMENTS pipeline)
   if(VISION_ENABLED){
@@ -2180,32 +2169,8 @@ function renderPanelLanding(prefill){
     askPanel(question, manual);
   });
 }
-// Panel sessions have their own history right here on the panel home — recent panel discussions, opened
-// into the panel view (never the Q&A list).
-async function loadPanelHistory(){
-  const wrap = $("#panelhist"), list = $("#panelhist-l"); if(!wrap || !list) return;
-  try{
-    const {sessions} = await (await fetch("/sessions?tenant_id=demo&limit=100")).json();
-    const panels = (sessions||[]).filter(s=>s.kind==="panel");
-    if(!panels.length){ wrap.hidden = true; return; }
-    list.innerHTML = panels.map(s=>`<div class="panelhist-row" data-id="${esc(s.id)}">
-        <button type="button" class="ph-open"><span class="ph-q">${esc(s.question)}</span>
-          <span class="ph-m">${new Date(s.created_at).toLocaleDateString()}</span></button>
-        <button type="button" class="ph-del" title="Delete discussion" aria-label="Delete discussion">🗑</button></div>`).join("");
-    list.querySelectorAll(".panelhist-row").forEach(row=>{
-      const id = row.dataset.id;
-      row.querySelector(".ph-open").addEventListener("click", async ()=>{
-        try{ const r = await (await fetch("/sessions/"+encodeURIComponent(id))).json(); openPanelSession(r); }catch(e){}
-      });
-      row.querySelector(".ph-del").addEventListener("click", async (e)=>{
-        e.stopPropagation();
-        if(!confirm("Delete this panel discussion?")) return;
-        try{ const r = await fetch("/sessions/"+encodeURIComponent(id), {method:"DELETE"}); if(r.ok) row.remove(); if(!list.children.length) wrap.hidden=true; }catch(_){}
-      });
-    });
-    wrap.hidden = false;
-  }catch(e){ wrap.hidden = true; }
-}
+// Panel sessions live in the Past Sessions "◈ Specialist Panel" tab (buildSessionTabs), not on the panel
+// home — so the landing stays a clean intake.
 // Phase 1 — CONVENE: auto-select the specialists (LLM triage) and let the user adjust before running.
 async function askPanel(question, manual){
   CURRENT_Q = question; PANEL_CASE = question;
@@ -2766,17 +2731,43 @@ function closeSessions(){
   document.body.style.overflow = "";
 }
 const fmtDate = s => { try{ return new Date(s).toLocaleString([], {dateStyle:"medium", timeStyle:"short"}); }catch(e){ return ""; } };
+// Build the Past-Sessions tab bar from the active flags. Audience tabs (Clinician|Patient) segment the
+// Q&A list; a Specialist Panel tab isolates panel discussions so they never clutter the Q&A tabs.
+function buildSessionTabs(){
+  const tabs = $("#stabs"); if(!tabs) return;
+  const defs = [];
+  if(PATIENT_MODE_ENABLED){
+    defs.push({key:"clinician", aud:"clinician", kind:"research", label:"Clinician Q&amp;A"});
+    defs.push({key:"patient",   aud:"patient",   kind:"research", label:"Patient Q&amp;A"});
+  } else if(ASK_PANEL_ENABLED){
+    defs.push({key:"qa", aud:null, kind:"research", label:"Quick Q&amp;A"});
+  }
+  if(ASK_PANEL_ENABLED) defs.push({key:"panel", aud:null, kind:"panel", label:"◈ Specialist Panel"});
+  SESS_TAB = defs[0] || null;
+  if(defs.length < 2){ tabs.hidden = true; tabs.innerHTML = ""; return; }
+  tabs.hidden = false;
+  tabs.innerHTML = defs.map((d,i)=>`<button type="button" class="stab" role="tab" data-key="${d.key}"`
+    + ` aria-selected="${i===0?"true":"false"}">${d.label}</button>`).join("");
+  tabs.querySelectorAll(".stab").forEach(t => t.addEventListener("click", () => {
+    const d = defs.find(x => x.key === t.dataset.key); if(!d) return;
+    SESS_TAB = d; SESS_AUDIENCE = d.aud || SESS_AUDIENCE;
+    tabs.querySelectorAll(".stab").forEach(x => x.setAttribute("aria-selected", x.dataset.key === d.key ? "true" : "false"));
+    loadSessionList();
+  }));
+}
 async function loadSessionList(){
   const q = ($("#ssearch").value||"").trim();
   slist.innerHTML = `<div class="sempty">Loading…</div>`;
-  // When patient mode is on, the active tab filters the list to one audience (server-side).
-  const audParam = PATIENT_MODE_ENABLED ? `&audience=${SESS_AUDIENCE}` : "";
+  // The active tab (see buildSessionTabs) filters the list server-side by kind and/or audience.
+  const kindParam = (ASK_PANEL_ENABLED && SESS_TAB) ? `&kind=${SESS_TAB.kind}` : "";
+  const audParam  = (PATIENT_MODE_ENABLED && SESS_TAB && SESS_TAB.aud) ? `&audience=${SESS_TAB.aud}` : "";
   try{
-    const {sessions} = await (await fetch("/sessions?tenant_id=demo&limit=200&q="+encodeURIComponent(q)+audParam)).json();
+    const {sessions} = await (await fetch("/sessions?tenant_id=demo&limit=200&q="+encodeURIComponent(q)+kindParam+audParam)).json();
     if(!sessions || !sessions.length){
       const empty = q ? "No matching sessions."
-        : (PATIENT_MODE_ENABLED ? `No ${SESS_AUDIENCE === "patient" ? "patient" : "clinician"}-driven questions yet.`
-                                : "No saved questions yet.");
+        : (SESS_TAB && SESS_TAB.kind === "panel" ? "No specialist-panel discussions yet."
+          : (PATIENT_MODE_ENABLED ? `No ${SESS_AUDIENCE === "patient" ? "patient" : "clinician"}-driven questions yet.`
+                                  : "No saved questions yet."));
       slist.innerHTML = `<div class="sempty">${empty}</div>`; return;
     }
     slist.innerHTML = sessions.map(s=>{

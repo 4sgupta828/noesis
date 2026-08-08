@@ -1140,16 +1140,18 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
 
     @app.get("/sessions")
     async def list_sessions(tenant_id: str = "demo", limit: int = 100, q: str = "",
-                            audience: str = "") -> dict:
-        """Recent saved Q&A for this vertical + tenant (history), optional search `q` and, when the
-        patient-mode flag is on, an optional audience filter ('clinician'|'patient')."""
+                            audience: str = "", kind: str = "") -> dict:
+        """Recent saved Q&A for this vertical + tenant (history), optional search `q`, an optional
+        `kind` filter ('panel'|'research') for the Past-Sessions tabs, and — when the patient-mode
+        flag is on — an optional audience filter ('clinician'|'patient')."""
         store = _store()
         if store is None:
             return {"sessions": []}
         aud = audience if (patient_mode_enabled() and audience in ("clinician", "patient")) else None
+        knd = kind if kind in ("panel", "research") else None
         try:
             return {"sessions": await store.list(tenant_id=tenant_id, limit=min(limit, 300),
-                                                 q=q or None, audience=aud)}
+                                                 q=q or None, audience=aud, kind=knd)}
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"session store error: {e}") from e
 

@@ -186,7 +186,8 @@ class SessionStore:
         return res.endswith("1")   # "UPDATE 1" when a row matched
 
     async def list(self, *, tenant_id: str, limit: int = 50,
-                   q: str | None = None, audience: str | None = None) -> list[dict[str, Any]]:
+                   q: str | None = None, audience: str | None = None,
+                   kind: str | None = None) -> list[dict[str, Any]]:
         await self._ensure()
         pool = await self._get_pool()
         # optional full-text-ish search over the question + asker (name/email)
@@ -199,6 +200,12 @@ class SessionStore:
         if audience in ("clinician", "patient"):
             params.append(audience)
             where += f" AND audience=${len(params)}"
+        # optional session-kind filter (Past-Sessions tabs): "panel" isolates the specialist-panel
+        # discussions; "research" isolates plain Q&A (kind is NULL in the DB for those).
+        if kind == "panel":
+            where += " AND thread->0->>'kind' = 'panel'"
+        elif kind == "research":
+            where += " AND (thread->0->>'kind' IS NULL OR thread->0->>'kind' = 'research')"
         params.append(limit)
         async with pool.acquire() as conn:
             rows = await conn.fetch(

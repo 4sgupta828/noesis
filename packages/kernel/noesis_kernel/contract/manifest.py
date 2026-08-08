@@ -86,6 +86,9 @@ class VerticalManifest:
     # Optional PRE-ANSWER refinement directive: propose sharper standalone versions of a fresh question
     # for the user to pick from (express refinement). Opaque prose; kernel owns the mechanics.
     refine_prompt: str | None = None
+    # Optional GUIDED-INTAKE / triage directive: a short clarifying conversation that converges on a crisp
+    # question and recommends a route (Q&A vs Panel). Opaque prose; kernel owns the turn mechanics + cap.
+    triage_prompt: str | None = None
     # Optional vertical-supplied instruction for the VISION pre-step: how to DESCRIBE a
     # user-uploaded image (color/shape/borders/texture/distribution), producing a labeled
     # visual observation — never a diagnosis. Opaque prose; the kernel only threads it into

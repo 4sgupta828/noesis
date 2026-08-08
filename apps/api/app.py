@@ -134,6 +134,19 @@ def ask_panel_enabled() -> bool:
     return os.environ.get("NOESIS_ASK_PANEL", "").lower() in ("1", "true", "yes")
 
 
+def triage_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, a "Guided" intake mode runs a short clarifying conversation
+    (`POST /triage/step`) that converges on a crisp question and recommends a route (Quick Q&A vs
+    Specialist Panel). One small LLM call per turn, hard-capped; it never answers or advises — only
+    narrows + routes. OFF → the endpoint 404s and the FE shows only the two answer modes."""
+    return os.environ.get("NOESIS_TRIAGE", "").lower() in ("1", "true", "yes")
+
+
+# The clarifying-turn cap (structural convergence guarantee — code owns structure, the LLM owns meaning):
+# after this many assistant questions, the next turn is FORCED to route. Keeps intake from interrogating.
+TRIAGE_MAX_ASK = int(os.environ.get("NOESIS_TRIAGE_MAX_ASK", "2"))
+
+
 def evidence_fitness_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, the relevance-selection step additionally BOOSTS stronger
     evidence tiers (guideline/systematic-review > RCT > cohort > case report, via the medical authority
@@ -249,6 +262,13 @@ class SuggestIn(BaseModel):
 
 class RefineIn(BaseModel):
     question: str
+
+
+class TriageIn(BaseModel):
+    # The running intake transcript, oldest-first: [{role: "user"|"assistant", text}]. The FE holds it
+    # (stateless server) and appends each turn. The last item is the user's latest message.
+    transcript: list[dict] = []
+    tenant_id: str = "demo"
 
 
 class ExplainIn(BaseModel):
@@ -373,6 +393,7 @@ def build_default_service() -> ResearchService:
     gap_prompt = manifest.gap_prompt if gap_healing_enabled() else None
     suggest_prompt = manifest.suggest_prompt if conversation_enabled() else None
     refine_prompt = getattr(manifest, "refine_prompt", None) if refine_enabled() else None
+    triage_prompt = getattr(manifest, "triage_prompt", None) if triage_enabled() else None
     # Use the BEST model for EVERY research step (planning + claim extraction + compose). A cheaper
     # planner (haiku) paraphrased quotes → span-verification rejected them (grounding regression),
     # so planner_llm is left unset and run_react uses `llm` throughout. Optional explicit override.
@@ -411,7 +432,7 @@ def build_default_service() -> ResearchService:
         patient_answer_format=patient_directive,
         vision_prompt=vision_prompt,
         layman_prompt=manifest.layman_prompt, gap_prompt=gap_prompt,
-        suggest_prompt=suggest_prompt, refine_prompt=refine_prompt,
+        suggest_prompt=suggest_prompt, refine_prompt=refine_prompt, triage_prompt=triage_prompt,
         vertical_name=manifest.name, ui=manifest.ui,
         connectors=connectors, corpus_source_key=corpus_key,
     )
@@ -562,6 +583,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 for s in getattr(svc, "panel_specialists", ())] if ask_panel_enabled() else []),
             "panel_examples": (list(getattr(svc, "panel_examples", ())) if ask_panel_enabled() else []),
             "refine_enabled": refine_enabled() and bool(getattr(svc, "refine_prompt", None)),
+            "triage_enabled": triage_enabled() and bool(getattr(svc, "triage_prompt", None)),
         }
 
     @app.post("/search")
@@ -1013,6 +1035,37 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception:                  # provider error → fail open (answer the original)
             return {"refinements": []}
         return {"refinements": opts}
+
+    @app.post("/triage/step")
+    async def triage_step(body: TriageIn) -> dict:
+        """Guided-intake / triage: one clarifying turn. Given the running transcript, return either the
+        next clarifying question (status="ask") or a crisp refined question + recommended route
+        (status="qa"|"panel", via `recommended_mode`) when ready. Stateless — the FE holds the transcript.
+        404 when the flag/vertical is off. Never answers the medical question; only narrows + routes.
+
+        Convergence is code-guaranteed: once the assistant has already asked TRIAGE_MAX_ASK questions,
+        this turn is FORCED to route (the LLM still owns whether/what to ask below that cap — Rule 18)."""
+        if not triage_enabled():
+            raise HTTPException(status_code=404, detail="triage mode is not enabled")
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        if not getattr(svc, "triage_prompt", None):
+            raise HTTPException(status_code=404, detail="triage mode is not enabled")
+        transcript = [t for t in (body.transcript or []) if isinstance(t, dict) and (t.get("text") or "").strip()]
+        if not transcript:
+            raise HTTPException(status_code=400, detail="transcript is empty")
+        asked = sum(1 for t in transcript if (t.get("role") or "") == "assistant")
+        force_ready = asked >= TRIAGE_MAX_ASK
+        try:
+            return await svc.triage(transcript=transcript, force_ready=force_ready)
+        except CassetteMiss:
+            # replay mode → route the last user message straight to Q&A (never dead-end)
+            last = next((t["text"] for t in reversed(transcript) if t.get("role") == "user"), "")
+            return {"status": "ready", "recommended_mode": "qa", "refined_question": last,
+                    "understood_problem": last, "message": "Searching that now.", "safety": "ok"}
+        except Exception as e:   # noqa: BLE001 — never dead-end the user
+            raise HTTPException(status_code=502, detail=f"triage error: {e}") from e
 
     @app.post("/corpus/gap-plan")
     async def corpus_gap_plan(body: GapPlanIn) -> dict:

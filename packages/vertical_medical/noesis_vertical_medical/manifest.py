@@ -23,6 +23,7 @@ from .layman import MEDICAL_LAYMAN_PROMPT
 from .gaps import MEDICAL_GAP_PROMPT
 from .suggest import MEDICAL_SUGGEST_PROMPT
 from .refine import MEDICAL_REFINE_PROMPT
+from .triage import MEDICAL_TRIAGE_PROMPT
 from .web_domains import TRUSTED_WEB_DOMAINS
 from .authority import MedicalAuthorityPolicy
 from .connector import ClinicalTrialsConnector
@@ -77,6 +78,7 @@ def build_manifest() -> VerticalManifest:
         gap_prompt=MEDICAL_GAP_PROMPT,
         suggest_prompt=MEDICAL_SUGGEST_PROMPT,
         refine_prompt=MEDICAL_REFINE_PROMPT,
+        triage_prompt=MEDICAL_TRIAGE_PROMPT,
         web_domains=TRUSTED_WEB_DOMAINS,
         extraction_lenses=(
             "interventions/treatments/drugs studied",

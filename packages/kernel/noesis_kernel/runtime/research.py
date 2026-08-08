@@ -69,6 +69,7 @@ class ResearchService:
     gap_prompt: str | None = None           # vertical gap-fill-planner directive (opaque)
     suggest_prompt: str | None = None       # vertical suggested-follow-ups directive (opaque)
     refine_prompt: str | None = None         # vertical pre-answer question-refinement directive (opaque)
+    triage_prompt: str | None = None         # vertical guided-intake/triage directive (opaque)
     max_calls: int = 40
     vertical_name: str = ""
     ui: object | None = None                # the vertical's UIContract (for /config)
@@ -443,6 +444,20 @@ class ResearchService:
         return await suggest_followups(
             llm=self.llm, suggest_prompt=self.suggest_prompt,
             question=question, answer=answer, history=history)
+
+    async def triage(self, *, transcript: list[dict], force_ready: bool = False) -> dict:
+        """Guided-intake / triage: run ONE clarifying turn over the transcript ([{role, text}]) and return
+        either the next question (status="ask") or a crisp refined question + recommended route
+        (status="ready"). `force_ready` (caller's turn cap) coerces a route. {} when the vertical has no
+        triage prompt (feature effectively off). Never answers the medical question — only narrows + routes."""
+        if not self.triage_prompt:
+            return {}
+        from noesis_kernel.research.triage import run_triage_turn
+        roster = ", ".join(f"{s.get('specialty','')}" for s in self.panel_roster()) if self.panel_specialists else ""
+        turn = await run_triage_turn(
+            llm=self.llm, triage_prompt=self.triage_prompt, transcript=transcript,
+            roster_summary=roster, force_ready=force_ready)
+        return turn.model_dump()
 
     async def refine(self, *, question: str) -> list[str]:
         """Pre-answer refinements: 0, or a few DISTINCT sharper standalone questions to choose from.

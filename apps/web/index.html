@@ -434,6 +434,39 @@
   body[data-mode="panel"] #audsel{display:none !important;}
   body[data-mode="panel"][data-panel="plan"] #ask,
   body[data-mode="panel"][data-panel="conference"] #ask{display:none;}
+  /* Guided intake (triage) — a THIRD mode of the shell. The shared #ask box is the message input; the
+     conversation + hand-off card render into #triagebody. Q&A-only control rows are hidden here too. */
+  #triagebody{display:none;padding:.4rem 0 3rem;max-width:44rem;margin:0 auto;}
+  body[data-mode="triage"] #triagebody{display:block;}
+  body[data-mode="triage"] #out,
+  body[data-mode="triage"] #sources,
+  body[data-mode="triage"] #effort,
+  body[data-mode="triage"] #audsel{display:none !important;}
+  .tgt-thread{display:flex;flex-direction:column;gap:.7rem;margin-bottom:.4rem;}
+  .tgt-msg{max-width:88%;padding:.6rem .85rem;border-radius:13px;font-size:.9rem;line-height:1.5;}
+  .tgt-msg.user{align-self:flex-end;background:var(--gold);color:var(--on-accent);border-bottom-right-radius:4px;}
+  .tgt-msg.bot{align-self:flex-start;background:var(--panel2);border:1px solid var(--hair);color:var(--ink);border-bottom-left-radius:4px;}
+  .tgt-msg.thinking{color:var(--muted);font-style:italic;}
+  .tgt-lead{font-size:.86rem;color:var(--muted);line-height:1.55;margin:.2rem 0 1rem;}
+  .tgt-urgent{background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.4);color:#c0392b;
+    border-radius:10px;padding:.6rem .8rem;font-size:.82rem;line-height:1.5;margin:.2rem 0 .8rem;}
+  /* the ready/hand-off card */
+  .tgt-ready{background:var(--panel2);border:1px solid var(--hair);border-radius:14px;padding:1.1rem 1.15rem;margin-top:1rem;}
+  .tgt-ready-h{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.5rem;}
+  .tgt-understood{font-size:.86rem;color:var(--muted);line-height:1.55;margin-bottom:.7rem;}
+  .tgt-refined{font-family:var(--serif);font-size:1.12rem;line-height:1.4;color:var(--ink);margin-bottom:1rem;}
+  .tgt-routes{display:flex;flex-wrap:wrap;gap:.6rem;}
+  .tgt-route{flex:1;min-width:200px;text-align:left;cursor:pointer;background:var(--panel);border:1px solid var(--hair);
+    border-radius:11px;padding:.7rem .85rem;transition:border-color .15s,box-shadow .15s;color:var(--ink);font:inherit;}
+  .tgt-route:hover{border-color:rgba(var(--gold-rgb),.6);}
+  .tgt-route.rec{border-color:var(--gold);box-shadow:0 0 0 2px rgba(var(--gold-rgb),.15);}
+  .tgt-route-t{font-weight:640;font-size:.92rem;display:flex;align-items:center;gap:.4rem;}
+  .tgt-route-why{font-size:.76rem;color:var(--muted);line-height:1.45;margin-top:.25rem;}
+  .tgt-route .rec-badge{font-family:var(--mono);font-size:.53rem;text-transform:uppercase;letter-spacing:.08em;color:var(--gold);
+    border:1px solid rgba(var(--gold-rgb),.5);border-radius:999px;padding:.05rem .4rem;}
+  .tgt-restart{margin-top:.9rem;font-family:var(--mono);font-size:.72rem;color:var(--muted);background:transparent;
+    border:1px solid var(--hair);border-radius:8px;padding:.35rem .7rem;cursor:pointer;}
+  .tgt-restart:hover{border-color:var(--gold);color:var(--gold);}
   .panelbody>.panelwrap,.panellanding{max-width:760px;margin:0 auto;}
   .panelsub{font-size:.9rem;color:var(--muted);line-height:1.6;margin:.2rem 0 1.5rem;}
   .panelq{width:100%;box-sizing:border-box;resize:none;overflow-y:auto;min-height:3.4rem;font:inherit;font-size:1rem;line-height:1.55;
@@ -901,6 +934,7 @@
   <h1 id="heading">What does the evidence show?</h1>
   <div class="modeswitch" id="modeswitch">
     <div class="modeseg" role="tablist" aria-label="Answer mode">
+      <button type="button" class="mbtn" data-mode="triage" role="tab" aria-selected="false" hidden>◍ Guided</button>
       <button type="button" class="mbtn" data-mode="qa" role="tab" aria-selected="true">Quick Q&amp;A</button>
       <button type="button" class="mbtn" data-mode="panel" role="tab" aria-selected="false">◈ Specialist Panel</button>
     </div>
@@ -964,6 +998,7 @@
   <!-- Specialist Panel body — lives in the SAME shell as Q&A (shared header + heading + mode switch +
        intake box). Mode is driven by body[data-mode]; the panel phase by body[data-panel]. -->
   <section class="panelbody" id="panelbody" hidden aria-label="Specialist panel"></section>
+  <section class="triagebody" id="triagebody" hidden aria-label="Guided intake"></section>
   <footer class="pagefoot" id="pagefoot" hidden></footer>
 </div>
 
@@ -1050,6 +1085,7 @@ let SESS_TAB = null;             // active Past-Sessions tab {key, aud, kind, la
 let REFINE_ENABLED = false;     // pre-answer question refinement (offer sharper versions to pick)
 let REASONING_ENABLED = false;  // reasoning-read interpretation + confidence layer (server-validated)
 let ASK_PANEL_ENABLED = false;  // AI specialist panel (Alpha)
+let TRIAGE_ENABLED = false;     // guided-intake / triage mode (clarify → route)
 let PANEL_SPECIALISTS = [];      // roster from /config [{id, specialty, default}]
 let PANEL_EXAMPLES = [];         // sample multi-specialty cases seeded into the panel intake
 let THREAD = {session_id:null, turns:[]};   // the active conversation
@@ -1084,13 +1120,16 @@ async function loadConfig(){
     REFINE_ENABLED = !!c.refine_enabled;
     REASONING_ENABLED = !!c.reasoning_read_enabled;
     ASK_PANEL_ENABLED = !!c.ask_panel_enabled;
+    TRIAGE_ENABLED = !!c.triage_enabled;
     PANEL_SPECIALISTS = c.panel_specialists || [];
     PANEL_EXAMPLES = c.panel_examples || [];
-    if(ASK_PANEL_ENABLED){
-      // One shell, two modes with a bidirectional switch: Quick Q&A ⇄ Specialist Panel. The switch is in the
-      // same place (under the heading) in both modes; switching keeps whatever's typed in the shared box.
+    if(ASK_PANEL_ENABLED || TRIAGE_ENABLED){
+      // One shell, up to three modes (Guided intake ⇄ Quick Q&A ⇄ Specialist Panel), switched in the same
+      // place under the heading. Only the enabled modes' buttons show; the shared box carries across them.
       $("#modeswitch").classList.add("on");
-      wireModeSwitch($("#modeswitch"), () => setMode("qa"), () => setMode("panel"));
+      const pbtn = $("#modeswitch .mbtn[data-mode='panel']"); if(pbtn) pbtn.hidden = !ASK_PANEL_ENABLED;
+      const tbtn = $("#modeswitch .mbtn[data-mode='triage']"); if(tbtn) tbtn.hidden = !TRIAGE_ENABLED;
+      wireModeSwitch($("#modeswitch"));
     }
     VISION_ENABLED = !!c.vision_enabled;
     if(EFFORT_ENABLED){
@@ -1996,6 +2035,7 @@ function cancelResearch(){
 $("#ask").addEventListener("submit", e=>{
   e.preventDefault();
   const question = q.value.trim();
+  if(APP_MODE === "triage"){ submitTriage(question); return; }        // guided intake → next clarifying turn
   if(APP_MODE === "panel"){ submitPanelIntake(question); return; }   // panel mode → convene / follow-up
   if(CURRENT_ABORT) return;               // a question is in flight — Enter/submit is a no-op (use Stop)
   if(question) askQuestion(question);
@@ -2090,25 +2130,23 @@ let HEADING_QA = "What does the evidence show?";   // captured from config; rest
 const pbody = () => $("#panelbody");        // the dedicated surface every panel state renders into
 function setPanelState(st){ PANEL_STATE = st; document.body.dataset.panel = st; }
 
-// Wire one mode-switch control: clicking a mode invokes its handler (clicking the mode you're already in is a
-// harmless re-entry). Used for the single shared switch under the heading.
-function wireModeSwitch(el, onQa, onPanel){
+// Wire the mode-switch control: clicking any mode button flips the shell to that mode.
+function wireModeSwitch(el){
   if(!el) return;
-  el.querySelectorAll(".mbtn").forEach(b => b.addEventListener("click", () => {
-    if(b.dataset.mode === "panel"){ if(onPanel) onPanel(); }
-    else if(onQa){ onQa(); }
-  }));
+  el.querySelectorAll(".mbtn").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
 }
-// Flip the shell between Quick Q&A and Specialist Panel. The header, heading, mode switch and intake box are
-// shared; only the answer surface (and Q&A-only control rows) swap. Whatever's typed in the box is preserved.
+// Flip the shell between Guided intake, Quick Q&A and Specialist Panel. The header, heading, mode switch and
+// intake box are shared; only the answer surface (and Q&A-only control rows) swap. Typed text is preserved.
 function setMode(mode, opts){
   opts = opts || {};
-  mode = (mode === "panel") ? "panel" : "qa";
+  mode = (mode === "panel" || mode === "triage") ? mode : "qa";
   APP_MODE = mode;
   document.body.dataset.mode = mode;
   $("#modeswitch").querySelectorAll(".mbtn").forEach(b =>
     b.setAttribute("aria-selected", b.dataset.mode === mode ? "true" : "false"));
   ATTN_BOX = "#attns"; renderAttachments();   // one intake box → one attachment surface
+  const clearModeHash = () => { if(/^#(panel|triage)$/.test(location.hash) || location.hash.indexOf("#p/") === 0)
+    history.replaceState(null, "", location.pathname + location.search); };
   if(mode === "panel"){
     document.body.classList.remove("chatting"); out.style.paddingBottom = "";
     $("#heading").textContent = "What should the panel weigh in on?";
@@ -2118,18 +2156,110 @@ function setMode(mode, opts){
     if(!opts.fresh && PANEL_THREAD && (PANEL_THREAD.turns||[]).length){ renderPanelConversation(); }
     else renderPanelLanding(opts.prefill !== undefined ? opts.prefill : (PANEL_CASE || ""));
     q.focus();
+  } else if(mode === "triage"){
+    document.body.classList.remove("chatting"); out.style.paddingBottom = "";
+    $("#heading").textContent = "Let's get to a crisp question";
+    if(location.hash !== "#triage") history.pushState(null, "", "#triage");
+    renderTriage(!!opts.fresh);
+    q.focus();
   } else {
     $("#heading").textContent = HEADING_QA;
     document.body.classList.toggle("chatting", THREAD.turns.length > 0);   // re-dock composer if a thread is live
     if(!THREAD.turns.length) q.setAttribute("placeholder", pickPlaceholder());
     syncComposerPad();
-    if(location.hash === "#panel" || location.hash.indexOf("#p/") === 0)
-      history.replaceState(null, "", location.pathname + location.search);
+    clearModeHash();
     q.focus();
   }
 }
 function openPanel(prefill){ setMode("panel", {prefill: prefill || PANEL_CASE || ""}); }
 function closePanel(){ setMode("qa"); }
+
+// ---- Guided intake (triage): a short clarifying chat that converges on a crisp question, then routes ----
+// The shared #ask box is the message input; the conversation + hand-off card render into #triagebody. The
+// server holds no state (Rule: stateless) — TRIAGE.transcript is the whole memory, sent each turn.
+let TRIAGE = {transcript: [], busy: false, refined: ""};
+const tbody = () => $("#triagebody");
+function triageMsgHtml(m){ return `<div class="tgt-msg ${m.role==='user'?'user':'bot'}">${esc(m.text)}</div>`; }
+function renderTriage(fresh){
+  if(fresh){ TRIAGE = {transcript: [], busy: false, refined: ""}; q.value = ""; autoGrow(); }
+  q.setAttribute("placeholder", TRIAGE.transcript.length ? "Type your answer…"
+                                                         : "Describe the clinical problem or question…");
+  const lead = TRIAGE.transcript.length ? "" :
+    `<div class="tgt-lead">Tell me the clinical problem in your own words. I'll ask only what's needed to make
+     the answer high-quality — then point you to a quick answer or a full specialist panel. I don't diagnose
+     or advise; I just help you ask the sharpest question.</div>`;
+  tbody().innerHTML = lead + `<div class="tgt-thread" id="tgt-thread">${TRIAGE.transcript.map(triageMsgHtml).join("")}</div>`;
+  window.scrollTo({top: document.body.scrollHeight});
+}
+async function submitTriage(text){
+  if(TRIAGE.busy) return;
+  if(!text){ q.focus(); return; }
+  TRIAGE.transcript.push({role:"user", text});
+  q.value = ""; autoGrow();
+  renderTriage(false);
+  const thread = $("#tgt-thread");
+  const think = document.createElement("div"); think.className = "tgt-msg bot thinking"; think.textContent = "thinking…";
+  thread.appendChild(think); window.scrollTo({top: document.body.scrollHeight});
+  TRIAGE.busy = true;
+  try{
+    const r = await fetch("/triage/step", {method:"POST", headers:{"content-type":"application/json"},
+      body: JSON.stringify({transcript: TRIAGE.transcript, tenant_id:"demo"})});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const d = await r.json();
+    think.remove();
+    if(d.status === "ready"){ renderTriageReady(d); }
+    else {
+      TRIAGE.transcript.push({role:"assistant", text: d.message || "Could you tell me a bit more about the case?"});
+      renderTriage(false);
+    }
+  }catch(e){
+    think.remove();   // fail-open: never dead-end — route the original text to Quick Q&A
+    renderTriageReady({status:"ready", recommended_mode:"qa", refined_question:text, understood_problem:text,
+      message:"Let me search the evidence for that.", rationale:"", safety:"ok"});
+  }finally{ TRIAGE.busy = false; }
+}
+// The "ready" hand-off card: the understood problem + the refined question + route buttons (recommended
+// one highlighted). Clicking a route sets the refined question into the shared box and runs that mode.
+function renderTriageReady(d){
+  const refined = d.refined_question || d.understood_problem || "";
+  TRIAGE.refined = refined;
+  const rec = d.recommended_mode === "panel" ? "panel" : "qa";
+  const urgent = d.safety === "urgent"
+    ? `<div class="tgt-urgent">${esc(d.message || "This may need urgent in-person evaluation — please use emergency/local care pathways.")}</div>` : "";
+  const panelBtn = ASK_PANEL_ENABLED ? `<button type="button" class="tgt-route ${rec==='panel'?'rec':''}" data-route="panel">
+      <div class="tgt-route-t">◈ Specialist Panel ${rec==='panel'?'<span class="rec-badge">Recommended</span>':''}</div>
+      <div class="tgt-route-why">Several specialists each review the evidence through their own lens; a chair synthesizes.</div></button>` : "";
+  tbody().innerHTML = `<div class="tgt-thread">${TRIAGE.transcript.map(triageMsgHtml).join("")}</div>
+    ${urgent}
+    <div class="tgt-ready">
+      <div class="tgt-ready-h">Here's the question I'll run</div>
+      ${d.understood_problem ? `<div class="tgt-understood">${esc(d.understood_problem)}</div>` : ""}
+      <div class="tgt-refined">${esc(refined)}</div>
+      <div class="tgt-routes">
+        <button type="button" class="tgt-route ${rec==='qa'?'rec':''}" data-route="qa">
+          <div class="tgt-route-t">⚡ Quick Q&amp;A ${rec==='qa'?'<span class="rec-badge">Recommended</span>':''}</div>
+          <div class="tgt-route-why">One grounded, cited answer — fast.</div></button>
+        ${panelBtn}
+      </div>
+      <button type="button" class="tgt-restart" id="tgt-restart">↺ Start over</button>
+    </div>`;
+  q.setAttribute("placeholder", "Add a detail to refine further…");
+  tbody().querySelectorAll(".tgt-route").forEach(b => b.addEventListener("click", () => routeTriage(b.dataset.route, refined)));
+  const rs = $("#tgt-restart"); if(rs) rs.addEventListener("click", () => setMode("triage", {fresh:true}));
+  window.scrollTo({top: document.body.scrollHeight});
+}
+// Hand the refined question to the chosen answer mode. Attachments added during triage live in the shared
+// ATTACHMENTS pipeline and carry through untouched.
+function routeTriage(route, refined){
+  q.value = refined; autoGrow();
+  if(route === "panel" && ASK_PANEL_ENABLED){
+    setMode("panel", {fresh:true, prefill: refined});
+    submitPanelIntake(refined);
+  } else {
+    setMode("qa");
+    askQuestion(refined, {skipRefine:true});
+  }
+}
 // A random sample case for the panel intake placeholder (mirrors pickPlaceholder for Q&A).
 function pickPanelCase(){
   const ex = PANEL_EXAMPLES || [];
@@ -2664,6 +2794,7 @@ function newConversation(){
   out.innerHTML = "";
   q.value=""; q.style.height="auto";
   if(APP_MODE === "panel"){ closePanel(); return; }   // New chat from panel → back to Q&A landing
+  if(APP_MODE === "triage"){ TRIAGE = {transcript: [], busy: false, refined: ""}; setMode("qa"); return; }
   try{ history.replaceState(null, "", location.pathname + location.search); }catch(e){}
   q.setAttribute("placeholder", pickPlaceholder());  // fresh question each New chat
   window.scrollTo({top:0}); q.focus();
@@ -3060,6 +3191,7 @@ function routeHash(){    // #s/<id> → Q&A answer/thread · #p/<id> → panel s
   else if(m){ loadSharedSession(decodeURIComponent(m[1])); }   // legacy #s/<panelid> still self-routes to the panel
   else if(location.hash === "#sessions"){ openSessions(); }
   else if(location.hash === "#panel" && ASK_PANEL_ENABLED){ openPanel(""); }
+  else if(location.hash === "#triage" && TRIAGE_ENABLED){ setMode("triage"); }
 }
 // route only AFTER config loads, so CONV_ENABLED is known (shared threads render as conversations)
 loadConfig().then(routeHash);
@@ -3070,8 +3202,9 @@ window.addEventListener("hashchange", ()=>{
   const m = location.hash.match(/^#s\/(.+)$/);
   if(m){ loadSharedSession(decodeURIComponent(m[1])); return; }
   if(location.hash === "#panel"){ if(APP_MODE !== "panel") openPanel(""); return; }
-  // navigated away from a panel hash (e.g. browser Back) → return to Quick Q&A
-  if(APP_MODE === "panel") closePanel();
+  if(location.hash === "#triage"){ if(APP_MODE !== "triage" && TRIAGE_ENABLED) setMode("triage"); return; }
+  // navigated away from a mode hash (e.g. browser Back) → return to Quick Q&A
+  if(APP_MODE !== "qa") setMode("qa");
 });
 </script>
 </body>

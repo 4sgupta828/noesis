@@ -2204,19 +2204,37 @@ async function submitTriage(text){
   try{
     const r = await fetch("/triage/step", {method:"POST", headers:{"content-type":"application/json"},
       body: JSON.stringify({transcript: TRIAGE.transcript, tenant_id:"demo"})});
-    if(!r.ok) throw new Error("HTTP "+r.status);
-    const d = await r.json();
     think.remove();
+    if(!r.ok){
+      // A failed turn must NOT masquerade as an instant "ready" — surface WHY, offer a direct route.
+      const why = r.status === 404 ? "Guided mode isn't enabled on this server."
+                : (r.status === 400 ? "I didn't catch that — could you rephrase the case?"
+                                    : `The intake service returned an error (${r.status}).`);
+      triageError(why); return;
+    }
+    const d = await r.json();
     if(d.status === "ready"){ renderTriageReady(d); }
     else {
       TRIAGE.transcript.push({role:"assistant", text: d.message || "Could you tell me a bit more about the case?"});
       renderTriage(false);
     }
   }catch(e){
-    think.remove();   // fail-open: never dead-end — route the original text to Quick Q&A
-    renderTriageReady({status:"ready", recommended_mode:"qa", refined_question:text, understood_problem:text,
-      message:"Let me search the evidence for that.", rationale:"", safety:"ok"});
+    think.remove();
+    triageError("I couldn't reach the guided-intake service.");
   }finally{ TRIAGE.busy = false; }
+}
+// A visible intake error (never a fake "ready" card) — keeps the transcript and offers a direct route so
+// the user is never dead-ended, but a broken/absent endpoint reads as an error, not an instant answer.
+function triageError(msg){
+  const last = [...TRIAGE.transcript].reverse().find(m => m.role === "user");
+  tbody().innerHTML = `<div class="tgt-thread">${TRIAGE.transcript.map(triageMsgHtml).join("")}</div>
+    <div class="tgt-urgent">⚠ ${esc(msg)}</div>
+    <div class="tgt-routes"><button type="button" class="tgt-route rec" data-route="qa">
+      <div class="tgt-route-t">⚡ Run in Quick Q&amp;A</div>
+      <div class="tgt-route-why">Search the evidence for what you typed.</div></button></div>`;
+  const btn = tbody().querySelector(".tgt-route");
+  if(btn) btn.addEventListener("click", () => routeTriage("qa", (last && last.text) || ""));
+  window.scrollTo({top: document.body.scrollHeight});
 }
 // The "ready" hand-off card: the understood problem + the refined question + route buttons (recommended
 // one highlighted). Clicking a route sets the refined question into the shared box and runs that mode.

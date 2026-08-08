@@ -409,33 +409,22 @@
   .panelrun:hover{background:var(--gold-strong);}
   .panelrun:disabled{opacity:.5;cursor:default;background:transparent;color:var(--muted);border-color:var(--hair);}
   .panelrun-n{font-weight:400;opacity:.85;margin-left:.3rem;}
-  /* dedicated Specialist Panel destination (full-screen surface, mirrors .videos) */
-  .panelview[hidden]{display:none;}   /* author display:flex would otherwise beat the UA [hidden] rule */
-  .panelview{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;
-    background-image:radial-gradient(120% 60% at 85% -10%, rgba(var(--gold-rgb),.07), transparent 60%);}
-  .panelview .vhd{display:flex;align-items:center;gap:.9rem;padding:.85rem 1.2rem;border-bottom:1px solid var(--hair);flex:none;}
-  .panelview .sback{font-family:var(--mono);font-size:.66rem;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;
-    background:transparent;border:1px solid var(--hair);border-radius:8px;padding:.4rem .75rem;color:var(--ink);}
-  .panelview .sback:hover{border-color:var(--gold);color:var(--gold);}
-  .panelview .stitle{font-family:var(--serif);font-size:1.15rem;color:var(--ink);display:flex;align-items:center;gap:.55rem;}
-  .panelview .alpha{font-family:var(--mono);font-size:.55rem;text-transform:uppercase;letter-spacing:.12em;
-    color:var(--gold);border:1px solid rgba(var(--gold-rgb),.5);border-radius:999px;padding:.1rem .5rem;}
-  .panelbody{flex:1;overflow-y:auto;padding:1.6rem 1.2rem 3rem;}
+  /* Specialist Panel — a MODE of the same shell as Q&A, not a separate overlay. body[data-mode] swaps the
+     answer surface (#out ⇄ #panelbody); body[data-panel] tracks the phase (landing keeps the shared intake
+     box visible; plan/conference hide it since they have their own run button / docked composer). */
+  #panelbody{display:none;padding:.4rem 0 3rem;}
+  body[data-mode="panel"] #panelbody{display:block;}
+  body[data-mode="panel"] #out,
+  body[data-mode="panel"] #sources,
+  body[data-mode="panel"] #effort,
+  body[data-mode="panel"] #audsel{display:none !important;}
+  body[data-mode="panel"][data-panel="plan"] #ask,
+  body[data-mode="panel"][data-panel="conference"] #ask{display:none;}
   .panelbody>.panelwrap,.panellanding{max-width:760px;margin:0 auto;}
-  .panellead{font-family:var(--serif);font-size:1.5rem;line-height:1.3;color:var(--ink);margin:.4rem 0 .5rem;}
-  .panelsub{font-size:.9rem;color:var(--muted);line-height:1.6;margin-bottom:1.5rem;}
-  .panelqwrap{margin-bottom:1.7rem;}
-  .panelqlbl{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.5rem;}
+  .panelsub{font-size:.9rem;color:var(--muted);line-height:1.6;margin:.2rem 0 1.5rem;}
   .panelq{width:100%;box-sizing:border-box;resize:none;overflow-y:auto;min-height:3.4rem;font:inherit;font-size:1rem;line-height:1.55;
     color:var(--ink);background:var(--panel);border:1px solid var(--hair);border-radius:12px;padding:.8rem .95rem;}
   .panelq:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.12);}
-  .panelq.flash{animation:pflash .9s ease;}
-  @keyframes pflash{0%,100%{border-color:var(--hair);}30%,60%{border-color:var(--gold);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.18);}}
-  .panelintake{display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;margin-top:.6rem;}
-  .pintk{font-family:var(--mono);font-size:.72rem;cursor:pointer;background:var(--panel2);border:1px solid var(--hair);
-    border-radius:8px;padding:.35rem .7rem;color:var(--ink);transition:border-color .15s;}
-  .pintk:hover{border-color:rgba(var(--gold-rgb),.5);}
-  .pintk-hint{font-size:.72rem;color:var(--muted);}
   .rosterhead{display:flex;align-items:baseline;justify-content:space-between;gap:.6rem;margin-bottom:.7rem;}
   .rosterhead .rh-h{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
   .rosterhead .rh-n{font-size:.78rem;color:var(--muted);}
@@ -936,13 +925,13 @@
       <span class="eval" id="effort-val">Standard · 1×</span>
       <span class="ehint" id="effort-hint">Standard depth. Raise it for a hard question — uses more credits and time.</span>
     </div>
-    <div class="audsel" id="audsel" role="group" aria-label="Answer audience" hidden>
-      <span class="lbl">Answering for</span>
+    <div class="audsel" id="audsel" role="group" aria-label="Answer format" hidden>
+      <span class="lbl">Format answer for</span>
       <div class="seg">
-        <button type="button" class="segbtn" data-aud="clinician" aria-pressed="true">Clinician</button>
-        <button type="button" class="segbtn" data-aud="patient" aria-pressed="false">Patient</button>
+        <button type="button" class="segbtn" data-aud="clinician" aria-pressed="true">Clinician brief</button>
+        <button type="button" class="segbtn" data-aud="patient" aria-pressed="false">Patient explanation</button>
       </div>
-      <span class="ahint" id="aud-hint">Clinician view — structured, cited, for a medical audience.</span>
+      <span class="ahint" id="aud-hint">Clinician brief — structured, cited, for a medical audience.</span>
     </div>
   </form>
 
@@ -958,6 +947,9 @@
         <svg class="micon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/><circle cx="12" cy="12" r="0.7" fill="currentColor"/></svg></div>
     </div>
   </section>
+  <!-- Specialist Panel body — lives in the SAME shell as Q&A (shared header + heading + mode switch +
+       intake box). Mode is driven by body[data-mode]; the panel phase by body[data-panel]. -->
+  <section class="panelbody" id="panelbody" hidden aria-label="Specialist panel"></section>
 </div>
 
 <!-- Past Sessions: full-page master/detail (questions left, answer right) -->
@@ -996,17 +988,6 @@
     <video id="vlvideo" controls playsinline></video>
   </div>
 </div>
-<section class="panelview" id="panelview" hidden aria-label="Specialist panel">
-  <div class="vhd">
-    <button type="button" class="sback" id="pback">← Back</button>
-    <div class="modeseg" id="panelmode" role="tablist" aria-label="Answer mode">
-      <button type="button" class="mbtn" data-mode="qa" role="tab" aria-selected="false">Quick Q&amp;A</button>
-      <button type="button" class="mbtn" data-mode="panel" role="tab" aria-selected="true">◈ Specialist Panel</button>
-    </div>
-    <span class="alpha">Alpha</span>
-  </div>
-  <div class="panelbody" id="panelbody"></div>
-</section>
 
 <!-- identity gate: capture name + email at landing, stored against each session -->
 <div class="idmodal" id="idmodal" hidden>
@@ -1089,11 +1070,10 @@ async function loadConfig(){
     PANEL_SPECIALISTS = c.panel_specialists || [];
     PANEL_EXAMPLES = c.panel_examples || [];
     if(ASK_PANEL_ENABLED){
-      // Two modes with a bidirectional switch: Quick Q&A (the console) ⇄ Specialist Panel (the panel view).
-      // The console switch reveals the panel (prefilled with any typed question); the panel switch returns.
+      // One shell, two modes with a bidirectional switch: Quick Q&A ⇄ Specialist Panel. The switch is in the
+      // same place (under the heading) in both modes; switching keeps whatever's typed in the shared box.
       $("#modeswitch").classList.add("on");
-      wireModeSwitch($("#modeswitch"), null, () => openPanel(q.value.trim()));
-      wireModeSwitch($("#panelmode"), () => closePanel(), null);
+      wireModeSwitch($("#modeswitch"), () => setMode("qa"), () => setMode("panel"));
     }
     VISION_ENABLED = !!c.vision_enabled;
     if(EFFORT_ENABLED){
@@ -1117,7 +1097,7 @@ async function loadConfig(){
     }
     // vertical-supplied console copy (heading + placeholder) — keeps the shell domain-neutral
     const con = c.console || {};
-    if(con.heading) $("#heading").textContent = con.heading;
+    if(con.heading){ HEADING_QA = con.heading; $("#heading").textContent = con.heading; }
     // seed the intake prompt with a RANDOM real question from the vertical's picker (falls back
     // to the plain placeholder). Refreshed on each New chat for variety.
     EXAMPLES = Array.isArray(con.examples) ? con.examples : [];
@@ -1165,8 +1145,8 @@ function setAudience(a){
     b.setAttribute("aria-pressed", b.dataset.aud === AUDIENCE ? "true" : "false"));
   const hint = $("#aud-hint");
   if(hint) hint.textContent = AUDIENCE === "patient"
-    ? "Patient view — plain language for a non-expert, same evidence and accuracy."
-    : "Clinician view — structured, cited, for a medical audience.";
+    ? "Patient explanation — plain language for a non-expert, same evidence and accuracy."
+    : "Clinician brief — structured, cited, for a medical audience.";
 }
 const audienceName = a => (a === "patient" ? "Patient" : "Clinician");
 
@@ -1982,8 +1962,9 @@ function cancelResearch(){
 }
 $("#ask").addEventListener("submit", e=>{
   e.preventDefault();
-  if(CURRENT_ABORT) return;               // a question is in flight — Enter/submit is a no-op (use Stop)
   const question = q.value.trim();
+  if(APP_MODE === "panel"){ submitPanelIntake(question); return; }   // panel mode → convene / follow-up
+  if(CURRENT_ABORT) return;               // a question is in flight — Enter/submit is a no-op (use Stop)
   if(question) askQuestion(question);
 });
 // While a question runs, the round Go button becomes a STOP button — click it to cancel.
@@ -2065,15 +2046,19 @@ function renderRefineChips(original, refs){
   box.querySelectorAll(".chip-q").forEach(b=>b.addEventListener("click",()=>askQuestion(b.dataset.q,{skipRefine:true})));
   syncComposerPad();
 }
-// Ask Panel (Alpha) — a DEDICATED destination (#panelview overlay). All panel states render into
-// #panelbody (never the console `out`): landing (roster + case) → convene (auto-select + adjust) →
-// case conference. A clinician describes a case; specialists each review the evidence through their own
-// lens (lens-scoped retrieval, not general search); the chair synthesizes the pooled verified findings.
+// Ask Panel (Alpha) — a MODE of the shared shell (body[data-mode="panel"]), not a separate overlay. Panel
+// states render into #panelbody (never the console `out`): landing (shared intake + roster) → convene
+// (auto-select + adjust) → case conference. A clinician describes a case; specialists each review the
+// evidence through their own lens; the chair synthesizes the pooled verified findings.
 let PANEL_CASE = "";                       // the case under panel review
-const pbody = () => $("#panelbody");       // the dedicated surface every panel state renders into
+let APP_MODE = "qa";                        // "qa" | "panel" — which answer surface the shell shows
+let PANEL_STATE = "landing";                // "landing" | "plan" | "conference" — the panel phase
+let HEADING_QA = "What does the evidence show?";   // captured from config; restored on return to Q&A
+const pbody = () => $("#panelbody");        // the dedicated surface every panel state renders into
+function setPanelState(st){ PANEL_STATE = st; document.body.dataset.panel = st; }
 
-// Wire one mode-switch control: clicking the OTHER mode invokes its handler (same mode is a no-op — you're
-// already there). Used for both the console switch and the panel-view switch so they behave identically.
+// Wire one mode-switch control: clicking a mode invokes its handler (clicking the mode you're already in is a
+// harmless re-entry). Used for the single shared switch under the heading.
 function wireModeSwitch(el, onQa, onPanel){
   if(!el) return;
   el.querySelectorAll(".mbtn").forEach(b => b.addEventListener("click", () => {
@@ -2081,19 +2066,42 @@ function wireModeSwitch(el, onQa, onPanel){
     else if(onQa){ onQa(); }
   }));
 }
-function openPanel(prefill){
-  const v = $("#panelview"); if(!v) return;
-  v.hidden = false; document.body.style.overflow = "hidden";
-  if(location.hash !== "#panel") history.pushState(null, "", "#panel");
-  renderPanelLanding(prefill || PANEL_CASE || "");
+// Flip the shell between Quick Q&A and Specialist Panel. The header, heading, mode switch and intake box are
+// shared; only the answer surface (and Q&A-only control rows) swap. Whatever's typed in the box is preserved.
+function setMode(mode, opts){
+  opts = opts || {};
+  mode = (mode === "panel") ? "panel" : "qa";
+  APP_MODE = mode;
+  document.body.dataset.mode = mode;
+  $("#modeswitch").querySelectorAll(".mbtn").forEach(b =>
+    b.setAttribute("aria-selected", b.dataset.mode === mode ? "true" : "false"));
+  ATTN_BOX = "#attns"; renderAttachments();   // one intake box → one attachment surface
+  if(mode === "panel"){
+    document.body.classList.remove("chatting"); out.style.paddingBottom = "";
+    $("#heading").textContent = "What should the panel weigh in on?";
+    if(location.hash !== "#panel" && location.hash.indexOf("#p/") !== 0)
+      history.pushState(null, "", "#panel");
+    // resume an in-progress conference (toggling modes preserves it, like Q&A preserves its thread)
+    if(!opts.fresh && PANEL_THREAD && (PANEL_THREAD.turns||[]).length){ renderPanelConversation(); }
+    else renderPanelLanding(opts.prefill !== undefined ? opts.prefill : (PANEL_CASE || ""));
+    q.focus();
+  } else {
+    $("#heading").textContent = HEADING_QA;
+    document.body.classList.toggle("chatting", THREAD.turns.length > 0);   // re-dock composer if a thread is live
+    if(!THREAD.turns.length) q.setAttribute("placeholder", pickPlaceholder());
+    syncComposerPad();
+    if(location.hash === "#panel" || location.hash.indexOf("#p/") === 0)
+      history.replaceState(null, "", location.pathname + location.search);
+    q.focus();
+  }
 }
-function closePanel(){
-  const v = $("#panelview"); if(v) v.hidden = true;
-  ATTN_BOX = "#attns";   // hand attachment rendering back to the Q&A intake
-  if($("#sessions").hidden && $("#videos").hidden) document.body.style.overflow = "";
-  // clear the panel hash (#panel or a #p/<id> session page) so the URL matches the view we return to
-  if(location.hash === "#panel" || location.hash.indexOf("#p/") === 0)
-    history.replaceState(null, "", location.pathname + location.search);
+function openPanel(prefill){ setMode("panel", {prefill: prefill || PANEL_CASE || ""}); }
+function closePanel(){ setMode("qa"); }
+// A random sample case for the panel intake placeholder (mirrors pickPlaceholder for Q&A).
+function pickPanelCase(){
+  const ex = PANEL_EXAMPLES || [];
+  return ex.length ? ex[Math.floor(Math.random()*ex.length)]
+                   : "72-year-old with HFrEF and CKD stage 3 on metformin — how should GDMT be optimized?";
 }
 // A card for one specialist. `mode`: 'lens' shows its expertise (landing); 'why' shows the case rationale (convene).
 function specCard(s, on, mode, rationale){
@@ -2104,31 +2112,22 @@ function specCard(s, on, mode, rationale){
       <span class="pcard-b"><span class="pcard-name">${esc(s.specialty)}</span>
         <span class="pcard-lens">${esc(detail)}</span></span></label>`;
 }
-// Landing: the full roster up front (each specialist + its lens/expertise) and a
-// case box. "Convene panel" runs the LLM triage to auto-select the specialists that fit THIS case.
+// Landing: the shared intake box (up in the shell, identical to Quick Q&A) is the case box; below it, the
+// full roster (each specialist + its lens) and a Convene button. Convening runs the LLM triage. The intake
+// itself — textarea, attach, camera, paste — is the Q&A #ask form, so the two modes share one intake UI.
 function renderPanelLanding(prefill){
+  setPanelState("landing");
   const roster = PANEL_SPECIALISTS || [];
-  // A fresh random sample case seeds the placeholder each time (no clickable chips — the placeholder alone
-  // shows the intake's shape). The panel is auto-selected per case, so nothing is pre-checked.
-  const shuffled = (PANEL_EXAMPLES || []).slice().sort(()=>Math.random()-0.5);
-  const ph = shuffled.length ? shuffled[0] : "72-year-old with HFrEF and CKD stage 3 on metformin — how should GDMT be optimized?";
+  // seed the shared box: a fresh random sample case as the placeholder; the box value only if a prefill was
+  // passed (a permalink/prefill) — otherwise keep whatever the user already typed.
+  q.setAttribute("placeholder", "e.g. " + pickPanelCase());
+  if(prefill){ q.value = prefill; autoGrow(); }
   pbody().scrollTop = 0;
   pbody().innerHTML = `<div class="panellanding">
-    <div class="panellead">Convene a specialist panel</div>
-    <div class="panelsub">Describe the clinical case. A panel of AI specialists each reviews the evidence
+    <div class="panelsub">Describe the clinical case above. A panel of AI specialists each reviews the evidence
       through its own lens — dosing, evidence quality, cardiovascular, renal, and more — then the chair
       synthesizes their verified findings into a case-conference conclusion. Every statement is grounded
       in retrieved evidence.</div>
-    <div class="panelqwrap">
-      <div class="panelqlbl">The case before the panel</div>
-      <textarea class="panelq" id="panelq" rows="3" placeholder="e.g. ${esc(ph)}">${esc(prefill||"")}</textarea>
-      ${VISION_ENABLED ? `<div class="panelintake">
-        <button type="button" class="pintk" id="panel-attach" title="Attach image, PDF, or DICOM">📎 Attach</button>
-        <button type="button" class="pintk" id="panel-camera" title="Take a photo" hidden>📷 Camera</button>
-        <span class="pintk-hint">or paste an image / a long note for context</span>
-      </div>
-      <div class="attns" id="panel-attns" hidden></div>` : ""}
-    </div>
     <div class="rosterhead"><span class="rh-h">The specialists</span>
       <span class="rh-n">${roster.length} available · the panel is auto-selected per case</span></div>
     <div class="rostergrid">${roster.map(s=>specCard(s, false, "lens")).join("")}</div>
@@ -2136,38 +2135,30 @@ function renderPanelLanding(prefill){
   </div>`;
   const upd = () => pbody().querySelectorAll(".pcard").forEach(l=>l.classList.toggle("on", l.querySelector(".pchk").checked));
   pbody().querySelectorAll(".pchk").forEach(c=>c.addEventListener("change", upd));
-  // intake grows to fit the text (expandable to text size)
-  const ta = $("#panelq");
-  const grow = () => { ta.style.height="auto"; ta.style.height=Math.min(ta.scrollHeight, 320)+"px"; };
-  ta.addEventListener("input", grow);
-  if(prefill) grow();
-  // attachment/camera/paste parity with the Q&A intake (reuses the global ATTACHMENTS pipeline)
-  if(VISION_ENABLED){
-    ATTN_BOX = "#panel-attns"; renderAttachments();
-    const ab = $("#panel-attach"); if(ab) ab.addEventListener("click", ()=>$("#file").click());
-    const cb = $("#panel-camera");
-    if(cb && navigator.mediaDevices && navigator.mediaDevices.getUserMedia){ cb.hidden = false; cb.addEventListener("click", openCamera); }
-    ta.addEventListener("paste", (e)=>{
-      const files = [...(e.clipboardData?.files || [])];
-      if(files.length){ e.preventDefault(); addFiles(files); return; }   // pasted screenshot/file → attach
-      const text = (e.clipboardData?.getData("text") || "");
-      const lines = text.split(/\r?\n/).length;
-      if((text.length >= PASTE_MIN_CHARS || lines >= PASTE_MIN_LINES) && ATTACHMENTS.length < 4){
-        e.preventDefault(); addPastedText(text); grow();               // big paste → context attachment
-      }
-    });
+  $("#panelconvene").addEventListener("click", () => submitPanelIntake((q.value||"").trim()));
+}
+// The shared intake was submitted (Enter / Go / Convene) while in panel mode. On the landing this convenes a
+// fresh panel; in an open conference it asks the panel a follow-up.
+function submitPanelIntake(question){
+  if(!question){ q.focus(); const fld=document.querySelector("#ask .field");
+    if(fld){ fld.classList.add("flash"); setTimeout(()=>fld.classList.remove("flash"), 900); } return; }
+  if(PANEL_STATE === "conference"){ q.value = ""; autoGrow(); runPanelTurn(question); return; }
+  if(ATTACHMENTS.length && !($("#consent")||{}).checked){   // require the no-PII consent before sending
+    const c = $("#consent"); if(c){ c.focus(); c.parentElement.style.color = "var(--gap)"; } return;
   }
-  $("#panelconvene").addEventListener("click", ()=>{
-    const question = (ta.value||"").trim();
-    if(!question){ ta.focus(); ta.classList.add("flash"); setTimeout(()=>ta.classList.remove("flash"), 900); return; }
-    if(ATTACHMENTS.length && !($("#consent")||{}).checked){   // require the no-PII consent before sending
-      const c = $("#consent"); if(c){ c.focus(); c.parentElement.style.color = "var(--gap)"; } return;
-    }
-    PANEL_ATTACHMENTS = ATTACHMENTS.slice();   // carry the case attachments into the run (first turn)
-    // any specialists the user pre-selected on the landing seed the triage as a manual hint
-    const manual = [...pbody().querySelectorAll(".pcard")].filter(l=>l.querySelector(".pchk").checked).map(l=>l.dataset.id);
-    askPanel(question, manual);
-  });
+  PANEL_ATTACHMENTS = ATTACHMENTS.slice();   // carry the case attachments into the run (first turn)
+  // any specialists the user pre-selected on the landing seed the triage as a manual hint
+  const manual = [...pbody().querySelectorAll(".pcard")].filter(l=>l.querySelector(".pchk").checked).map(l=>l.dataset.id);
+  askPanel(question, manual);
+}
+// "＋ New case" — clear the shared intake + attachments + any prior conference, and return to a fresh landing.
+function panelNewCase(){
+  q.value = ""; autoGrow();
+  ATTACHMENTS = []; renderAttachments();
+  PANEL_CASE = ""; PANEL_ATTACHMENTS = [];
+  PANEL_THREAD = {ids: [], turns: [], session_id: null, rationales: {}};
+  renderPanelLanding("");
+  window.scrollTo({top:0}); q.focus();
 }
 // Panel sessions live in the Past Sessions "◈ Specialist Panel" tab (buildSessionTabs), not on the panel
 // home — so the landing stays a clean intake.
@@ -2189,6 +2180,7 @@ async function askPanel(question, manual){
 // The convene screen: the auto-selected panel (with case rationale) + the rest of the roster to add, each
 // showing its lens/expertise. The user restricts/expands the set, then runs the analysis.
 function renderPanelPlan(question, data, manual){
+  setPanelState("plan");
   const selIds = new Set((data.selected||[]).map(s=>s.id));
   (manual||[]).forEach(id=>selIds.add(id));   // respect any specialists the user pre-picked on the landing
   const ration = {}; (data.selected||[]).forEach(s=>ration[s.id]=s.rationale);
@@ -2277,6 +2269,7 @@ function panelTakeHtml(t){
 // Render the whole conversation: each completed turn (Q + conference), a live area for the in-flight turn,
 // and the docked follow-up composer — the same shape as the primary agent's threaded chat.
 function renderPanelConversation(){
+  setPanelState("conference");
   const turns = PANEL_THREAD.turns.map((t,i)=>{
     const takes = (t.result.takes||[]).map(panelTakeHtml).join("");
     const qlabel = i===0 ? `Case` : `Follow-up`;
@@ -2297,7 +2290,7 @@ function renderPanelConversation(){
         <button type="button" class="go pf-go" id="pfgo" aria-label="Ask the panel">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
       </div>
-      <div class="pf-actions"><button type="button" class="panelbtn" onclick="renderPanelLanding('')">＋ New case</button>
+      <div class="pf-actions"><button type="button" class="panelbtn" onclick="panelNewCase()">＋ New case</button>
         ${PANEL_THREAD.session_id ? `<button type="button" class="panelbtn danger" id="pdel">🗑 Delete discussion</button>` : ""}</div>
     </div>`;
   // render each completed turn's deliberation with the full machinery (reasoning read + evidence panel)
@@ -2347,10 +2340,11 @@ async function deletePanelSession(id){
   try{
     const r = await fetch("/sessions/"+encodeURIComponent(id), {method:"DELETE"});
     if(!r.ok) throw new Error();
-    renderPanelLanding("");   // back to the panel home (its history refreshes without this one)
+    PANEL_THREAD = {ids: [], turns: [], session_id: null, rationales: {}};
+    panelNewCase();   // back to a fresh panel landing (its history refreshes without this one)
   }catch(e){ alert("Couldn't delete that discussion."); }
 }
-// Open a saved PANEL session (from a shared #s/<id> link or Past Sessions) into the dedicated panel view.
+// Open a saved PANEL session (from a shared #s/<id> link or Past Sessions) into the panel mode (conference).
 function openPanelSession(row){
   const thread = (row.thread || []).filter(t=>t);
   // rebuild each saved turn back into {question, result}; ids derive from the last turn's specialists
@@ -2362,10 +2356,14 @@ function openPanelSession(row){
   const lastTakes = turns.length ? (turns[turns.length-1].result.takes||[]) : [];
   const rationales = {}; lastTakes.forEach(t=>{ if(t.rationale) rationales[t.id]=t.rationale; });
   PANEL_THREAD = {ids: lastTakes.map(t=>t.id), turns, session_id: row.id, rationales};
-  // the panel is its OWN page — clear any Q&A view underneath so closing it never reveals stale content
+  // enter panel mode in the shared shell (same header/heading/switch); render straight into the conference.
   try{ out.innerHTML = ""; document.body.classList.remove("chatting"); }catch(e){}
-  const v = $("#panelview"); if(v){ v.hidden = false; document.body.style.overflow = "hidden"; }
+  APP_MODE = "panel"; document.body.dataset.mode = "panel";
+  $("#modeswitch").querySelectorAll(".mbtn").forEach(b =>
+    b.setAttribute("aria-selected", b.dataset.mode === "panel" ? "true" : "false"));
+  $("#heading").textContent = "What should the panel weigh in on?";
   renderPanelConversation();
+  window.scrollTo({top:0});
 }
 // a saved session is a PANEL session when its first turn is tagged kind:"panel"
 function isPanelRow(row){ const th = row && row.thread; return !!(th && th[0] && th[0].kind === "panel"); }
@@ -2506,7 +2504,7 @@ async function runPanelTurn(question){
       const msg = ctrl.signal.aborted ? "The panel timed out." : esc(String(e.message||e));
       live.innerHTML = `<div class="panelstatus">The panel couldn't complete. ${msg}
         <div style="margin-top:1rem"><button type="button" class="panelbtn" onclick="runPanelTurn(${JSON.stringify(question)})">↻ Retry</button>
-          <button type="button" class="panelbtn" onclick="renderPanelLanding('')" style="margin-left:.5rem;">＋ New case</button></div></div>`;
+          <button type="button" class="panelbtn" onclick="panelNewCase()" style="margin-left:.5rem;">＋ New case</button></div></div>`;
     }
   }finally{ clearTimeout(timer); }
 }
@@ -2631,8 +2629,10 @@ function newConversation(){
   THREAD = {session_id:null, turns:[]};
   document.body.classList.remove("chatting"); out.style.paddingBottom = "";   // back to landing layout
   out.innerHTML = "";
+  q.value=""; q.style.height="auto";
+  if(APP_MODE === "panel"){ closePanel(); return; }   // New chat from panel → back to Q&A landing
   try{ history.replaceState(null, "", location.pathname + location.search); }catch(e){}
-  q.value=""; q.style.height="auto"; q.setAttribute("placeholder", pickPlaceholder());  // fresh question each New chat
+  q.setAttribute("placeholder", pickPlaceholder());  // fresh question each New chat
   window.scrollTo({top:0}); q.focus();
 }
 function renderThread(){
@@ -2963,8 +2963,7 @@ $("#vidbtn").addEventListener("click", openVideos);
 $("#vback").addEventListener("click", closeVideos);
 $("#vlclose").addEventListener("click", closeLight);
 $("#vlight").addEventListener("click", e=>{ if(e.target === vlight) closeLight(); });
-$("#pback").addEventListener("click", closePanel);
-document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ if(!vlight.hidden) closeLight(); else if(!videosEl.hidden) closeVideos(); else if(!$("#panelview").hidden) closePanel(); } });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ if(!vlight.hidden) closeLight(); else if(!videosEl.hidden) closeVideos(); else if(APP_MODE === "panel" && PANEL_STATE === "landing") closePanel(); } });
 async function deleteSession(id, rowEl){
   if(!confirm("Delete this session? It will be removed from your history.")) return;
   try{
@@ -3030,7 +3029,10 @@ window.addEventListener("hashchange", ()=>{
   const mp = location.hash.match(/^#p\/(.+)$/);
   if(mp){ loadPanelSession(decodeURIComponent(mp[1])); return; }
   const m = location.hash.match(/^#s\/(.+)$/);
-  if(m) loadSharedSession(decodeURIComponent(m[1]));
+  if(m){ loadSharedSession(decodeURIComponent(m[1])); return; }
+  if(location.hash === "#panel"){ if(APP_MODE !== "panel") openPanel(""); return; }
+  // navigated away from a panel hash (e.g. browser Back) → return to Quick Q&A
+  if(APP_MODE === "panel") closePanel();
 });
 </script>
 </body>

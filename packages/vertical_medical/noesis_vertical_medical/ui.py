@@ -29,6 +29,24 @@ class MedicalUI:
         return {
             "heading": "What does the evidence show?",
             "placeholder": "Ask a clinical research question…",
+            # Domain-owned responsibility disclaimers (rendered by the shell): a first-use attestation
+            # gate, a persistent footer line, and a short footnote under every answer. Keeps Noesis clearly
+            # an informational research tool for clinicians — responsibility for any clinical use is the
+            # user's. (Standard for this category; not a substitute for your own legal review.)
+            "disclaimer": {
+                "gate": ("Noesis is a clinical research tool intended for use by healthcare professionals. "
+                         "It finds and summarizes published evidence for informational purposes only — it is "
+                         "not medical advice, not a diagnosis or treatment recommendation, and not a substitute "
+                         "for independent professional judgment or the standard of care. Answers are "
+                         "AI-generated and may be incomplete, out of date, or wrong; always verify against the "
+                         "cited primary sources before any clinical decision. By continuing you confirm you "
+                         "understand this and accept sole responsibility for how you use the information."),
+                "footer": ("For informational purposes only — not medical advice. Noesis is intended for "
+                           "healthcare professionals. Verify every answer against the cited primary sources "
+                           "and apply independent clinical judgment before acting."),
+                "answer": ("AI-generated summary of published evidence — informational only, not medical advice. "
+                           "Verify against the cited sources and apply independent clinical judgment before acting."),
+            },
             # A picker of real, current questions the corpus can answer — the web shell shows a
             # random one as the intake prompt each load (kept here so wording stays domain-owned).
             "examples": [

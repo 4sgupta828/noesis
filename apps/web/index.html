@@ -206,6 +206,15 @@
     font-weight:600;padding:.7rem;cursor:pointer;margin-top:.35rem;}
   .idcard .idgo:hover{background:var(--gold-strong);}
   .idcard .iderr{color:var(--gap);font-size:.75rem;min-height:1rem;margin-top:.35rem;text-align:center;}
+  .idcard .iddisc{font-size:.72rem;line-height:1.5;color:var(--muted);text-align:left;background:var(--panel2);
+    border:1px solid var(--hair);border-radius:10px;padding:.7rem .8rem;margin:.2rem 0 1rem;max-height:8.5rem;overflow-y:auto;}
+  /* persistent responsibility disclaimer at the foot of the shell */
+  .pagefoot{margin-top:2.5rem;padding-top:1rem;border-top:1px solid var(--hair);
+    font-size:.72rem;line-height:1.55;color:var(--muted);text-align:center;}
+  /* per-answer footnote — small, muted, sits under each answer */
+  .ansdisc{margin-top:1rem;font-size:.7rem;line-height:1.5;color:var(--muted);opacity:.85;
+    border-top:1px dashed var(--hair);padding-top:.6rem;}
+  .ansdisc::before{content:"⚠ ";opacity:.7;}
 
   /* camera capture modal */
   .cammodal[hidden]{display:none;}
@@ -955,6 +964,7 @@
   <!-- Specialist Panel body — lives in the SAME shell as Q&A (shared header + heading + mode switch +
        intake box). Mode is driven by body[data-mode]; the panel phase by body[data-panel]. -->
   <section class="panelbody" id="panelbody" hidden aria-label="Specialist panel"></section>
+  <footer class="pagefoot" id="pagefoot" hidden></footer>
 </div>
 
 <!-- Past Sessions: full-page master/detail (questions left, answer right) -->
@@ -1003,7 +1013,8 @@
     <input id="idname" type="text" placeholder="Full name" autocomplete="name" />
     <input id="idemail" type="email" placeholder="Email" autocomplete="email" />
     <div class="iderr" id="iderr"></div>
-    <button type="button" class="idgo" id="idgo">Continue</button>
+    <div class="iddisc" id="iddisc" hidden></div>
+    <button type="button" class="idgo" id="idgo">I understand — continue</button>
   </div>
 </div>
 
@@ -1043,6 +1054,7 @@ let PANEL_SPECIALISTS = [];      // roster from /config [{id, specialty, default
 let PANEL_EXAMPLES = [];         // sample multi-specialty cases seeded into the panel intake
 let THREAD = {session_id:null, turns:[]};   // the active conversation
 let BASE_PLACEHOLDER = "";                   // vertical console placeholder (restored on New)
+let DISCLAIMER = {};                          // {gate, footer, answer} responsibility copy from config
 let EXAMPLES = [];                            // vertical example questions → random intake prompt
 let ATTACHMENTS = [];       // [{name, media_type, data(base64)}]
 let USER = null;            // {name, email} captured at landing, saved per session
@@ -1108,6 +1120,10 @@ async function loadConfig(){
     EXAMPLES = Array.isArray(con.examples) ? con.examples : [];
     BASE_PLACEHOLDER = con.placeholder || "Ask a research question…";
     q.setAttribute("placeholder", pickPlaceholder());
+    // Responsibility disclaimers (domain-owned copy): a first-use attestation gate, a persistent footer,
+    // and a per-answer footnote. All optional — absent copy → nothing renders.
+    DISCLAIMER = con.disclaimer || {};
+    applyDisclaimers();
     const box = $("#sources");
     for(const k of SOURCES){
       const b = document.createElement("button");
@@ -1154,6 +1170,16 @@ function setAudience(a){
     : "Clinician brief — structured, cited, for a medical audience.";
 }
 const audienceName = a => (a === "patient" ? "Patient" : "Clinician");
+
+// Render the responsibility disclaimers wherever their config copy exists (gate attestation + page footer).
+// The per-answer footnote is added inside render(). Absent copy → the element stays hidden (no-op).
+function applyDisclaimers(){
+  const d = DISCLAIMER || {};
+  const gate = $("#iddisc");
+  if(gate){ gate.textContent = d.gate || ""; gate.hidden = !d.gate; }
+  const foot = $("#pagefoot");
+  if(foot){ foot.textContent = d.footer || ""; foot.hidden = !d.footer; }
+}
 
 function esc(s){const d=document.createElement("div");d.textContent=s??"";return d.innerHTML;}
 
@@ -1481,6 +1507,8 @@ function render(data, target, opts){
   // CONVERSATION-LEVEL box: briefing video + explain-in-plain-language. In a thread it renders ONCE at
   // the bottom (renderThread passes noConvo per turn); in single-answer mode it renders here.
   if(!opts.noConvo) parts.push(convoActionsMarkup(data));
+  // per-answer responsibility footnote — only under a real answer (skips pending/clarification turns)
+  if(data.answer && DISCLAIMER.answer) parts.push(`<div class="ansdisc">${esc(DISCLAIMER.answer)}</div>`);
   target.innerHTML = parts.join("");
   // clicking a [n] reference scrolls to and highlights its finding (within this pane)
   target.querySelectorAll(".ref").forEach(r=>r.addEventListener("click",()=>{
@@ -3007,13 +3035,19 @@ document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !sessionsEl.hid
 // ---- identity gate (name + email captured at landing, stored per session) ----
 function initIdentity(){
   try{ USER = JSON.parse(localStorage.getItem("noesis_user")||"null"); }catch(e){ USER = null; }
-  if(!USER || !USER.email){ $("#idmodal").hidden = false; setTimeout(()=>$("#idname").focus(), 60); }
+  // Show the gate for new users AND for returning users who predate the disclaimer (never attested).
+  if(!USER || !USER.email || !USER.disclaimer_ack){
+    if(USER){ if(USER.name) $("#idname").value = USER.name; if(USER.email) $("#idemail").value = USER.email; }
+    $("#idmodal").hidden = false; setTimeout(()=>$("#idname").focus(), 60);
+  }
 }
 $("#idgo").addEventListener("click", ()=>{
   const name = $("#idname").value.trim(), email = $("#idemail").value.trim();
   if(name.length < 2){ $("#iderr").textContent = "Please enter your name."; return; }
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ $("#iderr").textContent = "Please enter a valid email."; return; }
-  USER = {name, email}; localStorage.setItem("noesis_user", JSON.stringify(USER));
+  // clicking "I understand — continue" is the attestation: record acceptance of the disclaimer terms
+  USER = {name, email, disclaimer_ack: true, disclaimer_ack_at: new Date().toISOString()};
+  localStorage.setItem("noesis_user", JSON.stringify(USER));
   $("#idmodal").hidden = true;
 });
 $("#idmodal").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#idgo").click(); });

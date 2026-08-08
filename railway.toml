@@ -8,3 +8,7 @@ healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
+# 2 replicas for concurrent-request headroom (single worker/event-loop per replica; long research
+# requests no longer starve each other). Safe: the corpus gap-processor claims jobs atomically, so the
+# replicas SHARE the drain (no duplicate ingestion); sessions/corpus are DB-backed and shared.
+numReplicas = 2

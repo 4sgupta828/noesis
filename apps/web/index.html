@@ -2255,17 +2255,17 @@ function renderTriageReady(d){
     ? `<div class="tgt-urgent">${esc(d.message || "This may need urgent in-person evaluation — please use emergency/local care pathways.")}</div>` : "";
   const panelBtn = ASK_PANEL_ENABLED ? `<button type="button" class="tgt-route ${rec==='panel'?'rec':''}" data-route="panel">
       <div class="tgt-route-t">◈ Specialist Panel ${rec==='panel'?'<span class="rec-badge">Recommended</span>':''}</div>
-      <div class="tgt-route-why">Several specialists each review the evidence through their own lens; a chair synthesizes.</div></button>` : "";
+      <div class="tgt-route-why">Take it to the panel — pick the specialists, then convene.</div></button>` : "";
   tbody().innerHTML = `<div class="tgt-thread">${TRIAGE.transcript.map(triageMsgHtml).join("")}</div>
     ${urgent}
     <div class="tgt-ready">
-      <div class="tgt-ready-h">Here's the question I'll run</div>
+      <div class="tgt-ready-h">Here's your refined question — where should it go?</div>
       ${d.understood_problem ? `<div class="tgt-understood">${esc(d.understood_problem)}</div>` : ""}
       <div class="tgt-refined">${esc(refined)}</div>
       <div class="tgt-routes">
         <button type="button" class="tgt-route ${rec==='qa'?'rec':''}" data-route="qa">
           <div class="tgt-route-t">⚡ Quick Q&amp;A ${rec==='qa'?'<span class="rec-badge">Recommended</span>':''}</div>
-          <div class="tgt-route-why">One grounded, cited answer — fast.</div></button>
+          <div class="tgt-route-why">Take it to Quick Q&amp;A — set effort, then ask.</div></button>
         ${panelBtn}
       </div>
       <button type="button" class="tgt-restart" id="tgt-restart">↺ Start over</button>
@@ -2275,16 +2275,15 @@ function renderTriageReady(d){
   const rs = $("#tgt-restart"); if(rs) rs.addEventListener("click", () => setMode("triage", {fresh:true}));
   triageScroll();
 }
-// Hand the refined question to the chosen answer mode. Attachments added during triage live in the shared
-// ATTACHMENTS pipeline and carry through untouched.
+// TAKE the user to the chosen mode with the refined question pre-filled — but DON'T auto-run, so they can
+// still set effort / answer format (Q&A) or pick specialists (Panel) before asking. Attachments added
+// during triage live in the shared ATTACHMENTS pipeline and carry through untouched.
 function routeTriage(route, refined){
-  q.value = refined; autoGrow();
   if(route === "panel" && ASK_PANEL_ENABLED){
-    setMode("panel", {fresh:true, prefill: refined});
-    submitPanelIntake(refined);
+    setMode("panel", {fresh:true, prefill: refined});   // panel landing: question filled, roster to adjust, Convene when ready
   } else {
-    setMode("qa");
-    askQuestion(refined, {skipRefine:true});
+    setMode("qa");                                       // Q&A intake: effort/format available, ask when ready
+    q.value = refined; autoGrow(); q.focus();
   }
 }
 // A random sample case for the panel intake placeholder (mirrors pickPlaceholder for Q&A).

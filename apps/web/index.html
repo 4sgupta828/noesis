@@ -1090,6 +1090,7 @@ let AUDIENCE = "clinician"; // current answer audience; only sent when "patient"
 let SESS_AUDIENCE = "clinician"; // active Past-Sessions audience tab (clinician | patient)
 let SESS_TAB = null;             // active Past-Sessions tab {key, aud, kind, label} (see buildSessionTabs)
 let REFINE_ENABLED = false;     // pre-answer question refinement (offer sharper versions to pick)
+let GUIDED_REFINED = false;     // one-shot: the Q&A box was filled from Guided → skip refine on next ask
 let REASONING_ENABLED = false;  // reasoning-read interpretation + confidence layer (server-validated)
 let ASK_PANEL_ENABLED = false;  // AI specialist panel (Alpha)
 let TRIAGE_ENABLED = false;     // guided-intake / triage mode (clarify → route)
@@ -2036,7 +2037,7 @@ $("#ask").addEventListener("submit", e=>{
   if(APP_MODE === "triage"){ submitTriage(question); return; }        // guided intake → next clarifying turn
   if(APP_MODE === "panel"){ submitPanelIntake(question); return; }   // panel mode → convene / follow-up
   if(CURRENT_ABORT) return;               // a question is in flight — Enter/submit is a no-op (use Stop)
-  if(question) askQuestion(question);
+  if(question){ askQuestion(question, {skipRefine: GUIDED_REFINED}); GUIDED_REFINED = false; }   // skip refine if it came via Guided
 });
 // While a question runs, the round Go button becomes a STOP button — click it to cancel.
 go.addEventListener("click", e=>{
@@ -2139,6 +2140,7 @@ function setMode(mode, opts){
   opts = opts || {};
   mode = (mode === "panel" || mode === "triage") ? mode : "qa";
   APP_MODE = mode;
+  GUIDED_REFINED = false;   // any mode change clears the stale "skip refine" flag (routeTriage re-sets it)
   document.body.dataset.mode = mode;
   if(mode !== "triage") document.body.classList.remove("triage-live");   // undock when leaving guided mode
   $("#modeswitch").querySelectorAll(".mbtn").forEach(b =>
@@ -2284,6 +2286,7 @@ function routeTriage(route, refined){
   } else {
     setMode("qa");                                       // Q&A intake: effort/format available, ask when ready
     q.value = refined; autoGrow(); q.focus();
+    GUIDED_REFINED = true;   // already sharpened by guided intake → don't offer "pick a sharper question"
   }
 }
 // A random sample case for the panel intake placeholder (mirrors pickPlaceholder for Q&A).
@@ -2816,6 +2819,7 @@ function threadHistoryPayload(){ return THREAD.turns.map(t=>({question:t.questio
   claims:(t.claims||[]).slice(0,8).map(c=>({text:c.text}))})); }
 function newConversation(){
   THREAD = {session_id:null, turns:[]};
+  GUIDED_REFINED = false;
   document.body.classList.remove("chatting"); out.style.paddingBottom = "";   // back to landing layout
   out.innerHTML = "";
   q.value=""; q.style.height="auto";

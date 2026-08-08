@@ -302,6 +302,8 @@ def _refs_valid(text: str, n_findings: int) -> bool:
 _EVIDENCE_FITNESS_WEIGHT = 0.15
 _EVIDENCE_MAX_RANK = 6
 _COUNTRY_BOOST_WEIGHT = 0.12   # bounded, comparable to the tier boost; boost-only, never demotes
+_LOW_YIELD_ATOMS = 2           # a search adding fewer than this many NEW atoms counts as diminishing-returns
+#                               (two in a row → force an answer; catches the steady +1 grind, not just zero)
 
 
 async def _rank_claims_by_relevance(question, claims, embedder, top, *,
@@ -535,6 +537,9 @@ async def run_react(
             else:
                 result.rejected_claims.append(RejectedClaim(c.text, c.atom_id, c.quote, "quote_not_grounded"))
 
+    searched_queries: list[str] = []   # every query/reformulation issued — shown to the planner so it
+    #                                    doesn't re-search the same ground (the repeated-search fix)
+
     async def _ask(mode: str = "step") -> AgentStep:
         # Show the planner only the most-recent window of atoms (the store keeps ALL for grounding /
         # verification) — keeps late-step prompts from snowballing. Claims can cite only shown atoms.
@@ -561,8 +566,11 @@ async def run_react(
             instr = ("You have reached the evidence-gathering limit. You MUST now "
                      "action='answer'. Do NOT search.")
         else:
-            instr = ("Either action='search' with a query (and optional reformulations in "
-                     "'queries') to gather more, or action='answer' with claims.")
+            instr = ("Either action='search' with a FOCUSED `query` for THIS step (plus optional "
+                     "reformulations in 'queries') to gather NEW evidence, or action='answer' with claims. "
+                     "If the queries already tried (below) are not turning up new relevant evidence, do "
+                     "NOT keep repeating them — either search a genuinely DIFFERENT angle/subtopic, or "
+                     "answer with what you have.")
         # Shared answering discipline: report what the evidence DIRECTLY supports (partial is
         # fine — the synthesis notes what isn't), and copy quotes VERBATIM so the span-check
         # passes. This is the fix for advice/ranking questions where the model would otherwise
@@ -584,8 +592,13 @@ async def run_react(
         # turn — required by chat LLMs — and keeps the agent stateless per step.
         # img_ctx (if any) frames the search but is never merged into `question` (so it
         # stays out of the compose step and can't read as a grounded finding).
+        # QUERIES ALREADY TRIED — so the planner searches new ground instead of re-issuing near-identical
+        # queries (the repeated-search / diminishing-returns fix). Deduped + capped to keep the prompt bounded.
+        tried = list(dict.fromkeys(searched_queries))[-16:]
+        tried_ctx = ("QUERIES ALREADY TRIED (do NOT repeat these — search a DIFFERENT angle or answer):\n"
+                     + "\n".join(f"- {t}" for t in tried) + "\n\n") if tried else ""
         user = (conv_ctx + img_ctx + f"Question: {question}\n\nEVIDENCE GATHERED SO FAR:\n{obs}\n\n"
-                + ("NOTES:\n" + "\n".join(notes) + "\n\n" if notes else "") + instr)
+                + tried_ctx + ("NOTES:\n" + "\n".join(notes) + "\n\n" if notes else "") + instr)
         # NOTE: temperature is intentionally NOT set — the current model rejects it
         # ("deprecated for this model"). Variance is countered by the answering
         # discipline above + the extract recovery re-ask, not by sampling controls.
@@ -642,7 +655,12 @@ async def run_react(
 
         if step.action == "search":
             q = step.query or question
-            await emit({"type": "search", "query": q, "variants": list(step.queries or [])})
+            searched_queries.append(q)                 # (A) remember what we searched, for the next planner step
+            searched_queries.extend(step.queries or [])
+            # (C) show the planner's focused query for THIS step; fall back to a reformulation (which varies)
+            # rather than always echoing the original question, so the trace isn't misleadingly "duplicated".
+            display_q = step.query or (step.queries[0] if step.queries else question)
+            await emit({"type": "search", "query": display_q, "variants": list(step.queries or [])})
             qvec = await asyncio.to_thread(lambda: list(embedder.embed([q])[0]))  # off the loop
             base_req = RetrievalRequest(
                 query=q, tenant_id=tenant_id, workspace_id=workspace_id,
@@ -664,7 +682,9 @@ async def run_react(
             before = len(atoms.all())
             atoms.add_hits(hits)
             added = len(atoms.all()) - before
-            stale_searches = stale_searches + 1 if added == 0 else 0
+            # (B) count diminishing-returns searches: fewer than _LOW_YIELD_ATOMS NEW atoms is "stale"
+            # (not just exactly zero), so a steady +1 grind trips the force-answer after two in a row.
+            stale_searches = stale_searches + 1 if added < _LOW_YIELD_ATOMS else 0
             srcs = sorted({(h.source_key or "corpus") for h in hits})
             await emit({"type": "found", "added": added, "total": len(atoms.all()), "sources": srcs})
             if diag is not None:

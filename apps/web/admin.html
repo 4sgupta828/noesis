@@ -4,18 +4,33 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Noesis — Corpus Coverage</title>
+<script>/* apply the app's saved theme before paint (no flash) — Coverage follows the main app's light/dark choice */
+try{var t=localStorage.getItem("noesis-theme"); if(t==="dark"||t==="light") document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 <style>
+  /* DEFAULT = CLINICAL LIGHT — mirrors the main app; dark is opt-in and follows the app's theme choice
+     (shared localStorage key "noesis-theme") or the OS preference when no explicit choice was made. */
   :root{
-    --bg:#060E1B; --panel:#0F1A2C; --panel2:#0C1524; --ink:#ECEBE3; --muted:#8B96A9;
-    --gold:#D3B37C; --verified:#57B891; --gap:#D6975A; --hair:#22304A;
+    color-scheme:light;
+    --bg:#EEF3F8; --panel:#FFFFFF; --panel2:#F4F8FC; --ink:#132430; --muted:#5A6B7B;
+    --gold:#1568B5; --gold-rgb:21,104,181; --verified:#137A54; --gap:#B26A1E; --hair:#D2DEEA;
     --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
     --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
     --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
   }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --bg:#060E1B; --panel:#0F1A2C; --panel2:#0C1524; --ink:#ECEBE3; --muted:#8B96A9;
+    --gold:#D3B37C; --gold-rgb:211,179,124; --verified:#57B891; --gap:#D6975A; --hair:#22304A;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#060E1B; --panel:#0F1A2C; --panel2:#0C1524; --ink:#ECEBE3; --muted:#8B96A9;
+    --gold:#D3B37C; --gold-rgb:211,179,124; --verified:#57B891; --gap:#D6975A; --hair:#22304A;
+  }}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;
     font-size:15px;-webkit-font-smoothing:antialiased;
-    background-image:radial-gradient(120% 60% at 85% -10%, rgba(211,179,124,.06), transparent 60%);}
+    background-image:radial-gradient(120% 60% at 85% -10%, rgba(var(--gold-rgb),.06), transparent 60%);}
   .wrap{max-width:56rem;margin:0 auto;padding:1.5rem 1.15rem 5rem;}
   header{display:flex;align-items:center;gap:.8rem;padding:.1rem 0 1.2rem;border-bottom:1px solid var(--hair);margin-bottom:1.6rem;flex-wrap:wrap;}
   .logo{height:52px;width:auto;}

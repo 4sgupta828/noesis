@@ -90,15 +90,14 @@
      works on a hard question. Distinct from the source pills so it's never read as a source key. */
   .effort{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:.55rem 0 0;}
   .effort .lbl{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
-  .effort .track{flex:1;min-width:150px;max-width:280px;display:flex;align-items:center;}
-  .effort input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;border-radius:3px;
-    background:var(--hair);outline:none;cursor:pointer;}
-  .effort input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:15px;height:15px;
-    border-radius:50%;background:var(--gold);border:2px solid var(--bg);box-shadow:0 0 0 1px var(--gold);transition:.12s;}
-  .effort input[type=range]::-moz-range-thumb{width:15px;height:15px;border:2px solid var(--bg);border-radius:50%;
-    background:var(--gold);box-shadow:0 0 0 1px var(--gold);cursor:pointer;}
-  .effort input[type=range]:focus-visible{outline:2px solid var(--gold);outline-offset:4px;border-radius:3px;}
-  .effort .eval{font-family:var(--mono);font-size:.72rem;color:var(--gold);white-space:nowrap;min-width:8.5rem;}
+  .effort .estep{display:inline-flex;align-items:center;gap:.55rem;}
+  .effort .ebtn{width:1.6rem;height:1.6rem;border-radius:50%;border:1px solid var(--hair);background:var(--panel2);
+    color:var(--ink);font-size:1rem;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+    padding:0;transition:border-color .12s,color .12s;}
+  .effort .ebtn:hover:not(:disabled){border-color:var(--gold);color:var(--gold);}
+  .effort .ebtn:disabled{opacity:.4;cursor:default;}
+  .effort .ebtn:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+  .effort .eval{font-family:var(--mono);font-size:.72rem;color:var(--gold);white-space:nowrap;min-width:8.5rem;text-align:center;}
   .effort .ehint{flex-basis:100%;font-family:var(--mono);font-size:.63rem;color:var(--muted);opacity:.85;}
   .effort[data-tier="1"] .eval{color:var(--muted);}
   /* effort on a saved turn: a small gold badge + a retry-deeper affordance */
@@ -429,7 +428,6 @@
   #panelbody{display:none;padding:.4rem 0 3rem;}
   body[data-mode="panel"] #panelbody{display:block;}
   body[data-mode="panel"] #out,
-  body[data-mode="panel"] #sources,
   body[data-mode="panel"] #effort,
   body[data-mode="panel"] #audsel{display:none !important;}
   body[data-mode="panel"][data-panel="plan"] #ask,
@@ -439,7 +437,6 @@
   #triagebody{display:none;padding:.4rem 0 3rem;max-width:44rem;margin:0 auto;}
   body[data-mode="triage"] #triagebody{display:block;}
   body[data-mode="triage"] #out,
-  body[data-mode="triage"] #sources,
   body[data-mode="triage"] #effort,
   body[data-mode="triage"] #audsel{display:none !important;}
   .tgt-thread{display:flex;flex-direction:column;gap:.7rem;margin-bottom:.4rem;}
@@ -667,6 +664,10 @@
     padding:.7rem 1.15rem calc(.7rem + env(safe-area-inset-bottom,0px));}
   body.chatting #out{padding-bottom:9rem;}   /* JS keeps this in sync with the composer's real height */
   body.triage-live #triagebody{padding-bottom:9rem;}
+  /* the disclaimer footer is a landing element — hide it whenever the composer is docked (Q&A thread or
+     Guided chat), else it renders mid-screen above the fixed composer. Per-answer footnotes still show. */
+  body.chatting #pagefoot,
+  body.triage-live #pagefoot{display:none;}
   /* suggested follow-ups */
   .suggest{margin:.6rem 0 .4rem;padding:1rem 1.15rem;border:1px solid var(--hair);border-radius:14px;background:var(--panel2);}
   .suggest-h{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:.7rem;}
@@ -970,12 +971,13 @@
     </div>
     <input type="file" id="file" accept="image/*,.pdf,application/pdf,.dcm,application/dicom" multiple hidden />
     <div class="attns" id="attns" hidden></div>
-    <div class="sources" id="sources"><span class="lbl">Sources</span></div>
     <div class="effort" id="effort" data-tier="1" hidden>
       <span class="lbl">Effort</span>
-      <span class="track"><input type="range" id="effort-range" min="1" max="2.5" step="0.25" value="1"
-             aria-label="Research effort — higher digs deeper but uses more credits and time"></span>
-      <span class="eval" id="effort-val">Standard · 1×</span>
+      <span class="estep">
+        <button type="button" class="ebtn" id="effort-dec" aria-label="Less effort">−</button>
+        <span class="eval" id="effort-val">Standard · 1×</span>
+        <button type="button" class="ebtn" id="effort-inc" aria-label="More effort">+</button>
+      </span>
       <span class="ehint" id="effort-hint">Standard depth. Raise it for a hard question — uses more credits and time.</span>
     </div>
     <div class="audsel" id="audsel" role="group" aria-label="Answer format" hidden>
@@ -1138,9 +1140,9 @@ async function loadConfig(){
     }
     VISION_ENABLED = !!c.vision_enabled;
     if(EFFORT_ENABLED){
-      const wrap = $("#effort"), rng = $("#effort-range");
-      wrap.hidden = false;
-      rng.addEventListener("input", () => setEffort(parseFloat(rng.value)));
+      $("#effort").hidden = false;
+      $("#effort-dec").addEventListener("click", () => setEffort(EFFORT - 0.25));
+      $("#effort-inc").addEventListener("click", () => setEffort(EFFORT + 0.25));
       setEffort(1);
     }
     if(PATIENT_MODE_ENABLED){
@@ -1168,21 +1170,11 @@ async function loadConfig(){
     // and a per-answer footnote. All optional — absent copy → nothing renders.
     DISCLAIMER = con.disclaimer || {};
     applyDisclaimers();
-    const box = $("#sources");
-    for(const k of SOURCES){
-      const b = document.createElement("button");
-      b.type="button"; b.className="pill"; b.dataset.key=k;
-      // All sources on by default. Web = Exa restricted to trusted medical domains, queried ONCE
-      // per step (in parallel with the corpus), so it adds breadth when the corpus is thin without
-      // multiplying latency. Toggle off for the fastest pure-corpus answers.
-      b.setAttribute("aria-pressed","true"); b.textContent = label(k);
-      b.onclick = () => b.setAttribute("aria-pressed", b.getAttribute("aria-pressed")==="true"?"false":"true");
-      box.appendChild(b);
-    }
   }catch(e){ /* config unavailable — shell still works */ }
 }
 
-const chosen = () => [...document.querySelectorAll('.pill[aria-pressed="true"]')].map(b=>b.dataset.key);
+// All sources are always on (corpus + trusted web). No toggle UI — every question queries every source.
+const chosen = () => (SOURCES || []).slice();
 
 // Effort tiers: 1× Standard · 1.25–1.75 Deeper · 2–2.5 Deepest. Names read differently from a raw
 // multiplier and keep the cost tradeoff legible. Returns {tier, name}.
@@ -1192,10 +1184,11 @@ function effortTier(v){
   return {tier:3, name:"Deepest"};
 }
 function setEffort(v){
-  EFFORT = Math.min(2.5, Math.max(1, Math.round(v*4)/4));   // snap to 0.25
+  EFFORT = Math.min(2.5, Math.max(1, Math.round(v*4)/4));   // snap to 0.25, clamp 1–2.5
   const {tier, name} = effortTier(EFFORT);
   const wrap = $("#effort"); if(wrap) wrap.dataset.tier = tier;
-  const rng = $("#effort-range"); if(rng && parseFloat(rng.value)!==EFFORT) rng.value = EFFORT;
+  const dec = $("#effort-dec"); if(dec) dec.disabled = EFFORT <= 1;      // stepper bounds
+  const inc = $("#effort-inc"); if(inc) inc.disabled = EFFORT >= 2.5;
   const val = $("#effort-val"); if(val) val.textContent = `${name} · ${EFFORT}×`;
   const hint = $("#effort-hint");
   if(hint) hint.textContent = EFFORT<=1
@@ -2197,7 +2190,13 @@ function renderTriage(fresh){
      the answer high-quality — then point you to a quick answer or a full specialist panel. I don't diagnose
      or advise; I just help you ask the sharpest question.</div>`;
   tbody().innerHTML = lead + `<div class="tgt-thread" id="tgt-thread">${TRIAGE.transcript.map(triageMsgHtml).join("")}</div>`;
-  window.scrollTo({top: document.body.scrollHeight});
+  triageScroll();
+}
+// Scroll to the newest message when a conversation is active; on the empty landing scroll to the TOP (the
+// intake box) — never to the bottom (that jumped past the intake to the footer, esp. on mobile).
+function triageScroll(){
+  if(TRIAGE.transcript.length) window.scrollTo({top: document.body.scrollHeight, behavior:"smooth"});
+  else window.scrollTo({top: 0});
 }
 async function submitTriage(text){
   if(TRIAGE.busy) return;
@@ -2207,7 +2206,7 @@ async function submitTriage(text){
   renderTriage(false);
   const thread = $("#tgt-thread");
   const think = document.createElement("div"); think.className = "tgt-msg bot thinking"; think.textContent = "thinking…";
-  thread.appendChild(think); window.scrollTo({top: document.body.scrollHeight});
+  thread.appendChild(think); triageScroll();
   TRIAGE.busy = true;
   try{
     const r = await fetch("/triage/step", {method:"POST", headers:{"content-type":"application/json"},
@@ -2243,7 +2242,7 @@ function triageError(msg){
       <div class="tgt-route-why">Search the evidence for what you typed.</div></button></div>`;
   const btn = tbody().querySelector(".tgt-route");
   if(btn) btn.addEventListener("click", () => routeTriage("qa", (last && last.text) || ""));
-  window.scrollTo({top: document.body.scrollHeight});
+  triageScroll();
 }
 // The "ready" hand-off card: the understood problem + the refined question + route buttons (recommended
 // one highlighted). Clicking a route sets the refined question into the shared box and runs that mode.
@@ -2274,7 +2273,7 @@ function renderTriageReady(d){
   q.setAttribute("placeholder", "Add a detail to refine further…");
   tbody().querySelectorAll(".tgt-route").forEach(b => b.addEventListener("click", () => routeTriage(b.dataset.route, refined)));
   const rs = $("#tgt-restart"); if(rs) rs.addEventListener("click", () => setMode("triage", {fresh:true}));
-  window.scrollTo({top: document.body.scrollHeight});
+  triageScroll();
 }
 // Hand the refined question to the chosen answer mode. Attachments added during triage live in the shared
 // ATTACHMENTS pipeline and carry through untouched.

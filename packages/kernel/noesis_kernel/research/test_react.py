@@ -534,3 +534,23 @@ def test_strip_control_tags_removes_leaked_serialization():
     # a legitimate less-than is NOT a control tag
     assert s("Give if CrCl < 30 mL/min [1].") == "Give if CrCl < 30 mL/min [1]."
     assert s("") == ""
+
+
+def test_country_boost_surfaces_region_evidence():
+    """A country_boost lifts region-tagged findings into the compose cap WITHOUT filtering — an equally
+    relevant IN-tagged finding should win a tie over a non-tagged one when {"IN"} is boosted."""
+    import asyncio
+    from noesis_kernel.research.react import _rank_claims_by_relevance, VerifiedClaim
+    from noesis_kernel.providers.embeddings import FakeEmbedder
+
+    def _c(text, country=""):
+        return VerifiedClaim(text=text, quote=text, atom_id=text, source_key="s",
+                             document_title="", document_id="", facets={"source_country": country})
+    # identical text → identical cosine to the question; the boost is the only differentiator
+    claims = [_c("dengue management", ""), _c("dengue management", "IN")]
+    emb = FakeEmbedder(dim=8)
+    top1 = asyncio.run(_rank_claims_by_relevance("dengue management", claims, emb, 1, country_boost={"IN"}))
+    assert top1[0].facets.get("source_country") == "IN"          # boosted IN finding surfaces
+    # no boost → order unchanged (byte-identical), IN not preferred
+    top1_noboost = asyncio.run(_rank_claims_by_relevance("dengue management", claims, emb, 1))
+    assert top1_noboost[0].facets.get("source_country") == ""    # first-in-order kept

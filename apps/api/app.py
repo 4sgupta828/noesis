@@ -69,6 +69,22 @@ def country_scope_enabled() -> bool:
     return os.environ.get("NOESIS_COUNTRY_SCOPE", "").lower() in ("1", "true", "yes")
 
 
+def country_boost_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, a request's `countries` BOOSTS that region's evidence in
+    ranking (region-specific findings surface) WITHOUT filtering out the global evidence base — the
+    'relevant yet not limiting' path. Boost-only; no null-exclusion trap. OFF → `countries` drives no
+    boost (byte-identical). Independent of NOESIS_COUNTRY_SCOPE (the hard filter)."""
+    return os.environ.get("NOESIS_COUNTRY_BOOST", "").lower() in ("1", "true", "yes")
+
+
+def _country_boost(countries: list[str] | None):
+    """Selected countries → a boost set (e.g. {"IN"}) when the boost flag is on, else None (no-op)."""
+    if not country_boost_enabled():
+        return None
+    valid = {c for c in (countries or []) if c in set(AVAILABLE_COUNTRIES)}
+    return valid or None
+
+
 def effort_scale_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, a request's `effort` multiplier (1.0..2.5) scales how
     hard the research loop works (turns, results considered, context, citations, LLM budget) on a
@@ -799,7 +815,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             question=body.question, tenant_id=body.tenant_id,
             workspace_id=body.workspace_id, source_keys=body.sources,
             images=images, documents=docs, history=history, on_event=on_event,
-            facets=_country_facets(body.countries), effort=effort, audience=audience,
+            facets=_country_facets(body.countries), country_boost=_country_boost(body.countries),
+            effort=effort, audience=audience,
             answer_focus=focus, clarify=followup_clarify_enabled())
         # Ambiguous follow-up → return the clarifying question; no research ran, nothing to persist.
         if getattr(res, "clarification", ""):

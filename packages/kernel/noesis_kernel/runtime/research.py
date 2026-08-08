@@ -118,6 +118,7 @@ class ResearchService:
         history: list[dict] | None = None,
         on_event=None,                       # async callback(dict) for live progress (SSE)
         facets: dict | None = None,          # hard retrieval facet filter (e.g. source_country scope)
+        country_boost=None,                  # set of country codes to BOOST (surface region evidence, no filter)
         max_steps: int = 8,
         effort: float = 1.0,                 # research-effort multiplier (1.0 = baseline no-op)
         audience: str = "clinician",         # "clinician" (default) | "patient" — selects the compose directive ONLY
@@ -225,7 +226,7 @@ class ResearchService:
             facets=facets or {},
             max_steps=sc.max_steps, k=sc.k, planner_atom_window=sc.planner_atom_window,
             compose_claim_cap=sc.compose_claim_cap, extract_collect=sc.extract_collect,
-            answer_focus=answer_focus, reasoning_read=self.reasoning_read,
+            answer_focus=answer_focus, reasoning_read=self.reasoning_read, country_boost=country_boost,
             collect_diagnostics=self.collect_diagnostics,
             classify_evidence=self.classify_evidence,
             evidence_fitness=self.evidence_fitness, evidence_ranker=self.evidence_ranker,

@@ -301,15 +301,18 @@ def _refs_valid(text: str, n_findings: int) -> bool:
 # (rank 0) is a no-op → never demotes a finding below its relevance rank. Max authority rank = 6.
 _EVIDENCE_FITNESS_WEIGHT = 0.15
 _EVIDENCE_MAX_RANK = 6
+_COUNTRY_BOOST_WEIGHT = 0.12   # bounded, comparable to the tier boost; boost-only, never demotes
 
 
 async def _rank_claims_by_relevance(question, claims, embedder, top, *,
-                                    evidence_ranker=None):
+                                    evidence_ranker=None, country_boost=None):
     """Keep the `top` verified claims most RELEVANT to the question, by dense cosine similarity of
     claim↔question embeddings (Rule 18 — a computable relevance signal, not a keyword heuristic). When
     `evidence_ranker` is supplied (evidence-fitness on), a SMALL bounded evidence-tier boost is added so
-    a stronger-tier finding wins ties — boost-only, never demoting below the relevance baseline. Neither
-    touches the span/entailment gates; only which already-verified claims survive the cap changes.
+    a stronger-tier finding wins ties. When `country_boost` (a set of country codes, e.g. {"IN"}) is
+    supplied, findings whose `source_country` is in it get a bounded boost so region-specific evidence
+    (e.g. Indian guidelines) SURFACES — WITHOUT filtering out the global evidence base. Both are
+    boost-only, never demoting below the relevance baseline, and never touch the span/entailment gates.
     Fail-safe: any embedding error → the original order's first `top` (never worse than today)."""
     import asyncio
     import math
@@ -321,15 +324,23 @@ async def _rank_claims_by_relevance(question, claims, embedder, top, *,
         return list(claims)[:top]
     qv = vecs[0]
     qn = math.sqrt(sum(x * x for x in qv)) or 1.0
+    cb = set(country_boost or ())
 
     def _boost(i: int) -> float:
-        if evidence_ranker is None:
-            return 0.0
-        try:
-            r = evidence_ranker(getattr(claims[i], "evidence_kind", "") or "")
-        except Exception:   # noqa: BLE001 — ranking must never break selection
-            return 0.0
-        return _EVIDENCE_FITNESS_WEIGHT * (max(0, int(r)) / _EVIDENCE_MAX_RANK)
+        b = 0.0
+        if evidence_ranker is not None:
+            try:
+                r = evidence_ranker(getattr(claims[i], "evidence_kind", "") or "")
+                b += _EVIDENCE_FITNESS_WEIGHT * (max(0, int(r)) / _EVIDENCE_MAX_RANK)
+            except Exception:   # noqa: BLE001 — ranking must never break selection
+                pass
+        if cb:
+            try:
+                if (getattr(claims[i], "facets", None) or {}).get("source_country") in cb:
+                    b += _COUNTRY_BOOST_WEIGHT
+            except Exception:   # noqa: BLE001
+                pass
+        return b
 
     def _score(i: int) -> float:
         v = vecs[1 + i]
@@ -447,6 +458,7 @@ async def run_react(
     classify_evidence=None,                   # vertical hook (source_key, facets) -> evidence_kind str (Rule 18: structural)
     evidence_fitness: bool = False,           # boost stronger evidence tiers into the compose cap (flag)
     evidence_ranker=None,                     # vertical hook: evidence_kind -> int rank (the authority pyramid)
+    country_boost=None,                       # set of country codes to boost (surface region evidence, no filter)
 ) -> AnswerResult:
     import asyncio
     atoms = AtomStore()
@@ -769,11 +781,12 @@ async def run_react(
     # RELEVANT to the question; under evidence-fitness, additionally boost stronger evidence TIERS into
     # the cap (span+entailment already passed → provenance unchanged; this only reorders/trims already-
     # verified claims). Either flag triggers the ranking pass.
-    if (evidence_select or evidence_fitness) and len(result.verified_claims) > compose_claim_cap:
+    if (evidence_select or evidence_fitness or country_boost) and len(result.verified_claims) > compose_claim_cap:
         await emit({"type": "selecting", "from": len(result.verified_claims), "to": compose_claim_cap})
         result.verified_claims = await _rank_claims_by_relevance(
             question, result.verified_claims, embedder, compose_claim_cap,
-            evidence_ranker=(evidence_ranker if evidence_fitness else None))
+            evidence_ranker=(evidence_ranker if evidence_fitness else None),
+            country_boost=country_boost)
 
     # Compose a synthesized answer FROM the verified findings only (factra "living
     # answer" model). Grounded by construction: the composer sees only the verified

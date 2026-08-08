@@ -657,11 +657,16 @@
   .turnstatus{margin-top:1.2rem;}
   /* ChatGPT-style conversation: once a thread is active, the composer docks to the BOTTOM and the
      thread (each turn is question-first) scrolls above it. Empty/landing state is unchanged. */
-  body.chatting #heading{display:none;}
-  body.chatting #ask{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;
+  body.chatting #heading,
+  body.triage-live #heading{display:none;}
+  /* Docked composer at the bottom — for the Q&A thread AND the Guided (triage) clarifying conversation,
+     so both read like a chat with the input pinned below the messages. */
+  body.chatting #ask,
+  body.triage-live #ask{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;
     max-width:44rem;margin:0;z-index:40;background:var(--bg);border-top:1px solid var(--hair);
     padding:.7rem 1.15rem calc(.7rem + env(safe-area-inset-bottom,0px));}
   body.chatting #out{padding-bottom:9rem;}   /* JS keeps this in sync with the composer's real height */
+  body.triage-live #triagebody{padding-bottom:9rem;}
   /* suggested follow-ups */
   .suggest{margin:.6rem 0 .4rem;padding:1rem 1.15rem;border:1px solid var(--hair);border-radius:14px;background:var(--panel2);}
   .suggest-h{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:.7rem;}
@@ -2142,6 +2147,7 @@ function setMode(mode, opts){
   mode = (mode === "panel" || mode === "triage") ? mode : "qa";
   APP_MODE = mode;
   document.body.dataset.mode = mode;
+  if(mode !== "triage") document.body.classList.remove("triage-live");   // undock when leaving guided mode
   $("#modeswitch").querySelectorAll(".mbtn").forEach(b =>
     b.setAttribute("aria-selected", b.dataset.mode === mode ? "true" : "false"));
   ATTN_BOX = "#attns"; renderAttachments();   // one intake box → one attachment surface
@@ -2182,6 +2188,8 @@ const tbody = () => $("#triagebody");
 function triageMsgHtml(m){ return `<div class="tgt-msg ${m.role==='user'?'user':'bot'}">${esc(m.text)}</div>`; }
 function renderTriage(fresh){
   if(fresh){ TRIAGE = {transcript: [], busy: false, refined: ""}; q.value = ""; autoGrow(); }
+  // dock the composer to the bottom once the conversation has started (chat feel); top on the empty landing
+  document.body.classList.toggle("triage-live", TRIAGE.transcript.length > 0);
   q.setAttribute("placeholder", TRIAGE.transcript.length ? "Type your answer…"
                                                          : "Describe the clinical problem or question…");
   const lead = TRIAGE.transcript.length ? "" :
@@ -2226,6 +2234,7 @@ async function submitTriage(text){
 // A visible intake error (never a fake "ready" card) — keeps the transcript and offers a direct route so
 // the user is never dead-ended, but a broken/absent endpoint reads as an error, not an instant answer.
 function triageError(msg){
+  document.body.classList.add("triage-live");
   const last = [...TRIAGE.transcript].reverse().find(m => m.role === "user");
   tbody().innerHTML = `<div class="tgt-thread">${TRIAGE.transcript.map(triageMsgHtml).join("")}</div>
     <div class="tgt-urgent">⚠ ${esc(msg)}</div>
@@ -2239,6 +2248,7 @@ function triageError(msg){
 // The "ready" hand-off card: the understood problem + the refined question + route buttons (recommended
 // one highlighted). Clicking a route sets the refined question into the shared box and runs that mode.
 function renderTriageReady(d){
+  document.body.classList.add("triage-live");   // keep the composer docked on the hand-off card too
   const refined = d.refined_question || d.understood_problem || "";
   TRIAGE.refined = refined;
   const rec = d.recommended_mode === "panel" ? "panel" : "qa";

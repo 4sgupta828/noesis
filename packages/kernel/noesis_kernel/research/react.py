@@ -233,6 +233,19 @@ def extract_hard_tokens(text: str) -> set[str]:
     return {_norm_token(m.group(0)) for m in _HARD_TOKEN_RE.finditer(text or "")}
 
 
+_REF_MARK_RE = re.compile(r"\[\d+\]")   # citation markers — not facts; stripped before token checks
+
+
+def _frame_grounded(text: str, allowed: set[str]) -> str:
+    """No-new-facts guard for a Reasoning-Read FRAME (purpose / conclusion): keep it only if every hard
+    token it states (citation markers stripped) already appears in `allowed` — the union of the verified
+    findings AND the grounded composed answer the frame summarizes. A figure in NEITHER drops the whole
+    text (fail-safe against fabrication); a figure the answer already states no longer blanks a valid
+    judgment. Returns the original text when grounded, else "" (Rule 6: provenance, not correctness)."""
+    s = (text or "").strip()
+    return s if (s and extract_hard_tokens(_REF_MARK_RE.sub(" ", s)).issubset(allowed)) else ""
+
+
 def _validate_interpretation(items: list["InterpretationItem"],
                              verified: list["VerifiedClaim"]) -> list[dict]:
     """Keep only interpretation items that are (a) a valid kind, (b) resting on ≥1 real finding
@@ -949,17 +962,16 @@ async def run_react(
                     getattr(parsed, "interpretation", []) or [], result.verified_claims)
                 conf = getattr(parsed, "confidence", None)
                 result.confidence = conf.model_dump() if conf is not None else None
-                # Purpose + conclusion FRAME the factors. Grounded no-new-facts against ALL findings
-                # (they synthesize across the whole set, not one basis) — a fabricated figure drops the
-                # text (fail-safe). Purpose is usually number-free (it restates the decision), so it
-                # passes trivially; the guard only bites if the model invents a figure.
-                _all_src = " ".join((vc.text + " " + vc.quote) for vc in result.verified_claims)
-                _all_tokens = extract_hard_tokens(_all_src)
-                def _grounded_frame(s: str) -> str:
-                    s = (s or "").strip()
-                    return s if (s and extract_hard_tokens(s).issubset(_all_tokens)) else ""
-                result.reasoning_purpose = _grounded_frame(getattr(parsed, "reasoning_purpose", ""))
-                result.reasoning_conclusion = _grounded_frame(getattr(parsed, "reasoning_conclusion", ""))
+                # Purpose + conclusion FRAME the answer — they restate/synthesize figures already in the
+                # grounded COMPOSED ANSWER, not just single claim atoms. So the no-new-facts allowance is
+                # the union of (verified findings) AND (the composed answer); see _frame_grounded. Without
+                # the answer in the allowance, a valid Informed judgment vanished whenever it cited a
+                # figure present in the answer but not verbatim in a claim atom (e.g. "≤1 hour/day").
+                _all_tokens = extract_hard_tokens(
+                    " ".join((vc.text + " " + vc.quote) for vc in result.verified_claims)
+                    + " " + _REF_MARK_RE.sub(" ", result.composed_answer or ""))
+                result.reasoning_purpose = _frame_grounded(getattr(parsed, "reasoning_purpose", ""), _all_tokens)
+                result.reasoning_conclusion = _frame_grounded(getattr(parsed, "reasoning_conclusion", ""), _all_tokens)
             # Honesty signal → coverage gap: a "grounded-on-analogues" answer still flags the gap,
             # so the UI shows the prominent fill-the-gaps affordance (LLM-owned judgment, no regex).
             if parsed.directly_addresses is False and (parsed.gap_note or "").strip():

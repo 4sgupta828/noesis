@@ -2,7 +2,7 @@
 (b) rests on ≥1 real finding, and (c) introduces no number/dose/date/% absent from its basis findings.
 The safety boundary — a fabricated inference (a number the evidence never stated) must never ship."""
 from noesis_kernel.research.react import (
-    InterpretationItem, VerifiedClaim, _validate_interpretation, extract_hard_tokens,
+    InterpretationItem, VerifiedClaim, _frame_grounded, _validate_interpretation, extract_hard_tokens,
 )
 
 V = [
@@ -71,6 +71,46 @@ def test_dose_token_grounding():
     bad = [_item(text="A 10 mg dose might work better", kind="implication", basis_findings=[1])]
     assert len(_validate_interpretation(ok, v)) == 1
     assert _validate_interpretation(bad, v) == []
+
+
+# ---- Reasoning-Read FRAME grounding (purpose / conclusion = the "Informed judgment") ----
+# The allowance is the union of the verified findings AND the grounded composed answer the frame sums up.
+
+def _allow(claims_src: str, answer: str) -> set[str]:
+    from noesis_kernel.research.react import _REF_MARK_RE
+    return extract_hard_tokens(claims_src + " " + _REF_MARK_RE.sub(" ", answer))
+
+
+def test_frame_survives_when_figure_is_in_the_answer_not_a_claim_atom():
+    # REGRESSION: the Informed judgment cited "1 hour/day" — present in the ANSWER prose but not verbatim
+    # in any claim atom. Old guard (claims-only) blanked the whole conclusion; it must now survive.
+    claims_src = "150-300 minutes of moderate aerobic activity; strength training on 2 days"
+    answer = "Guideline dose is 150–300 min/week; cognitive benefit appears from as little as 1 hour/day."
+    allowed = _allow(claims_src, answer)
+    concl = "A single regimen (150–300 min/week plus 2 days of strength) serves both goals, with cognitive gains from ~1 hour/day."
+    assert _frame_grounded(concl, allowed) == concl.strip()
+
+
+def test_frame_drops_a_fabricated_figure_in_neither_answer_nor_claims():
+    allowed = _allow("150-300 minutes weekly", "Do 150–300 minutes of moderate activity weekly.")
+    assert _frame_grounded("Aim for 500 minutes weekly for maximal benefit.", allowed) == ""
+
+
+def test_frame_ignores_citation_markers():
+    # a bare [3] reference index is not a fact — stripped before the token check
+    allowed = _allow("moderate activity weekly", "Exercise helps mood and cognition.")
+    assert _frame_grounded("Exercise supports mental health [3].", allowed) == "Exercise supports mental health [3]."
+
+
+def test_number_free_purpose_passes_trivially():
+    allowed = _allow("some findings", "some grounded answer")
+    p = "Whether current guidance supports a specific weekly exercise dose for health and mood."
+    assert _frame_grounded(p, allowed) == p
+
+
+def test_empty_frame_stays_empty():
+    assert _frame_grounded("", {"1", "2"}) == ""
+    assert _frame_grounded("   ", {"1", "2"}) == ""
 
 
 def test_empty_is_noop():

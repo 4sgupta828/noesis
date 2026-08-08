@@ -409,6 +409,11 @@
   .panelrun:hover{background:var(--gold-strong);}
   .panelrun:disabled{opacity:.5;cursor:default;background:transparent;color:var(--muted);border-color:var(--hair);}
   .panelrun-n{font-weight:400;opacity:.85;margin-left:.3rem;}
+  /* On the convene screen the Run button sits up top and sticks there, so it stays reachable while the
+     user scrolls the (long) specialist roster below — no scroll-to-bottom to start the analysis. */
+  .panelrun-bar{position:sticky;top:0;z-index:5;margin:.2rem 0 1.3rem;padding:.5rem 0;background:var(--bg);
+    border-bottom:1px solid var(--hair);}
+  .panelrun-bar .panelrun{margin-top:0;}
   /* Specialist Panel — a MODE of the same shell as Q&A, not a separate overlay. body[data-mode] swaps the
      answer surface (#out ⇄ #panelbody); body[data-panel] tracks the phase (landing keeps the shared intake
      box visible; plan/conference hide it since they have their own run button / docked composer). */
@@ -2192,11 +2197,11 @@ function renderPanelPlan(question, data, manual){
     <div class="panelcase">Case: <b>${esc(question)}</b></div>
     <div class="planintro">For this case I've selected these specialists — each reviews the evidence through
       its own lens. Adjust the panel, then run the analysis.</div>
+    <div class="panelrun-bar"><button type="button" class="panelrun" id="panelrun">▶ Run Panel Analysis <span class="panelrun-n"></span></button></div>
     <div class="planblock"><div class="planblock-h">Convening (${chosen.length})</div>
       <div class="pcards">${chosen.map(s=>specCard(s,true,"why",ration[s.id])).join("")}</div></div>
     ${rest.length?`<div class="planblock"><div class="planblock-h">Also available</div>
       <div class="pcards">${rest.map(s=>specCard(s,false,"lens")).join("")}</div></div>`:""}
-    <button type="button" class="panelrun" id="panelrun">▶ Run Panel Analysis <span class="panelrun-n"></span></button>
   </div>`;
   const refresh = () => {
     pbody().querySelectorAll(".pcard").forEach(l=>l.classList.toggle("on", l.querySelector(".pchk").checked));

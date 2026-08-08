@@ -20,7 +20,10 @@ import urllib.request
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packages", "vertical_medical"))
 from noesis_vertical_medical.eval_india_gold import INDIA_CLINICAL_GOLD  # noqa: E402
 
-URL = os.environ.get("NOESIS_URL", "https://noesis-api-production.up.railway.app").rstrip("/") + "/research"
+BASE = os.environ.get("NOESIS_URL", "https://noesis-api-production.up.railway.app").rstrip("/")
+# Use the STREAMING endpoint: a plain synchronous /research that runs longer than Railway's edge timeout
+# is cut with a 502 (the UI avoids this via SSE keepalives). Streaming holds the connection open.
+URL = BASE + "/research/stream"
 TENANT = os.environ.get("TENANT", "demo")
 SUBSET = {s.strip() for s in os.environ.get("SUBSET", "").split(",") if s.strip()}
 COUNTRIES = [c for c in os.environ.get("COUNTRIES", "").split(",") if c.strip()]   # e.g. IN (needs the flag on)
@@ -36,8 +39,23 @@ def ask(q):
     for attempt in range(3):
         try:
             req = urllib.request.Request(URL, json.dumps(body).encode(), {"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=REQ_TIMEOUT) as r:
-                return json.load(r)
+            final = None
+            with urllib.request.urlopen(req, timeout=REQ_TIMEOUT) as r:   # SSE: read progress, keep the final
+                buf = b""
+                for chunk in r:
+                    buf += chunk
+                    while b"\n\n" in buf:
+                        frame, buf = buf.split(b"\n\n", 1)
+                        for line in frame.decode(errors="replace").split("\n"):
+                            if line.startswith("data:"):
+                                ev = json.loads(line[5:].strip())
+                                if ev.get("type") == "final":
+                                    final = ev.get("result")
+                                elif ev.get("type") == "error":
+                                    raise RuntimeError(ev.get("detail", "stream error"))
+            if final is not None:
+                return final
+            raise RuntimeError("stream ended without a final result")
         except Exception as e:   # noqa: BLE001
             last = e
             time.sleep(8 * (attempt + 1))

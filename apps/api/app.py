@@ -300,6 +300,11 @@ class RegisterIn(BaseModel):
     disclaimer_ack: bool = False    # the attestation from the identity gate
 
 
+class SettingIn(BaseModel):
+    key: str
+    value: str = ""     # "on" | "off" | "" (empty = follow the env default)
+
+
 class FeedbackIn(BaseModel):
     session_id: str = ""
     turn_index: int = 0
@@ -432,9 +437,11 @@ def build_default_service() -> ResearchService:
     gap_prompt = manifest.gap_prompt if gap_healing_enabled() else None
     suggest_prompt = manifest.suggest_prompt if conversation_enabled() else None
     refine_prompt = getattr(manifest, "refine_prompt", None) if refine_enabled() else None
-    triage_prompt = getattr(manifest, "triage_prompt", None) if triage_enabled() else None
-    reasoned_scaffold = getattr(manifest, "reasoned_scaffold_prompt", None) if duel_enabled() else None
-    reasoned_format = getattr(manifest, "reasoned_answer_format", None) if duel_enabled() else None
+    # Prompts are wired UNCONDITIONALLY so the live admin toggles (duel/triage) work without a
+    # redeploy — an unused prompt is inert; gating happens at request time on the live flag.
+    triage_prompt = getattr(manifest, "triage_prompt", None)
+    reasoned_scaffold = getattr(manifest, "reasoned_scaffold_prompt", None)
+    reasoned_format = getattr(manifest, "reasoned_answer_format", None)
     # Use the BEST model for EVERY research step (planning + claim extraction + compose). A cheaper
     # planner (haiku) paraphrased quotes → span-verification rejected them (grounding regression),
     # so planner_llm is left unset and run_react uses `llm` throughout. Optional explicit override.
@@ -539,6 +546,35 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 app.state.session_store = None
         return app.state.session_store
 
+    def _settings():
+        """Live product-settings store (same DSN); None without a DSN → env-only flags."""
+        if getattr(app.state, "setting_store", "unset") == "unset":
+            dsn = os.environ.get("NOESIS_CORPUS_DSN")
+            if dsn:
+                from api.settings import SettingStore
+                app.state.setting_store = SettingStore(dsn, vertical=load_active_vertical().name)
+            else:
+                app.state.setting_store = None
+        return app.state.setting_store
+
+    # Flags the admin panel can flip LIVE (DB override wins; empty → env default). Only flags whose
+    # gating is fully REQUEST-time belong here — accounts_enabled stays env-only (it gates store
+    # construction at boot). New product settings land in this dict going forward.
+    _LIVE_FLAGS = {"duel_enabled": duel_enabled, "triage_enabled": triage_enabled,
+                   "ask_panel_enabled": ask_panel_enabled}
+
+    async def _flag_live(key: str) -> bool:
+        """Resolved value of a controlled flag: DB override → else env default. Fail-open to env."""
+        env_fn = _LIVE_FLAGS[key]
+        st = _settings()
+        if st is None:
+            return env_fn()
+        try:
+            from api.settings import SettingStore
+            return SettingStore.resolve_flag(await st.get(key), env_fn())
+        except Exception:   # noqa: BLE001 — settings must never break a request
+            return env_fn()
+
     def _accounts():
         """Vertical-isolated account+feedback store (same DSN as sessions); None without a DSN."""
         if getattr(app.state, "account_store", "unset") == "unset":
@@ -592,11 +628,15 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         return {"status": "ok"}
 
     @app.get("/config")
-    def config() -> dict:
-        """The active vertical's declared UI + available sources (drives the shell)."""
+    async def config() -> dict:
+        """The active vertical's declared UI + available sources (drives the shell).
+        Panel/triage/duel flags resolve LIVE (admin-panel override → env default)."""
         if app.state.service is None:
             app.state.service = build_default_service()
         svc = app.state.service
+        live_panel = await _flag_live("ask_panel_enabled")
+        live_triage = await _flag_live("triage_enabled")
+        live_duel = await _flag_live("duel_enabled")
         ui = getattr(svc, "ui", None)
         from api.video import video_enabled
         console = ui.console() if ui and hasattr(ui, "console") else {}
@@ -628,17 +668,17 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "reasoning_read_enabled": reasoning_read_enabled() and structured_answers(),
             "diag_trace_enabled": diag_trace_enabled(),
             "evidence_fitness_enabled": evidence_fitness_enabled(),
-            "ask_panel_enabled": ask_panel_enabled(),
+            "ask_panel_enabled": live_panel,
             "panel_specialists": ([
                 {"id": getattr(s, "id", ""), "specialty": getattr(s, "specialty", ""),
                  "focus": getattr(s, "focus", ""),   # the specialist's expertise, shown on the panel roster
                  "default": getattr(s, "id", "") in set(getattr(svc, "panel_default_ids", ()))}
-                for s in getattr(svc, "panel_specialists", ())] if ask_panel_enabled() else []),
-            "panel_examples": (list(getattr(svc, "panel_examples", ())) if ask_panel_enabled() else []),
+                for s in getattr(svc, "panel_specialists", ())] if live_panel else []),
+            "panel_examples": (list(getattr(svc, "panel_examples", ())) if live_panel else []),
             "refine_enabled": refine_enabled() and bool(getattr(svc, "refine_prompt", None)),
-            "triage_enabled": triage_enabled() and bool(getattr(svc, "triage_prompt", None)),
+            "triage_enabled": live_triage and bool(getattr(svc, "triage_prompt", None)),
             "accounts_enabled": accounts_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
-            "duel_enabled": duel_enabled() and bool(getattr(svc, "reasoned_answer_format", None)),
+            "duel_enabled": live_duel and bool(getattr(svc, "reasoned_answer_format", None)),
         }
 
     @app.post("/search")
@@ -732,7 +772,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     async def panel_plan(body: PanelIn) -> dict:
         """Phase 1 (Convene): auto-select the specialists for this case + return the full roster (each
         with its lens/expertise) so the UI can show the proposed panel and let the user adjust."""
-        if not ask_panel_enabled():
+        if not await _flag_live("ask_panel_enabled"):
             raise HTTPException(status_code=404, detail="ask panel not enabled")
         if app.state.service is None:
             app.state.service = build_default_service()
@@ -815,7 +855,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         own grounded, lens-scoped research — and return each specialist's take + the synthesized panel.
         NOTE: a full panel runs for several minutes; browsers should use /panel/ask/stream, which keeps
         the connection alive with SSE keepalives (a plain POST this long is cut by the edge proxy → 502)."""
-        if not ask_panel_enabled():
+        if not await _flag_live("ask_panel_enabled"):
             raise HTTPException(status_code=404, detail="ask panel not enabled")
         if app.state.service is None:
             app.state.service = build_default_service()
@@ -837,7 +877,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         """Live SSE for a panel run: emits specialist_start / specialist_done progress as each lens runs,
         then a `final` event carrying the full panel payload. The keepalive `: ping` comments keep the
         edge proxy from cutting the (multi-minute) connection — the fix for the plain-POST 502."""
-        if not ask_panel_enabled():
+        if not await _flag_live("ask_panel_enabled"):
             raise HTTPException(status_code=404, detail="ask panel not enabled")
         if app.state.service is None:
             app.state.service = build_default_service()
@@ -910,7 +950,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         # A/B duel arm: engine="reasoned" routes through the alternate scaffold+decision-gated engine.
         # Flag off (or unknown engine) → plain ask, param ignored (byte-identical, Rule 20).
         _ask = (app.state.service.ask_reasoned
-                if body.engine == "reasoned" and duel_enabled() else app.state.service.ask)
+                if body.engine == "reasoned" and await _flag_live("duel_enabled") else app.state.service.ask)
         res = await _ask(
             question=body.question, tenant_id=body.tenant_id,
             workspace_id=body.workspace_id, source_keys=body.sources,
@@ -1123,7 +1163,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
 
         Convergence is code-guaranteed: once the assistant has already asked TRIAGE_MAX_ASK questions,
         this turn is FORCED to route (the LLM still owns whether/what to ask below that cap — Rule 18)."""
-        if not triage_enabled():
+        if not await _flag_live("triage_enabled"):
             raise HTTPException(status_code=404, detail="triage mode is not enabled")
         if app.state.service is None:
             app.state.service = build_default_service()
@@ -1320,6 +1360,50 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"feedback failed: {e}") from e
         return {"ok": True, "id": fid}
+
+    def _admin_ui_pw() -> str:
+        # UI panel password (user-chosen; default per request). ALPHA-grade gate for non-destructive
+        # product toggles only — change via NOESIS_ADMIN_UI_PASSWORD; never gate data access with this.
+        return os.environ.get("NOESIS_ADMIN_UI_PASSWORD", "1111")
+
+    async def _settings_payload() -> dict:
+        st = _settings()
+        over = {}
+        if st is not None:
+            try:
+                over = await st.all(fresh=True)
+            except Exception:   # noqa: BLE001
+                over = {}
+        from api.settings import SettingStore
+        return {"store": st is not None, "settings": {
+            k: {"override": over.get(k, ""), "env_default": fn(),
+                "resolved": SettingStore.resolve_flag(over.get(k, ""), fn())}
+            for k, fn in _LIVE_FLAGS.items()}}
+
+    @app.get("/admin/settings")
+    async def admin_settings_get(x_admin_password: str = Header(default="")) -> dict:
+        """Live product settings (admin panel): per-flag override / env default / resolved value."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        return await _settings_payload()
+
+    @app.post("/admin/settings")
+    async def admin_settings_set(body: SettingIn, x_admin_password: str = Header(default="")) -> dict:
+        """Flip a controlled flag live (no redeploy): value 'on' | 'off' | '' (follow env)."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        if body.key not in _LIVE_FLAGS:
+            raise HTTPException(status_code=400, detail=f"unknown setting (known: {sorted(_LIVE_FLAGS)})")
+        if body.value not in ("on", "off", ""):
+            raise HTTPException(status_code=400, detail="value must be 'on', 'off', or '' (follow env)")
+        st = _settings()
+        if st is None:
+            raise HTTPException(status_code=503, detail="no settings store (NOESIS_CORPUS_DSN unset)")
+        try:
+            await st.set(body.key, body.value)
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"settings store error: {e}") from e
+        return await _settings_payload()
 
     @app.get("/admin/feedback")
     async def admin_feedback(limit: int = 25, x_admin_token: str = Header(default="")) -> dict:

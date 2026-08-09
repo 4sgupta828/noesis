@@ -114,10 +114,19 @@ def main():
     print(f"C1 entailment probe · {len(recs)} logged answers\n")
     tot_recs = tot_flags = 0
     agree = {"W1": [0, 0, 0], "W2": [0, 0, 0], "W3": [0, 0, 0]}   # [both, auditor-only, eval-only]
+    n_eval = 0
     for r in recs:
-        a = asyncio.run(_audit(llm, r["question"], r["answer"], r.get("claims") or r.get("_claims") or []))
-        # claims aren't stored in the log; re-pull from the record if present, else skip source-span check
         claims = r.get("claims") or []
+        a = None
+        for attempt in range(3):   # the model occasionally malforms the structured list — a fresh sample fixes it
+            try:
+                a = asyncio.run(_audit(llm, r["question"], r["answer"], claims)); break
+            except Exception as e:  # noqa: BLE001
+                if attempt == 2:
+                    print(f"  {r['case_id']:34s} JUDGE ERROR (skipped): {str(e)[:60]}")
+        if a is None:
+            continue
+        n_eval += 1
         a = _filter(a, r["answer"], claims)
         tot_recs += a.n_recommendations
         tot_flags += len(a.unwarranted)
@@ -129,7 +138,7 @@ def main():
             elif m in emodes: agree[m][2] += 1
         print(f"  {r['case_id']:34s} recs={a.n_recommendations:2d} unwarranted={len(a.unwarranted):2d}  "
               f"[{','.join(sorted(amodes)) or '—'}]  eval:[{','.join(sorted(emodes & {'W1','W2','W3'})) or '—'}]")
-    print(f"\ntotal recommendation-bearing statements: {tot_recs}")
+    print(f"\naudited {n_eval}/{len(recs)} answers · total recommendation-bearing statements: {tot_recs}")
     print(f"flagged unwarranted by the strict auditor : {tot_flags}"
           f"  ({tot_flags/max(tot_recs,1):.0%} of statements)")
     print("\n=== agreement with the broad eval judge (cases) ===")

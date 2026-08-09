@@ -194,6 +194,9 @@ def main():
                 "probes": (meta.get("probes") if isinstance(meta, dict) else []),
                 "depth": (meta.get("depth") if isinstance(meta, dict) else ""),
                 "n_claims": len(claims), "n_recs": v.n_recommendations, "answer": answer,
+                # trimmed findings so downstream auditors (C1 probe) can check entailment offline
+                "claims": [{"text": c.get("text", ""), "quote": c.get("quote", ""),
+                            "source": c.get("source", "")} for c in claims],
                 "verdict": v.model_dump(),
             }) + "\n")
         print(f"  {cid:26s} recs={v.n_recommendations:2d}  flags={','.join(sorted(modes)) or '—'}")

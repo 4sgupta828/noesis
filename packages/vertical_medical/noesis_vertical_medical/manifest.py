@@ -24,6 +24,7 @@ from .gaps import MEDICAL_GAP_PROMPT
 from .suggest import MEDICAL_SUGGEST_PROMPT
 from .refine import MEDICAL_REFINE_PROMPT
 from .triage import MEDICAL_TRIAGE_PROMPT
+from .reasoned import REASONED_SCAFFOLD_PROMPT, REASONED_ANSWER_FORMAT
 from .web_domains import TRUSTED_WEB_DOMAINS
 from .authority import MedicalAuthorityPolicy
 from .connector import ClinicalTrialsConnector
@@ -33,6 +34,7 @@ from .faers import FaersConnector
 from .dailymed import DailyMedConnector
 from .cdc import CdcConnector
 from .india_guidelines import IndiaGuidelinesConnector
+from .global_guidelines import GlobalGuidelinesConnector
 from .eval_gold import GOLD
 from .fixtures import sample_studies
 from .gating import MedicalGatingPolicy
@@ -56,6 +58,7 @@ def build_manifest() -> VerticalManifest:
             "dailymed": DailyMedConnector(),
             "cdc": CdcConnector(),
             "india_guidelines": IndiaGuidelinesConnector(),   # ICMR + national-programme + society (source_country=IN)
+            "global_guidelines": GlobalGuidelinesConnector(), # top-tier society/WHO/task-force guidance (source_country=global)
         },
         retrieval_sources={"clinicaltrials": MedicalRetrievalSource()},
         gating_policy=MedicalGatingPolicy(),
@@ -79,6 +82,8 @@ def build_manifest() -> VerticalManifest:
         suggest_prompt=MEDICAL_SUGGEST_PROMPT,
         refine_prompt=MEDICAL_REFINE_PROMPT,
         triage_prompt=MEDICAL_TRIAGE_PROMPT,
+        reasoned_scaffold_prompt=REASONED_SCAFFOLD_PROMPT,
+        reasoned_answer_format=REASONED_ANSWER_FORMAT,
         web_domains=TRUSTED_WEB_DOMAINS,
         extraction_lenses=(
             "interventions/treatments/drugs studied",

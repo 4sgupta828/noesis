@@ -89,6 +89,10 @@ class VerticalManifest:
     # Optional GUIDED-INTAKE / triage directive: a short clarifying conversation that converges on a crisp
     # question and recommends a route (Q&A vs Panel). Opaque prose; kernel owns the turn mechanics + cap.
     triage_prompt: str | None = None
+    # Optional ALTERNATE "reasoned" engine (A/B duel arm): a pre-retrieval scaffold directive (coverage
+    # as QUESTIONS, never conclusions) + a decision-gated compose directive. Opaque prose.
+    reasoned_scaffold_prompt: str | None = None
+    reasoned_answer_format: str | None = None
     # Optional vertical-supplied instruction for the VISION pre-step: how to DESCRIBE a
     # user-uploaded image (color/shape/borders/texture/distribution), producing a labeled
     # visual observation — never a diagnosis. Opaque prose; the kernel only threads it into

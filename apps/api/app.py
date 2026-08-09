@@ -135,6 +135,15 @@ def ask_panel_enabled() -> bool:
     return os.environ.get("NOESIS_ASK_PANEL", "").lower() in ("1", "true", "yes")
 
 
+def duel_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, `engine="reasoned"` on /research[/stream] routes through
+    the ALTERNATE reason-first engine (scaffold → coverage-steered retrieval → decision-gated compose)
+    and the FE runs both engines on fresh questions as a blinded A/B with a which-is-better vote —
+    clinician preference data that settles the retrieval-first vs reasoning-first question empirically.
+    OFF → the engine param is ignored and no duel UI shows (byte-identical)."""
+    return os.environ.get("NOESIS_DUEL", "").lower() in ("1", "true", "yes")
+
+
 def accounts_enabled() -> bool:
     """Flag (default OFF, Rule 20 — adoption P0): when ON, users register a real account
     (`POST /auth/register`, free verified-clinician tier via structural NPI lookup) and every answer
@@ -245,6 +254,7 @@ class ResearchIn(BaseModel):
     attachments: list[Attachment] | None = None   # images/PDF/DICOM → vision context
     user_name: str | None = None          # asker identity (captured at landing)
     user_email: str | None = None
+    engine: str = "standard"              # "standard" | "reasoned" (A/B duel arm; ignored unless NOESIS_DUEL)
     history: list[dict] | None = None     # prior turns [{question, answer}] → follow-up context
     session_id: str | None = None         # thread to append this turn to (conversation)
     countries: list[str] | None = None    # source-country scope (e.g. ["IN"]); None/[]=all (see flag)
@@ -423,6 +433,8 @@ def build_default_service() -> ResearchService:
     suggest_prompt = manifest.suggest_prompt if conversation_enabled() else None
     refine_prompt = getattr(manifest, "refine_prompt", None) if refine_enabled() else None
     triage_prompt = getattr(manifest, "triage_prompt", None) if triage_enabled() else None
+    reasoned_scaffold = getattr(manifest, "reasoned_scaffold_prompt", None) if duel_enabled() else None
+    reasoned_format = getattr(manifest, "reasoned_answer_format", None) if duel_enabled() else None
     # Use the BEST model for EVERY research step (planning + claim extraction + compose). A cheaper
     # planner (haiku) paraphrased quotes → span-verification rejected them (grounding regression),
     # so planner_llm is left unset and run_react uses `llm` throughout. Optional explicit override.
@@ -462,6 +474,7 @@ def build_default_service() -> ResearchService:
         vision_prompt=vision_prompt,
         layman_prompt=manifest.layman_prompt, gap_prompt=gap_prompt,
         suggest_prompt=suggest_prompt, refine_prompt=refine_prompt, triage_prompt=triage_prompt,
+        reasoned_scaffold_prompt=reasoned_scaffold, reasoned_answer_format=reasoned_format,
         vertical_name=manifest.name, ui=manifest.ui,
         connectors=connectors, corpus_source_key=corpus_key,
     )
@@ -625,6 +638,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "refine_enabled": refine_enabled() and bool(getattr(svc, "refine_prompt", None)),
             "triage_enabled": triage_enabled() and bool(getattr(svc, "triage_prompt", None)),
             "accounts_enabled": accounts_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
+            "duel_enabled": duel_enabled() and bool(getattr(svc, "reasoned_answer_format", None)),
         }
 
     @app.post("/search")
@@ -666,22 +680,41 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     # running old front-end code and new features (flags/UI) never reach the user until a hard refresh.
     _NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate"}
 
+    # PERF: the shell is ~220 KB and was shipped uncompressed on every load (~3 s). Pre-gzip the HTML
+    # ONCE per process (files are baked into the image, immutable per deploy) and serve the compressed
+    # bytes when the client accepts gzip. Deliberately NOT a blanket GZip middleware: compressing the
+    # SSE streams would buffer keepalives and resurrect the edge-502 bug — only these two HTML routes.
+    import gzip as _gzip
+    _HTML_CACHE: dict[str, tuple[bytes, bytes]] = {}   # name -> (raw, gzipped)
+
+    def _html_response(fname: str, accept_encoding: str):
+        from fastapi.responses import Response
+        if fname not in _HTML_CACHE:
+            page = _WEB_DIR / fname
+            raw = page.read_bytes() if page.exists() else b"<h1>Noesis</h1>"
+            _HTML_CACHE[fname] = (raw, _gzip.compress(raw, 6))
+        raw, gz = _HTML_CACHE[fname]
+        if "gzip" in (accept_encoding or "").lower():
+            return Response(gz, media_type="text/html",
+                            headers={**_NO_CACHE, "Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
+        return Response(raw, media_type="text/html", headers=_NO_CACHE)
+
     @app.get("/", response_class=HTMLResponse)
-    def index() -> HTMLResponse:
-        page = _WEB_DIR / "index.html"
-        html = page.read_text() if page.exists() else "<h1>Noesis</h1>"
-        return HTMLResponse(html, headers=_NO_CACHE)
+    def index(accept_encoding: str = Header(default="")):
+        return _html_response("index.html", accept_encoding)
 
     @app.get("/{name}.png")
     def web_png(name: str):
         """Serve a PNG asset from apps/web (logo, brand mark). Basename-only + .png
-        guard → no path traversal; only files that exist in the web dir are served."""
+        guard → no path traversal; only files that exist in the web dir are served.
+        Long-lived cache: the logos change ~never (and a stale logo is harmless)."""
         from fastapi.responses import FileResponse
         safe = os.path.basename(name) + ".png"
         f = _WEB_DIR / safe
         if not f.exists():
             raise HTTPException(status_code=404, detail="not found")
-        return FileResponse(str(f), media_type="image/png")
+        return FileResponse(str(f), media_type="image/png",
+                            headers={"Cache-Control": "public, max-age=604800"})
 
     @app.post("/research", response_model=ResearchOut)
     async def research(body: ResearchIn) -> ResearchOut:
@@ -874,7 +907,11 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         # Answer-focus: condense elliptical follow-ups + answer-scope compose (needs the flag; the
         # condense half additionally needs conversation history, which `history` above already gates).
         focus = answer_focus_enabled()
-        res = await app.state.service.ask(
+        # A/B duel arm: engine="reasoned" routes through the alternate scaffold+decision-gated engine.
+        # Flag off (or unknown engine) → plain ask, param ignored (byte-identical, Rule 20).
+        _ask = (app.state.service.ask_reasoned
+                if body.engine == "reasoned" and duel_enabled() else app.state.service.ask)
+        res = await _ask(
             question=body.question, tenant_id=body.tenant_id,
             workspace_id=body.workspace_id, source_keys=body.sources,
             images=images, documents=docs, history=history, on_event=on_event,
@@ -1404,9 +1441,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         return {"vertical": getattr(svc, "vertical_name", ""), "plan": plan, "live": live}
 
     @app.get("/admin", response_class=HTMLResponse)
-    def admin_page() -> HTMLResponse:
-        page = _WEB_DIR / "admin.html"
-        html = page.read_text() if page.exists() else "<h1>Noesis admin</h1>"
-        return HTMLResponse(html, headers=_NO_CACHE)
+    def admin_page(accept_encoding: str = Header(default="")):
+        return _html_response("admin.html", accept_encoding)
 
     return app

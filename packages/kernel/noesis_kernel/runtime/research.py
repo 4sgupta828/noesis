@@ -70,6 +70,8 @@ class ResearchService:
     suggest_prompt: str | None = None       # vertical suggested-follow-ups directive (opaque)
     refine_prompt: str | None = None         # vertical pre-answer question-refinement directive (opaque)
     triage_prompt: str | None = None         # vertical guided-intake/triage directive (opaque)
+    reasoned_scaffold_prompt: str | None = None  # alternate-engine scaffold directive (coverage as QUESTIONS)
+    reasoned_answer_format: str | None = None    # alternate-engine compose directive (decision-gated answer)
     max_calls: int = 40
     vertical_name: str = ""
     ui: object | None = None                # the vertical's UIContract (for /config)
@@ -107,6 +109,50 @@ class ResearchService:
             return MultiSourceRetriever(chosen), None
         return MultiSourceRetriever(corpus), (MultiSourceRetriever(aux) if aux else None)
 
+    async def ask_reasoned(self, **kw):
+        """ALTERNATE ENGINE ("reasoned", A/B duel arm): reason-first scaffold → coverage-steered
+        retrieval → decision-gated compose. Implements the reason-before-retrieve principle
+        GROUNDING-SAFELY: the scaffold emits the clinical decision structure strictly as QUESTIONS /
+        coverage targets (never conclusions), which are appended to the research question — they steer
+        what the loop searches for but add zero facts, so every claim still needs a span-verified quote.
+        The compose step swaps in the vertical's `reasoned_answer_format` (decision gates, Do-now/Do-if
+        conditionality, tier-awareness). Falls back to plain ask() when the vertical lacks the prompts
+        or the scaffold errors (fail-open — never a dead end)."""
+        if not (self.reasoned_scaffold_prompt and self.reasoned_answer_format):
+            return await self.ask(**kw)
+        question = kw.get("question", "")
+        on_event = kw.get("on_event")
+        from pydantic import BaseModel, Field
+
+        class _Scaffold(BaseModel):
+            # every field is QUESTIONS/topics to cover — the prompt forbids conclusions/answers
+            likely_causes: list[str] = Field(default_factory=list)
+            cant_miss: list[str] = Field(default_factory=list)
+            key_decisions: list[str] = Field(default_factory=list)
+        try:
+            comp = await self.llm.complete(
+                system=self.reasoned_scaffold_prompt,
+                messages=[{"role": "user", "content": question}],
+                response_format=_Scaffold, max_tokens=700)
+            s = comp.parsed
+            lines = ([f"- likely/common: {x}" for x in s.likely_causes[:6]]
+                     + [f"- can't-miss: {x}" for x in s.cant_miss[:6]]
+                     + [f"- decision: {x}" for x in s.key_decisions[:6]])
+            if lines:
+                kw = dict(kw)
+                kw["question"] = (question + "\n\n[Coverage brief — clinical branches this answer must "
+                                  "INVESTIGATE and address (these are questions to research, not facts):\n"
+                                  + "\n".join(lines) + "\n]")
+                if on_event is not None:
+                    try:
+                        await on_event({"type": "scaffold", "branches": len(lines)})
+                    except Exception:
+                        pass
+        except Exception:   # noqa: BLE001 — scaffold is an enhancer; its failure never blocks the answer
+            pass
+        kw["answer_format_override"] = self.reasoned_answer_format
+        return await self.ask(**kw)
+
     async def ask(
         self,
         *,
@@ -125,6 +171,7 @@ class ResearchService:
         audience: str = "clinician",         # "clinician" (default) | "patient" — selects the compose directive ONLY
         answer_focus: bool = False,          # condense elliptical follow-ups + ANSWER-scope compose (flag)
         clarify: bool = False,               # ask a clarifying question when a follow-up is ambiguous (flag)
+        answer_format_override: str | None = None,   # per-call compose directive (alternate engine); None → default
     ) -> AnswerResult:
         # ANSWER-FOCUS (flag): resolve a conversational FOLLOW-UP ("what dose?") into a self-contained
         # question carrying the subject from the conversation ("dose of TMP-SMX for PCP prophylaxis"),
@@ -176,7 +223,7 @@ class ResearchService:
         # same span/entailment gates. "patient" uses the vertical's patient directive when it supplies
         # one; anything else (incl. an unknown value) falls back to the clinician directive → the
         # default path is byte-identical.
-        directive = (self.patient_answer_format
+        directive = answer_format_override or (self.patient_answer_format
                      if audience == "patient" and self.patient_answer_format
                      else self.answer_format)
         # Effort scales STRUCTURAL search knobs only (turns, results, context, citations, budget) —

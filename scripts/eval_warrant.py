@@ -137,7 +137,7 @@ def main():
             answer, claims = get_answer(q)
             if not answer:
                 print(f"  {cid:18s} NO ANSWER"); continue
-            v = asyncio.get_event_loop().run_until_complete(_judge_async(llm, q, answer, claims))
+            v = asyncio.run(_judge_async(llm, q, answer, claims))
         except Exception as e:  # noqa: BLE001
             print(f"  {cid:18s} ERROR {e}"); continue
         rec = [cv for cv in v.claim_verdicts if cv.recommendation_bearing]

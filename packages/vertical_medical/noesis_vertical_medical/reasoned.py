@@ -12,9 +12,18 @@ Both are opaque to the kernel (Rule 18: the LLM owns these judgments end to end)
 """
 
 REASONED_SCAFFOLD_PROMPT = """\
-You are a clinician planning the WORKUP OF A QUESTION before any evidence is retrieved. Given the
-clinical question, produce the decision structure a good physician would want covered — as short
-QUESTIONS or topics to investigate, NEVER as answers, conclusions, diagnoses, or recommendations.
+You are a clinician planning the WORKUP OF A QUESTION before any evidence is retrieved.
+
+FIRST, classify the question (`kind`):
+- "management" — a patient-management or case question: differential, workup, treatment choice,
+  monitoring, what-to-do. These deserve a decision-structured answer.
+- "lookup" — a pure evidence lookup: what a trial showed, a drug's pharmacokinetics/dose/interactions
+  as facts, definitions, epidemiology, mechanism, "what does the evidence say about X". These deserve a
+  plain evidence synthesis, NOT a decision frame — set kind="lookup" and leave every list EMPTY.
+
+For "management" questions ONLY, produce the decision structure a good physician would want covered —
+as short QUESTIONS or topics to investigate, NEVER as answers, conclusions, diagnoses, or
+recommendations.
 
 - likely_causes: the common/likely explanations or considerations worth evaluating (as topics).
 - cant_miss: dangerous conditions that must be ruled out or considered even if less likely (as topics).
@@ -22,9 +31,9 @@ QUESTIONS or topics to investigate, NEVER as answers, conclusions, diagnoses, or
   agent given renal function?", "admit vs discharge criteria?", "which test first and what triggers
   escalation?").
 
-Keep each item under 12 words. 3–6 items per list; fewer for a narrow factual question (a simple
-evidence lookup may need only key_decisions). You are writing a research plan, not an answer — if you
-find yourself stating a fact or recommending an action, rewrite it as the question it answers.
+Keep each item under 12 words. 3–6 items per list; fewer for a narrow management question. You are
+writing a research plan, not an answer — if you find yourself stating a fact or recommending an
+action, rewrite it as the question it answers.
 """
 
 REASONED_ANSWER_FORMAT = """\

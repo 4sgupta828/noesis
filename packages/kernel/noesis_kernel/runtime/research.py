@@ -111,39 +111,49 @@ class ResearchService:
             return MultiSourceRetriever(chosen), None
         return MultiSourceRetriever(corpus), (MultiSourceRetriever(aux) if aux else None)
 
-    async def ask_reasoned(self, **kw):
-        """ALTERNATE ENGINE ("reasoned", A/B duel arm): reason-first scaffold → coverage-steered
-        retrieval → decision-gated compose. Implements the reason-before-retrieve principle
-        GROUNDING-SAFELY: the scaffold emits the clinical decision structure strictly as QUESTIONS /
-        coverage targets (never conclusions), which are appended to the research question — they steer
-        what the loop searches for but add zero facts, so every claim still needs a span-verified quote.
-        The compose step swaps in the vertical's `reasoned_answer_format` (decision gates, Do-now/Do-if
-        conditionality, tier-awareness). Falls back to plain ask() when the vertical lacks the prompts
-        or the scaffold errors (fail-open — never a dead end)."""
+    async def ask_reasoned(self, route: bool = True, **kw):
+        """REASONED engine with DYNAMIC per-question routing. The single scaffold call does double duty
+        (zero extra LLM calls): it first CLASSIFIES the question — management/case (differential, workup,
+        treatment choice) vs pure evidence LOOKUP (trial results, pharmacokinetics, definitions) — then:
+          - management → coverage scaffold (QUESTIONS only, never conclusions — grounding-safe) steers
+            retrieval + the decision-gated compose directive;
+          - lookup → falls through to the STANDARD adaptive engine (a decision frame is the wrong shape
+            for an evidence summary).
+        `route=False` (the duel's explicit "reasoned" arm) FORCES the reasoned pipeline so A/B contrast
+        stays honest. Follow-ups run the standard adaptive compose (narrower asks; the scaffold's brief
+        would interfere with follow-up resolution). Fail-open everywhere — errors → reasoned-no-brief."""
         if not (self.reasoned_scaffold_prompt and self.reasoned_answer_format):
             return await self.ask(**kw)
         if kw.get("history"):
-            # FOLLOW-UP: the conversation already frames the problem — skip the scaffold (its coverage
-            # brief would also interfere with follow-up resolution, which rewrites the question). Keep
-            # the decision-gated compose format so the thread stays stylistically consistent.
-            kw = dict(kw)
-            kw["answer_format_override"] = self.reasoned_answer_format
             return await self.ask(**kw)
         question = kw.get("question", "")
         on_event = kw.get("on_event")
+        from typing import Literal
         from pydantic import BaseModel, Field
 
         class _Scaffold(BaseModel):
-            # every field is QUESTIONS/topics to cover — the prompt forbids conclusions/answers
+            # kind = the routing judgment (LLM-owned, Rule 18). Lists are QUESTIONS/topics to cover.
+            kind: Literal["management", "lookup"] = "management"
             likely_causes: list[str] = Field(default_factory=list)
             cant_miss: list[str] = Field(default_factory=list)
             key_decisions: list[str] = Field(default_factory=list)
+
+        async def _emit(ev):
+            if on_event is not None:
+                try:
+                    await on_event(ev)
+                except Exception:
+                    pass
         try:
             comp = await self.llm.complete(
                 system=self.reasoned_scaffold_prompt,
                 messages=[{"role": "user", "content": question}],
                 response_format=_Scaffold, max_tokens=700)
             s = comp.parsed
+            if route and s.kind == "lookup":
+                # pure evidence lookup → the standard adaptive engine fits better; say so in the trace
+                await _emit({"type": "engine", "engine": "standard", "why": "evidence lookup"})
+                return await self.ask(**kw)
             lines = ([f"- likely/common: {x}" for x in s.likely_causes[:6]]
                      + [f"- can't-miss: {x}" for x in s.cant_miss[:6]]
                      + [f"- decision: {x}" for x in s.key_decisions[:6]])
@@ -152,11 +162,8 @@ class ResearchService:
                 kw["question"] = (question + "\n\n[Coverage brief — clinical branches this answer must "
                                   "INVESTIGATE and address (these are questions to research, not facts):\n"
                                   + "\n".join(lines) + "\n]")
-                if on_event is not None:
-                    try:
-                        await on_event({"type": "scaffold", "branches": len(lines)})
-                    except Exception:
-                        pass
+                await _emit({"type": "engine", "engine": "reasoned", "why": "management question"})
+                await _emit({"type": "scaffold", "branches": len(lines)})
         except Exception:   # noqa: BLE001 — scaffold is an enhancer; its failure never blocks the answer
             pass
         kw["answer_format_override"] = self.reasoned_answer_format

@@ -981,7 +981,11 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             _use_reasoned = (await _flag_live("duel_enabled")) or (await _flag_live("reasoned_default_enabled"))
         else:
             _use_reasoned = await _flag_live("reasoned_default_enabled")
-        _ask = app.state.service.ask_reasoned if _use_reasoned else app.state.service.ask
+        # Explicit engine="reasoned" (the duel arm) FORCES the reasoned pipeline; auto mode lets the
+        # scaffold call route lookups to the standard engine (dynamic per-question selection).
+        import functools as _ft
+        _ask = (_ft.partial(app.state.service.ask_reasoned, route=(_eng != "reasoned"))
+                if _use_reasoned else app.state.service.ask)
         # per-question integrative opt-in (double opt-in: live flag AND body.integrative). Steers the
         # search (question hint) + appends the section directive; persisted question stays the original.
         _q, _extra = body.question, None

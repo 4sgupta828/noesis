@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
@@ -132,6 +133,15 @@ def ask_panel_enabled() -> bool:
     (`POST /panel/ask`) — each specialist runs its own grounded, lens-scoped research and the panel
     synthesizes their pooled verified findings. Costs N× a single answer; OFF → the endpoint 404s."""
     return os.environ.get("NOESIS_ASK_PANEL", "").lower() in ("1", "true", "yes")
+
+
+def accounts_enabled() -> bool:
+    """Flag (default OFF, Rule 20 — adoption P0): when ON, users register a real account
+    (`POST /auth/register`, free verified-clinician tier via structural NPI lookup) and every answer
+    carries a feedback affordance (`POST /feedback`) keyed to the W1–W9 warrant taxonomy — the
+    accumulating ground-truth signal. OFF → endpoints 404 and the FE keeps the localStorage-only
+    identity gate (byte-identical)."""
+    return os.environ.get("NOESIS_ACCOUNTS", "").lower() in ("1", "true", "yes")
 
 
 def triage_enabled() -> bool:
@@ -269,6 +279,25 @@ class TriageIn(BaseModel):
     # (stateless server) and appends each turn. The last item is the user's latest message.
     transcript: list[dict] = []
     tenant_id: str = "demo"
+
+
+class RegisterIn(BaseModel):
+    name: str
+    email: str
+    profession: str = ""            # self-declared (Physician / NP-PA / Pharmacist / Student / …)
+    country: str = ""
+    npi: str = ""                   # optional (US) — structurally verified against the CMS registry
+    disclaimer_ack: bool = False    # the attestation from the identity gate
+
+
+class FeedbackIn(BaseModel):
+    session_id: str = ""
+    turn_index: int = 0
+    verdict: str                    # "up" | "down" | "flag"
+    modes: list[str] = []           # W1–W9 codes (shared warrant taxonomy)
+    claim_index: int | None = None  # 1-based finding a flag points at, when specific
+    note: str = ""
+    question: str = ""              # echo of the question for a self-contained feedback row
 
 
 class ExplainIn(BaseModel):
@@ -497,6 +526,17 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 app.state.session_store = None
         return app.state.session_store
 
+    def _accounts():
+        """Vertical-isolated account+feedback store (same DSN as sessions); None without a DSN."""
+        if getattr(app.state, "account_store", "unset") == "unset":
+            dsn = os.environ.get("NOESIS_CORPUS_DSN")
+            if dsn and accounts_enabled():
+                from api.accounts import AccountStore
+                app.state.account_store = AccountStore(dsn, vertical=load_active_vertical().name)
+            else:
+                app.state.account_store = None
+        return app.state.account_store
+
     async def _attach_video(session_id: str, **kw) -> None:
         store = _store()
         if store is not None:
@@ -584,6 +624,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "panel_examples": (list(getattr(svc, "panel_examples", ())) if ask_panel_enabled() else []),
             "refine_enabled": refine_enabled() and bool(getattr(svc, "refine_prompt", None)),
             "triage_enabled": triage_enabled() and bool(getattr(svc, "triage_prompt", None)),
+            "accounts_enabled": accounts_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
         }
 
     @app.post("/search")
@@ -1190,6 +1231,76 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"queue error: {e}") from e
         return {"queued": len(ids), "jobs": len(jobs)}
+
+    @app.post("/auth/register")
+    async def auth_register(body: RegisterIn) -> dict:
+        """Adoption P0: register (or re-register) a user for the free verified-clinician tier.
+        Upsert-on-email; returns the bearer token ONCE (the FE stores it and sends it with feedback).
+        NPI (optional, US) is verified structurally against the public CMS registry. 404 when off."""
+        if not accounts_enabled():
+            raise HTTPException(status_code=404, detail="accounts are not enabled")
+        store = _accounts()
+        if store is None:
+            raise HTTPException(status_code=503, detail="no account store configured (NOESIS_CORPUS_DSN)")
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", body.email or ""):
+            raise HTTPException(status_code=400, detail="invalid email")
+        if len((body.name or "").strip()) < 2:
+            raise HTTPException(status_code=400, detail="name required")
+        npi_ok = False
+        if body.npi.strip():
+            from api.accounts import verify_npi
+            npi_ok = await verify_npi(body.npi)
+        try:
+            user, token = await store.register(
+                email=body.email, name=body.name, profession=body.profession[:80],
+                country=body.country[:40], npi=body.npi.strip()[:16], npi_verified=npi_ok,
+                disclaimer_ack=body.disclaimer_ack)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"registration failed: {e}") from e
+        return {"user": user, "token": token}
+
+    @app.post("/feedback")
+    async def post_feedback(body: FeedbackIn, x_noesis_token: str = Header(default="")) -> dict:
+        """Per-answer user feedback keyed to the W1–W9 warrant taxonomy (the same codes the eval and
+        auditor use — one contract, three uses). Requires a registered token so feedback is
+        attributable; modes are whitelisted structurally. 404 when accounts are off."""
+        if not accounts_enabled():
+            raise HTTPException(status_code=404, detail="accounts are not enabled")
+        store = _accounts()
+        if store is None:
+            raise HTTPException(status_code=503, detail="no account store configured")
+        user = await store.user_by_token(x_noesis_token)
+        if user is None:
+            raise HTTPException(status_code=401, detail="register to give feedback")
+        if body.verdict not in ("up", "down", "flag"):
+            raise HTTPException(status_code=400, detail="verdict must be up|down|flag")
+        modes = [m for m in body.modes if m in {f"W{i}" for i in range(1, 10)}]
+        try:
+            fid = await store.add_feedback(
+                user=user, session_id=body.session_id, turn_index=max(0, body.turn_index),
+                verdict=body.verdict, modes=modes, claim_index=body.claim_index,
+                note=body.note, question=body.question)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"feedback failed: {e}") from e
+        return {"ok": True, "id": fid}
+
+    @app.get("/admin/feedback")
+    async def admin_feedback(limit: int = 25, x_admin_token: str = Header(default="")) -> dict:
+        """The accumulating feedback signal, aggregated (totals · by verdict · by W-mode · by day ·
+        recent rows · user counts) — how we watch what's building up over time. Same admin-token gate
+        as corpus ingest."""
+        if not accounts_enabled():
+            raise HTTPException(status_code=404, detail="accounts are not enabled")
+        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
+        if want and x_admin_token != want:
+            raise HTTPException(status_code=401, detail="bad admin token")
+        store = _accounts()
+        if store is None:
+            raise HTTPException(status_code=503, detail="no account store configured")
+        try:
+            return await store.feedback_summary(limit=min(limit, 100))
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"feedback summary failed: {e}") from e
 
     @app.get("/sessions")
     async def list_sessions(tenant_id: str = "demo", limit: int = 100, q: str = "",

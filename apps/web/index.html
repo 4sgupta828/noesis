@@ -205,6 +205,26 @@
     font-weight:600;padding:.7rem;cursor:pointer;margin-top:.35rem;}
   .idcard .idgo:hover{background:var(--gold-strong);}
   .idcard .iderr{color:var(--gap);font-size:.75rem;min-height:1rem;margin-top:.35rem;text-align:center;}
+  .idcard select{width:100%;background:var(--panel2);border:1px solid var(--hair);border-radius:10px;
+    font:inherit;color:var(--ink);padding:.6rem .7rem;margin-bottom:.6rem;}
+  .idcard .idrow{display:flex;gap:.5rem;} .idcard .idrow>*{flex:1;min-width:0;}
+  .idcard .idhint{font-size:.68rem;color:var(--muted);line-height:1.45;margin:-.1rem 0 .5rem;}
+  /* per-answer feedback (accounts flag) — the W-taxonomy signal loop */
+  .fbrow{margin-top:.9rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;font-size:.78rem;color:var(--muted);}
+  .fb-l{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;}
+  .fbbtn{font:inherit;font-size:.75rem;cursor:pointer;background:var(--panel2);border:1px solid var(--hair);
+    border-radius:999px;padding:.28rem .7rem;color:var(--ink);transition:border-color .12s,color .12s;}
+  .fbbtn:hover{border-color:var(--gold);color:var(--gold);}
+  .fbpick{flex-basis:100%;background:var(--panel2);border:1px solid var(--hair);border-radius:10px;padding:.7rem .8rem;margin-top:.3rem;}
+  .fbpick label{display:flex;gap:.45rem;align-items:center;font-size:.8rem;color:var(--ink);padding:.15rem 0;cursor:pointer;}
+  .fbpick input[type=checkbox]{accent-color:var(--gold);}
+  .fbnote{width:100%;box-sizing:border-box;margin-top:.5rem;font:inherit;font-size:.8rem;background:var(--panel);
+    border:1px solid var(--hair);border-radius:8px;padding:.45rem .6rem;color:var(--ink);resize:vertical;min-height:2.2rem;}
+  .fbsend{margin-top:.5rem;font-family:var(--mono);font-size:.7rem;cursor:pointer;background:var(--gold);
+    color:var(--on-accent);border:1px solid var(--gold);border-radius:8px;padding:.35rem .8rem;}
+  .fbdone{margin-top:.9rem;font-size:.78rem;color:var(--verified);}
+  .vbadge{font-family:var(--mono);font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--verified);
+    border:1px solid var(--verified);border-radius:999px;padding:.06rem .4rem;margin-left:.4rem;vertical-align:middle;}
   .idcard .iddisc{font-size:.72rem;line-height:1.5;color:var(--muted);text-align:left;background:var(--panel2);
     border:1px solid var(--hair);border-radius:10px;padding:.7rem .8rem;margin:.2rem 0 1rem;max-height:8.5rem;overflow-y:auto;}
   /* persistent responsibility disclaimer at the foot of the shell */
@@ -1054,6 +1074,22 @@
     <p>Tell us who you are, so your questions are saved to your name.</p>
     <input id="idname" type="text" placeholder="Full name" autocomplete="name" />
     <input id="idemail" type="email" placeholder="Email" autocomplete="email" />
+    <div class="idextra" id="idextra" hidden>
+      <select id="idprof" aria-label="Profession">
+        <option value="">Profession…</option>
+        <option>Physician</option><option>Resident / Fellow</option><option>NP / PA</option>
+        <option>Pharmacist</option><option>Nurse</option><option>Medical student</option>
+        <option>Researcher</option><option>Other</option>
+      </select>
+      <div class="idrow">
+        <select id="idcountry" aria-label="Country">
+          <option value="US">United States</option><option value="IN">India</option>
+          <option value="">Other</option>
+        </select>
+        <input id="idnpi" type="text" placeholder="NPI (US — optional)" inputmode="numeric" />
+      </div>
+      <div class="idhint">Add your NPI for a ✓ verified-clinician badge — checked against the public NPI registry. Free for verified clinicians.</div>
+    </div>
     <div class="iderr" id="iderr"></div>
     <div class="iddisc" id="iddisc" hidden></div>
     <button type="button" class="idgo" id="idgo">I understand — continue</button>
@@ -1094,6 +1130,7 @@ let GUIDED_REFINED = false;     // one-shot: the Q&A box was filled from Guided 
 let REASONING_ENABLED = false;  // reasoning-read interpretation + confidence layer (server-validated)
 let ASK_PANEL_ENABLED = false;  // AI specialist panel (Alpha)
 let TRIAGE_ENABLED = false;     // guided-intake / triage mode (clarify → route)
+let ACCOUNTS_ENABLED = false;   // accounts + verified-clinician tier + per-answer feedback (W-taxonomy)
 let PANEL_SPECIALISTS = [];      // roster from /config [{id, specialty, default}]
 let PANEL_EXAMPLES = [];         // sample multi-specialty cases seeded into the panel intake
 let THREAD = {session_id:null, turns:[]};   // the active conversation
@@ -1129,6 +1166,16 @@ async function loadConfig(){
     REASONING_ENABLED = !!c.reasoning_read_enabled;
     ASK_PANEL_ENABLED = !!c.ask_panel_enabled;
     TRIAGE_ENABLED = !!c.triage_enabled;
+    ACCOUNTS_ENABLED = !!c.accounts_enabled;
+    if(ACCOUNTS_ENABLED){
+      const ex = $("#idextra"); if(ex) ex.hidden = false;   // reveal profession/NPI/country in the gate
+      // an existing local-only user predates accounts → ask them to register once (prefilled)
+      if(USER && USER.email && !USER.token){
+        if(USER.name) $("#idname").value = USER.name;
+        if(USER.email) $("#idemail").value = USER.email;
+        $("#idmodal").hidden = false;
+      }
+    }
     PANEL_SPECIALISTS = c.panel_specialists || [];
     PANEL_EXAMPLES = c.panel_examples || [];
     if(ASK_PANEL_ENABLED || TRIAGE_ENABLED){
@@ -1547,7 +1594,10 @@ function render(data, target, opts){
   if(!opts.noConvo) parts.push(convoActionsMarkup(data));
   // per-answer responsibility footnote — only under a real answer (skips pending/clarification turns)
   if(data.answer && DISCLAIMER.answer) parts.push(`<div class="ansdisc">${esc(DISCLAIMER.answer)}</div>`);
+  // per-answer feedback loop (accounts flag) — user signal keyed to the same W-taxonomy as the eval
+  if(ACCOUNTS_ENABLED && data.answer && !data._pending) parts.push(feedbackMarkup());
   target.innerHTML = parts.join("");
+  wireFeedback(target, data);
   // clicking a [n] reference scrolls to and highlights its finding (within this pane)
   target.querySelectorAll(".ref").forEach(r=>r.addEventListener("click",()=>{
     const ev = target.querySelector("#evblock"); if(ev) ev.open = true;   // reveal the dossier
@@ -1805,6 +1855,58 @@ async function generatePlain(root){
 }
 
 // Build clean Markdown of the answer + its evidence (verbatim quotes + sources).
+// ---- per-answer feedback (accounts flag) ----
+// Plain-language labels mapped to the W1–W9 warrant taxonomy (docs/specs/answer-warrant-contract.md) —
+// the SAME codes the eval + auditor use, so user signal, eval runs, and audit verdicts share one store.
+const FB_MODES = [
+  ["W5", "Missing something important"],
+  ["W1", "The evidence doesn't support a claim"],
+  ["W3", "Wrong patient group or setting"],
+  ["W4", "Overstates weak evidence"],
+  ["W7", "Should be conditional, not routine"],
+];
+function feedbackMarkup(){
+  return `<div class="fbrow">
+    <span class="fb-l">Rate this answer</span>
+    <button type="button" class="fbbtn" data-v="up">👍 Helpful</button>
+    <button type="button" class="fbbtn" data-v="down">👎 Not right</button>
+    <button type="button" class="fbbtn" data-v="flag">⚑ Flag an issue</button>
+    <div class="fbpick" hidden>
+      ${FB_MODES.map(([w,l])=>`<label><input type="checkbox" value="${w}"> ${esc(l)}</label>`).join("")}
+      <textarea class="fbnote" placeholder="Anything specific? (optional)"></textarea>
+      <button type="button" class="fbsend">Send feedback</button>
+    </div>
+  </div>`;
+}
+function wireFeedback(target, data){
+  const row = target.querySelector(".fbrow"); if(!row) return;
+  const sid = data.session_id || THREAD.session_id
+    || (typeof PANEL_THREAD !== "undefined" && PANEL_THREAD && PANEL_THREAD.session_id) || "";
+  const send = async (verdict, modes, note) => {
+    try{
+      const r = await fetch("/feedback", {method:"POST",
+        headers:{"content-type":"application/json", "x-noesis-token": (USER && USER.token) || ""},
+        body: JSON.stringify({session_id: sid, verdict, modes, note,
+                              question: data.question || CURRENT_Q || ""})});
+      if(r.status === 401){ $("#idmodal").hidden = false; return; }   // register first, then re-click
+      if(!r.ok) throw new Error();
+      row.outerHTML = `<div class="fbdone">✓ Thanks — feedback logged.</div>`;
+    }catch(e){ row.querySelector(".fb-l").textContent = "Couldn't send — try again"; }
+  };
+  let pendingVerdict = "down";
+  row.querySelectorAll(".fbbtn").forEach(b => b.addEventListener("click", () => {
+    if(!(USER && USER.token)){ $("#idmodal").hidden = false; return; }   // needs a registered account
+    if(b.dataset.v === "up"){ send("up", [], ""); return; }
+    pendingVerdict = b.dataset.v;
+    row.querySelector(".fbpick").hidden = false;
+  }));
+  const sb = row.querySelector(".fbsend");
+  if(sb) sb.addEventListener("click", () => {
+    const modes = [...row.querySelectorAll(".fbpick input:checked")].map(i => i.value);
+    send(pendingVerdict, modes, (row.querySelector(".fbnote").value || "").trim());
+  });
+}
+
 // FAITHFUL markdown export — everything the rendered answer shows, so the copy can recreate it exactly:
 // question · answer prose · Reasoning Read (purpose / factors / informed judgment / confidence) ·
 // coverage gaps · grounded chart data · evidence (quote + source + url) · plain-language view. Each
@@ -3272,12 +3374,29 @@ function initIdentity(){
     $("#idmodal").hidden = false; setTimeout(()=>$("#idname").focus(), 60);
   }
 }
-$("#idgo").addEventListener("click", ()=>{
+$("#idgo").addEventListener("click", async ()=>{
   const name = $("#idname").value.trim(), email = $("#idemail").value.trim();
   if(name.length < 2){ $("#iderr").textContent = "Please enter your name."; return; }
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ $("#iderr").textContent = "Please enter a valid email."; return; }
   // clicking "I understand — continue" is the attestation: record acceptance of the disclaimer terms
   USER = {name, email, disclaimer_ack: true, disclaimer_ack_at: new Date().toISOString()};
+  // accounts flag on → register server-side (free verified-clinician tier). Fail-open: a registration
+  // error never blocks use — the local identity still works; they can re-try from the gate later.
+  if(ACCOUNTS_ENABLED){
+    const btn = $("#idgo"), was = btn.textContent; btn.textContent = "Registering…"; btn.disabled = true;
+    try{
+      const r = await fetch("/auth/register", {method:"POST", headers:{"content-type":"application/json"},
+        body: JSON.stringify({name, email, profession: ($("#idprof")||{}).value || "",
+          country: ($("#idcountry")||{}).value || "", npi: (($("#idnpi")||{}).value || "").trim(),
+          disclaimer_ack: true})});
+      if(r.ok){
+        const d = await r.json();
+        USER.token = d.token; USER.verified = !!(d.user && d.user.verified);
+        USER.profession = (d.user && d.user.profession) || "";
+      }
+    }catch(e){ /* offline/server issue — proceed local-only */ }
+    btn.textContent = was; btn.disabled = false;
+  }
   localStorage.setItem("noesis_user", JSON.stringify(USER));
   $("#idmodal").hidden = true;
 });

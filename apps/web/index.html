@@ -224,14 +224,16 @@
   .idcard .idhint{font-size:.68rem;color:var(--muted);line-height:1.45;margin:-.1rem 0 .5rem;}
   /* per-answer feedback (accounts flag) — the W-taxonomy signal loop. PROMINENT card, not fine print:
      it sits directly under the answer/evidence cluster with the gold accent the key boxes use. */
-  .fbcard{margin-top:1.15rem;background:var(--panel2);border:1px solid var(--hair);border-left:3px solid var(--gold);
-    border-radius:12px;padding:.95rem 1.05rem;}
-  .fb-h{font-family:var(--serif);font-size:1.04rem;color:var(--ink);}
-  .fb-sub{font-size:.76rem;color:var(--muted);margin:.15rem 0 .65rem;line-height:1.45;}
-  .fb-btns{display:flex;gap:.55rem;flex-wrap:wrap;}
-  .fbbtn{font:inherit;font-size:.85rem;font-weight:560;cursor:pointer;background:var(--panel);border:1px solid var(--hair);
-    border-radius:10px;padding:.5rem .95rem;color:var(--ink);transition:border-color .12s,color .12s,background .12s;}
+  .fbcard.fbslim{margin-top:1rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;
+    background:var(--panel2);border:1px solid var(--hair);border-radius:10px;padding:.55rem .8rem;}
+  .fb-l{font-family:var(--mono);font-size:.64rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+  .fbbtn{font:inherit;font-size:.9rem;cursor:pointer;background:var(--panel);border:1px solid var(--hair);
+    border-radius:9px;padding:.3rem .65rem;color:var(--ink);transition:border-color .12s,color .12s;}
   .fbbtn:hover{border-color:var(--gold);color:var(--gold);}
+  .fbpick-h{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem;}
+  .fbpick{flex-basis:100%;}
+  .evgaps{color:var(--gap);font-weight:640;}
+  .evbody .gaps{margin:.2rem 0 1rem;}
   .fbpick{background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:.7rem .8rem;margin-top:.65rem;}
   .fbpick label{display:flex;gap:.45rem;align-items:center;font-size:.84rem;color:var(--ink);padding:.18rem 0;cursor:pointer;}
   .fbpick input[type=checkbox]{accent-color:var(--gold);}
@@ -1558,16 +1560,23 @@ function render(data, target, opts){
   const hasHl = STRUCTURED && !!data.answer && /\[\[[FRK]\]\]/.test(data.answer);  // answer has markers
   // TOP bar: action buttons only (retry-with-more-effort is prepended by the session view). The
   // "Grounded" status + "Sources used" move to the Diagnostics box at the BOTTOM (see below).
+  const showFb = ACCOUNTS_ENABLED && !!data.answer && !data._pending && !opts.noFeedback;
+  const fbTop = showFb
+    ? `<button type="button" class="copybtn fbtop" data-v="up" title="Helpful">👍</button>`
+      + `<button type="button" class="copybtn fbtop" data-v="down" title="Not right — tell us why">👎</button>` : "";
   const topbtns = `${hasHl?`<button type="button" class="copybtn hltoggle" id="hltoggle" title="Show color highlights (load-bearing facts, reasoning, key context)">✦ Highlights</button>`:""}`
     + `${showLink?`<button type="button" class="copybtn" id="linkbtn">🔗 Copy link</button>`:""}`
-    + `${(data.answer||n)?`<button type="button" class="copybtn" id="copybtn">⧉ Copy</button>`:""}`;
+    + `${(data.answer||n)?`<button type="button" class="copybtn" id="copybtn">⧉ Copy</button>`:""}`
+    + fbTop;
   // noTopbtns: the session-detail view lifts turn-1's actions into a single toolbar above the answer
   // (so they don't crowd the header question on mobile) — suppress the per-answer top bar there.
   if(topbtns.trim() && !opts.noTopbtns) parts.push(`<div class="ansmeta ansmeta-top"><span class="metabtns">${topbtns}</span></div>`);
-  if(data.coverage_gaps && data.coverage_gaps.length){
-    parts.push(`<div class="gaps"><h4>Coverage gaps</h4><ul>` +
-      data.coverage_gaps.map(g=>`<li>${esc(g)}</li>`).join("") + `</ul></div>`);
-  }
+  // Coverage gaps live INSIDE the Evidence box (a sub-box at its top, with a count in the summary
+  // line); standalone only when there's no Evidence box to host them.
+  const gapsHtml = (data.coverage_gaps && data.coverage_gaps.length)
+    ? `<div class="gaps"><h4>Coverage gaps</h4><ul>` +
+      data.coverage_gaps.map(g=>`<li>${esc(g)}</li>`).join("") + `</ul></div>` : "";
+  if(gapsHtml && !n) parts.push(gapsHtml);
   // labeled AI visual observation (context, NOT a diagnosis, NOT part of the evidence)
   if(data.visual_observation){
     parts.push(`<div class="vobs">
@@ -1642,10 +1651,11 @@ function render(data, target, opts){
         <div class="cfoot"><span class="verified" title="A verbatim quote from this source was located and matched — this is a provenance check, not a judgment of source quality, currency, or clinical applicability.">✓ Quote found in source</span>${src}</div>
       </article>`;
     }).join("");
+    const ngaps = (data.coverage_gaps||[]).length;
     evBits.push(`<details class="evblock" id="evblock">
-      <summary><h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}<span class="evtoggle"></span></h4>
+      <summary><h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}${ngaps?` · <span class="evgaps">${ngaps} gap${ngaps===1?"":"s"}</span>`:""}<span class="evtoggle"></span></h4>
         <div class="evhint">The passages this answer is built on — each shows a quote located in its cited source.</div></summary>
-      <div class="evbody">${cards}</div>
+      <div class="evbody">${gapsHtml}${cards}</div>
     </details>`);
   }
   if(GAP_ENABLED){
@@ -1658,10 +1668,9 @@ function render(data, target, opts){
   if(evBits.length) parts.push(`<div class="ansbox">${evBits.join("")}</div>`);
   // CONVERSATION-LEVEL box: briefing video + explain-in-plain-language. In a thread it renders ONCE at
   // the bottom (renderThread passes noConvo per turn); in single-answer mode it renders here.
-  // per-answer feedback loop (accounts flag) — PROMINENT: directly under the answer/evidence cluster,
-  // above the add-ons and the fine print. User signal keyed to the same W-taxonomy as the eval.
-  // (suppressed inside a duel tab — the A/B vote bar is the feedback there)
-  if(ACCOUNTS_ENABLED && data.answer && !data._pending && !opts.noFeedback) parts.push(feedbackMarkup());
+  // per-answer feedback: slim thumbs at the BOTTOM (the top pair lives in the toolbar); 👎 opens the
+  // root-cause picker. Suppressed inside a duel tab (the A/B vote bar is the feedback there).
+  if(showFb) parts.push(feedbackMarkup());
   if(!opts.noConvo) parts.push(convoActionsMarkup(data));
   // per-answer responsibility footnote — only under a real answer (skips pending/clarification turns)
   if(data.answer && DISCLAIMER.answer) parts.push(`<div class="ansdisc">${esc(DISCLAIMER.answer)}</div>`);
@@ -1927,32 +1936,39 @@ async function generatePlain(root){
 // ---- per-answer feedback (accounts flag) ----
 // Plain-language labels mapped to the W1–W9 warrant taxonomy (docs/specs/answer-warrant-contract.md) —
 // the SAME codes the eval + auditor use, so user signal, eval runs, and audit verdicts share one store.
+// Root-cause options (what was MISSING, WRONG, or AMBIGUOUS — the signal that teaches us how to
+// architect better answers). W-codes share the warrant taxonomy; U-codes are UX/understanding causes.
 const FB_MODES = [
   ["W5", "Missing something important"],
-  ["W1", "The evidence doesn't support a claim"],
-  ["W3", "Wrong patient group or setting"],
+  ["W1", "A claim isn't supported by its cited source"],
+  ["W3", "Doesn't apply to this patient or setting"],
   ["W4", "Overstates weak evidence"],
-  ["W7", "Should be conditional, not routine"],
+  ["U1", "Unclear or ambiguous"],
+  ["U2", "Misunderstood my question"],
 ];
 function feedbackMarkup(){
-  return `<div class="fbcard">
-    <div class="fb-h">Was this answer right?</div>
-    <div class="fb-sub">One click trains Noesis — your read as a clinician is the signal we build on.</div>
-    <div class="fb-btns">
-      <button type="button" class="fbbtn" data-v="up">👍 Helpful</button>
-      <button type="button" class="fbbtn" data-v="down">👎 Not right</button>
-    </div>
+  return `<div class="fbcard fbslim">
+    <span class="fb-l">Was this answer right?</span>
+    <button type="button" class="fbbtn" data-v="up" title="Helpful">👍</button>
+    <button type="button" class="fbbtn" data-v="down" title="Not right — tell us why">👎</button>
     <div class="fbpick" hidden>
+      <div class="fbpick-h">What went wrong? (root cause — pick any)</div>
       ${FB_MODES.map(([w,l])=>`<label><input type="checkbox" value="${w}"> ${esc(l)}</label>`).join("")}
-      <textarea class="fbnote" placeholder="Anything specific? (optional)"></textarea>
+      <textarea class="fbnote" placeholder="What would a better answer have included? (optional)"></textarea>
       <button type="button" class="fbsend">Send feedback</button>
     </div>
   </div>`;
 }
 function wireFeedback(target, data){
-  const row = target.querySelector(".fbcard"); if(!row) return;
+  const row = target.querySelector(".fbcard");
+  const tops = [...target.querySelectorAll(".fbtop")];
+  if(!row && !tops.length) return;
   const sid = data.session_id || THREAD.session_id
     || (typeof PANEL_THREAD !== "undefined" && PANEL_THREAD && PANEL_THREAD.session_id) || "";
+  const done = () => {
+    if(row) row.outerHTML = `<div class="fbdone">✓ Thank you — logged. This is exactly what trains Noesis.</div>`;
+    tops.forEach(b => { b.disabled = true; b.style.opacity = ".45"; });
+  };
   const send = async (verdict, modes, note) => {
     try{
       const r = await fetch("/feedback", {method:"POST",
@@ -1961,15 +1977,22 @@ function wireFeedback(target, data){
                               question: data.question || CURRENT_Q || ""})});
       if(r.status === 401){ $("#idmodal").hidden = false; return; }   // register first, then re-click
       if(!r.ok) throw new Error();
-      row.outerHTML = `<div class="fbdone">✓ Thank you — your feedback is logged and goes straight into improving Noesis.</div>`;
-    }catch(e){ row.querySelector(".fb-h").textContent = "Couldn't send — try again"; }
+      done();
+    }catch(e){ if(row) row.querySelector(".fb-l").textContent = "Couldn't send — try again"; }
   };
-  row.querySelectorAll(".fbbtn").forEach(b => b.addEventListener("click", () => {
+  const openPicker = () => {
+    if(!row) return;
+    row.querySelector(".fbpick").hidden = false;
+    row.scrollIntoView({behavior: "smooth", block: "center"});
+  };
+  const onThumb = (v) => {
     if(!(USER && USER.token)){ $("#idmodal").hidden = false; return; }   // needs a registered account
-    if(b.dataset.v === "up"){ send("up", [], ""); return; }
-    row.querySelector(".fbpick").hidden = false;    // 👎 → say what's wrong (issue picker + note)
-  }));
-  const sb = row.querySelector(".fbsend");
+    if(v === "up") send("up", [], "");
+    else openPicker();                                 // 👎 → root-cause picker (missing/wrong/ambiguous)
+  };
+  tops.forEach(b => b.addEventListener("click", () => onThumb(b.dataset.v)));
+  if(row) row.querySelectorAll(".fbbtn").forEach(b => b.addEventListener("click", () => onThumb(b.dataset.v)));
+  const sb = row && row.querySelector(".fbsend");
   if(sb) sb.addEventListener("click", () => {
     const modes = [...row.querySelectorAll(".fbpick input:checked")].map(i => i.value);
     send("down", modes, (row.querySelector(".fbnote").value || "").trim());

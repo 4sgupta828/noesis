@@ -1351,7 +1351,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=401, detail="register to give feedback")
         if body.verdict not in ("up", "down", "flag"):
             raise HTTPException(status_code=400, detail="verdict must be up|down|flag")
-        modes = [m for m in body.modes if m in {f"W{i}" for i in range(1, 10)}]
+        # W1–W9 = warrant taxonomy; U1 (unclear/ambiguous) + U2 (misunderstood question) = UX root causes
+        modes = [m for m in body.modes if m in ({f"W{i}" for i in range(1, 10)} | {"U1", "U2"})]
         try:
             fid = await store.add_feedback(
                 user=user, session_id=body.session_id, turn_index=max(0, body.turn_index),

@@ -209,20 +209,25 @@
     font:inherit;color:var(--ink);padding:.6rem .7rem;margin-bottom:.6rem;}
   .idcard .idrow{display:flex;gap:.5rem;} .idcard .idrow>*{flex:1;min-width:0;}
   .idcard .idhint{font-size:.68rem;color:var(--muted);line-height:1.45;margin:-.1rem 0 .5rem;}
-  /* per-answer feedback (accounts flag) — the W-taxonomy signal loop */
-  .fbrow{margin-top:.9rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;font-size:.78rem;color:var(--muted);}
-  .fb-l{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;}
-  .fbbtn{font:inherit;font-size:.75rem;cursor:pointer;background:var(--panel2);border:1px solid var(--hair);
-    border-radius:999px;padding:.28rem .7rem;color:var(--ink);transition:border-color .12s,color .12s;}
+  /* per-answer feedback (accounts flag) — the W-taxonomy signal loop. PROMINENT card, not fine print:
+     it sits directly under the answer/evidence cluster with the gold accent the key boxes use. */
+  .fbcard{margin-top:1.15rem;background:var(--panel2);border:1px solid var(--hair);border-left:3px solid var(--gold);
+    border-radius:12px;padding:.95rem 1.05rem;}
+  .fb-h{font-family:var(--serif);font-size:1.04rem;color:var(--ink);}
+  .fb-sub{font-size:.76rem;color:var(--muted);margin:.15rem 0 .65rem;line-height:1.45;}
+  .fb-btns{display:flex;gap:.55rem;flex-wrap:wrap;}
+  .fbbtn{font:inherit;font-size:.85rem;font-weight:560;cursor:pointer;background:var(--panel);border:1px solid var(--hair);
+    border-radius:10px;padding:.5rem .95rem;color:var(--ink);transition:border-color .12s,color .12s,background .12s;}
   .fbbtn:hover{border-color:var(--gold);color:var(--gold);}
-  .fbpick{flex-basis:100%;background:var(--panel2);border:1px solid var(--hair);border-radius:10px;padding:.7rem .8rem;margin-top:.3rem;}
-  .fbpick label{display:flex;gap:.45rem;align-items:center;font-size:.8rem;color:var(--ink);padding:.15rem 0;cursor:pointer;}
+  .fbpick{background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:.7rem .8rem;margin-top:.65rem;}
+  .fbpick label{display:flex;gap:.45rem;align-items:center;font-size:.84rem;color:var(--ink);padding:.18rem 0;cursor:pointer;}
   .fbpick input[type=checkbox]{accent-color:var(--gold);}
-  .fbnote{width:100%;box-sizing:border-box;margin-top:.5rem;font:inherit;font-size:.8rem;background:var(--panel);
+  .fbnote{width:100%;box-sizing:border-box;margin-top:.5rem;font:inherit;font-size:.84rem;background:var(--panel2);
     border:1px solid var(--hair);border-radius:8px;padding:.45rem .6rem;color:var(--ink);resize:vertical;min-height:2.2rem;}
-  .fbsend{margin-top:.5rem;font-family:var(--mono);font-size:.7rem;cursor:pointer;background:var(--gold);
-    color:var(--on-accent);border:1px solid var(--gold);border-radius:8px;padding:.35rem .8rem;}
-  .fbdone{margin-top:.9rem;font-size:.78rem;color:var(--verified);}
+  .fbsend{margin-top:.55rem;font-family:var(--mono);font-size:.72rem;font-weight:640;cursor:pointer;background:var(--gold);
+    color:var(--on-accent);border:1px solid var(--gold);border-radius:8px;padding:.42rem .9rem;}
+  .fbdone{margin-top:1.15rem;background:var(--panel2);border:1px solid var(--verified);border-left:3px solid var(--verified);
+    border-radius:12px;padding:.8rem 1.05rem;font-size:.86rem;color:var(--verified);}
   .vbadge{font-family:var(--mono);font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--verified);
     border:1px solid var(--verified);border-radius:999px;padding:.06rem .4rem;margin-left:.4rem;vertical-align:middle;}
   .idcard .iddisc{font-size:.72rem;line-height:1.5;color:var(--muted);text-align:left;background:var(--panel2);
@@ -1591,11 +1596,12 @@ function render(data, target, opts){
   if(evBits.length) parts.push(`<div class="ansbox">${evBits.join("")}</div>`);
   // CONVERSATION-LEVEL box: briefing video + explain-in-plain-language. In a thread it renders ONCE at
   // the bottom (renderThread passes noConvo per turn); in single-answer mode it renders here.
+  // per-answer feedback loop (accounts flag) — PROMINENT: directly under the answer/evidence cluster,
+  // above the add-ons and the fine print. User signal keyed to the same W-taxonomy as the eval.
+  if(ACCOUNTS_ENABLED && data.answer && !data._pending) parts.push(feedbackMarkup());
   if(!opts.noConvo) parts.push(convoActionsMarkup(data));
   // per-answer responsibility footnote — only under a real answer (skips pending/clarification turns)
   if(data.answer && DISCLAIMER.answer) parts.push(`<div class="ansdisc">${esc(DISCLAIMER.answer)}</div>`);
-  // per-answer feedback loop (accounts flag) — user signal keyed to the same W-taxonomy as the eval
-  if(ACCOUNTS_ENABLED && data.answer && !data._pending) parts.push(feedbackMarkup());
   target.innerHTML = parts.join("");
   wireFeedback(target, data);
   // clicking a [n] reference scrolls to and highlights its finding (within this pane)
@@ -1866,11 +1872,13 @@ const FB_MODES = [
   ["W7", "Should be conditional, not routine"],
 ];
 function feedbackMarkup(){
-  return `<div class="fbrow">
-    <span class="fb-l">Rate this answer</span>
-    <button type="button" class="fbbtn" data-v="up">👍 Helpful</button>
-    <button type="button" class="fbbtn" data-v="down">👎 Not right</button>
-    <button type="button" class="fbbtn" data-v="flag">⚑ Flag an issue</button>
+  return `<div class="fbcard">
+    <div class="fb-h">Was this answer right?</div>
+    <div class="fb-sub">One click trains Noesis — your read as a clinician is the signal we build on.</div>
+    <div class="fb-btns">
+      <button type="button" class="fbbtn" data-v="up">👍 Helpful</button>
+      <button type="button" class="fbbtn" data-v="down">👎 Not right</button>
+    </div>
     <div class="fbpick" hidden>
       ${FB_MODES.map(([w,l])=>`<label><input type="checkbox" value="${w}"> ${esc(l)}</label>`).join("")}
       <textarea class="fbnote" placeholder="Anything specific? (optional)"></textarea>
@@ -1879,7 +1887,7 @@ function feedbackMarkup(){
   </div>`;
 }
 function wireFeedback(target, data){
-  const row = target.querySelector(".fbrow"); if(!row) return;
+  const row = target.querySelector(".fbcard"); if(!row) return;
   const sid = data.session_id || THREAD.session_id
     || (typeof PANEL_THREAD !== "undefined" && PANEL_THREAD && PANEL_THREAD.session_id) || "";
   const send = async (verdict, modes, note) => {
@@ -1890,20 +1898,18 @@ function wireFeedback(target, data){
                               question: data.question || CURRENT_Q || ""})});
       if(r.status === 401){ $("#idmodal").hidden = false; return; }   // register first, then re-click
       if(!r.ok) throw new Error();
-      row.outerHTML = `<div class="fbdone">✓ Thanks — feedback logged.</div>`;
-    }catch(e){ row.querySelector(".fb-l").textContent = "Couldn't send — try again"; }
+      row.outerHTML = `<div class="fbdone">✓ Thank you — your feedback is logged and goes straight into improving Noesis.</div>`;
+    }catch(e){ row.querySelector(".fb-h").textContent = "Couldn't send — try again"; }
   };
-  let pendingVerdict = "down";
   row.querySelectorAll(".fbbtn").forEach(b => b.addEventListener("click", () => {
     if(!(USER && USER.token)){ $("#idmodal").hidden = false; return; }   // needs a registered account
     if(b.dataset.v === "up"){ send("up", [], ""); return; }
-    pendingVerdict = b.dataset.v;
-    row.querySelector(".fbpick").hidden = false;
+    row.querySelector(".fbpick").hidden = false;    // 👎 → say what's wrong (issue picker + note)
   }));
   const sb = row.querySelector(".fbsend");
   if(sb) sb.addEventListener("click", () => {
     const modes = [...row.querySelectorAll(".fbpick input:checked")].map(i => i.value);
-    send(pendingVerdict, modes, (row.querySelector(".fbnote").value || "").trim());
+    send("down", modes, (row.querySelector(".fbnote").value || "").trim());
   });
 }
 

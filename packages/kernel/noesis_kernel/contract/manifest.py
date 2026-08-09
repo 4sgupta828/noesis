@@ -93,6 +93,10 @@ class VerticalManifest:
     # as QUESTIONS, never conclusions) + a decision-gated compose directive. Opaque prose.
     reasoned_scaffold_prompt: str | None = None
     reasoned_answer_format: str | None = None
+    # Optional OPT-IN complementary/integrative section: a compose addendum + a retrieval-steering hint,
+    # applied only when the user explicitly opts in for a question. Opaque prose.
+    integrative_prompt: str | None = None
+    integrative_query_hint: str | None = None
     # Optional vertical-supplied instruction for the VISION pre-step: how to DESCRIBE a
     # user-uploaded image (color/shape/borders/texture/distribution), producing a labeled
     # visual observation — never a diagnosis. Opaque prose; the kernel only threads it into

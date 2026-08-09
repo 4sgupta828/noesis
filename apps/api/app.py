@@ -144,6 +144,14 @@ def duel_enabled() -> bool:
     return os.environ.get("NOESIS_DUEL", "").lower() in ("1", "true", "yes")
 
 
+def integrative_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, the per-question "include complementary & integrative
+    approaches" opt-in appears (itself off by default per question). Double opt-in: this flag gates the
+    feature; the user chooses per question. Grounding invariant unchanged — the section only shapes what
+    is searched and how VERIFIED findings are presented; evidence-strength labels are required."""
+    return os.environ.get("NOESIS_INTEGRATIVE", "").lower() in ("1", "true", "yes")
+
+
 def accounts_enabled() -> bool:
     """Flag (default OFF, Rule 20 — adoption P0): when ON, users register a real account
     (`POST /auth/register`, free verified-clinician tier via structural NPI lookup) and every answer
@@ -255,6 +263,7 @@ class ResearchIn(BaseModel):
     user_name: str | None = None          # asker identity (captured at landing)
     user_email: str | None = None
     engine: str = "standard"              # "standard" | "reasoned" (A/B duel arm; ignored unless NOESIS_DUEL)
+    integrative: bool = False             # per-question opt-in: complementary/integrative section (flag-gated)
     history: list[dict] | None = None     # prior turns [{question, answer}] → follow-up context
     session_id: str | None = None         # thread to append this turn to (conversation)
     countries: list[str] | None = None    # source-country scope (e.g. ["IN"]); None/[]=all (see flag)
@@ -482,6 +491,8 @@ def build_default_service() -> ResearchService:
         layman_prompt=manifest.layman_prompt, gap_prompt=gap_prompt,
         suggest_prompt=suggest_prompt, refine_prompt=refine_prompt, triage_prompt=triage_prompt,
         reasoned_scaffold_prompt=reasoned_scaffold, reasoned_answer_format=reasoned_format,
+        integrative_prompt=getattr(manifest, "integrative_prompt", None),
+        integrative_query_hint=getattr(manifest, "integrative_query_hint", None),
         vertical_name=manifest.name, ui=manifest.ui,
         connectors=connectors, corpus_source_key=corpus_key,
     )
@@ -561,7 +572,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     # gating is fully REQUEST-time belong here — accounts_enabled stays env-only (it gates store
     # construction at boot). New product settings land in this dict going forward.
     _LIVE_FLAGS = {"duel_enabled": duel_enabled, "triage_enabled": triage_enabled,
-                   "ask_panel_enabled": ask_panel_enabled}
+                   "ask_panel_enabled": ask_panel_enabled, "integrative_enabled": integrative_enabled}
 
     async def _flag_live(key: str) -> bool:
         """Resolved value of a controlled flag: DB override → else env default. Fail-open to env."""
@@ -679,6 +690,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "triage_enabled": live_triage and bool(getattr(svc, "triage_prompt", None)),
             "accounts_enabled": accounts_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
             "duel_enabled": live_duel and bool(getattr(svc, "reasoned_answer_format", None)),
+            "integrative_enabled": (await _flag_live("integrative_enabled")) and bool(getattr(svc, "integrative_prompt", None)),
         }
 
     @app.post("/search")
@@ -951,13 +963,22 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         # Flag off (or unknown engine) → plain ask, param ignored (byte-identical, Rule 20).
         _ask = (app.state.service.ask_reasoned
                 if body.engine == "reasoned" and await _flag_live("duel_enabled") else app.state.service.ask)
+        # per-question integrative opt-in (double opt-in: live flag AND body.integrative). Steers the
+        # search (question hint) + appends the section directive; persisted question stays the original.
+        _q, _extra = body.question, None
+        if body.integrative and await _flag_live("integrative_enabled"):
+            svc_ = app.state.service
+            _extra = getattr(svc_, "integrative_prompt", None)
+            hint = getattr(svc_, "integrative_query_hint", None)
+            if hint:
+                _q = body.question + "\n\n[" + hint + "]"
         res = await _ask(
-            question=body.question, tenant_id=body.tenant_id,
+            question=_q, tenant_id=body.tenant_id,
             workspace_id=body.workspace_id, source_keys=body.sources,
             images=images, documents=docs, history=history, on_event=on_event,
             facets=_country_facets(body.countries), country_boost=_country_boost(body.countries),
             effort=effort, audience=audience,
-            answer_focus=focus, clarify=followup_clarify_enabled())
+            answer_focus=focus, clarify=followup_clarify_enabled(), extra_directive=_extra)
         # Ambiguous follow-up → return the clarifying question; no research ran, nothing to persist.
         if getattr(res, "clarification", ""):
             return ResearchOut(grounded=False, answer="", claims=[], coverage_gaps=[], rejected=0,

@@ -1042,6 +1042,13 @@
       </div>
       <span class="ahint" id="aud-hint">Clinician brief — structured, cited, for a medical audience.</span>
     </div>
+    <div class="audsel" id="integsel" role="group" aria-label="Complementary and integrative approaches" hidden>
+      <span class="lbl">Complementary</span>
+      <div class="seg">
+        <button type="button" class="segbtn" id="integbtn" aria-pressed="false">🌿 Include integrative &amp; natural options</button>
+      </div>
+      <span class="ahint">Off by default. Adds an evidence-based complementary/integrative section (proven &amp; adopted approaches only, with interactions) to this answer.</span>
+    </div>
   </form>
 
   <section id="out" aria-live="polite">
@@ -1181,6 +1188,8 @@ let ASK_PANEL_ENABLED = false;  // AI specialist panel (Alpha)
 let TRIAGE_ENABLED = false;     // guided-intake / triage mode (clarify → route)
 let ACCOUNTS_ENABLED = false;   // accounts + verified-clinician tier + per-answer feedback (W-taxonomy)
 let DUEL_ENABLED = false;       // A/B duel: fresh questions run standard + reasoned engines, user votes
+let INTEGRATIVE_ENABLED = false; // feature flag: the per-question integrative opt-in is offered
+let INTEGRATIVE_ON = false;      // the per-question opt-in state (off by default)
 let PANEL_SPECIALISTS = [];      // roster from /config [{id, specialty, default}]
 let PANEL_EXAMPLES = [];         // sample multi-specialty cases seeded into the panel intake
 let THREAD = {session_id:null, turns:[]};   // the active conversation
@@ -1214,6 +1223,7 @@ async function loadConfig(){
           // patient mode) still take effect on the next load.
           DUEL_ENABLED = !!f.duel_enabled;
           ACCOUNTS_ENABLED = !!f.accounts_enabled;
+          // integrative reveals a control row → wired on the next full load (not hot-applied)
         })
         .catch(()=>{});
     } else {
@@ -1236,6 +1246,15 @@ async function loadConfig(){
     TRIAGE_ENABLED = !!c.triage_enabled;
     ACCOUNTS_ENABLED = !!c.accounts_enabled;
     DUEL_ENABLED = !!c.duel_enabled;
+    INTEGRATIVE_ENABLED = !!c.integrative_enabled;
+    if(INTEGRATIVE_ENABLED){
+      const isel = $("#integsel"), ib = $("#integbtn");
+      if(isel) isel.hidden = false;
+      if(ib) ib.addEventListener("click", () => {
+        INTEGRATIVE_ON = !INTEGRATIVE_ON;
+        ib.setAttribute("aria-pressed", INTEGRATIVE_ON ? "true" : "false");
+      });
+    }
     if(ACCOUNTS_ENABLED){
       const ex = $("#idextra"); if(ex) ex.hidden = false;   // reveal profession/NPI/country in the gate
       // an existing local-only user predates accounts → ask them to register once (prefilled)
@@ -2976,6 +2995,7 @@ async function runDuel(question){
   if(EFFORT_ENABLED && EFFORT > 1) base.effort = EFFORT;
   if(PATIENT_MODE_ENABLED && AUDIENCE === "patient") base.audience = "patient";
   if(ATTACHMENTS.length) base.attachments = ATTACHMENTS.slice();
+  if(INTEGRATIVE_ENABLED && INTEGRATIVE_ON) base.integrative = true;      // both duel arms get it
   if(USER){ base.user_name = USER.name; base.user_email = USER.email; }
   CURRENT_Q = question;
   q.value = ""; autoGrow();
@@ -3076,6 +3096,7 @@ async function askQuestion(question, opts){
   if(EFFORT_ENABLED && EFFORT > 1) payload.effort = EFFORT;
   if(PATIENT_MODE_ENABLED && AUDIENCE === "patient") payload.audience = "patient";
   if(ATTACHMENTS.length) payload.attachments = ATTACHMENTS.slice();
+  if(INTEGRATIVE_ENABLED && INTEGRATIVE_ON) payload.integrative = true;   // per-question opt-in
   if(USER){ payload.user_name = USER.name; payload.user_email = USER.email; }
   if(conv){
     if(THREAD.turns.length) payload.history = threadHistoryPayload();
@@ -3591,6 +3612,7 @@ const SET_LABELS = {
   duel_enabled:      ["A/B duel answers", "Fresh questions run BOTH engines with a which-is-better vote (2× cost/question)"],
   triage_enabled:    ["Guided intake mode", "The ◍ Guided clarify-then-route mode"],
   ask_panel_enabled: ["Specialist Panel", "The ◈ multi-specialist panel mode"],
+  integrative_enabled: ["Integrative-medicine opt-in", "Offers the 🌿 per-question complementary/integrative section (user still opts in per question)"],
 };
 function openSettings(){
   $("#setmodal").hidden = false;

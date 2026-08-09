@@ -72,6 +72,8 @@ class ResearchService:
     triage_prompt: str | None = None         # vertical guided-intake/triage directive (opaque)
     reasoned_scaffold_prompt: str | None = None  # alternate-engine scaffold directive (coverage as QUESTIONS)
     reasoned_answer_format: str | None = None    # alternate-engine compose directive (decision-gated answer)
+    integrative_prompt: str | None = None        # opt-in complementary/integrative answer-section directive
+    integrative_query_hint: str | None = None    # retrieval-steering hint appended when the user opts in
     max_calls: int = 40
     vertical_name: str = ""
     ui: object | None = None                # the vertical's UIContract (for /config)
@@ -172,6 +174,7 @@ class ResearchService:
         answer_focus: bool = False,          # condense elliptical follow-ups + ANSWER-scope compose (flag)
         clarify: bool = False,               # ask a clarifying question when a follow-up is ambiguous (flag)
         answer_format_override: str | None = None,   # per-call compose directive (alternate engine); None → default
+        extra_directive: str | None = None,          # per-call ADDENDUM appended to the selected directive
     ) -> AnswerResult:
         # ANSWER-FOCUS (flag): resolve a conversational FOLLOW-UP ("what dose?") into a self-contained
         # question carrying the subject from the conversation ("dose of TMP-SMX for PCP prophylaxis"),
@@ -226,6 +229,8 @@ class ResearchService:
         directive = answer_format_override or (self.patient_answer_format
                      if audience == "patient" and self.patient_answer_format
                      else self.answer_format)
+        if extra_directive:   # opt-in addendum (e.g. integrative section) — appended to WHICHEVER directive won
+            directive = (directive + "\n\n" + extra_directive) if directive else extra_directive
         # Effort scales STRUCTURAL search knobs only (turns, results, context, citations, budget) —
         # never the grounding gates. At effort<=1.0 every value round-trips to today's exact defaults,
         # so this is a byte-identical no-op when the caller passes 1.0 (flag OFF).

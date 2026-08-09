@@ -191,3 +191,44 @@ OpenAI (ChatGPT for Clinicians, Apr 2026), and Anthropic (Claude for Healthcare,
 HIPAA/BAA/SOC2 status; Glass's "97/98/90%" accuracy figures (no primary source); named EHR
 certifications for several AI layers; Claude's MedAgentBench/USMLE numbers. Treat all competitor
 specifics as directionally current, not contractual — re-verify before external use.
+
+---
+
+## Addendum (Aug 2026): Perplexity — the general research engine clinicians actually use
+
+Perplexity isn't a clinical product, but it's the research UX bar and informally used by clinicians —
+so it belongs in the comparison. Research as of mid-2026, sources in the research log.
+
+**What it is.** Deep Research (Feb 2025): agentic multi-search (~20–50 queries, hundreds of sources),
+2–4-minute cited reports; by 2026 folded into "Perplexity Computer" routing subtasks across 20+ models.
+Free/Pro($20)/Max($200)/Enterprise tiers. Self-reported evals: 21.1% Humanity's Last Exam, 93.9%
+SimpleQA. **Perplexity Health** (Mar 2026) is consumer-wellness (Apple Health/EHR dashboards, NEJM/BMJ
+"premium sources") — NOT a clinician evidence engine. HIPAA only via Enterprise BAA.
+
+**Where Noesis is structurally ahead (the moat, confirmed):**
+- **Provenance:** Perplexity attaches *links*, never verifies the claim exists in the source — the Tow
+  Center/CJR study found it wrong on ~37% of citation tests (and it was the BEST of 8 engines tested);
+  documented real-URL/wrong-claim failures, AI-slop pages cited as sources, and an active
+  false-attribution lawsuit (Dow Jones). Noesis's verbatim span-check is precisely the thing it lacks.
+- **Evidence hierarchy:** a guideline, an RCT, and a content farm render as identical numbered chips;
+  medical sourcing is SEO-rank-driven (WebMD-tier sources documented). Noesis has authority tiers +
+  now a curated top-tier guideline layer.
+- **Calibration:** "confidently wrong," minimal hedging (Tow Center) vs Noesis's reasoning-read
+  confidence decomposition + coverage-gap honesty.
+
+**What to steal from its UX (priority order):**
+1. **Suggested follow-ups everywhere** — their single biggest session-extender (we have /suggest; make
+   it more prominent).
+2. **Hover source previews + a persistent source rail** — our evidence dossier is stronger but buried;
+   surface per-sentence source cards on hover.
+3. **Clarifying questions before long runs** — we built this (Guided mode); Perplexity validates it.
+4. **Focus modes** (e.g. "guidelines only / trials only" source scoping as one-click toggles — we have
+   the facets, no UI).
+5. **Export/Pages** — shareable formatted briefs from answers (we have copy-markdown; a share-page is a
+   step further).
+6. **Speed as a feature** — 2–4 min beats 30; our long runs need the progress narration to carry trust
+   (we have the live trace — keep investing there).
+
+**Net:** Perplexity wins speed, polish, and breadth; it structurally cannot claim verified provenance,
+evidence tiers, or clinical calibration — the exact lane Noesis occupies. Its Health launch pulls
+consumer attention to "AI + health" without entering the clinician-evidence niche.

@@ -64,27 +64,26 @@ _W = {
 }
 
 
-class ClaimVerdict(BaseModel):
-    claim_index: int
-    recommendation_bearing: bool = False
-    warranted: bool = True
-    failure_modes: list[Literal["W1", "W2", "W3", "W4", "W7"]] = Field(default_factory=list)
-    # falsifiability: a flag is only kept if these concrete spans actually exist (checked in code, Rule 18)
-    challenged_answer_span: str = Field(default="", description="verbatim phrase FROM THE ANSWER this flag challenges")
-    source_span: str = Field(default="", description="verbatim phrase FROM THE CITED FINDING that (fails to) support it")
+class Flag(BaseModel):
+    """One warrant failure the judge raises. Compact: only RAISED flags are emitted (not a row per
+    claim) so output scales regardless of answer size. Falsifiability spans are checked in code."""
+    mode: Literal["W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9"]
+    claim_index: int | None = Field(default=None, description="1-based finding index for claim-level modes; null for answer-level")
+    answer_span: str = Field(default="", description="verbatim phrase FROM THE ANSWER this flag is about (required for W1-W4/W7/W8)")
+    source_span: str = Field(default="", description="verbatim phrase FROM THE CITED FINDING (required for W1-W4)")
+    missing_option: str = Field(default="", description="for W5: the SPECIFIC omitted actionable option (must NOT be in the answer)")
     note: str = ""
 
 
 class AnswerVerdict(BaseModel):
-    claim_verdicts: list[ClaimVerdict] = Field(default_factory=list)
-    coverage_gap: bool = False        # W5
-    coverage_missing: str = Field(default="", description="the SPECIFIC omitted actionable option (must NOT already be in the answer)")
-    salience_distortion: bool = False  # W6
-    contradiction: bool = False        # W8
-    contradiction_pair: str = Field(default="", description="the two answer phrases that conflict, verbatim")
-    miscalibration: bool = False       # W9
+    flags: list[Flag] = Field(default_factory=list)
+    n_recommendations: int = Field(default=0, description="how many recommendation-bearing statements the answer makes (denominator)")
     summary: str = ""
 
+
+# Which modes require which spans to be falsifiable (structural gate, Rule-18-clean).
+_NEEDS_ANSWER_SPAN = {"W1", "W2", "W3", "W4", "W7", "W8"}
+_NEEDS_SOURCE_SPAN = {"W1", "W2", "W3", "W4"}
 
 _JUDGE_SYS = (
     "You are a rigorous attending physician auditing an AI-generated clinical answer for WARRANT — "
@@ -92,14 +91,15 @@ _JUDGE_SYS = (
     "justified by evidence that applies and supports the specific inference. Judge ONLY what the "
     "provided findings support; you are checking warrant, not writing a better answer. These are "
     "semantic judgments — reason about meaning, do not pattern-match words.\n\n"
-    "BE CONSERVATIVE AND FALSIFIABLE. Raise a flag ONLY if you can point to concrete evidence for it:\n"
-    "- every claim-level flag (W1–W4/W7) MUST set `challenged_answer_span` to a VERBATIM phrase copied "
-    "from the ANSWER, and (for W1–W4) `source_span` to a VERBATIM phrase from the cited finding. If you "
-    "cannot copy both spans, DO NOT raise the flag.\n"
-    "- W5 (coverage gap) MUST set `coverage_missing` to a SPECIFIC actionable option, and you must first "
-    "confirm it is NOT already anywhere in the answer — if it is present, do NOT flag W5.\n"
-    "- W8 (contradiction) MUST set `contradiction_pair` to the two conflicting answer phrases, verbatim.\n"
-    "A flag you cannot ground in copied spans is noise — omit it.\n\nFailure modes:\n"
+    "EMIT ONLY the flags you actually raise (do not enumerate every claim). Set n_recommendations to how "
+    "many recommendation-bearing statements the answer makes.\n\n"
+    "BE CONSERVATIVE AND FALSIFIABLE — raise a flag ONLY with concrete copied evidence:\n"
+    "- W1-W4/W7/W8: `answer_span` = a VERBATIM phrase copied from the ANSWER; W1-W4 also need `source_span` "
+    "= a VERBATIM phrase from the cited finding (set `claim_index`). If you can't copy the span(s), omit it.\n"
+    "- W5 (coverage gap): `missing_option` = a SPECIFIC actionable option, only after confirming it is NOT "
+    "anywhere in the answer.\n"
+    "- W6/W9 are holistic; still copy an `answer_span` you're reacting to when you can.\n"
+    "A flag you can't ground in copied spans is noise — omit it.\n\nFailure modes:\n"
     + "\n".join(f"{k}: {v}" for k, v in _W.items())
 )
 
@@ -109,33 +109,23 @@ def _filter_verdict(v, answer, claims):
     LLM-judge's habit of inventing gaps/challenges). Structural checks only; the LLM still owns meaning."""
     al = answer.lower()
 
-    def _in_answer(s):
-        return bool(s) and s.strip().lower() in al
+    def _in(s, hay):
+        return bool(s) and s.strip().lower() in hay
     kept = []
-    for cv in v.claim_verdicts:
-        # a claim flag must challenge a real answer span; W1–W4 must also cite a real source span
-        src = ""
-        if 1 <= cv.claim_index <= len(claims):
-            c = claims[cv.claim_index - 1]
-            src = (str(c.get("text", "")) + " " + str(c.get("quote", ""))).lower()
-        modes = []
-        for m in cv.failure_modes:
-            if not _in_answer(cv.challenged_answer_span):
-                continue                                   # challenged phrase isn't in the answer → fabricated
-            if m in ("W1", "W2", "W3", "W4") and cv.source_span and cv.source_span.strip().lower() not in src:
-                continue                                   # cited source span isn't in the finding → fabricated
-            modes.append(m)
-        cv.failure_modes = modes
-        kept.append(cv)
-    v.claim_verdicts = kept
-    # W5 is only real if the named missing option is genuinely absent from the answer
-    if v.coverage_gap and (not v.coverage_missing or _in_answer(v.coverage_missing)):
-        v.coverage_gap = False
-    # W8 is only real if the two named conflicting phrases both appear in the answer
-    if v.contradiction:
-        parts = [p.strip() for p in (v.contradiction_pair or "").split("|") if p.strip()] or [v.contradiction_pair]
-        if not all(_in_answer(p) for p in parts if p):
-            v.contradiction = False
+    for f in v.flags:
+        if f.mode in _NEEDS_ANSWER_SPAN and not _in(f.answer_span, al):
+            continue                                        # challenged phrase isn't in the answer → fabricated
+        if f.mode in _NEEDS_SOURCE_SPAN:
+            src = ""
+            if f.claim_index and 1 <= f.claim_index <= len(claims):
+                c = claims[f.claim_index - 1]
+                src = (str(c.get("text", "")) + " " + str(c.get("quote", ""))).lower()
+            if not _in(f.source_span, src):
+                continue                                    # cited source span isn't in the finding → fabricated
+        if f.mode == "W5" and (not f.missing_option or _in(f.missing_option, al)):
+            continue                                        # the "missing" option is actually present → not a gap
+        kept.append(f)
+    v.flags = kept
     return v
 
 
@@ -191,13 +181,8 @@ def main():
             v = _filter_verdict(v, answer, claims)   # drop ungrounded/over-flagged verdicts
         except Exception as e:  # noqa: BLE001
             print(f"  {cid:26s} ERROR {e}"); continue
-        rec = [cv for cv in v.claim_verdicts if cv.recommendation_bearing]
-        total_recs += len(rec)
-        modes = {m for cv in v.claim_verdicts for m in cv.failure_modes}
-        for lvl in ("coverage_gap", "salience_distortion", "contradiction", "miscalibration"):
-            if getattr(v, lvl):
-                modes.add({"coverage_gap": "W5", "salience_distortion": "W6",
-                           "contradiction": "W8", "miscalibration": "W9"}[lvl])
+        total_recs += v.n_recommendations
+        modes = {f.mode for f in v.flags}
         for m in modes:
             tally[m] += 1
         # persist (accumulating feedback log — the same store the auditor + user feedback will feed)
@@ -208,10 +193,10 @@ def main():
                 "specialties": (meta.get("specialties") if isinstance(meta, dict) else []),
                 "probes": (meta.get("probes") if isinstance(meta, dict) else []),
                 "depth": (meta.get("depth") if isinstance(meta, dict) else ""),
-                "n_claims": len(claims), "n_recs": len(rec), "answer": answer,
+                "n_claims": len(claims), "n_recs": v.n_recommendations, "answer": answer,
                 "verdict": v.model_dump(),
             }) + "\n")
-        print(f"  {cid:26s} recs={len(rec):2d}  flags={','.join(sorted(modes)) or '—'}")
+        print(f"  {cid:26s} recs={v.n_recommendations:2d}  flags={','.join(sorted(modes)) or '—'}")
     print("\n=== warrant failure counts (cases flagged / total) ===")
     n = len(cases)
     for k in _W:
@@ -225,14 +210,11 @@ async def _judge_async(llm, q, a, c):
         f"[{i+1}] {cl.get('text','')}\n     quote: \"{cl.get('quote','')}\"  — {cl.get('source','')}"
         for i, cl in enumerate(c))
     user = (f"QUESTION:\n{q}\n\nANSWER:\n{a}\n\nFINDINGS (surrounding source text + verbatim quote — "
-            f"judge against the TEXT):\n{findings}\n\nFor each recommendation-bearing claim decide warrant "
-            "and list W1–W4/W7 with claim_index — copying `challenged_answer_span` (from the answer) and "
-            "`source_span` (from the finding) for each flag. Then set coverage_gap(W5) with the specific "
-            "`coverage_missing` option (only if it is truly absent from the answer), salience_distortion(W6), "
-            "contradiction(W8) with `contradiction_pair`, miscalibration(W9). Omit any flag you can't ground "
-            "in copied spans.")
+            f"judge against the TEXT):\n{findings}\n\nReturn ONLY the warrant flags you can ground in copied "
+            "spans (W1-W4/W7 with claim_index + answer_span + source_span; W5 with missing_option; W6/W8/W9 "
+            "with an answer_span where possible), plus n_recommendations. Do not enumerate every claim.")
     comp = await llm.complete(system=_JUDGE_SYS, messages=[{"role": "user", "content": user}],
-                              response_format=AnswerVerdict, max_tokens=1500)
+                              response_format=AnswerVerdict, max_tokens=3000)
     return comp.parsed
 
 

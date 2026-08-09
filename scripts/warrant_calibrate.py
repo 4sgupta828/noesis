@@ -21,8 +21,11 @@ _ANSWER_MODES = {"W5", "W6", "W8", "W9"}
 
 
 def _judge_modes(rec):
-    """The set of W-modes the JUDGE flagged for one log record."""
+    """The set of W-modes the JUDGE flagged for one log record (flags-only schema; falls back to the
+    legacy claim_verdicts shape for older records)."""
     v = rec.get("verdict", {}) or {}
+    if "flags" in v:
+        return {f.get("mode") for f in v.get("flags", []) if f.get("mode")}
     modes = {m for cv in v.get("claim_verdicts", []) for m in (cv.get("failure_modes") or [])}
     for lvl, code in (("coverage_gap", "W5"), ("salience_distortion", "W6"),
                       ("contradiction", "W8"), ("miscalibration", "W9")):

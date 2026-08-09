@@ -12,13 +12,18 @@ RUN apt-get update \
 
 RUN pip install --no-cache-dir --upgrade pip
 
+# Heavy, code-independent deps FIRST so their layers cache across code pushes:
+# vision-upload media decoders (images / PDF pages / DICOM) + boto3 for durable video (R2),
+# and docling (factra-style PDF → layout/table-aware markdown for guideline full-text ingestion;
+# PyMuPDF stays the fallback engine — NOESIS_PDF_ENGINE=pymupdf forces it if docling misbehaves).
+RUN pip install --no-cache-dir Pillow PyMuPDF pydicom numpy boto3
+RUN pip install --no-cache-dir docling
+
 # Install the kernel (serve + postgres extras) and the medical vertical.
 COPY packages packages
 COPY apps apps
 COPY deploy deploy
 RUN pip install --no-cache-dir "./packages/kernel[serve,postgres]" ./packages/vertical_medical
-# Vision-upload media decoders (images / PDF pages / DICOM) + boto3 for durable video (R2).
-RUN pip install --no-cache-dir Pillow PyMuPDF pydicom numpy boto3
 
 # Build the self-contained answer-video generator (Node). tsx is a runtime dep so the
 # generator runs in-container; @napi-rs/canvas ships prebuilt linux-x64 binaries.

@@ -357,6 +357,16 @@ GLOBAL_GUIDELINES: tuple[dict, ...] = (
          "(BPPV → Dix-Hallpike/Epley).",
          "AAN/Barany consensus")},
 
+    # ---- FULL-TEXT entries (no inline `text` → fetch_artifact downloads the real document; needs the
+    # PDF parser in the ingest registry). First mover: KDIGO 2024 CKD — a stable self-hosted PDF
+    # (verified: 6 MB, parses to ~980k chars with SGLT2/eGFR/albuminuria anchors present).
+    # NOTE: WHO IRIS bitstream URLs broke in their DSpace migration — WHO full texts need the new
+    # /server/api/core/bitstreams/<uuid>/content form, resolved per document before adding.
+    {"id": "kdigo-ckd-fulltext", "issuer": "KDIGO",
+     "title": "KDIGO 2024 Clinical Practice Guideline — CKD Evaluation and Management (FULL TEXT)",
+     "conditions": ["chronic kidney disease", "ckd", "albuminuria", "egfr", "kidney disease management"],
+     "url": "https://kdigo.org/wp-content/uploads/2024/03/KDIGO-2024-CKD-Guideline.pdf", "year": 2024},
+
     # ---- electrolytes ----
     {"id": "hyponatremia-consensus", "issuer": "European Hyponatremia Guideline (ESE/ERA/ESICM)",
      "title": "Diagnosis and Treatment of Hyponatremia",
@@ -390,7 +400,9 @@ class GlobalGuidelinesConnector:
         egress_class = "datacenter"; engine = "http"; proxy_enabled = False
         async def fetch(self, url: str, **o) -> bytes:  # noqa: ANN003
             import httpx
-            async with httpx.AsyncClient(timeout=40.0, follow_redirects=True) as c:
+            # browser-ish UA: society sites (WordPress etc.) sometimes 403 bare clients
+            hdrs = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) noesis-ingest"}
+            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True, headers=hdrs) as c:
                 r = await c.get(url); r.raise_for_status(); return r.content
 
     def __init__(self, *, registry: tuple[dict, ...] = GLOBAL_GUIDELINES, documents: list[dict] | None = None):

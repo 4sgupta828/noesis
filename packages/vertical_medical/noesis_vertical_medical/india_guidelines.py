@@ -123,6 +123,97 @@ INDIA_GUIDELINES: tuple[dict, ...] = (
          "- In the Indian focus, **single-dose liposomal amphotericin B** is the preferred first-line "
          "treatment; **antimonials are not recommended** owing to high resistance.",
          "NVBDCP")},
+    # ---- expansion tranche 2 (high-burden India conditions) ----
+    {"id": "uip-immunization", "issuer": "Universal Immunization Programme, MoHFW / IAP",
+     "title": "National Immunization Schedule (India, UIP)",
+     "conditions": ["immunization", "vaccination schedule", "childhood vaccines", "vaccine"],
+     "url": "https://mohfw.gov.in/", "year": 2023,
+     "text": _summary(
+         "- At **birth**: BCG, OPV-0, and Hepatitis B birth dose. Pentavalent (DPT–HepB–Hib) at "
+         "**6, 10, 14 weeks** with OPV/fIPV per schedule; Rotavirus and PCV per national rollout.\n"
+         "- **Measles–Rubella (MR)** at 9–12 months and 16–24 months; JE vaccine in endemic districts.\n"
+         "- Td for pregnant women; missed doses are caught up — a delayed schedule is resumed, "
+         "not restarted.",
+         "UIP / MoHFW")},
+    {"id": "india-hypertension", "issuer": "Indian Guidelines on Hypertension / API–IGH",
+     "title": "Management of Hypertension (India)",
+     "conditions": ["hypertension", "high blood pressure", "bp management"],
+     "url": "https://www.apiindia.org/", "year": 2019,
+     "text": _summary(
+         "- Diagnose at **≥140/90 mmHg** on repeated measurements; lifestyle measures (salt restriction, "
+         "weight, tobacco/alcohol) for all.\n"
+         "- First-line drug classes: **CCB (e.g. amlodipine), ACE inhibitor/ARB, or thiazide** — CCBs are "
+         "effective and widely used in Indian practice; combine at moderate doses rather than maximising "
+         "one drug.\n"
+         "- Assess target-organ damage and cardiovascular risk; refer resistant hypertension.",
+         "API / IGH")},
+    {"id": "amb-anemia-pregnancy", "issuer": "Anemia Mukt Bharat / MoHFW–FOGSI",
+     "title": "Prevention & Management of Anemia in Pregnancy (India)",
+     "conditions": ["anemia in pregnancy", "anemia", "iron deficiency", "ifa"],
+     "url": "https://anemiamuktbharat.info/", "year": 2018,
+     "text": _summary(
+         "- **Prophylactic iron–folic acid (IFA)** daily through pregnancy and lactation per national "
+         "programme; screen haemoglobin at ANC visits.\n"
+         "- Moderate anemia: therapeutic oral iron with follow-up; **severe anemia (Hb < 7 g/dL)** needs "
+         "escalated care — parenteral iron or transfusion per severity/gestation and referral.\n"
+         "- **Deworming (albendazole) once in the second trimester** per national guidance.",
+         "Anemia Mukt Bharat / MoHFW")},
+    {"id": "imnci-diarrhea", "issuer": "IMNCI / MoHFW",
+     "title": "Management of Childhood Diarrhoea (India, IMNCI)",
+     "conditions": ["diarrhea", "diarrhoea", "childhood diarrhea", "dehydration child", "ors"],
+     "url": "https://mohfw.gov.in/", "year": 2019,
+     "text": _summary(
+         "- Cornerstones: **low-osmolarity ORS** plus **zinc for 14 days** (10 mg/day < 6 months; "
+         "20 mg/day ≥ 6 months) and **continued feeding/breastfeeding**.\n"
+         "- **No routine antibiotics** — reserve for dysentery (blood in stool) or suspected cholera.\n"
+         "- Danger signs (unable to drink, lethargy, persistent vomiting, sunken eyes with poor skin "
+         "pinch) → severe dehydration pathway / referral for IV fluids.",
+         "IMNCI / MoHFW")},
+    {"id": "icmr-scrub-typhus", "issuer": "ICMR / DHR consensus",
+     "title": "Diagnosis & Management of Scrub Typhus (India)",
+     "conditions": ["scrub typhus", "rickettsia", "eschar fever", "acute undifferentiated fever"],
+     "url": "https://main.icmr.nic.in/", "year": 2021,
+     "text": _summary(
+         "- Consider scrub typhus in **acute undifferentiated fever** in endemic areas; an **eschar** is "
+         "highly suggestive but often absent.\n"
+         "- **Doxycycline is first-line** (including in children — benefit outweighs dental-staining "
+         "concern for short courses); **azithromycin** is the alternative in pregnancy.\n"
+         "- Do not await serology to treat when suspicion is high — untreated disease progresses to "
+         "pneumonitis, AKI, meningoencephalitis.",
+         "ICMR")},
+    {"id": "nlep-leprosy", "issuer": "National Leprosy Eradication Programme, MoHFW",
+     "title": "NLEP — Diagnosis & Treatment of Leprosy (India)",
+     "conditions": ["leprosy", "hansen disease", "hypopigmented patch"],
+     "url": "https://dghs.gov.in/", "year": 2020,
+     "text": _summary(
+         "- Treat with **WHO multidrug therapy (rifampicin + clofazimine + dapsone)** — "
+         "**paucibacillary 6 months, multibacillary 12 months**, free through the programme; "
+         "**never monotherapy** (resistance).\n"
+         "- Examine contacts; **single-dose rifampicin chemoprophylaxis** for eligible household "
+         "contacts per programme guidance. Watch for and treat lepra reactions — do not stop MDT "
+         "during reactions.",
+         "NLEP / MoHFW")},
+    {"id": "icmr-rf-rhd", "issuer": "ICMR / national consensus",
+     "title": "Rheumatic Fever & Rheumatic Heart Disease — Prophylaxis (India)",
+     "conditions": ["rheumatic fever", "rheumatic heart disease", "rhd", "strep throat"],
+     "url": "https://main.icmr.nic.in/", "year": 2020,
+     "text": _summary(
+         "- Secondary prophylaxis is the pillar: **benzathine penicillin G IM every 3–4 weeks** "
+         "continued for years per age/severity criteria — irregular prophylaxis drives recurrence "
+         "and progression.\n"
+         "- Treat streptococcal pharyngitis promptly (penicillin/amoxicillin) as primary prevention; "
+         "penicillin-allergic patients use programme alternatives.",
+         "ICMR consensus")},
+    {"id": "ntep-tpt", "issuer": "NTEP / Central TB Division, MoHFW",
+     "title": "TB Preventive Treatment (TPT) for Contacts & PLHIV (India)",
+     "conditions": ["latent tuberculosis", "tb preventive therapy", "tpt", "tb contact"],
+     "url": "https://tbcindia.gov.in/", "year": 2021,
+     "text": _summary(
+         "- Offer **TB preventive treatment** after ruling out active TB to: **household contacts of "
+         "pulmonary TB (especially children < 5 years)** and **people living with HIV**.\n"
+         "- Programme regimens include **6 months daily isoniazid (6H)** or shorter rifamycin-based "
+         "regimens (e.g. **3HP weekly isoniazid–rifapentine**) per current national guidance.",
+         "NTEP")},
 )
 
 

@@ -1177,7 +1177,13 @@ async function loadConfig(){
     try{ c = JSON.parse(localStorage.getItem("noesis_cfg") || "null"); }catch(e){}
     if(c){
       fetch("/config").then(r=>r.json())
-        .then(f=>{ try{ localStorage.setItem("noesis_cfg", JSON.stringify(f)); }catch(e){} })
+        .then(f=>{ try{ localStorage.setItem("noesis_cfg", JSON.stringify(f)); }catch(e){}
+          // HOT-APPLY flags that are read at CALL time (no listener/DOM wiring) so admin-panel toggles
+          // land on THIS load, not two loads later. Flags that wire UI (panel/triage buttons, effort,
+          // patient mode) still take effect on the next load.
+          DUEL_ENABLED = !!f.duel_enabled;
+          ACCOUNTS_ENABLED = !!f.accounts_enabled;
+        })
         .catch(()=>{});
     } else {
       c = await (await fetch("/config")).json();

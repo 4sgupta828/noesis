@@ -38,16 +38,17 @@ SUBSET = {s.strip() for s in os.environ.get("SUBSET", "").split(",") if s.strip(
 LOG = os.environ.get("NOESIS_EVAL_LOG", os.path.join(os.path.dirname(__file__), "..", "data", "eval", "warrant_runs.jsonl"))
 REQ_TIMEOUT = int(os.environ.get("REQ_TIMEOUT", "420"))
 
-# Case-shaped questions where warrant failures are most likely to surface. SEED skeleton — replace/grow
-# with a physician-curated gold set. Kept deliberately terse; the point is to exercise the judge.
-CASES = {
-    "nms_delirium":      "72-year-old on a new antipsychotic develops fever, rigidity, and confusion — what is the initial diagnostic workup and management?",
-    "digoxin_toxicity":  "Elderly patient on digoxin and a new diuretic presents with nausea and a slow irregular pulse — how should this be evaluated and managed?",
-    "afib_anticoag":     "70-year-old with new atrial fibrillation, CKD stage 4, and prior GI bleed — how should anticoagulation be approached?",
-    "peds_fever":        "3-week-old infant with a fever of 38.5°C and no obvious source — what is the recommended evaluation and management?",
-    "sepsis_source":     "68-year-old diabetic with hypotension, confusion, and leukocytosis — how should suspected sepsis be worked up and treated in the first hour?",
-    "serotonin_vs_nms":  "Patient on an SSRI and a newly added antiemetic develops agitation, clonus, and hyperthermia — how do you distinguish and manage the likely cause?",
-}
+# Wide (every specialty) + deep (multi-system) case set, each tagged with the warrant modes it probes.
+# Curated in the vertical so it evolves with the roster; falls back to a tiny inline seed if unavailable.
+try:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packages", "vertical_medical"))
+    from noesis_vertical_medical.eval_warrant_cases import WARRANT_CASES as _CASES
+except Exception:   # noqa: BLE001
+    _CASES = {"nms_delirium": {"q": "72-year-old on a new antipsychotic develops fever, rigidity, and "
+              "confusion — what is the initial diagnostic workup and management?",
+              "specialties": ["psychiatry"], "probes": ["W5"], "depth": "focused"}}
+DEPTH = os.environ.get("DEPTH", "")   # "" = all · "focused" · "multisystem"
+CASES = {cid: m for cid, m in _CASES.items() if not DEPTH or m.get("depth") == DEPTH}
 
 # ---- the ONE rubric: W1–W9 (see docs/specs/answer-warrant-contract.md §2) ----
 _W = {
@@ -128,11 +129,12 @@ def main():
     llm = build_llm(mode="live")
     sha, model = _sha(), os.environ.get("NOESIS_LLM_MODEL", "default")
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
-    cases = [(cid, q) for cid, q in CASES.items() if not SUBSET or cid in SUBSET]
+    cases = [(cid, m) for cid, m in CASES.items() if not SUBSET or cid in SUBSET]
     tally = {k: 0 for k in _W}
     total_recs = 0
     print(f"warrant eval · mode={MODE} · {len(cases)} cases · log={LOG}\n")
-    for cid, q in cases:
+    for cid, meta in cases:
+        q = meta["q"] if isinstance(meta, dict) else meta
         try:
             answer, claims = get_answer(q)
             if not answer:
@@ -154,10 +156,13 @@ def main():
             f.write(json.dumps({
                 "ts": _dt.datetime.now(_dt.timezone.utc).isoformat(), "git_sha": sha,
                 "judge_model": model, "mode": MODE, "case_id": cid, "question": q,
+                "specialties": (meta.get("specialties") if isinstance(meta, dict) else []),
+                "probes": (meta.get("probes") if isinstance(meta, dict) else []),
+                "depth": (meta.get("depth") if isinstance(meta, dict) else ""),
                 "n_claims": len(claims), "n_recs": len(rec), "answer": answer,
                 "verdict": v.model_dump(),
             }) + "\n")
-        print(f"  {cid:18s} recs={len(rec):2d}  flags={','.join(sorted(modes)) or '—'}")
+        print(f"  {cid:26s} recs={len(rec):2d}  flags={','.join(sorted(modes)) or '—'}")
     print("\n=== warrant failure counts (cases flagged / total) ===")
     n = len(cases)
     for k in _W:

@@ -10,10 +10,12 @@ from __future__ import annotations
 SOURCE_INVENTORY = [
     {"key": "clinicaltrials", "label": "ClinicalTrials.gov", "kind": "trials", "tier": "open", "status": "live"},
     {"key": "openfda", "label": "openFDA drug labels", "kind": "drug labels", "tier": "open", "status": "live"},
-    {"key": "europepmc", "label": "Europe PMC", "kind": "literature", "tier": "open", "status": "live", "note": "abstracts; OA full-text TODO"},
-    {"key": "faers", "label": "openFDA FAERS", "kind": "adverse events", "tier": "open", "status": "partial", "note": "thin — a few drugs so far"},
-    {"key": "cdc", "label": "CDC (data.cdc.gov)", "kind": "public health", "tier": "open", "status": "partial", "note": "thin"},
-    {"key": "dailymed", "label": "DailyMed", "kind": "SPL labels", "tier": "open", "status": "connector", "note": "connector built; not bulk-ingested"},
+    {"key": "europepmc", "label": "Europe PMC", "kind": "literature", "tier": "open", "status": "live", "note": "FULL-TEXT enabled 2026-08-09; deliberate SR/MA sweeps across 38 conditions"},
+    {"key": "faers", "label": "openFDA FAERS", "kind": "adverse events", "tier": "open", "status": "partial", "note": "16 high-risk/narrow-index drugs swept 2026-08-09; breadth continues"},
+    {"key": "cdc", "label": "CDC (data.cdc.gov)", "kind": "public health", "tier": "open", "status": "partial", "note": "14 high-yield topics swept 2026-08-09 (immunization, STI, stewardship…)"},
+    {"key": "dailymed", "label": "DailyMed", "kind": "SPL labels", "tier": "open", "status": "live", "note": "~815 labels — top-60 prescribed drugs swept 2026-08-09; bulk remainder open"},
+    {"key": "global_guidelines", "label": "Global guidelines (society/WHO/task-force)", "kind": "guidelines", "tier": "open", "status": "live", "note": "27 curated top-tier summaries + FULL TEXT via docling (KDIGO 2024 CKD, ~200 blocks); clinician review of registry pending"},
+    {"key": "india_guidelines", "label": "India guidelines (ICMR/MoHFW/programmes)", "kind": "guidelines", "tier": "open", "status": "live", "note": "18 curated entries (source_country=IN); clinician review pending"},
     {"key": "rxnorm", "label": "RxNorm", "kind": "drug normalization", "tier": "open", "status": "connector", "note": "utility; not wired into ingest facets"},
     {"key": "licensed", "label": "Cochrane · NICE · NCCN · NEJM · JAMA", "kind": "reviews / guidelines / journals", "tier": "licensed", "status": "planned", "note": "needs contracts / API access"},
 ]
@@ -96,14 +98,49 @@ COVERED_CONDITIONS = [
     {"group": "Respiratory", "name": "pulmonary fibrosis", "depth": "deep"},
     {"group": "Respiratory", "name": "cystic fibrosis", "depth": "deep"},
     {"group": "Renal", "name": "polycystic kidney disease", "depth": "deep"},
+    # Acute / guideline-tier (2026-08-09): top-tier guideline + SR/MA coverage (not 300-trial depth) —
+    # the conditions the warrant eval exercises; "medium" depth is the honest label.
+    {"group": "Acute / guideline-tier", "name": "febrile neutropenia", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "acute coronary syndrome", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "preeclampsia", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "neonatal fever", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "anaphylaxis", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "acute pancreatitis", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "variceal bleeding / cirrhosis", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "hyponatremia", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "diabetic ketoacidosis", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "immune thrombocytopenia", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "giant cell arteritis", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "septic arthritis", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "community-acquired pneumonia", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "delirium (older adults)", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "acute vertigo", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "acute angle-closure glaucoma", "depth": "medium"},
+    {"group": "Acute / guideline-tier", "name": "asymptomatic bacteriuria", "depth": "medium"},
+    # India programme conditions (curated national guidance, 2026-08-05 → 08-09)
+    {"group": "India programme", "name": "dengue", "depth": "medium"},
+    {"group": "India programme", "name": "enteric fever (typhoid)", "depth": "medium"},
+    {"group": "India programme", "name": "visceral leishmaniasis (kala-azar)", "depth": "medium"},
+    {"group": "India programme", "name": "rabies post-exposure prophylaxis", "depth": "medium"},
+    {"group": "India programme", "name": "snakebite envenomation", "depth": "medium"},
+    {"group": "India programme", "name": "gestational diabetes (DIPSI)", "depth": "medium"},
+    {"group": "India programme", "name": "scrub typhus", "depth": "medium"},
+    {"group": "India programme", "name": "leprosy", "depth": "medium"},
+    {"group": "India programme", "name": "rheumatic fever / RHD prophylaxis", "depth": "medium"},
+    {"group": "India programme", "name": "childhood diarrhoea (ORS + zinc)", "depth": "medium"},
+    {"group": "India programme", "name": "anemia in pregnancy", "depth": "medium"},
+    {"group": "India programme", "name": "TB preventive treatment", "depth": "medium"},
 ]
 
 # Remaining work. Every roadmap CONDITION is now covered deep; what's left is cross-cutting DEPTH
 # on the non-trial sources (not a condition gap) — the lever for effect sizes / eligibility /
 # guideline-grade synthesis (see the clinical-synthesis answer work).
 REMAINING_CONDITIONS = [
-    {"group": "Depth work", "name": "DailyMed bulk labels + FAERS breadth across more drugs"},
-    {"group": "Depth work", "name": "Europe PMC full-text (currently abstracts) + licensed guideline sources"},
+    {"group": "Depth work", "name": "Guideline FULL-TEXT expansion — per-society direct PDFs via the KDIGO/docling pattern (WHO needs new IRIS URLs)"},
+    {"group": "Depth work", "name": "Licensed sources: Cochrane full text · NICE · NCCN · NEJM/JAMA (contracts needed)"},
+    {"group": "Depth work", "name": "LactMed pregnancy/lactation + pediatric dosing connectors"},
+    {"group": "Depth work", "name": "DailyMed bulk remainder + FAERS breadth beyond the top-76 drugs"},
+    {"group": "Quality", "name": "Clinician review of the curated guideline registries (27 global + 18 India)"},
 ]
 
 

@@ -207,6 +207,19 @@
   .idcard .iderr{color:var(--gap);font-size:.75rem;min-height:1rem;margin-top:.35rem;text-align:center;}
   .idcard select{width:100%;background:var(--panel2);border:1px solid var(--hair);border-radius:10px;
     font:inherit;color:var(--ink);padding:.6rem .7rem;margin-bottom:.6rem;}
+  /* product-settings modal (reuses the idcard shell) */
+  .setbtn{font-size:.95rem;line-height:1;padding:.35rem .55rem;}
+  .setclose{margin-top:1rem;width:100%;font-family:var(--mono);font-size:.7rem;cursor:pointer;
+    background:transparent;border:1px solid var(--hair);border-radius:9px;padding:.5rem;color:var(--muted);}
+  .setclose:hover{border-color:var(--gold);color:var(--gold);}
+  .setrow{display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;padding:.5rem 0;border-bottom:1px solid var(--hair);}
+  .setrow:last-of-type{border-bottom:none;}
+  .setrow b{font-size:.88rem;min-width:9.5rem;}
+  .setrow select{width:auto;flex:none;margin:0;padding:.3rem .5rem;font-size:.8rem;}
+  .setrow .sethint{flex-basis:100%;font-size:.68rem;color:var(--muted);line-height:1.4;}
+  .setlive{font-family:var(--mono);font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;
+    border-radius:999px;padding:.06rem .45rem;border:1px solid var(--hair);color:var(--muted);}
+  .setlive.on{color:var(--verified);border-color:var(--verified);}
   .idcard .idrow{display:flex;gap:.5rem;} .idcard .idrow>*{flex:1;min-width:0;}
   .idcard .idhint{font-size:.68rem;color:var(--muted);line-height:1.45;margin:-.1rem 0 .5rem;}
   /* per-answer feedback (accounts flag) — the W-taxonomy signal loop. PROMINENT card, not fine print:
@@ -973,6 +986,7 @@
     <a class="histbtn" href="/admin" style="margin-left:0;text-decoration:none;">Coverage</a>
     <button type="button" class="histbtn" id="vidbtn" style="margin-left:0;">Videos</button>
     <button type="button" class="histbtn" id="histbtn" style="margin-left:0;">Past Sessions</button>
+    <button type="button" class="histbtn setbtn" id="setbtn" style="margin-left:0;" title="Product settings (admin)" aria-label="Product settings">⚙</button>
   </header>
 
   <h1 id="heading">What does the evidence show?</h1>
@@ -1111,6 +1125,21 @@
     <div class="iderr" id="iderr"></div>
     <div class="iddisc" id="iddisc" hidden></div>
     <button type="button" class="idgo" id="idgo">I understand — continue</button>
+  </div>
+</div>
+
+<!-- product settings (admin, password-gated) — live flag toggles, no redeploy -->
+<div class="idmodal" id="setmodal" hidden>
+  <div class="idcard">
+    <h2>⚙ Product settings</h2>
+    <div id="setlock">
+      <p>Admin only — enter the settings password.</p>
+      <input id="setpw" type="password" placeholder="Admin password" autocomplete="off" />
+      <div class="iderr" id="seterr"></div>
+      <button type="button" class="idgo" id="setgo">Unlock</button>
+    </div>
+    <div id="setbody" hidden></div>
+    <button type="button" class="setclose" id="setclose">Close ✕</button>
   </div>
 </div>
 
@@ -3533,6 +3562,58 @@ $("#idgo").addEventListener("click", async ()=>{
   $("#idmodal").hidden = true;
 });
 $("#idmodal").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#idgo").click(); });
+
+// ---- product settings (⚙, password-gated): live flag toggles served by /admin/settings ----
+const SET_LABELS = {
+  duel_enabled:      ["A/B duel answers", "Fresh questions run BOTH engines with a which-is-better vote (2× cost/question)"],
+  triage_enabled:    ["Guided intake mode", "The ◍ Guided clarify-then-route mode"],
+  ask_panel_enabled: ["Specialist Panel", "The ◈ multi-specialist panel mode"],
+};
+function openSettings(){
+  $("#setmodal").hidden = false;
+  const unlocked = sessionStorage.getItem("noesis_apw");
+  $("#setlock").hidden = !!unlocked;
+  if(unlocked) loadSettingsUI(); else setTimeout(()=>$("#setpw").focus(), 60);
+}
+async function loadSettingsUI(){
+  const pw = sessionStorage.getItem("noesis_apw") || $("#setpw").value.trim();
+  try{
+    const r = await fetch("/admin/settings", {headers: {"x-admin-password": pw}});
+    if(r.status === 401){
+      sessionStorage.removeItem("noesis_apw");
+      $("#setlock").hidden = false; $("#setbody").hidden = true;
+      $("#seterr").textContent = "Wrong password."; return;
+    }
+    if(!r.ok) throw new Error(r.status);
+    sessionStorage.setItem("noesis_apw", pw);
+    $("#setlock").hidden = true; $("#seterr").textContent = "";
+    renderSettingsUI(await r.json());
+  }catch(e){ $("#seterr").textContent = "Settings unavailable — try again."; $("#setlock").hidden = false; }
+}
+function renderSettingsUI(d){
+  const body = $("#setbody"); body.hidden = false;
+  const rows = Object.entries(d.settings || {}).map(([k, s]) => {
+    const [label, hint] = SET_LABELS[k] || [k, ""];
+    const opt = (v, t) => `<option value="${v}" ${s.override === v ? "selected" : ""}>${t}</option>`;
+    return `<div class="setrow"><b>${esc(label)}</b>
+      <select data-k="${k}">${opt("", "Default (" + (s.env_default ? "on" : "off") + ")")}${opt("on", "On")}${opt("off", "Off")}</select>
+      <span class="setlive ${s.resolved ? "on" : ""}">${s.resolved ? "ACTIVE" : "off"}</span>
+      <span class="sethint">${esc(hint)}</span></div>`;
+  }).join("");
+  body.innerHTML = rows + `<div class="sethint" style="margin-top:.6rem;">Applies to the API within ~15 s; this page picks it up on the next reload.</div>`;
+  body.querySelectorAll("select[data-k]").forEach(sel => sel.addEventListener("change", async () => {
+    const r = await fetch("/admin/settings", {method: "POST",
+      headers: {"content-type": "application/json", "x-admin-password": sessionStorage.getItem("noesis_apw") || ""},
+      body: JSON.stringify({key: sel.dataset.k, value: sel.value})});
+    if(r.ok) renderSettingsUI(await r.json());
+    else $("#seterr").textContent = "Save failed (" + r.status + ").";
+  }));
+}
+$("#setbtn").addEventListener("click", openSettings);
+$("#setgo").addEventListener("click", loadSettingsUI);
+$("#setpw").addEventListener("keydown", e => { if(e.key === "Enter") loadSettingsUI(); });
+$("#setclose").addEventListener("click", () => { $("#setmodal").hidden = true; });
+$("#setmodal").addEventListener("click", e => { if(e.target === $("#setmodal")) $("#setmodal").hidden = true; });
 
 initIdentity();
 function routeHash(){    // #s/<id> → Q&A answer/thread · #p/<id> → panel session page · #sessions/#panel

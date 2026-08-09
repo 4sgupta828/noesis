@@ -79,70 +79,13 @@ try{var t=localStorage.getItem("noesis-theme"); if(t==="dark"||t==="light") docu
     <h1>Corpus Coverage</h1>
     <a class="back" href="/">← Research</a>
   </header>
-  <!-- Live product settings — flips flags WITHOUT a redeploy (DB override; empty = follow env). -->
-  <h2>Product settings</h2>
-  <div class="cgroup" id="settingscard">
-    <div class="item" style="gap:.6rem;">
-      <input id="apw" type="password" placeholder="Admin password" style="background:var(--panel2);
-        border:1px solid var(--hair);border-radius:8px;color:var(--ink);font:inherit;padding:.45rem .6rem;" />
-      <button id="apwgo" style="font-family:var(--mono);font-size:.7rem;cursor:pointer;background:var(--gold);
-        color:#fff;border:1px solid var(--gold);border-radius:8px;padding:.45rem .8rem;">Unlock</button>
-      <span class="note" id="apwmsg"></span>
-    </div>
-    <div id="settingsbody" hidden></div>
-  </div>
   <div id="out"><div class="muted">Loading coverage…</div></div>
 </div>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => { const d=document.createElement("div"); d.textContent=s??""; return d.innerHTML; };
 const fmt = n => (n||0).toLocaleString();
-
-// ---- live product settings (password-gated; toggles apply within ~15 s, users see them next load) ----
-const SETTING_LABELS = {
-  duel_enabled:      ["A/B duel answers", "Fresh questions run BOTH engines with a which-is-better vote (2× cost/question)"],
-  triage_enabled:    ["Guided intake mode", "The ◍ Guided clarify-then-route mode"],
-  ask_panel_enabled: ["Specialist Panel", "The ◈ multi-specialist panel mode"],
-};
-function pw(){ return sessionStorage.getItem("noesis_apw") || ""; }
-async function loadSettings(){
-  const r = await fetch("/admin/settings", {headers: {"x-admin-password": pw()}});
-  if(r.status === 401){ $("#apwmsg").textContent = "Wrong password."; return; }
-  if(!r.ok){ $("#apwmsg").textContent = "Settings unavailable ("+r.status+")."; return; }
-  renderSettings(await r.json());
-}
-function renderSettings(d){
-  $("#apwmsg").textContent = d.store ? "" : "No settings store (env-only).";
-  const rows = Object.entries(d.settings||{}).map(([k, s]) => {
-    const [label, hint] = SETTING_LABELS[k] || [k, ""];
-    const opt = (v, txt) => `<option value="${v}" ${s.override===v?"selected":""}>${txt}</option>`;
-    return `<div class="item" style="gap:.7rem;flex-wrap:wrap;">
-      <span style="min-width:11rem;"><b>${esc(label)}</b></span>
-      <select data-k="${k}" style="background:var(--panel2);border:1px solid var(--hair);border-radius:8px;
-        color:var(--ink);font:inherit;padding:.3rem .5rem;">
-        ${opt("", "Follow env (" + (s.env_default ? "on" : "off") + ")")}${opt("on", "On")}${opt("off", "Off")}
-      </select>
-      <span class="badge ${s.resolved ? "b-live" : ""}">${s.resolved ? "ACTIVE" : "off"}</span>
-      <span class="note">${esc(hint)}</span>
-    </div>`;
-  }).join("");
-  const body = $("#settingsbody");
-  body.hidden = false;
-  body.innerHTML = rows + `<div class="note" style="margin-top:.5rem;">Changes apply to the API within ~15 s; signed-in users pick them up on their next page load.</div>`;
-  body.querySelectorAll("select[data-k]").forEach(sel => sel.addEventListener("change", async () => {
-    const r = await fetch("/admin/settings", {method: "POST",
-      headers: {"content-type": "application/json", "x-admin-password": pw()},
-      body: JSON.stringify({key: sel.dataset.k, value: sel.value})});
-    if(r.ok) renderSettings(await r.json());
-    else $("#apwmsg").textContent = "Save failed (" + r.status + ").";
-  }));
-}
-$("#apwgo").addEventListener("click", () => {
-  sessionStorage.setItem("noesis_apw", $("#apw").value.trim());
-  loadSettings();
-});
-$("#apw").addEventListener("keydown", e => { if(e.key === "Enter") $("#apwgo").click(); });
-if(pw()) loadSettings();   // already unlocked this session
+// (Product settings moved to the ⚙ icon in the main app — this page is coverage only.)
 
 async function load(){
   let d;

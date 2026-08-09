@@ -144,6 +144,15 @@ def duel_enabled() -> bool:
     return os.environ.get("NOESIS_DUEL", "").lower() in ("1", "true", "yes")
 
 
+def reasoned_default_enabled() -> bool:
+    """Flag (default OFF, live-toggleable): when ON, single answers (no explicit engine — i.e. whenever
+    the A/B duel isn't running the question) DEFAULT to the REASONED engine: clinical scaffold →
+    coverage-steered retrieval → decision-gated compose. Explicit engine="standard" (the duel's control
+    arm) still runs standard, so duel votes keep their contrast. Costs +1 scaffold LLM call per fresh
+    question. Grounding identical to the standard engine."""
+    return os.environ.get("NOESIS_REASONED_DEFAULT", "").lower() in ("1", "true", "yes")
+
+
 def integrative_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, the per-question "include complementary & integrative
     approaches" opt-in appears (itself off by default per question). Double opt-in: this flag gates the
@@ -262,7 +271,7 @@ class ResearchIn(BaseModel):
     attachments: list[Attachment] | None = None   # images/PDF/DICOM → vision context
     user_name: str | None = None          # asker identity (captured at landing)
     user_email: str | None = None
-    engine: str = "standard"              # "standard" | "reasoned" (A/B duel arm; ignored unless NOESIS_DUEL)
+    engine: str = ""                      # "" = auto (reasoned-default setting decides) · "standard" · "reasoned"
     integrative: bool = False             # per-question opt-in: complementary/integrative section (flag-gated)
     history: list[dict] | None = None     # prior turns [{question, answer}] → follow-up context
     session_id: str | None = None         # thread to append this turn to (conversation)
@@ -572,7 +581,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     # gating is fully REQUEST-time belong here — accounts_enabled stays env-only (it gates store
     # construction at boot). New product settings land in this dict going forward.
     _LIVE_FLAGS = {"duel_enabled": duel_enabled, "triage_enabled": triage_enabled,
-                   "ask_panel_enabled": ask_panel_enabled, "integrative_enabled": integrative_enabled}
+                   "ask_panel_enabled": ask_panel_enabled, "integrative_enabled": integrative_enabled,
+                   "reasoned_default_enabled": reasoned_default_enabled}
 
     async def _flag_live(key: str) -> bool:
         """Resolved value of a controlled flag: DB override → else env default. Fail-open to env."""
@@ -961,8 +971,17 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         focus = answer_focus_enabled()
         # A/B duel arm: engine="reasoned" routes through the alternate scaffold+decision-gated engine.
         # Flag off (or unknown engine) → plain ask, param ignored (byte-identical, Rule 20).
-        _ask = (app.state.service.ask_reasoned
-                if body.engine == "reasoned" and await _flag_live("duel_enabled") else app.state.service.ask)
+        # Engine resolution: explicit "standard" (duel control arm) → standard; explicit "reasoned" →
+        # reasoned when duel or the reasoned-default setting allows; UNSET → the reasoned-default
+        # setting decides (the "default to engine B outside duel mode" behavior).
+        _eng = (body.engine or "").strip()
+        if _eng == "standard":
+            _use_reasoned = False
+        elif _eng == "reasoned":
+            _use_reasoned = (await _flag_live("duel_enabled")) or (await _flag_live("reasoned_default_enabled"))
+        else:
+            _use_reasoned = await _flag_live("reasoned_default_enabled")
+        _ask = app.state.service.ask_reasoned if _use_reasoned else app.state.service.ask
         # per-question integrative opt-in (double opt-in: live flag AND body.integrative). Steers the
         # search (question hint) + appends the section directive; persisted question stays the original.
         _q, _extra = body.question, None

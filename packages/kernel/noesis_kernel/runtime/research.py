@@ -122,6 +122,13 @@ class ResearchService:
         or the scaffold errors (fail-open — never a dead end)."""
         if not (self.reasoned_scaffold_prompt and self.reasoned_answer_format):
             return await self.ask(**kw)
+        if kw.get("history"):
+            # FOLLOW-UP: the conversation already frames the problem — skip the scaffold (its coverage
+            # brief would also interfere with follow-up resolution, which rewrites the question). Keep
+            # the decision-gated compose format so the thread stays stylistically consistent.
+            kw = dict(kw)
+            kw["answer_format_override"] = self.reasoned_answer_format
+            return await self.ask(**kw)
         question = kw.get("question", "")
         on_event = kw.get("on_event")
         from pydantic import BaseModel, Field
@@ -226,9 +233,10 @@ class ResearchService:
         # same span/entailment gates. "patient" uses the vertical's patient directive when it supplies
         # one; anything else (incl. an unknown value) falls back to the clinician directive → the
         # default path is byte-identical.
-        directive = answer_format_override or (self.patient_answer_format
-                     if audience == "patient" and self.patient_answer_format
-                     else self.answer_format)
+        if audience == "patient" and self.patient_answer_format:
+            directive = self.patient_answer_format     # patient view always wins (per-audience contract)
+        else:
+            directive = answer_format_override or self.answer_format
         if extra_directive:   # opt-in addendum (e.g. integrative section) — appended to WHICHEVER directive won
             directive = (directive + "\n\n" + extra_directive) if directive else extra_directive
         # Effort scales STRUCTURAL search knobs only (turns, results, context, citations, budget) —

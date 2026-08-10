@@ -3179,10 +3179,13 @@ async function askQuestion(question, opts){
       return;
     }
     const timedOut = err && err.name === "AbortError";
-    // SURFACE THE REAL ERROR (dev-phase transparency): the stream's error event carries the server's
-    // full detail in err.message — show it verbatim instead of a generic line.
-    const detail = (err && err.message && err.message !== "Failed to fetch")
-      ? `Research failed — ${err.message}` : "Couldn't reach the research service.";
+    // SURFACE THE REAL ERROR (dev-phase transparency) — every class, verbatim. Network-layer drops
+    // (TypeError/"Failed to fetch"/mid-stream reset) are named for what they usually are: the
+    // connection died mid-answer (commonly a server restart/deploy while streaming).
+    const isNet = err && (err.name === "TypeError" || /fetch|network|load failed/i.test(err.message || ""));
+    const detail = isNet
+      ? `Research failed — the connection dropped mid-answer (often a server restart/deploy during a long answer). [${(err && (err.name + ": " + err.message)) || "network error"}] Retry usually works.`
+      : `Research failed — ${(err && err.message) || "unknown error"}`;
     if(conv){ finishTurn(errTurn(timedOut
         ? "The full answer timed out — try a narrower follow-up, or fill the gaps below."
         : detail)); return; }

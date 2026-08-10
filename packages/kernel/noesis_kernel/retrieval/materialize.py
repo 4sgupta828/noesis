@@ -45,13 +45,21 @@ async def materialize_to_postgres(repo: CorpusRepository, pg_source, *, batch_si
 
     `facet_overrides` (generic) is merged LAST onto every block's facets — the caller-chosen way to
     stamp a whole ingest run (e.g. source_country for a country-specific ingest); it never encodes
-    domain meaning here, only applies whatever the caller passed."""
+    domain meaning here, only applies whatever the caller passed.
+
+    CLEAN-REPLACE (Evidence Pulse A1): block ids are content-addressed, so re-ingesting an EDITED
+    document inserts its changed blocks while the previous text's rows would linger under the same
+    document_id (the mixed-edition bug — one document serving both editions). After upserting, any
+    row of a document touched by THIS run whose block_id is not in the run's key set is deleted.
+    Documents not in this run are never touched."""
     ov = facet_overrides or {}
     rows: list[dict] = []
     added = 0
+    doc_keys: dict[tuple[str, str], set[str]] = {}   # (tenant_id, document_id) -> this run's block ids
     for doc in repo.iter_documents():
         for block in repo.blocks_for(doc.id):
             bc = repo.block_content(block.content_key)
+            doc_keys.setdefault((doc.tenant_id, doc.id), set()).add(block.content_key)
             rows.append(dict(
                 tenant_id=doc.tenant_id, document_id=doc.id, block_id=block.content_key,
                 text=block.text, embedding=list(bc.embedding) if (bc and bc.embedding) else None,
@@ -65,4 +73,8 @@ async def materialize_to_postgres(repo: CorpusRepository, pg_source, *, batch_si
     if rows:
         await pg_source.upsert_blocks(rows)
         added += len(rows)
+    if hasattr(pg_source, "delete_stale_blocks"):
+        for (tenant_id, document_id), keys in doc_keys.items():
+            await pg_source.delete_stale_blocks(
+                tenant_id=tenant_id, document_id=document_id, keep_block_ids=sorted(keys))
     return added

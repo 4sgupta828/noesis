@@ -94,7 +94,8 @@ class PostgresRetrievalSource:
                     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10)
                     ON CONFLICT (tenant_id, document_id, block_id) DO UPDATE
                     SET text=EXCLUDED.text, embedding=EXCLUDED.embedding,
-                        facets=EXCLUDED.facets""",
+                        facets=EXCLUDED.facets, document_title=EXCLUDED.document_title,
+                        content_type=EXCLUDED.content_type, source_key=EXCLUDED.source_key""",
                 tenant_id, workspace_id, document_id, block_id, text, embedding,
                 json.dumps(facets or {}), document_title, content_type, source_key,
             )
@@ -120,9 +121,28 @@ class PostgresRetrievalSource:
                     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10)
                     ON CONFLICT (tenant_id, document_id, block_id) DO UPDATE
                     SET text=EXCLUDED.text, embedding=EXCLUDED.embedding,
-                        facets=EXCLUDED.facets""",
+                        facets=EXCLUDED.facets, document_title=EXCLUDED.document_title,
+                        content_type=EXCLUDED.content_type, source_key=EXCLUDED.source_key""",
                 args,
             )
+
+    async def delete_stale_blocks(self, *, tenant_id: str, document_id: str,
+                                  keep_block_ids: list[str]) -> int:
+        """CLEAN-REPLACE (Evidence Pulse A1): after re-ingesting a document, remove rows whose
+        block_id is not in this ingest's key set. Block ids are content-addressed, so an edited
+        document INSERTS its changed blocks while the old text's rows would otherwise linger
+        forever — the mixed-edition corpus bug (one document silently serving both editions).
+        Returns rows deleted."""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            res = await conn.execute(
+                f"""DELETE FROM {self._table}
+                    WHERE tenant_id=$1 AND document_id=$2 AND NOT (block_id = ANY($3::text[]))""",
+                tenant_id, document_id, list(keep_block_ids))
+        try:
+            return int((res or "DELETE 0").split()[-1])
+        except ValueError:
+            return 0
 
     # --- port ---
     def capabilities(self) -> frozenset[Capability]:

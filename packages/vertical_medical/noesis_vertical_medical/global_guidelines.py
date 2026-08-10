@@ -383,6 +383,15 @@ GLOBAL_GUIDELINES: tuple[dict, ...] = (
     # ---- FULL-TEXT entries (no inline `text` → fetch_artifact downloads the real document; needs the
     # PDF parser in the ingest registry). First mover: KDIGO 2024 CKD — a stable self-hosted PDF
     # (verified: 6 MB, parses to ~980k chars with SGLT2/eGFR/albuminuria anchors present).
+    #
+    # EDITION IDENTITY POLICY (Evidence Pulse A1/A7 — REQUIRED for change detection to exist):
+    # a NEW EDITION of a guideline is a NEW entry with a year-scoped id (e.g. a future
+    # "kdigo-anemia-2030-fulltext"), carrying `"supersedes": "<old-entry-id>"`; the OLD entry is
+    # RETAINED (its blocks get demoted via the supersession stamp, never deleted — they are the
+    # evidence the change brief cites). NEVER edit an existing entry's url/year to point at a new
+    # edition: same id → same document_id → the editions merge and no old/new pair ever exists.
+    # `"retracts": true` on an entry marks withdrawn guidance. Lineage is read by
+    # `declared_lineage()` below (curator-declared = highest-confidence, zero-LLM P0 source).
     # NOTE: WHO IRIS bitstream URLs broke in their DSpace migration — WHO full texts need the new
     # /server/api/core/bitstreams/<uuid>/content form, resolved per document before adding.
     {"id": "kdigo-ckd-fulltext", "issuer": "KDIGO",
@@ -499,3 +508,27 @@ class GlobalGuidelinesConnector:
         if not url:
             raise ValueError(f"global_guidelines: no text or url for {doc.native_id!r}")
         return await self.fetch_strategy.fetch(url)   # live fetch (PDF/HTML → parser)
+
+
+def declared_lineage(registry: tuple[dict, ...] = GLOBAL_GUIDELINES,
+                     source_key: str = "global_guidelines") -> list[dict]:
+    """Curator-declared document lineage (Evidence Pulse P0 — the zero-LLM, highest-confidence
+    change source). Entries carrying `"supersedes": "<old-entry-id>"` yield a superseded_by
+    relation old→new; `"retracts": true` yields a retracted relation on the entry itself.
+    Returns [{old_document_id, new_document_id, relation, subjects}] in the kernel's
+    currency vocabulary; dangling supersedes targets are skipped (never guessed)."""
+    ids = {g["id"] for g in registry}
+    out: list[dict] = []
+    for g in registry:
+        old = g.get("supersedes")
+        if old and old in ids:
+            out.append({"old_document_id": f"{source_key}:{old}",
+                        "new_document_id": f"{source_key}:{g['id']}",
+                        "relation": "superseded_by",
+                        "subjects": list(g.get("conditions", []))})
+        if g.get("retracts"):
+            out.append({"old_document_id": f"{source_key}:{g['id']}",
+                        "new_document_id": "",
+                        "relation": "retracted",
+                        "subjects": list(g.get("conditions", []))})
+    return out

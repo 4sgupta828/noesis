@@ -522,4 +522,143 @@ CLINICAL_GOLD: dict[str, dict] = {
         "pico": {"population": "adult, essential hypertension", "intervention": "gene therapy",
                  "comparator": "", "outcome": "approved product"},
     },
+
+    # ---- Synthesis precision (held-out, authored 2026-08-10) --------------------------------------
+    # Anti-overfitting guard for the reasoned-engine gates: each case exercises a failure mode
+    # OBSERVED in the HFpEF/cardiorenal case (session 6bab9c4b) on a DIFFERENT clinical scenario, so
+    # a pass means the principle generalized — not that one answer got patched. Rules 5/7: never
+    # shown to the model; phrase checks are deliberately narrow (deterministic assertions on
+    # unambiguous failures, not attempted semantic grading — nuanced grading is the LLM-judge
+    # layer's job, TODO).
+    "sp_threshold_not_label": {
+        # mode: treatment-initiation threshold reported as a severity label
+        "question": "A 67-year-old woman has a femoral neck T-score of -1.9 and a 10-year FRAX major "
+                    "fracture risk of 21%. Does she need pharmacologic treatment, and what would you "
+                    "start?",
+        "expect": "value",
+        "required_phrases": [],
+        # T-score -1.9 is osteopenia; calling it severe osteoporosis is the labeling error
+        "forbidden_phrases": ["severe osteoporosis"],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "med",
+        "category": "synthesis_precision",
+        "pico": {"population": "67F, osteopenia, high FRAX", "intervention": "antiresorptive",
+                 "comparator": "none", "outcome": "treatment threshold vs diagnostic label"},
+    },
+    "sp_route_stays_open": {
+        # mode: importing a route preference the directly-applicable evidence leaves open
+        "question": "For a 58-year-old with newly diagnosed pernicious anemia and no neurologic "
+                    "symptoms, should vitamin B12 be replaced orally or by injection?",
+        "expect": "value",
+        "required_phrases": [],
+        # high-dose oral is evidence-supported here; flat route absolutism is the failure
+        "forbidden_phrases": ["must be given intramuscularly", "only intramuscular",
+                              "oral b12 is ineffective"],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "med",
+        "category": "synthesis_precision",
+        "pico": {"population": "58yo, pernicious anemia, no neuro deficit", "intervention": "oral B12",
+                 "comparator": "IM B12", "outcome": "route selection honesty"},
+    },
+    "sp_etiology_in_parallel": {
+        # modes: etiologic workup runs alongside treatment (not after failure) + prune branches the
+        # patient's sex rules out + retrieval-absence language ban
+        "question": "A 66-year-old man has new iron-deficiency anemia (ferritin 18 ng/mL) and is on "
+                    "warfarin for atrial fibrillation. How should his anemia be evaluated and treated?",
+        "expect": "value",
+        # "oscopy" catches endoscopy AND colonoscopy — the etiologic evaluation must appear
+        "required_phrases": ["oscopy"],
+        # assertion-shaped (a good answer may legitimately note the branch is excluded by sex — only
+        # RECOMMENDING it, or copying the guideline menu verbatim, is the failure)
+        "forbidden_phrases": ["urology/gynecology",           # the verbatim menu-copy artifact
+                              "refer to gynecolog",
+                              "none of the retrieved findings suggest",
+                              "no retrieved findings suggest"],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "high",
+        "category": "synthesis_precision",
+        "pico": {"population": "66M, IDA, anticoagulated", "intervention": "iron + GI evaluation",
+                 "comparator": "iron alone", "outcome": "parallel etiologic workup"},
+    },
+    "sp_horizons_mirrored": {
+        # mode: the question's explicit time structure must organize the answer
+        "question": "For a 55-year-old with a first unprovoked proximal DVT, what should happen in "
+                    "the first 24 hours, at 3 months, and in the long term?",
+        "expect": "value",
+        "required_phrases": ["3 month"],
+        "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "med",
+        "category": "synthesis_precision",
+        "pico": {"population": "55yo, first unprovoked DVT", "intervention": "anticoagulation",
+                 "comparator": "", "outcome": "time-horizon structure honored"},
+    },
+    "sp_lookup_not_decision_framed": {
+        # mode (router + over-hedging guard): a pure evidence lookup must NOT get the decision frame
+        "question": "What did the SPRINT trial show about intensive versus standard blood pressure "
+                    "targets?",
+        "expect": "value",
+        "required_phrases": [],
+        "forbidden_phrases": ["## do now", "## question coverage"],
+        "evidence_floor_kinds": _ANY_TRIAL_OR_BETTER,
+        "clinical_risk": "low",
+        "category": "synthesis_precision",
+        "pico": {"population": "SPRINT cohort", "intervention": "intensive BP target",
+                 "comparator": "standard target", "outcome": "router: lookup stays a lookup"},
+    },
+    "sp_emergency_not_hedged": {
+        # panel-added mode: the conditional-escalation discipline must NOT slow a true emergency —
+        # anaphylaxis gets immediate epinephrine, not a caveat ladder
+        "question": "A 34-year-old develops hives, lip swelling, wheeze, and BP 78/40 within minutes "
+                    "of a bee sting. What should be done?",
+        "expect": "value",
+        "required_phrases": ["epinephrine"],
+        "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "high",
+        "category": "synthesis_precision",
+        "pico": {"population": "34yo, anaphylaxis", "intervention": "IM epinephrine",
+                 "comparator": "", "outcome": "urgency preserved for true emergencies"},
+    },
+    "sp_no_demographics_menu_ok": {
+        # panel-added mode: with NO patient demographics, standard branching logic is CORRECT —
+        # the prune-branches rule must not punish a generic management question
+        "question": "How should recurrent calcium oxalate kidney stones be evaluated and managed?",
+        "expect": "value",
+        "required_phrases": ["24-hour urine"],
+        "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "med",
+        "category": "synthesis_precision",
+        "pico": {"population": "unspecified, recurrent stones", "intervention": "metabolic workup",
+                 "comparator": "", "outcome": "generic branching allowed without demographics"},
+    },
+    "sp_incidentaloma_authority_holds": {
+        # panel-added mode: aggressive case-report literature vs conservative guideline —
+        # authority ranking must hold (hormonal workup + surveillance, not reflex surgery)
+        "question": "A 2-cm adrenal incidentaloma is found on CT in an asymptomatic 55-year-old. "
+                    "What should happen next?",
+        "expect": "value",
+        "required_phrases": ["metanephrine"],
+        "forbidden_phrases": [],
+        "evidence_floor_kinds": _GUIDELINE_OR_TRIAL,
+        "clinical_risk": "med",
+        "category": "synthesis_precision",
+        "pico": {"population": "55yo, 2cm adrenal incidentaloma", "intervention": "hormonal workup",
+                 "comparator": "surgery", "outcome": "authority holds vs case-report pull"},
+    },
+    "sp_adjacent_population_overclaim": {
+        # mode: adjacent-population evidence flattened into a direct claim (nuance needs the
+        # LLM-judge layer; deterministic floor = the flat overclaim must not appear)
+        "question": "Do SGLT2 inhibitors reduce heart failure hospitalizations in patients with "
+                    "type 1 diabetes?",
+        "expect": "value",
+        "required_phrases": ["type 1"],
+        "forbidden_phrases": ["proven in type 1 diabetes", "established in type 1 diabetes"],
+        "evidence_floor_kinds": _ANY_TRIAL_OR_BETTER,
+        "clinical_risk": "high",
+        "category": "synthesis_precision",
+        "pico": {"population": "type 1 diabetes", "intervention": "SGLT2i",
+                 "comparator": "placebo", "outcome": "population-match honesty"},
+    },
 }

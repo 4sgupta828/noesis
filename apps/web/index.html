@@ -748,7 +748,9 @@
     padding:.8rem .95rem;margin-top:.35rem;}
   .xitem.expanded video{display:block;max-width:100%;border-radius:8px;margin:.55rem 0;}
   .xformrow>details.plain-d{flex-basis:100%;}
-  .gapfix.infoot{margin:1rem 0 .1rem;padding:.65rem .85rem;border-left-color:var(--hair);background:transparent;}
+  /* nested in the dossier: compact; the WEAK (non-.soft) variant keeps its gold urgency accent */
+  .gapfix.infoot{margin:1rem 0 .1rem;padding:.65rem .85rem;}
+  .gapfix.infoot.soft{border-left-color:var(--hair);background:transparent;}
   .gapfix.infoot .gapfix-hint{margin-bottom:.5rem;}
   /* diagnostics nested in the dossier: dashed-rule sub-section, not a second box */
   .evbody .diagbox{border:none;border-top:1px dashed var(--hair);border-radius:0;margin-top:.7rem;}
@@ -1386,12 +1388,19 @@ function applyDisclaimers(){
 
 function esc(s){const d=document.createElement("div");d.textContent=s??"";return d.innerHTML;}
 
+// [n] AND grouped [n, m, k] citation refs → clickable sups, in ONE pass (a chained second replace
+// would re-match the [n] text inside the sups the first pass emitted and nest tags).
+function linkCitationRefs(s, cls){
+  return s.replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, (m, g) =>
+    g.split(",").map(x => { const n = x.trim();
+      return `<sup class="${cls||"ref"}" data-n="${n}">[${n}]</sup>`; }).join(""));
+}
+
 // Inline: bold, clickable [n] refs, and typed highlight marks. Operates on
 // ALREADY-ESCAPED text (XSS-safe) — the [[F]]/[[R]]/[[K]] markers survive esc()
 // (literal brackets) and never collide with [n] refs (F/R/K aren't digits).
 function mdInline(s){
-  s = s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
-       .replace(/\[(\d+)\]/g,'<sup class="ref" data-n="$1">[$1]</sup>');
+  s = linkCitationRefs(s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>'));
   s = s.replace(/\[\[F\]\]([\s\S]*?)\[\[\/F\]\]/g,'<mark class="hl hl-f">$1</mark>')
        .replace(/\[\[R\]\]([\s\S]*?)\[\[\/R\]\]/g,'<mark class="hl hl-r">$1</mark>')
        .replace(/\[\[K\]\]([\s\S]*?)\[\[\/K\]\]/g,'<mark class="hl hl-k">$1</mark>');
@@ -1416,13 +1425,14 @@ function reasoningMarkup(data){
   const conf = data.confidence && typeof data.confidence === "object" ? data.confidence : null;
   const purpose = (data.reasoning_purpose || "").trim();
   const conclusion = (data.reasoning_conclusion || "").trim();
-  if(!items.length && !conf && !purpose && !conclusion) return "";
+  // purpose alone is framing, not substance — a purpose-only box reads broken (this happens when
+  // the no-new-facts guard blanks a conclusion that cited figures outside the grounding allowance)
+  if(!items.length && !conf && !conclusion) return "";
   // basis-finding refs → clickable chips that scroll to the evidence card (reuses the [n] machinery)
   const refChips = b => (Array.isArray(b) ? b : []).map(n =>
     `<sup class="rref ref" data-n="${parseInt(n,10)||0}" title="Rests on finding ${parseInt(n,10)||0}">[${parseInt(n,10)||0}]</sup>`).join("");
-  // inline [n] in free text → the SAME clickable ref (used in confidence rationales, which cite inline)
-  const linkRefs = s => esc(s).replace(/\[(\d+)\]/g,
-    '<sup class="rref ref" data-n="$1" title="Finding $1">[$1]</sup>');
+  // inline [n] (incl. grouped [n, m]) in free text → the SAME clickable ref
+  const linkRefs = s => linkCitationRefs(esc(s), "rref ref");
   const rows = items.map(it => {
     const meta = _RKIND[it.kind] || {c:"k-implication", l:esc(it.kind||"Note")};
     return `<div class="ritem"><span class="rkind ${meta.c}">${esc(meta.l)}</span>
@@ -1652,7 +1662,7 @@ function render(data, target, opts){
   if(data.answer){
     const html = STRUCTURED
       ? mdToHtml(data.answer)
-      : esc(data.answer).replace(/\[(\d+)\]/g, '<sup class="ref" data-n="$1">[$1]</sup>');
+      : linkCitationRefs(esc(data.answer));
     parts.push(`<div class="answer${STRUCTURED?" md":""}">${html}</div>`);
     if(STRUCTURED && /<mark class="hl/.test(html)){
       parts.push(`<div class="hllegend" hidden>
@@ -1704,19 +1714,19 @@ function render(data, target, opts){
     // strong answer → "strengthen" lives INSIDE the dossier (one less box in the bottom stack);
     // weak answer → it stands alone below, prominent (see next block)
     const weakEv = !data.grounded || ngaps || n < 2;
-    const gapFoot = (GAP_ENABLED && !weakEv) ? gapPanelMarkup(false, true) : "";
-    // DIAGNOSTICS nests inside the dossier — same "how this answer came to be" family as the
-    // findings, so the bottom stack carries ONE trust disclosure instead of two boxes.
-    evBits.push(`<details class="evblock" id="evblock">
+    // Gap-fill ALWAYS lives inside the dossier as a sub-box (weak answers keep the gold-accented
+    // urgent variant + the gap count in the header; strong get the soft "strengthen" one).
+    // DIAGNOSTICS nests here too — same "how this answer came to be" family as the findings, so
+    // the bottom stack carries ONE trust disclosure instead of three boxes.
+    const gapFoot = GAP_ENABLED ? gapPanelMarkup(weakEv, true) : "";
+    evBits.push(`<details class="evblock" id="evblock" ${weakEv&&GAP_ENABLED?"open":""}>
       <summary><h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}${ngaps?` · <span class="evgaps">${ngaps} gap${ngaps===1?"":"s"}</span>`:""}<span class="evtoggle"></span></h4>
         <div class="evhint">The passages this answer is built on — each shows a quote located in its cited source.</div></summary>
       <div class="evbody">${gapsHtml}${cards}${gapFoot}${diagBoxMarkup(data)}</div>
     </details>`);
   }
-  if(GAP_ENABLED){
-    const weak = !data.grounded || (data.coverage_gaps||[]).length || n < 2;
-    if(weak || !n) evBits.push(gapPanelMarkup(weak));
-  }
+  // no dossier to host it (unverified / error answer) → the gap panel stands alone
+  if(GAP_ENABLED && !n) evBits.push(gapPanelMarkup(!data.grounded || (data.coverage_gaps||[]).length));
   // no dossier to host it (unverified answer) → diagnostics stands alone, still collapsed
   if(data.answer && !n) evBits.push(diagBoxMarkup(data));
   if(evBits.length) parts.push(`<div class="ansbox">${evBits.join("")}</div>`);

@@ -160,6 +160,7 @@ class ResearchService:
             likely_causes: list[str] = Field(default_factory=list)
             cant_miss: list[str] = Field(default_factory=list)
             key_decisions: list[str] = Field(default_factory=list)
+            explicit_asks: list[str] = Field(default_factory=list)   # the audit contract: what was literally asked
 
         async def _emit(ev):
             if on_event is not None:
@@ -186,7 +187,8 @@ class ResearchService:
                 kw["answer_format_override"] = self.understanding_answer_format
                 await _emit({"type": "engine", "engine": "understanding", "why": "why/how question"})
                 return await self.ask(**kw)
-            lines = ([f"- likely/common: {x}" for x in s.likely_causes[:6]]
+            lines = ([f"- explicitly asked: {x}" for x in s.explicit_asks[:8]]
+                     + [f"- likely/common: {x}" for x in s.likely_causes[:6]]
                      + [f"- can't-miss: {x}" for x in s.cant_miss[:6]]
                      + [f"- decision: {x}" for x in s.key_decisions[:6]])
             if lines:

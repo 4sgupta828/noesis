@@ -89,16 +89,39 @@ GLOBAL_GUIDELINES: tuple[dict, ...] = (
          "rate vs rhythm control is individualised (early rhythm control benefits selected patients).",
          "ACC/AHA")},
     {"id": "acc-aha-hf", "issuer": "AHA/ACC/HFSA",
-     "title": "Heart Failure — Guideline-Directed Medical Therapy",
-     "conditions": ["heart failure", "hfref", "gdmt", "cardiomyopathy"],
+     "title": "Heart Failure — Guideline-Directed Medical Therapy, Decision Thresholds, and Escalation",
+     "conditions": ["heart failure", "hfref", "hfpef", "gdmt", "cardiomyopathy", "diuretic resistance",
+                    "cardiorenal", "hyperkalemia", "mra", "iron deficiency in heart failure",
+                    "ultrafiltration", "metolazone"],
      "url": "https://www.ahajournals.org/doi/10.1161/CIR.0000000000001063", "year": 2022,
      "text": _summary(
          "- HFrEF core therapy is **four pillars**: ARNI (or ACEi/ARB), **beta-blocker**, **MRA**, and "
          "**SGLT2 inhibitor** — titrated to target doses as tolerated.\n"
-         "- **SGLT2 inhibitors benefit across the EF spectrum** including HFpEF; diuretics manage "
-         "congestion but do not modify disease.\n"
+         "- **HFpEF (LVEF ≥50%) recommendations are weaker and EF-specific**: SGLT2 inhibitors carry a "
+         "Class 2a recommendation; MRAs, ARBs, and ARNI carry only Class 2b (may be considered, "
+         "particularly at the lower end of the preserved-EF range). Do not transfer HFrEF class-1 "
+         "strength to HFpEF decisions.\n"
+         "- **MRA renal/potassium thresholds** (from the HFrEF recommendation — apply with care in "
+         "HFpEF): initiate only if eGFR >30 mL/min/1.73m² and K⁺ <5.0 mEq/L; careful potassium "
+         "monitoring after any change; **discontinue the MRA if K⁺ cannot be maintained below "
+         "5.5 mEq/L**. Potassium binders (patiromer, sodium zirconium cyclosilicate, Class 2b) may "
+         "enable continuing RAAS/MRA therapy in recurrent hyperkalemia.\n"
+         "- **Diuretic escalation for inadequate decongestion is stepwise pharmacologic**: intensify "
+         "the loop diuretic (higher/IV dosing) first; for patients not responding to moderate-to-high "
+         "loop doses, **add a thiazide-type diuretic (e.g. metolazone)** — sequential nephron blockade "
+         "— before considering device-based options.\n"
+         "- **Ultrafiltration is a Class 2b consideration for refractory congestion only**: in acute HF "
+         "with worsening renal function and persistent congestion, a stepped pharmacologic regimen "
+         "achieved similar decongestion with **better preservation of renal function and fewer serious "
+         "adverse events than ultrafiltration** (CARRESS-HF) — escalate drugs before ultrafiltration, "
+         "and do not treat early dialysis/UF as routine escalation outside refractory cases.\n"
+         "- **IV iron is Class 2a for symptomatic HF with iron deficiency** (ferritin <100 ng/mL, or "
+         "100–299 with TSAT <20%) to improve functional status and quality of life — the trial "
+         "evidence (FAIR-HF, AFFIRM-AHF) is in **HFrEF**; benefit in HFpEF is extrapolation. **Oral "
+         "iron showed no benefit in HF** (IRONOUT-HF).\n"
          "- In CKD, do not reflexively withhold RAAS/SGLT2 therapy — an initial creatinine rise is "
-         "expected; monitor potassium/function.",
+         "expected and usually hemodynamic; monitor potassium/function rather than stopping for a "
+         "small rise.",
          "AHA/ACC/HFSA")},
     {"id": "aha-asa-stroke", "issuer": "AHA/ASA",
      "title": "Acute Ischemic Stroke — Early Management",
@@ -366,6 +389,37 @@ GLOBAL_GUIDELINES: tuple[dict, ...] = (
      "title": "KDIGO 2024 Clinical Practice Guideline — CKD Evaluation and Management (FULL TEXT)",
      "conditions": ["chronic kidney disease", "ckd", "albuminuria", "egfr", "kidney disease management"],
      "url": "https://kdigo.org/wp-content/uploads/2024/03/KDIGO-2024-CKD-Guideline.pdf", "year": 2024},
+    {"id": "kdigo-anemia-fulltext", "issuer": "KDIGO",
+     "title": "KDIGO 2026 Clinical Practice Guideline — Anemia in CKD (FULL TEXT)",
+     "conditions": ["anemia in ckd", "anemia", "iron deficiency", "iv iron", "oral iron", "ferritin",
+                    "tsat", "transferrin saturation", "esa", "erythropoiesis stimulating agent",
+                    "hemoglobin target", "hif-ph inhibitor"],
+     "url": "https://kdigo.org/wp-content/uploads/2026/01/KDIGO-2026-Anemia-in-CKD-Guideline.pdf",
+     "year": 2026},
+
+    # ---- iron-deficiency anemia workup ----
+    {"id": "aga-ida-workup", "issuer": "American Gastroenterological Association",
+     "title": "Gastrointestinal Evaluation of Iron-Deficiency Anemia",
+     "conditions": ["iron deficiency anemia", "occult gi bleeding", "anemia workup", "endoscopy",
+                    "colonoscopy", "anticoagulation bleeding", "fecal occult blood"],
+     "url": "https://gastro.org/clinical-guidance/gastrointestinal-evaluation-of-iron-deficiency-anemia/",
+     "year": 2020,
+     "text": _summary(
+         "- Confirm true iron deficiency first: **ferritin <45 ng/mL** makes iron deficiency likely in "
+         "anemia; in inflammatory states (CKD, heart failure), iron deficiency remains compatible with "
+         "ferritin up to ~100 ng/mL (or higher with **TSAT <20%**) — do not exclude it on a "
+         "\"normal\" ferritin alone.\n"
+         "- **Men and postmenopausal women with confirmed iron-deficiency anemia and no obvious cause: "
+         "bidirectional endoscopy (upper endoscopy + colonoscopy)** to evaluate for occult GI blood "
+         "loss and malignancy.\n"
+         "- **Anticoagulation (e.g. apixaban) is not by itself a sufficient explanation for "
+         "iron-deficiency anemia** — anticoagulated patients still warrant the etiologic GI workup; "
+         "the anticoagulant affects periprocedural planning (interruption/bridging decisions), not "
+         "whether to investigate.\n"
+         "- After negative bidirectional endoscopy: **non-invasive H. pylori testing** (treat if "
+         "positive); persistent/recurrent unexplained iron-deficiency anemia → consider small-bowel "
+         "evaluation (capsule endoscopy).",
+         "AGA")},
 
     # ---- electrolytes ----
     {"id": "hyponatremia-consensus", "issuer": "European Hyponatremia Guideline (ESE/ERA/ESICM)",

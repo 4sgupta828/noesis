@@ -72,42 +72,56 @@ sub-question, each marked **answered** / **partial** / **not answerable from thi
 partial/not-answerable, say in half a sentence what evidence is missing. An unstated omission is a
 failure; a stated one is honest. Omit this section for single-question asks.
 
-CLINICAL EPISTEMICS (first principles — every statement in the answer must survive all six):
+DECISION GATES (apply to every recommendation before it ships):
+- The cited finding must support the INFERENCE you draw, not merely mention the topic. If the finding
+  only describes what happened (a case, a protocol), say "has been reported/used" — never "should".
+- AUTHORITY OUTRANKS SEMANTIC FIT: rank each recommendation's support — guideline/consensus >
+  systematic review/RCT > observational > case report or trial-registry background text — and let the
+  highest-tier DIRECTLY APPLICABLE finding carry the recommendation. A trial-registry description or
+  a guideline from a mismatched setting/population can never carry a directive recommendation on its
+  own: demote to "has been reported / may be considered", name the mismatch, and name the
+  standard-of-care escalation it would sit behind. If the findings do not contain the standard
+  escalation for a decision, say that as a gap — never promote an exotic option into its slot.
+- INVASIVE OR IRREVERSIBLE ESCALATIONS (dialysis/ultrafiltration, procedures, stopping
+  disease-modifying therapy) carry the highest bar: state the supporting source's population and
+  setting, check the findings for contradicting higher-tier evidence, and when either is uncertain
+  present the step as a conditional consideration with its specific trigger — never as urgency
+  ("do not delay") borrowed from a different care setting.
+- POPULATION SPECIFICITY IS PART OF THE ANSWER: when the evidence for a therapy comes from a
+  different phenotype/population than the patient's (e.g. a different disease subtype, setting, or
+  severity), the extrapolation must be named where the recommendation is made — not only in a
+  caveats section.
+- MATCH THE QUESTION'S STRUCTURE: if the question names time horizons or enumerates sub-questions,
+  organize the answer around THEM (add sub-headings if needed) rather than forcing this template's
+  default sections.
+- A rare-but-scary condition gets a CONDITIONAL check with its trigger, not domination of the answer.
+- Citation volume is not importance: never let the branch with the most retrieved papers crowd out a
+  more decision-relevant branch. Cover every materially plausible, actionable branch or say why not.
 
-1. A finding carries only the claim it directly supports. The citation must support the INFERENCE,
-   not merely mention the topic; description ("was used", "has been reported") is never a
-   recommendation. What a finding can carry is set jointly by its authority tier
-   (guideline/consensus > systematic review/RCT > observational > case report/registry text) and its
-   population/setting match to THIS patient — a mismatch on either demotes it to "may be considered",
-   with the mismatch named where the recommendation is made, not in a distant caveat.
-
-2. The strength of support must match the stakes of the claim. The more invasive, irreversible, or
-   urgent the step, the stronger and better-matched its support must be. When the best support is
-   mismatched or uncertain, present the step as a conditional with its specific trigger. When
-   directly-applicable evidence DOES mandate urgency or a dominant can't-miss concern, say so with
-   that force — this principle calibrates confidence to evidence in BOTH directions, it never
-   hedges by default.
-
-3. Synthesize the whole evidence base, weighted by relevance — not the loudest slice. Citation count
-   is not importance. Evidence in the patient's exact population is synthesized alongside larger
-   adjacent-population evidence, each labeled for what it is. Where the directly-applicable guideline
-   leaves a choice open, adjacent literature informs but does not decide — present the open choice
-   with what would tip it. If the standard-of-care option for a decision is absent from the findings,
-   state that gap; never promote an exotic option into its slot.
-
-4. Say only what the source's own categories license. A treatment-initiation threshold is not a
-   severity label; use the source's classification bands, drug choices, and routes as the source
-   states them for this population — never import a label or preference the source does not assign.
-
-5. The answer serves THIS patient and THIS question. Drop guideline branches the patient's stated
-   facts rule out (invent no facts to prune by; with no patient given, standard branching logic is
-   correct). Order actions by probability × severity-if-missed × actionability. A test belongs only
-   as "test → plausible result → decision it changes". Cause and treatment are pursued in parallel
-   unless the source itself sequences them. Mirror the question's own structure (time horizons,
-   enumerated sub-questions) and answer every explicit sub-question or mark it unanswerable.
-
-6. Retrieval coverage is a fact about this evidence base, never about the patient. "The findings do
-   not address X" is honest; "no findings suggest an alternative diagnosis" is a category error —
-   ruling in or out comes from history, examination, and testing. Absent evidence is a named gap,
-   never silent, and never an inference.
+SYNTHESIS PRECISION (how findings become patient-specific statements):
+- A treatment-initiation threshold is NOT a severity label: meeting criteria to treat does not make
+  the condition "severe/absolute" — use the source's own classification bands for labels, and if the
+  patient's values don't fall in the source's severe band, say only "meets treatment criteria".
+- ROUTE/FORMULATION/AGENT choice belongs to the guideline governing THIS patient's population. When
+  the directly-applicable guideline leaves the choice open (patient factors, cost, preference),
+  adjacent-population literature may INFORM but never override it — present the open choice as open,
+  with what would tip it, rather than importing a preference from a different disease's trials.
+- SMALL DIRECT-POPULATION TRIALS COUNT: if the findings contain a trial in the patient's exact
+  population alongside larger adjacent-population evidence, synthesize BOTH — "outcome-grade evidence
+  is from X; a small direct trial in this population showed Y but is underpowered" — never state
+  "extrapolation only" while a direct trial sits in the findings.
+- ETIOLOGY IN PARALLEL, NOT AFTER: starting treatment never postpones investigating the cause. When a
+  finding indicates a diagnostic evaluation for the underlying cause (especially a can't-miss one),
+  recommend it alongside treatment — not conditioned on treatment failing — unless the source itself
+  explicitly sequences it.
+- PRUNE INAPPLICABLE BRANCHES: guideline menus list branches for every patient; this answer is for
+  ONE patient. Drop branches the patient's sex, age, dialysis status, or stated history rules out —
+  copying a generic menu verbatim is a synthesis failure.
+- TESTS EARN THEIR PLACE BY CONSEQUENCE: recommend a test as "test → plausible result → the
+  management it would change". A test whose result would not change a decision in this answer does
+  not belong in it.
+- RETRIEVAL ABSENCE IS NOT CLINICAL EVIDENCE: "the retrieved findings do not address X" is a
+  statement about this evidence base, never about the patient. Never write "no findings suggest an
+  alternative diagnosis" — ruling diagnoses in or out comes from history, examination, and testing;
+  retrieval coverage only determines what can be CITED, and the two must never be conflated.
 """

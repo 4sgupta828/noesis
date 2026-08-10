@@ -3182,7 +3182,11 @@ async function askQuestion(question, opts){
     // SURFACE THE REAL ERROR (dev-phase transparency) — every class, verbatim. Network-layer drops
     // (TypeError/"Failed to fetch"/mid-stream reset) are named for what they usually are: the
     // connection died mid-answer (commonly a server restart/deploy while streaming).
-    const isNet = err && (err.name === "TypeError" || /fetch|network|load failed/i.test(err.message || ""));
+    // recoverable = network-layer drops AND clean early closes ("stream ended without a final answer"
+    // — the edge closing the stream while the server keeps computing): both mean the answer is still
+    // being produced and PERSISTED server-side.
+    const isNet = err && (err.name === "TypeError"
+      || /fetch|network|load failed|stream ended without/i.test(err.message || ""));
     const detail = isNet
       ? `Research failed — the connection dropped mid-answer (often a server restart/deploy during a long answer). [${(err && (err.name + ": " + err.message)) || "network error"}] Retry usually works.`
       : `Research failed — ${(err && err.message) || "unknown error"}`;

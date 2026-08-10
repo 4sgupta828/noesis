@@ -3179,13 +3179,17 @@ async function askQuestion(question, opts){
       return;
     }
     const timedOut = err && err.name === "AbortError";
+    // SURFACE THE REAL ERROR (dev-phase transparency): the stream's error event carries the server's
+    // full detail in err.message — show it verbatim instead of a generic line.
+    const detail = (err && err.message && err.message !== "Failed to fetch")
+      ? `Research failed — ${err.message}` : "Couldn't reach the research service.";
     if(conv){ finishTurn(errTurn(timedOut
         ? "The full answer timed out — try a narrower follow-up, or fill the gaps below."
-        : "Couldn't reach the research service.")); return; }
+        : detail)); return; }
     if(await evidenceFallback(timedOut
         ? "The full answer timed out for this question. Showing ranked evidence — and you can queue high-quality sources below to fill the gap."
-        : "Showing ranked evidence from your sources.")) return;
-    out.innerHTML = `<div class="empty">${timedOut?"No evidence in the corpus answers this question yet.":"Couldn't reach the research service. Is the server running?"}</div>`;
+        : detail + " Showing ranked evidence from your sources.")) return;
+    out.innerHTML = `<div class="empty">${timedOut?"No evidence in the corpus answers this question yet.":esc(detail)+" Is the server running?"}</div>`;
     appendGapFallback(question);
   }finally{
     clearTimeout(timer);

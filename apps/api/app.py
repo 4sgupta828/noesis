@@ -10,6 +10,8 @@ import asyncio
 import json
 import os
 import re
+import time
+import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
@@ -25,6 +27,62 @@ from noesis_kernel.runtime.ingest import ingest_connector_to_postgres
 from noesis_kernel.runtime.research import ResearchService
 
 _WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+
+# ---- Resumable SSE runs -----------------------------------------------------
+# Railway's edge closes long-lived SSE connections after ~30-60s in steady state
+# regardless of keepalives (verified with the LLM-free /admin/stream-test probe:
+# clean EOF after ~3 pings — every client, no deploy in flight, no app restart).
+# The app can't prevent that, so streams are RESUMABLE instead: every streaming
+# run buffers its events here under a run_id, and GET /stream/{run_id}?since=N
+# replays the buffer from any cursor and follows live. The FE reconnects
+# silently on any drop, so an edge cut becomes a sub-second blip instead of an
+# error. The buffer is per-replica process memory: with numReplicas>1 a resume
+# can land on a replica that never saw the run (404) — the FE retries (each
+# attempt re-rolls the replica) and ultimately falls back to /sessions polling,
+# which reads the cross-replica store.
+_SSE_RUNS: dict[str, dict] = {}
+_SSE_RUN_TTL = 30 * 60   # keep finished runs resumable this long
+
+
+def _sse_run_new() -> dict:
+    now = time.time()
+    for k in [k for k, v in _SSE_RUNS.items() if now - v["ts"] > _SSE_RUN_TTL]:
+        _SSE_RUNS.pop(k, None)
+    run = {"id": uuid.uuid4().hex, "events": [], "done": False, "ts": now, "task": None}
+    _SSE_RUNS[run["id"]] = run
+    return run
+
+
+def _sse_push(run: dict, ev: dict) -> None:
+    run["events"].append(ev)
+    run["ts"] = time.time()
+
+
+def _sse_done(run: dict) -> None:
+    run["done"] = True
+    run["ts"] = time.time()
+
+
+async def _sse_follow(run: dict, since: int = 0):
+    """Yield the run's events from cursor `since` (each stamped with `_seq` so the client knows
+    its resume cursor), following live with 15s pings until the run is done. The events list is
+    append-only on a single event loop, so no locking is needed."""
+    idx = max(0, int(since))
+    last_beat = time.time()
+    while True:
+        events = run["events"]
+        if idx < len(events):
+            while idx < len(run["events"]):
+                yield f"data: {json.dumps(dict(run['events'][idx], _seq=idx))}\n\n"
+                idx += 1
+            last_beat = time.time()
+        elif run["done"]:
+            return
+        else:
+            await asyncio.sleep(0.4)
+            if time.time() - last_beat >= 15:
+                yield ": ping\n\n"
+                last_beat = time.time()
 
 
 def structured_answers() -> bool:
@@ -907,14 +965,16 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if app.state.service is None:
             app.state.service = build_default_service()
         from fastapi.responses import StreamingResponse
-        queue: asyncio.Queue = asyncio.Queue()
+        run = _sse_run_new()
 
         async def on_event(ev: dict) -> None:
-            await queue.put(ev)
+            _sse_push(run, ev)
 
         images, docs, _prev = _panel_media(body)
 
-        async def run() -> None:
+        async def runner() -> None:
+            # Runs to completion regardless of client connections — persists, and buffers every
+            # event under the run_id so a cut connection resumes via GET /stream/{run_id}.
             try:
                 r = await app.state.service.ask_panel(
                     question=body.question, tenant_id=body.tenant_id, workspace_id=body.workspace_id,
@@ -922,31 +982,21 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     history=body.history, rationales=body.rationales,
                     images=images, documents=docs, on_event=on_event)
                 sid = await _persist_panel(body, r)
-                await queue.put({"type": "final", "result": _panel_payload(r, session_id=sid or body.session_id)})
+                _sse_push(run, {"type": "final", "result": _panel_payload(r, session_id=sid or body.session_id)})
             except CassetteMiss:
-                await queue.put({"type": "error", "detail": "No model available in replay mode."})
+                _sse_push(run, {"type": "error", "detail": "No model available in replay mode."})
             except Exception as e:   # noqa: BLE001
-                await queue.put({"type": "error", "detail": f"provider error: {e}"})
+                _sse_push(run, {"type": "error", "detail": f"provider error: {e}"})
             finally:
-                await queue.put(None)   # sentinel: stream complete
+                _sse_done(run)
+
+        run["task"] = asyncio.create_task(runner())
 
         async def gen():
-            task = asyncio.create_task(run())
-            try:
-                yield ": open\n\n"                        # flush headers immediately
-                while True:
-                    try:
-                        ev = await asyncio.wait_for(queue.get(), timeout=15)
-                    except asyncio.TimeoutError:
-                        yield ": ping\n\n"; continue      # keepalive so proxies don't cut the stream
-                    if ev is None:
-                        break
-                    yield f"data: {json.dumps(ev)}\n\n"
-            finally:
-                # Client disconnect must NOT cancel the research — the run completes and PERSISTS the
-                # session server-side, so a dropped connection becomes a delayed answer the FE recovers
-                # by polling /sessions (instead of lost work + an error). Completed task → no-op.
-                pass
+            yield ": open\n\n"                            # flush headers immediately
+            yield f"data: {json.dumps({'type': 'run', 'run_id': run['id']})}\n\n"
+            async for chunk in _sse_follow(run, 0):
+                yield chunk
 
         return StreamingResponse(gen(), media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
@@ -1101,39 +1151,50 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if not stream_enabled():
             raise HTTPException(status_code=404, detail="streaming not enabled")
         from fastapi.responses import StreamingResponse
-        queue: asyncio.Queue = asyncio.Queue()
+        run = _sse_run_new()
 
         async def on_event(ev: dict) -> None:
-            await queue.put(ev)
+            _sse_push(run, ev)
 
-        async def run() -> None:
+        async def runner() -> None:
+            # Runs to completion regardless of client connections — the session PERSISTS server-side,
+            # and every event lands in the run buffer for any number of (re)connecting readers.
             try:
                 out = await _do_research(body, on_event=on_event)
-                await queue.put({"type": "final", "result": out.model_dump()})
+                _sse_push(run, {"type": "final", "result": out.model_dump()})
             except CassetteMiss:
-                await queue.put({"type": "error", "detail": "No model available in replay mode."})
+                _sse_push(run, {"type": "error", "detail": "No model available in replay mode."})
             except Exception as e:   # noqa: BLE001
-                await queue.put({"type": "error", "detail": f"provider error: {e}"})
+                _sse_push(run, {"type": "error", "detail": f"provider error: {e}"})
             finally:
-                await queue.put(None)   # sentinel: stream complete
+                _sse_done(run)
+
+        run["task"] = asyncio.create_task(runner())
 
         async def gen():
-            task = asyncio.create_task(run())
-            try:
-                yield ": open\n\n"                        # flush headers immediately
-                while True:
-                    try:
-                        ev = await asyncio.wait_for(queue.get(), timeout=15)
-                    except asyncio.TimeoutError:
-                        yield ": ping\n\n"; continue      # keepalive so proxies don't cut the stream
-                    if ev is None:
-                        break
-                    yield f"data: {json.dumps(ev)}\n\n"
-            finally:
-                # Client disconnect must NOT cancel the research — the run completes and PERSISTS the
-                # session server-side, so a dropped connection becomes a delayed answer the FE recovers
-                # by polling /sessions (instead of lost work + an error). Completed task → no-op.
-                pass
+            yield ": open\n\n"                            # flush headers immediately
+            yield f"data: {json.dumps({'type': 'run', 'run_id': run['id']})}\n\n"
+            async for chunk in _sse_follow(run, 0):
+                yield chunk
+
+        return StreamingResponse(gen(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
+
+    @app.get("/stream/{run_id}")
+    async def stream_resume(run_id: str, since: int = 0):
+        """Resume a live or recently-finished streaming run (research, panel, or stream-test) from
+        event cursor `since` — the FE's silent-reconnect path for when the edge cuts an SSE
+        connection mid-run. 404 = this replica never saw the run (or it expired); the FE retries
+        (re-rolling the replica) and falls back to /sessions polling."""
+        run = _SSE_RUNS.get(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="unknown run")
+        from fastapi.responses import StreamingResponse
+
+        async def gen():
+            yield ": open\n\n"
+            async for chunk in _sse_follow(run, since):
+                yield chunk
 
         return StreamingResponse(gen(), media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
@@ -1465,17 +1526,27 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if x_admin_password != _admin_ui_pw():
             raise HTTPException(status_code=401, detail="bad admin password")
         from fastapi.responses import StreamingResponse
+        run = _sse_run_new()
 
-        async def gen():
-            yield ": open\n\n"
+        async def runner() -> None:
+            # Registry-backed like the real runs, so resume (GET /stream/{run_id}) is testable
+            # end-to-end without a model call: let the edge cut this stream, then resume it.
             total = max(1, min(minutes, 20)) * 60
             for sec in range(0, total, 15):
                 await asyncio.sleep(15)
                 if (sec + 15) % 60 == 0:
-                    yield f"data: {{\"type\":\"tick\",\"minute\":{(sec+15)//60}}}\n\n"
-                else:
-                    yield ": ping\n\n"
-            yield "data: {\"type\":\"done\"}\n\n"
+                    _sse_push(run, {"type": "tick", "minute": (sec + 15) // 60})
+            _sse_push(run, {"type": "done"})
+            _sse_done(run)
+
+        run["task"] = asyncio.create_task(runner())
+
+        async def gen():
+            yield ": open\n\n"
+            yield f"data: {json.dumps({'type': 'run', 'run_id': run['id']})}\n\n"
+            async for chunk in _sse_follow(run, 0):
+                yield chunk
+
         return StreamingResponse(gen(), media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
 

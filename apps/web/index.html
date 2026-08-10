@@ -2364,11 +2364,14 @@ function pushTrace(tc, ev){
   tc.lastElementChild.classList.add("tlive");
   tc.lastElementChild.scrollIntoView({behavior:"smooth", block:"nearest"});
 }
-// Stream /research/stream, calling onEvent(ev) for each progress event; returns the final result.
-async function streamResearch(payload, onEvent, signal){
-  const resp = await fetch("/research/stream",{method:"POST",
-    headers:{"content-type":"application/json"}, body:JSON.stringify(payload), signal});
-  if(!resp.ok || !resp.body) throw new Error("HTTP "+resp.status);
+// ---- Resumable SSE ---------------------------------------------------------
+// The edge closes long-lived SSE connections after ~30-60s regardless of keepalives (measured with
+// the LLM-free /admin/stream-test probe). So every streaming run is RESUMABLE: the server buffers
+// events under a run_id (first event {type:"run"}), each event carries a _seq cursor, and on ANY
+// cut before the final event we silently reconnect to GET /stream/{run_id}?since=cursor and keep
+// reading. A cut becomes a sub-second blip, not an error.
+// Parse one SSE response into state, forwarding progress events. Returns when the connection ends.
+async function readSSE(resp, state, onEvent){
   const reader = resp.body.getReader(), dec = new TextDecoder();
   let buf = "";
   while(true){
@@ -2381,12 +2384,58 @@ async function streamResearch(payload, onEvent, signal){
       const dl = frame.split("\n").find(l=>l.startsWith("data:"));
       if(!dl) continue;                         // ": ping" keepalive / comment
       const ev = JSON.parse(dl.slice(5).trim());
-      if(ev.type==="final") return ev.result;
-      if(ev.type==="error") throw new Error(ev.detail || "stream error");
+      if(ev.type==="run"){ state.runId = ev.run_id; continue; }
+      if(typeof ev._seq === "number"){
+        if(ev._seq < state.seq) continue;       // replayed event we already handled
+        state.seq = ev._seq + 1;
+      }
+      if(ev.type==="final"){ state.final = ev.result; return; }
+      if(ev.type==="error"){ const e = new Error(ev.detail || "stream error"); e.server = true; throw e; }
       onEvent(ev);
     }
   }
+}
+// POST a streaming run and see it through to the final event, resuming across edge cuts.
+async function streamRun(url, payload, onEvent, signal){
+  const state = {runId:null, seq:0, final:null};
+  try{
+    const resp = await fetch(url,{method:"POST",
+      headers:{"content-type":"application/json"}, body:JSON.stringify(payload), signal});
+    if(!resp.ok || !resp.body) throw new Error("HTTP "+resp.status);
+    await readSSE(resp, state, onEvent);
+    if(state.final) return state.final;
+  }catch(err){
+    if(err && err.server) throw err;            // real server-side error — don't retry
+    if(signal && signal.aborted) throw err;     // user cancelled
+    if(!state.runId) throw err;                 // never got a run id — nothing to resume
+  }
+  // Cut before the final event → resume silently. `att` resets whenever progress lands, so long
+  // runs survive any number of cuts; a 404 means this replica doesn't hold the run — retrying
+  // re-rolls the replica. If resume truly can't complete, the caller's /sessions recovery kicks in.
+  let miss = 0;
+  for(let att = 0; att < 40; att++){
+    if(signal && signal.aborted) throw new Error("aborted");
+    await new Promise(r=>setTimeout(r, att ? 1500 : 250));
+    let resp;
+    try{ resp = await fetch(`/stream/${state.runId}?since=${state.seq}`, {signal}); }
+    catch(_){ continue; }                       // transient network error — retry
+    if(resp.status === 404){ if(++miss >= 10) break; att--; continue; }
+    if(!resp.ok || !resp.body) continue;
+    miss = 0;
+    const before = state.seq;
+    try{ await readSSE(resp, state, onEvent); }
+    catch(err){
+      if(err && err.server) throw err;
+      if(signal && signal.aborted) throw err;
+    }
+    if(state.final) return state.final;
+    if(state.seq > before) att = 0;             // made progress — keep going
+  }
   throw new Error("stream ended without a final answer");
+}
+// Stream /research/stream, calling onEvent(ev) for each progress event; returns the final result.
+async function streamResearch(payload, onEvent, signal){
+  return streamRun("/research/stream", payload, onEvent, signal);
 }
 
 // The one path for asking. In CONVERSATION mode it appends a turn to the running thread (carrying
@@ -2700,29 +2749,9 @@ function renderPanelPlan(question, data, manual){
   refresh();
 }
 // Stream /panel/ask/stream, calling onEvent(ev) for each progress event; returns the final panel result.
-// A full panel runs for minutes — the SSE keepalives keep the connection alive (a plain POST → edge 502).
+// A multi-minute panel run WILL get cut by the edge — streamRun resumes it silently via /stream/{run_id}.
 async function streamPanel(payload, onEvent, signal){
-  const resp = await fetch("/panel/ask/stream",{method:"POST",
-    headers:{"content-type":"application/json"}, body:JSON.stringify(payload), signal});
-  if(!resp.ok || !resp.body) throw new Error("HTTP "+resp.status);
-  const reader = resp.body.getReader(), dec = new TextDecoder();
-  let buf = "";
-  while(true){
-    const {value, done} = await reader.read();
-    if(done) break;
-    buf += dec.decode(value, {stream:true});
-    let i;
-    while((i = buf.indexOf("\n\n")) >= 0){
-      const frame = buf.slice(0, i); buf = buf.slice(i+2);
-      const dl = frame.split("\n").find(l=>l.startsWith("data:"));
-      if(!dl) continue;                         // ": ping" keepalive / comment
-      const ev = JSON.parse(dl.slice(5).trim());
-      if(ev.type==="final") return ev.result;
-      if(ev.type==="error") throw new Error(ev.detail || "stream error");
-      onEvent(ev);
-    }
-  }
-  throw new Error("stream ended without a final result");
+  return streamRun("/panel/ask/stream", payload, onEvent, signal);
 }
 // Phase 2 — DELIBERATE: run the confirmed panel (streamed) and render the case conference. Shows each
 // specialist's live status so a multi-minute run reads as progress, not a hang.

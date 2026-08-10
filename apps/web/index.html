@@ -2240,7 +2240,7 @@ async function addFiles(files){
 // Paste-to-attachment (ChatGPT/Claude style): a LARGE plain-text paste becomes a "Pasted text"
 // document chip instead of flooding the intake box, so the box stays for the actual question. Small
 // pastes fall through and insert inline as usual. Requires the attachments pipeline (vision on).
-const PASTE_MIN_CHARS = 800, PASTE_MIN_LINES = 8;
+const PASTE_MIN_CHARS = 2500, PASTE_MIN_LINES = 40;   // document-sized only — a long QUESTION stays in the box
 const _b64utf8 = s => btoa(unescape(encodeURIComponent(s)));   // UTF-8 safe base64
 function addPastedText(text){
   if(ATTACHMENTS.length >= 4) return false;
@@ -2325,6 +2325,10 @@ $("#ask").addEventListener("submit", e=>{
   if(APP_MODE === "triage"){ submitTriage(question); return; }        // guided intake → next clarifying turn
   if(APP_MODE === "panel"){ submitPanelIntake(question); return; }   // panel mode → convene / follow-up
   if(CURRENT_ABORT) return;               // a question is in flight — Enter/submit is a no-op (use Stop)
+  if(!question && ATTACHMENTS.length){    // attachment-only ask (e.g. a converted long paste IS the question)
+    askQuestion("Analyze the attached material; if it contains a question, answer it.", {skipRefine: true});
+    return;
+  }
   if(question){ askQuestion(question, {skipRefine: GUIDED_REFINED}); GUIDED_REFINED = false; }   // skip refine if it came via Guided
 });
 // While a question runs, the round Go button becomes a STOP button — click it to cancel.

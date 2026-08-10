@@ -38,10 +38,28 @@ class ExaWebSearch:
         if self._include_domains:
             payload["includeDomains"] = self._include_domains   # trusted-sources-only
         headers = {"x-api-key": self._api_key, "content-type": "application/json"}
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.post(EXA_URL, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+        # Exa is the ONLY web leg (no funded fallback provider): retry transient failures
+        # (network / 5xx / 429) with a short backoff before giving up. A 4xx other than 429 is a
+        # real request problem — no retry. Total added latency worst-case ~3.5s.
+        import asyncio
+        data = None
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    resp = await client.post(EXA_URL, json=payload, headers=headers)
+                    resp.raise_for_status()
+                    data = resp.json()
+                break
+            except httpx.HTTPStatusError as e:
+                last_err = e
+                if e.response.status_code != 429 and e.response.status_code < 500:
+                    raise                      # genuine request error — retrying can't help
+            except httpx.HTTPError as e:       # timeouts, connect errors — transient
+                last_err = e
+            await asyncio.sleep(0.5 * (attempt + 1))
+        if data is None:
+            raise last_err or RuntimeError("exa search failed")
         out: list[WebResult] = []
         for r in data.get("results", []):
             text = r.get("text") or ""

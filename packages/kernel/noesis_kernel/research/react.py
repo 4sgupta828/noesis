@@ -706,8 +706,15 @@ async def run_react(
             if aux_source is not None:
                 got = await asyncio.gather(corpus_co, aux_source.search(base_req), return_exceptions=True)
                 hits = []
-                for r in got:
-                    if not isinstance(r, Exception):
+                for leg, r in zip(("corpus", "web"), got):
+                    if isinstance(r, Exception):
+                        # a dead leg must be VISIBLE (Rule 13) — the answer proceeds on the other
+                        # leg, but the trace and diagnostics say the evidence base was degraded
+                        _log.warning("%s search leg failed on %r: %s", leg, q, r)
+                        if diag is not None:
+                            diag.setdefault("failures", []).append(
+                                {"stage": f"{leg}_search", "detail": f"{type(r).__name__}: {r}"[:200]})
+                    else:
                         hits += r
             else:
                 hits = await corpus_co

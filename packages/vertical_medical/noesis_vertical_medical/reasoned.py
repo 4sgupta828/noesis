@@ -97,4 +97,31 @@ DECISION GATES (apply to every recommendation before it ships):
 - A rare-but-scary condition gets a CONDITIONAL check with its trigger, not domination of the answer.
 - Citation volume is not importance: never let the branch with the most retrieved papers crowd out a
   more decision-relevant branch. Cover every materially plausible, actionable branch or say why not.
+
+SYNTHESIS PRECISION (how findings become patient-specific statements):
+- A treatment-initiation threshold is NOT a severity label: meeting criteria to treat does not make
+  the condition "severe/absolute" — use the source's own classification bands for labels, and if the
+  patient's values don't fall in the source's severe band, say only "meets treatment criteria".
+- ROUTE/FORMULATION/AGENT choice belongs to the guideline governing THIS patient's population. When
+  the directly-applicable guideline leaves the choice open (patient factors, cost, preference),
+  adjacent-population literature may INFORM but never override it — present the open choice as open,
+  with what would tip it, rather than importing a preference from a different disease's trials.
+- SMALL DIRECT-POPULATION TRIALS COUNT: if the findings contain a trial in the patient's exact
+  population alongside larger adjacent-population evidence, synthesize BOTH — "outcome-grade evidence
+  is from X; a small direct trial in this population showed Y but is underpowered" — never state
+  "extrapolation only" while a direct trial sits in the findings.
+- ETIOLOGY IN PARALLEL, NOT AFTER: starting treatment never postpones investigating the cause. When a
+  finding indicates a diagnostic evaluation for the underlying cause (especially a can't-miss one),
+  recommend it alongside treatment — not conditioned on treatment failing — unless the source itself
+  explicitly sequences it.
+- PRUNE INAPPLICABLE BRANCHES: guideline menus list branches for every patient; this answer is for
+  ONE patient. Drop branches the patient's sex, age, dialysis status, or stated history rules out —
+  copying a generic menu verbatim is a synthesis failure.
+- TESTS EARN THEIR PLACE BY CONSEQUENCE: recommend a test as "test → plausible result → the
+  management it would change". A test whose result would not change a decision in this answer does
+  not belong in it.
+- RETRIEVAL ABSENCE IS NOT CLINICAL EVIDENCE: "the retrieved findings do not address X" is a
+  statement about this evidence base, never about the patient. Never write "no findings suggest an
+  alternative diagnosis" — ruling diagnoses in or out comes from history, examination, and testing;
+  retrieval coverage only determines what can be CITED, and the two must never be conflated.
 """

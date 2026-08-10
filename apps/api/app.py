@@ -434,6 +434,14 @@ class PulseEventIn(BaseModel):
     action: str          # approve | retract
 
 
+class WatchIn(BaseModel):
+    topic: str
+
+
+class SeenIn(BaseModel):
+    event_id: str
+
+
 class Citation(BaseModel):
     text: str
     quote: str
@@ -801,6 +809,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "panel_examples": (list(getattr(svc, "panel_examples", ())) if live_panel else []),
             "refine_enabled": refine_enabled() and bool(getattr(svc, "refine_prompt", None)),
             "triage_enabled": live_triage and bool(getattr(svc, "triage_prompt", None)),
+            "pulse_enabled": pulse_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
             "accounts_enabled": accounts_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
             "duel_enabled": live_duel and bool(getattr(svc, "reasoned_answer_format", None)),
             "integrative_enabled": (await _flag_live("integrative_enabled")) and bool(getattr(svc, "integrative_prompt", None)),
@@ -1636,6 +1645,59 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             k: {"override": over.get(k, ""), "env_default": fn(),
                 "resolved": SettingStore.resolve_flag(over.get(k, ""), fn())}
             for k, fn in _LIVE_FLAGS.items()}}
+
+    # ---- Evidence Pulse P1 user surface: watches + inbox ---------------------------------------
+    async def _pulse_user(x_noesis_token: str):
+        cur = _currency()
+        if cur is None:
+            raise HTTPException(status_code=404, detail="pulse not enabled")
+        store = _accounts()
+        if store is None:
+            raise HTTPException(status_code=503, detail="no account store configured")
+        user = await store.user_by_token(x_noesis_token)
+        if user is None:
+            raise HTTPException(status_code=401, detail="sign in to use watches")
+        return cur, user
+
+    @app.post("/pulse/watch")
+    async def pulse_watch_add(body: WatchIn, x_noesis_token: str = Header(default="")) -> dict:
+        """Watch a topic: material approved change events matching it appear in the Pulse inbox."""
+        cur, user = await _pulse_user(x_noesis_token)
+        try:
+            await cur.add_watch(user_id=user["id"], topic=body.topic)
+            return {"watches": await cur.list_watches(user_id=user["id"])}
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"watch failed: {e}") from e
+
+    @app.delete("/pulse/watch")
+    async def pulse_watch_remove(topic: str, x_noesis_token: str = Header(default="")) -> dict:
+        cur, user = await _pulse_user(x_noesis_token)
+        try:
+            await cur.remove_watch(user_id=user["id"], topic=topic)
+            return {"watches": await cur.list_watches(user_id=user["id"])}
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"unwatch failed: {e}") from e
+
+    @app.get("/pulse/inbox")
+    async def pulse_inbox(x_noesis_token: str = Header(default="")) -> dict:
+        """The user's Pulse inbox: approved change events matching their watches (+ watch list)."""
+        cur, user = await _pulse_user(x_noesis_token)
+        try:
+            return {"watches": await cur.list_watches(user_id=user["id"]),
+                    "items": await cur.inbox(user_id=user["id"])}
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"inbox failed: {e}") from e
+
+    @app.post("/pulse/seen")
+    async def pulse_seen(body: SeenIn, x_noesis_token: str = Header(default="")) -> dict:
+        cur, user = await _pulse_user(x_noesis_token)
+        try:
+            await cur.mark_seen(user_id=user["id"], event_id=body.event_id)
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"seen failed: {e}") from e
+        return {"ok": True}
 
     @app.get("/admin/settings")
     async def admin_settings_get(x_admin_password: str = Header(default="")) -> dict:

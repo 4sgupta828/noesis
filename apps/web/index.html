@@ -749,6 +749,25 @@
     padding:.8rem .95rem;margin-top:.35rem;}
   .xitem.expanded video{display:block;max-width:100%;border-radius:8px;margin:.55rem 0;}
   .xformrow>details.plain-d{flex-basis:100%;}
+  /* Evidence Pulse: bell + badge · inbox panel · integrity banner · watch chip */
+  .pulsebtn{position:relative;}
+  .pbadge{position:absolute;top:-.35rem;right:-.45rem;background:var(--gap);color:var(--on-accent);
+    font-family:var(--mono);font-size:.6rem;font-weight:700;border-radius:999px;padding:.05rem .32rem;}
+  .pulsepanel{position:fixed;top:3.4rem;right:1rem;z-index:60;width:min(430px,92vw);max-height:70vh;
+    overflow-y:auto;background:var(--panel);border:1px solid var(--hair);border-radius:14px;
+    box-shadow:0 12px 40px rgba(0,0,0,.35);padding:.9rem 1rem;}
+  .pulsepanel-h{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--gold);display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;}
+  .pclose{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:.9rem;}
+  .pitem{border-top:1px dashed var(--hair);padding:.65rem 0;}
+  .pitem.unseen{border-left:3px solid var(--gold);padding-left:.55rem;}
+  .pitem-k{font-family:var(--mono);font-size:.64rem;text-transform:uppercase;letter-spacing:.07em;color:var(--gap);}
+  .pitem-s{font-size:.86rem;color:var(--ink);margin:.25rem 0 .4rem;line-height:1.4;}
+  .pitem-b{font-size:.78rem;color:var(--muted);margin-bottom:.4rem;}
+  .pitem-empty{font-size:.82rem;color:var(--muted);line-height:1.5;padding:.4rem 0;}
+  .pulsewarn{margin:.9rem 0;padding:.7rem .9rem;border:1px solid var(--gap);border-left-width:3px;
+    border-radius:10px;font-size:.84rem;color:var(--ink);line-height:1.5;}
+  .wn-watch{opacity:.92;}
   /* dossier tabs: Backing evidence ⇄ Coverage gaps/Strengthen */
   .evtabs{display:flex;gap:.35rem;margin:.3rem 0 1rem;border-bottom:1px solid var(--hair);}
   .evtab{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;
@@ -1030,6 +1049,8 @@
     <button type="button" class="histbtn" id="vidbtn" style="margin-left:0;">Videos</button>
     <button type="button" class="histbtn" id="histbtn" style="margin-left:0;">Past Sessions</button>
     <button type="button" class="histbtn setbtn" id="setbtn" style="margin-left:0;" title="Product settings (admin)" aria-label="Product settings">⚙</button>
+    <button type="button" class="histbtn pulsebtn" id="pulsebell" style="margin-left:0;" hidden
+            title="Pulse — evidence changes on your watched topics" aria-label="Pulse inbox">◉<span class="pbadge" id="pbadge" hidden></span></button>
   </header>
 
   <h1 id="heading">What does the evidence show?</h1>
@@ -1225,7 +1246,8 @@ let ASK_PANEL_ENABLED = false;  // AI specialist panel (Alpha)
 let TRIAGE_ENABLED = false;     // guided-intake / triage mode (clarify → route)
 let ACCOUNTS_ENABLED = false;   // accounts + verified-clinician tier + per-answer feedback (W-taxonomy)
 let DUEL_ENABLED = false;       // A/B duel: fresh questions run standard + reasoned engines, user votes
-let INTEGRATIVE_ENABLED = false; // feature flag: the per-question integrative opt-in is offered
+let INTEGRATIVE_ENABLED = false;
+let PULSE_ENABLED = false;      // Evidence Pulse: watches, inbox, answer-integrity banners // feature flag: the per-question integrative opt-in is offered
 let DYN_ENGINES = false;         // dynamic engine selection on → interlock hop chips render
 let INTEGRATIVE_ON = false;      // the per-question opt-in state (off by default)
 let PANEL_SPECIALISTS = [];      // roster from /config [{id, specialty, default}]
@@ -1286,6 +1308,8 @@ async function loadConfig(){
     ACCOUNTS_ENABLED = !!c.accounts_enabled;
     DUEL_ENABLED = !!c.duel_enabled;
     INTEGRATIVE_ENABLED = !!c.integrative_enabled;
+    PULSE_ENABLED = !!c.pulse_enabled;
+    if(PULSE_ENABLED && USER && USER.token){ const b=$("#pulsebell"); if(b){ b.hidden=false; refreshPulseBell(); } }
     DYN_ENGINES = !!c.dynamic_engines_enabled;
     if(INTEGRATIVE_ENABLED){
       const isel = $("#integsel"), ib = $("#integbtn");
@@ -1750,6 +1774,7 @@ function render(data, target, opts){
   if(data.answer && DISCLAIMER.answer) parts.push(`<div class="ansdisc">${esc(DISCLAIMER.answer)}</div>`);
   target.innerHTML = parts.join("");
   wireFeedback(target, data);
+  checkAnswerIntegrity(target, data);   // async, structural: banners answers citing changed sources
   // dossier tabs: Backing evidence ⇄ Coverage gaps/Strengthen
   target.querySelectorAll(".evtabs .evtab").forEach(tb=>tb.addEventListener("click",()=>{
     const box = tb.closest(".evbody");
@@ -3336,6 +3361,92 @@ const ENGINE_HOPS = {
   reasoned:      ["⚡ What should I do", "the decision-first plan"],
   standard:      ["📚 Just the evidence", "plain adaptive synthesis"],
 };
+// ---- Evidence Pulse FE: public event cache · answer-integrity banner · watches + inbox --------
+let _PULSE_EVENTS = null, _PULSE_TS = 0;
+async function pulseEvents(){
+  if(!PULSE_ENABLED) return [];
+  if(_PULSE_EVENTS && Date.now() - _PULSE_TS < 300000) return _PULSE_EVENTS;   // 5-min cache
+  try{
+    const r = await fetch("/pulse/recent?limit=50"); if(!r.ok) throw 0;
+    _PULSE_EVENTS = (await r.json()).events || []; _PULSE_TS = Date.now();
+  }catch(e){ _PULSE_EVENTS = _PULSE_EVENTS || []; }
+  return _PULSE_EVENTS;
+}
+// STRUCTURAL integrity check: if a rendered answer CITES a document that has since been retracted/
+// superseded (cited document_id ∩ event old_document_id — no guessing), banner it. Mostly fires on
+// past sessions: current retrieval already excludes/demotes these sources.
+async function checkAnswerIntegrity(target, data){
+  if(!PULSE_ENABLED || !(data.claims||[]).length) return;
+  const evs = await pulseEvents(); if(!evs.length) return;
+  const cited = new Set((data.claims||[]).map(c=>c.document_id).filter(Boolean));
+  const hits = evs.filter(e=>e.old_document_id && cited.has(e.old_document_id));
+  if(!hits.length || !target.isConnected || target.querySelector(".pulsewarn")) return;
+  const anchor = target.querySelector(".ansbox") || target.querySelector(".answer");
+  if(!anchor) return;
+  const kinds = [...new Set(hits.map(h=>h.relation==="retracted"?"RETRACTED":"superseded"))].join(" / ");
+  anchor.insertAdjacentHTML("beforebegin",
+    `<div class="pulsewarn">◉ <b>Evidence has changed since this answer.</b> ${hits.length}
+     cited source${hits.length>1?"s have":" has"} since been ${kinds}. Re-ask for a current answer.</div>`);
+}
+async function watchTopic(defaultTopic, btn){
+  if(!USER || !USER.token){ alert("Sign in (top right) to watch topics."); return; }
+  const t = (prompt("Watch this topic — material evidence changes will land in the ◉ Pulse inbox:",
+                    (defaultTopic||"").slice(0,120)) || "").trim();
+  if(!t) return;
+  try{
+    const r = await fetch("/pulse/watch",{method:"POST",
+      headers:{"content-type":"application/json","x-noesis-token":USER.token},
+      body:JSON.stringify({topic:t})});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || "HTTP "+r.status);
+    if(btn){ btn.textContent = "✓ Watching"; btn.disabled = true; }
+    refreshPulseBell();
+  }catch(e){ alert("Couldn't add watch: " + (e.message||e)); }
+}
+async function refreshPulseBell(){
+  const b = $("#pulsebell"), badge = $("#pbadge");
+  if(!b || !PULSE_ENABLED || !USER || !USER.token) return;
+  b.hidden = false;
+  try{
+    const r = await fetch("/pulse/inbox",{headers:{"x-noesis-token":USER.token}});
+    if(!r.ok) return;
+    const {items} = await r.json();
+    const unseen = (items||[]).filter(i=>!i.seen).length;
+    if(badge){ badge.hidden = !unseen; badge.textContent = unseen > 9 ? "9+" : String(unseen); }
+    b.onclick = ()=>openPulsePanel(items||[]);
+  }catch(e){}
+}
+function openPulsePanel(items){
+  document.querySelectorAll(".pulsepanel").forEach(p=>p.remove());
+  const p = document.createElement("div"); p.className = "pulsepanel";
+  const rows = items.length ? items.map(i=>{
+    const what = i.relation === "retracted" ? "Retracted" : "Guidance changed";
+    const subj = (i.subjects||[]).join("; ") || i.old_document_id || "";
+    return `<div class="pitem${i.seen?"":" unseen"}">
+      <div class="pitem-k">${esc(what)} · ${esc((i.created_at||"").slice(0,10))}</div>
+      <div class="pitem-s">${esc(subj)}</div>
+      ${i.brief_md?`<div class="pitem-b">${esc(i.brief_md).slice(0,400)}</div>`:""}
+      <button type="button" class="chip-q pitem-ask">Ask about this</button>
+    </div>`;
+  }).join("") : `<div class="pitem-empty">No changes on your watched topics yet. Watch topics from
+    any answer's "⊕ Watch topic" chip — material evidence changes will land here.</div>`;
+  p.innerHTML = `<div class="pulsepanel-h">◉ Pulse — changes on your watches
+    <button type="button" class="pclose" aria-label="Close">✕</button></div>${rows}`;
+  document.body.appendChild(p);
+  p.querySelector(".pclose").addEventListener("click", ()=>p.remove());
+  p.querySelectorAll(".pitem-ask").forEach(btn=>btn.addEventListener("click", (e)=>{
+    const it = e.currentTarget.closest(".pitem");
+    const subj = it.querySelector(".pitem-s").textContent.trim();
+    p.remove();
+    askQuestion(`What changed in the evidence regarding: ${subj}? What should I do differently now?`);
+  }));
+  // opening marks everything seen (the badge clears; items keep their highlight until next open)
+  items.filter(i=>!i.seen).forEach(i=>{
+    fetch("/pulse/seen",{method:"POST",headers:{"content-type":"application/json",
+      "x-noesis-token":USER.token},body:JSON.stringify({event_id:i.id})}).catch(()=>{});
+  });
+  const badge = $("#pbadge"); if(badge) badge.hidden = true;
+}
+
 // ONE "Where next" block hosts every diverging path forward: follow-up questions (the primary
 // engagement driver — real new content, filled async by loadSuggestions) + the engine-lens hops
 // (same question, different reasoning mode) as a subordinate second row. One header, one box —
@@ -3350,14 +3461,22 @@ function whereNextMarkup(t){
         `<button type="button" class="chip-q hopchip mini" data-eng="${k}" title="${esc(d)}">${esc(l)}</button>`).join("")
       + `</div>`;
   })();
+  const watch = (PULSE_ENABLED && t && t.answer)
+    ? `<button type="button" class="chip-q wn-watch mini"
+         title="Get notified in the ◉ Pulse inbox when the evidence on this topic materially changes">⊕ Watch topic</button>` : "";
   const follow = (SUGGEST_ENABLED && t && t.answer)
     ? `<div id="wn-follow"><div class="suggest-loading">Finding good next questions…</div></div>` : "";
-  if(!lens && !follow) return "";
-  return `<div class="suggest wherenext" id="wherenext"><div class="suggest-h">◇ Where next</div>${follow}${lens}</div>`;
+  if(!lens && !follow && !watch) return "";
+  const tail = (lens || watch)
+    ? (lens ? lens.replace("</div>", `${watch}</div>`)      // watch rides the lens row
+             : `<div class="wn-lens">${watch}</div>`) : "";
+  return `<div class="suggest wherenext" id="wherenext"><div class="suggest-h">◇ Where next</div>${follow}${tail}</div>`;
 }
 function wireEngineHops(root, t){
   root.querySelectorAll(".hopchip").forEach(b => b.addEventListener("click", () =>
     askQuestion(t.question || CURRENT_Q, {engine: b.dataset.eng, skipRefine: true, skipDuel: true})));
+  root.querySelectorAll(".wn-watch").forEach(b => b.addEventListener("click", () =>
+    watchTopic(t.question || CURRENT_Q, b)));
 }
 
 function newConversation(){

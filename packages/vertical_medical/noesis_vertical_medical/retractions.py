@@ -26,9 +26,10 @@ def _parse_doc_id(document_id: str) -> tuple[str, str] | None:
 
 
 async def find_retracted_ext_ids(ext_ids: list[str], *, src: str = "MED",
-                                 batch: int = 40, fetch=None) -> set[str]:
+                                 batch: int = 40, fetch=None) -> dict[str, str]:
     """Batched Europe PMC lookups: which of these EXT_IDs are retracted publications?
-    `fetch(url, params) -> dict` is injectable for tests; defaults to httpx."""
+    Returns {ext_id: title} — the title becomes the event's subject so watch/inbox matching has
+    something structural to match on. `fetch(url, params) -> dict` is injectable for tests."""
     if fetch is None:
         import httpx
 
@@ -37,7 +38,7 @@ async def find_retracted_ext_ids(ext_ids: list[str], *, src: str = "MED",
                 r = await c.get(url, params=params)
                 r.raise_for_status()
                 return r.json()
-    retracted: set[str] = set()
+    retracted: dict[str, str] = {}     # ext_id -> title (title rides along for event subjects)
     ids = [i for i in ext_ids if i]
     for i in range(0, len(ids), batch):
         chunk = ids[i:i + batch]
@@ -47,7 +48,7 @@ async def find_retracted_ext_ids(ext_ids: list[str], *, src: str = "MED",
         for r in ((data.get("resultList") or {}).get("result") or []):
             rid = str(r.get("id") or "")
             if rid:
-                retracted.add(rid)
+                retracted[rid] = str(r.get("title") or "")
     return retracted
 
 
@@ -66,5 +67,6 @@ async def retraction_lineage(document_ids: list[str], *, fetch=None) -> list[dic
         hit = await find_retracted_ext_ids(sorted(mapping), src=src, fetch=fetch)
         for ext in sorted(hit):
             out.append({"old_document_id": mapping[ext], "new_document_id": "",
-                        "relation": "retracted", "subjects": []})
+                        "relation": "retracted",
+                        "subjects": [t for t in [hit[ext]] if t]})
     return out

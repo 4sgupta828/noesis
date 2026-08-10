@@ -34,6 +34,19 @@ CREATE TABLE IF NOT EXISTS noesis_change_event (
     updated_at       timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS noesis_change_event_status ON noesis_change_event (status, created_at DESC);
+CREATE TABLE IF NOT EXISTS noesis_watch (
+    user_id     text NOT NULL,
+    topic       text NOT NULL,
+    source      text NOT NULL DEFAULT 'manual',
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, topic)
+);
+CREATE TABLE IF NOT EXISTS noesis_watch_seen (
+    user_id  text NOT NULL,
+    event_id text NOT NULL,
+    seen_at  timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, event_id)
+);
 """
 
 
@@ -78,7 +91,12 @@ class CurrencyStore:
                      (id, relation, old_document_id, new_document_id, subjects,
                       materiality, confidence, status)
                    VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8)
-                   ON CONFLICT (id) DO NOTHING""",
+                   ON CONFLICT (id) DO UPDATE SET
+                     -- enrich empty subjects on re-record (e.g. a later sweep learned the title);
+                     -- NEVER touch status/audit fields
+                     subjects = CASE WHEN noesis_change_event.subjects = '[]'::jsonb
+                                     THEN EXCLUDED.subjects ELSE noesis_change_event.subjects END,
+                     updated_at = now()""",
                 eid, relation, old_document_id, new_document_id,
                 json.dumps(list(subjects or [])), materiality, confidence, status)
         return eid
@@ -164,6 +182,62 @@ class CurrencyStore:
                 f"""SELECT DISTINCT document_id FROM {self._block_table}
                     WHERE document_id LIKE $1 LIMIT $2""", prefix + "%", limit)
         return [r["document_id"] for r in rows]
+
+    # ---- watches + inbox (P1) ------------------------------------------------------------------
+
+    async def add_watch(self, *, user_id: str, topic: str, source: str = "manual") -> None:
+        t = (topic or "").strip()[:200]
+        if not t:
+            raise ValueError("empty topic")
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO noesis_watch (user_id, topic, source) VALUES ($1,$2,$3) "
+                "ON CONFLICT DO NOTHING", user_id, t, source)
+
+    async def remove_watch(self, *, user_id: str, topic: str) -> None:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute("DELETE FROM noesis_watch WHERE user_id=$1 AND topic=$2",
+                               user_id, (topic or "").strip()[:200])
+
+    async def list_watches(self, *, user_id: str) -> list[dict]:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT topic, source, created_at FROM noesis_watch WHERE user_id=$1 "
+                "ORDER BY created_at DESC", user_id)
+        return [{"topic": r["topic"], "source": r["source"],
+                 "created_at": r["created_at"].isoformat()} for r in rows]
+
+    async def inbox(self, *, user_id: str, limit: int = 50) -> list[dict]:
+        """Approved events matching the user's watches — P1 matching is STRUCTURAL and
+        precision-biased: case-insensitive containment between watch topic and an event's subject
+        strings (LLM matching is a later layer). Each item carries `seen`."""
+        watches = [w["topic"].lower() for w in await self.list_watches(user_id=user_id)]
+        if not watches:
+            return []
+        events = await self.list_events(status="approved", limit=300)
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            seen_rows = await conn.fetch(
+                "SELECT event_id FROM noesis_watch_seen WHERE user_id=$1", user_id)
+        seen = {r["event_id"] for r in seen_rows}
+        out = []
+        for e in events:
+            subj = " ".join(str(s) for s in (e.get("subjects") or [])).lower()
+            if any((t in subj or (subj and subj in t)) for t in watches if t):
+                out.append({**e, "seen": e["id"] in seen})
+            if len(out) >= limit:
+                break
+        return out
+
+    async def mark_seen(self, *, user_id: str, event_id: str) -> None:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO noesis_watch_seen (user_id, event_id) VALUES ($1,$2) "
+                "ON CONFLICT DO NOTHING", user_id, event_id)
 
     # ---- P0 sweep: curator-declared lineage → approved events + stamps -------------------------
 

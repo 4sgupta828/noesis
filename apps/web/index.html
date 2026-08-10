@@ -226,16 +226,18 @@
   .setlive.on{color:var(--verified);border-color:var(--verified);}
   .idcard .idrow{display:flex;gap:.5rem;} .idcard .idrow>*{flex:1;min-width:0;}
   .idcard .idhint{font-size:.68rem;color:var(--muted);line-height:1.45;margin:-.1rem 0 .5rem;}
-  /* per-answer feedback (accounts flag) — the W-taxonomy signal loop. PROMINENT card, not fine print:
-     it sits directly under the answer/evidence cluster with the gold accent the key boxes use. */
-  .fbcard.fbslim{margin-top:1rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;
-    background:var(--panel2);border:1px solid var(--hair);border-radius:10px;padding:.55rem .8rem;}
+  /* per-answer feedback (accounts flag) — the W-taxonomy signal loop. The RESTING state is a
+     one-line whisper (the top-toolbar thumbs already provide the prominent pair); the root-cause
+     PICKER regains full card treatment when it opens — that's the moment it earns the space. */
+  .fbcard.fbslim{margin-top:.9rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;
+    background:transparent;border:none;padding:0;}
   .fb-l{font-family:var(--mono);font-size:.64rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
-  .fbbtn{font:inherit;font-size:.9rem;cursor:pointer;background:var(--panel);border:1px solid var(--hair);
-    border-radius:9px;padding:.3rem .65rem;color:var(--ink);transition:border-color .12s,color .12s;}
+  .fbbtn{font:inherit;font-size:.86rem;cursor:pointer;background:transparent;border:1px solid var(--hair);
+    border-radius:999px;padding:.26rem .6rem;color:var(--ink);transition:border-color .12s,color .12s;}
   .fbbtn:hover{border-color:var(--gold);color:var(--gold);}
   .fbpick-h{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem;}
-  .fbpick{flex-basis:100%;}
+  .fbpick{flex-basis:100%;background:var(--panel2);border:1px solid var(--hair);border-radius:10px;
+    padding:.7rem .85rem;margin-top:.4rem;}
   .evgaps{color:var(--gap);font-weight:640;}
   .evbody .gaps{margin:.2rem 0 1rem;}
   .fbpick{background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:.7rem .8rem;margin-top:.65rem;}
@@ -748,6 +750,10 @@
   .xformrow>details.plain-d{flex-basis:100%;}
   .gapfix.infoot{margin:1rem 0 .1rem;padding:.65rem .85rem;border-left-color:var(--hair);background:transparent;}
   .gapfix.infoot .gapfix-hint{margin-bottom:.5rem;}
+  /* diagnostics nested in the dossier: dashed-rule sub-section, not a second box */
+  .evbody .diagbox{border:none;border-top:1px dashed var(--hair);border-radius:0;margin-top:.7rem;}
+  .evbody .diagbox>summary{padding:.6rem .2rem;}
+  .evbody .diagbox .diagbody{padding:.2rem .2rem .5rem;}
   .suggest-chips{display:flex;flex-direction:column;gap:.5rem;}
   .chip-q{text-align:left;font-family:inherit;font-size:.92rem;line-height:1.4;color:var(--ink);cursor:pointer;
     background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:.6rem .8rem;transition:border-color .15s,color .15s;}
@@ -1699,19 +1705,20 @@ function render(data, target, opts){
     // weak answer → it stands alone below, prominent (see next block)
     const weakEv = !data.grounded || ngaps || n < 2;
     const gapFoot = (GAP_ENABLED && !weakEv) ? gapPanelMarkup(false, true) : "";
+    // DIAGNOSTICS nests inside the dossier — same "how this answer came to be" family as the
+    // findings, so the bottom stack carries ONE trust disclosure instead of two boxes.
     evBits.push(`<details class="evblock" id="evblock">
       <summary><h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}${ngaps?` · <span class="evgaps">${ngaps} gap${ngaps===1?"":"s"}</span>`:""}<span class="evtoggle"></span></h4>
         <div class="evhint">The passages this answer is built on — each shows a quote located in its cited source.</div></summary>
-      <div class="evbody">${gapsHtml}${cards}${gapFoot}</div>
+      <div class="evbody">${gapsHtml}${cards}${gapFoot}${diagBoxMarkup(data)}</div>
     </details>`);
   }
   if(GAP_ENABLED){
     const weak = !data.grounded || (data.coverage_gaps||[]).length || n < 2;
     if(weak || !n) evBits.push(gapPanelMarkup(weak));
   }
-  // DIAGNOSTICS joins the same bottom-box cluster (Evidence · Strengthen · Diagnostics) so the three
-  // read as one consistent set of left-highlighted boxes. Grounding meta, collapsed by default.
-  if(data.answer || n) evBits.push(diagBoxMarkup(data));
+  // no dossier to host it (unverified answer) → diagnostics stands alone, still collapsed
+  if(data.answer && !n) evBits.push(diagBoxMarkup(data));
   if(evBits.length) parts.push(`<div class="ansbox">${evBits.join("")}</div>`);
   // CONVERSATION-LEVEL box: briefing video + explain-in-plain-language. In a thread it renders ONCE at
   // the bottom (renderThread passes noConvo per turn); in single-answer mode it renders here.
@@ -3565,8 +3572,50 @@ function showSessionDetail(row, rowEl){
   LAST = {question: row.question, answer: (lastTurn.answer||row.answer||""), session_id: row.id};
   const act = document.createElement("div"); act.innerHTML = convoActionsMarkup(actData);
   if(act.firstChild){ sdbody.appendChild(act); wireConvo(act, actData); }
+  sessionWhereNext(sdbody, row, turns);
   sdetail.scrollTop = 0;
   if(isMobileSess()){ sessionsEl.dataset.view = "detail"; setSback("← Sessions"); }  // drill into the answer
+}
+
+// The SAME "Where next" block at the bottom of a loaded past session — lens hops render
+// immediately; follow-up suggestions are INTENT-GATED behind one chip (the /suggest endpoint is an
+// LLM call, so browsing old sessions must not spend a call per open). Any chosen path seeds the
+// thread from this session and continues in the main chat — same as "Continue in chat".
+function sessionWhereNext(sdbody, row, turns){
+  const lastTurn = turns[turns.length-1] || row;
+  if(!lastTurn.answer) return;
+  const wm = whereNextMarkup(lastTurn);
+  if(!wm) return;
+  const wr = document.createElement("div"); wr.innerHTML = wm;
+  sdbody.appendChild(wr);
+  const seed = ()=>{
+    THREAD = {session_id: row.id, turns: (row.thread && row.thread.length ? row.thread : [row]).slice()};
+    if(PATIENT_MODE_ENABLED) setAudience(row.audience || "clinician");
+    closeSessions();
+    q.value=""; q.style.height="auto"; renderThread();
+  };
+  wr.querySelectorAll(".hopchip").forEach(b=>b.addEventListener("click", ()=>{
+    seed(); askQuestion(lastTurn.question || row.question, {engine: b.dataset.eng, skipRefine: true, skipDuel: true});
+  }));
+  const slot = wr.querySelector("#wn-follow");
+  if(!slot) return;
+  slot.innerHTML = `<button type="button" class="chip-q" id="wn-fetch">◇ Find follow-up questions</button>`;
+  slot.querySelector("#wn-fetch").addEventListener("click", async (e)=>{
+    e.currentTarget.disabled = true; e.currentTarget.textContent = "Finding good next questions…";
+    try{
+      const hist = turns.filter(x=>x.answer).map(x=>({question:x.question, answer:x.answer}));
+      const r = await fetch("/suggest",{method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({question:lastTurn.question||row.question, answer:lastTurn.answer||"", history:hist})});
+      if(!r.ok) throw new Error();
+      const {suggestions} = await r.json();
+      if(!suggestions || !suggestions.length) throw new Error();
+      slot.innerHTML = `<div class="suggest-chips">` +
+        suggestions.map(s=>`<button type="button" class="chip-q">${esc(s)}</button>`).join("") + `</div>`;
+      slot.querySelectorAll(".chip-q").forEach(b=>b.addEventListener("click",()=>{ seed(); askQuestion(b.textContent.trim()); }));
+    }catch(err){
+      slot.innerHTML = `<div class="suggest-loading">No good follow-ups found for this session.</div>`;
+    }
+  });
 }
 
 // One compact, ICONIZED action toolbar for a loaded session, placed between the question and the

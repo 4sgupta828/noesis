@@ -28,6 +28,7 @@ from .reasoned import REASONED_SCAFFOLD_PROMPT, REASONED_ANSWER_FORMAT
 from .integrative import INTEGRATIVE_DIRECTIVE, INTEGRATIVE_QUERY_HINT
 from .understanding import UNDERSTANDING_ANSWER_FORMAT, UNDERSTANDING_QUERY_HINT
 from .web_domains import TRUSTED_WEB_DOMAINS, WEB_DOMAIN_FACETS
+from .global_guidelines import declared_lineage
 from .authority import MedicalAuthorityPolicy
 from .connector import ClinicalTrialsConnector
 from .openfda import OpenFdaConnector
@@ -92,6 +93,7 @@ def build_manifest() -> VerticalManifest:
         understanding_query_hint=UNDERSTANDING_QUERY_HINT,
         web_domains=TRUSTED_WEB_DOMAINS,
         web_domain_facets=WEB_DOMAIN_FACETS,
+        lineage=tuple(declared_lineage()),
         extraction_lenses=(
             "interventions/treatments/drugs studied",
             "outcomes, findings and effect sizes",

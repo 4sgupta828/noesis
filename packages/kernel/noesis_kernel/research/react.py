@@ -341,6 +341,16 @@ async def _rank_claims_by_relevance(question, claims, embedder, top, *,
     Fail-safe: any embedding error → the original order's first `top` (never worse than today)."""
     import asyncio
     import math
+
+    # Corpus currency (Evidence Pulse C1/A3): superseded-source claims are stable-partitioned BELOW
+    # current ones — a hard fact, not a boost (a negative additive term can't express it against
+    # cosine in [-1,1]), and deliberately a documented break of this function's boost-only design.
+    # Applied UNCONDITIONALLY (including the <= top early return, which skips scoring entirely).
+    def _stale(c) -> bool:
+        f = getattr(c, "facets", None) or {}
+        return bool(f.get("superseded_by") or f.get("retracted"))
+    claims = sorted(claims, key=_stale)                 # stable: preserves order within partitions
+
     if len(claims) <= top:
         return list(claims)
     try:
@@ -382,7 +392,8 @@ async def _rank_claims_by_relevance(question, claims, embedder, top, *,
         vn = math.sqrt(sum(x * x for x in v)) or 1.0
         return dot / (qn * vn) + _boost(i)          # cosine + bounded tier boost (boost-only)
 
-    order = sorted(range(len(claims)), key=_score, reverse=True)
+    # partition primary (currency is a fact), relevance+boosts secondary within each partition
+    order = sorted(range(len(claims)), key=lambda i: (_stale(claims[i]), -_score(i)))
     return [claims[i] for i in order[:top]]
 
 

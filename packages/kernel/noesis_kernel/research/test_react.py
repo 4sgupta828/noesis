@@ -344,6 +344,23 @@ def test_rank_claims_recency_breaks_controlling_tier_ties_only():
     assert top1c[0].text == "old guideline"
 
 
+def test_rank_claims_superseded_partitioned_below_current():
+    # Evidence Pulse C1 (spec A3): superseded/retracted-source claims sort BELOW current ones as a
+    # hard partition — unconditionally, including the <=top early-return path that skips scoring.
+    from noesis_kernel.research.react import _rank_claims_by_relevance, VerifiedClaim
+    class _FE:
+        def dim(self): return 2
+        def embed(self, texts): return [[1.0, 0.0] for _ in texts]     # equal relevance everywhere
+    old = VerifiedClaim("from 2012 edition", "a1", "q", facets={"superseded_by": "g:kdigo-2026"})
+    new = VerifiedClaim("from 2026 edition", "a2", "q", facets={})
+    # scoring path (claims > top): current wins the cap
+    top1 = asyncio.run(_rank_claims_by_relevance("q", [old, new], _FE(), 1))
+    assert top1[0].text == "from 2026 edition"
+    # early-return path (claims <= top): partition still applies — current FIRST in compose order
+    both = asyncio.run(_rank_claims_by_relevance("q", [old, new], _FE(), 5))
+    assert [c.text for c in both] == ["from 2026 edition", "from 2012 edition"]
+
+
 def test_reasoning_conclusion_repaired_when_guard_blanks_it(monkeypatch):
     # Robustness (the "Informed judgment randomly absent" bug): a conclusion stating a figure OUTSIDE
     # the allowance (findings + answer) is blanked by the guard — the repair pass restates it

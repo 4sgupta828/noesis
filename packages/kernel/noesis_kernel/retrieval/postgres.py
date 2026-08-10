@@ -48,7 +48,8 @@ CREATE INDEX IF NOT EXISTS {table}_emb_hnsw   ON {table} USING hnsw (embedding v
 
 class PostgresRetrievalSource:
     def __init__(self, dsn: str, *, key: str = "postgres", dim: int = 1536,
-                 table: str = "rs_block", covers: FacetFilter | None = None):
+                 table: str = "rs_block", covers: FacetFilter | None = None,
+                 currency_demote: bool = False):
         self.key = key
         self._dsn = dsn
         self._dim = dim
@@ -56,6 +57,8 @@ class PostgresRetrievalSource:
         self._covers = covers or {}
         self._pool = None
         self._cache: dict[tuple[str, str, str], str] = {}
+        # Evidence Pulse C1 (flag-fed by the app): exclude retracted / demote superseded at retrieval
+        self._currency_demote = currency_demote
 
     # --- lifecycle ---
     async def _get_pool(self):
@@ -226,4 +229,13 @@ class PostgresRetrievalSource:
                 document_title=r["document_title"], content_type=r["content_type"],
                 source_key=r["source_key"],
             ))
-        return rank_candidates(req.query, qvec, cands, k=req.k, fetch_pool=req.fetch_pool)
+        hits = rank_candidates(req.query, qvec, cands, k=req.k, fetch_pool=req.fetch_pool)
+        # Corpus currency (Evidence Pulse C1): RETRACTED sources never ground an answer (hard
+        # exclusion); SUPERSEDED blocks are stable-partitioned to the bottom — demoted, never
+        # deleted (they may be the only source for an unrevised topic, and are the evidence a
+        # change brief cites). Retrieval-level, so a superseded edition cannot crowd the current
+        # one out of the candidate pool before claim ranking ever sees it (spec A3).
+        if self._currency_demote:
+            hits = [h for h in hits if not (h.facets or {}).get("retracted")]
+            hits.sort(key=lambda h: bool((h.facets or {}).get("superseded_by")))
+        return hits

@@ -114,6 +114,14 @@ def gap_healing_enabled() -> bool:
     return os.environ.get("NOESIS_GAP_HEALING", "").lower() in ("1", "true", "yes")
 
 
+def pulse_enabled() -> bool:
+    """Flag (default OFF, Rule 20): Evidence Pulse P0 — the corpus-currency subsystem.
+    ON: curator-declared lineage sweeps into the change-event ledger, approved events stamp
+    superseded/retracted facets onto blocks, and retrieval + claim ranking demote superseded
+    (exclude retracted) sources. OFF → no ledger, no stamps, no demotion — byte-identical."""
+    return os.environ.get("NOESIS_PULSE", "").lower() in ("1", "true", "yes")
+
+
 def stream_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, /research/stream serves live SSE progress events
     (searching/found/verifying/composing → final). OFF → the endpoint 404s; /research unchanged."""
@@ -420,6 +428,12 @@ class CorpusIngestIn(BaseModel):
     source_country: str = ""               # stamp every block from this batch (e.g. "IN" for India sources)
 
 
+class PulseEventIn(BaseModel):
+    """Evidence Pulse admin action: approve (apply stamps) or retract (undo a mistake) an event."""
+    event_id: str
+    action: str          # approve | retract
+
+
 class Citation(BaseModel):
     text: str
     quote: str
@@ -477,7 +491,8 @@ def build_default_service() -> ResearchService:
         # under the vertical's corpus source key so gating/covers still align.
         covers = next((s.covers() for s in manifest.retrieval_sources.values()
                        if hasattr(s, "covers")), {})
-        pg = PostgresRetrievalSource(dsn, dim=embedder.dim, table="rs_block", covers=covers)
+        pg = PostgresRetrievalSource(dsn, dim=embedder.dim, table="rs_block", covers=covers,
+                                     currency_demote=pulse_enabled())
         corpus_key = next(iter(manifest.retrieval_sources), "corpus")
         sources[corpus_key] = pg
         connectors = dict(manifest.connectors)
@@ -687,6 +702,18 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             else:
                 app.state.gap_queue = None
         return app.state.gap_queue
+
+    def _currency():
+        """Evidence Pulse ledger (Postgres). None unless a corpus DSN is set AND the pulse flag is
+        on — so OFF is a true no-op (no table, no stamps, no demotion)."""
+        if getattr(app.state, "currency", "unset") == "unset":
+            dsn = os.environ.get("NOESIS_CORPUS_DSN")
+            if dsn and pulse_enabled():
+                from noesis_kernel.currency import CurrencyStore
+                app.state.currency = CurrencyStore(dsn)
+            else:
+                app.state.currency = None
+        return app.state.currency
 
     @app.on_event("startup")
     async def _start_gap_processor() -> None:
@@ -1424,6 +1451,54 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"queue error: {e}") from e
         return {"queued": len(ids), "jobs": len(jobs)}
+
+    # ---- Evidence Pulse P0 admin surface (spec A4/A5): scan · list · approve/retract -----------
+    def _pulse_admin_gate(x_admin_token: str):
+        cur = _currency()
+        if cur is None:
+            raise HTTPException(status_code=404, detail="pulse not enabled")
+        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
+        if want and x_admin_token != want:
+            raise HTTPException(status_code=401, detail="admin token required")
+        return cur
+
+    @app.post("/admin/pulse/scan")
+    async def admin_pulse_scan(x_admin_token: str = Header(default="")) -> dict:
+        """Sweep curator-declared lineage into the ledger (declared = high-confidence → approved,
+        A4) and (re-)apply all approved stamps. Idempotent — this is ALSO the manual re-stamp job
+        to run after any re-ingest (facet overwrite erases stamps; the ledger restores them)."""
+        cur = _pulse_admin_gate(x_admin_token)
+        manifest = load_active_vertical()
+        try:
+            return await cur.sweep_declared(list(getattr(manifest, "lineage", ()) or ()))
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"pulse scan failed: {e}") from e
+
+    @app.get("/admin/pulse/events")
+    async def admin_pulse_events(status: str | None = None, limit: int = 100,
+                                 x_admin_token: str = Header(default="")) -> dict:
+        """The auditable change ledger — every relation, its status, and when it was recorded."""
+        cur = _pulse_admin_gate(x_admin_token)
+        try:
+            return {"events": await cur.list_events(status=status, limit=limit)}
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"pulse list failed: {e}") from e
+
+    @app.post("/admin/pulse/event")
+    async def admin_pulse_event(body: PulseEventIn, x_admin_token: str = Header(default="")) -> dict:
+        """Approve (stamps applied) or retract (stamps removed, event kept for audit) one event —
+        the panel-required one-click reversal path for a wrong supersession."""
+        cur = _pulse_admin_gate(x_admin_token)
+        status = {"approve": "approved", "retract": "retracted_event"}.get(body.action)
+        if status is None:
+            raise HTTPException(status_code=400, detail="action must be approve|retract")
+        try:
+            ok = await cur.set_status(body.event_id, status)
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"pulse action failed: {e}") from e
+        if not ok:
+            raise HTTPException(status_code=404, detail="unknown event")
+        return {"event_id": body.event_id, "status": status}
 
     @app.post("/auth/register")
     async def auth_register(body: RegisterIn) -> dict:

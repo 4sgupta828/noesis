@@ -127,6 +127,11 @@ class VerticalManifest:
     # metadata: e.g. a guideline body's pages carry pub_type "practice guideline"), so the vertical's
     # evidence classifier and authority pyramid grade web evidence like corpus evidence. Empty → none.
     web_domain_facets: dict = field(default_factory=dict)
+    # Optional CURATOR-DECLARED document lineage (Evidence Pulse P0): a tuple of
+    # {old_document_id, new_document_id, relation, subjects} dicts in the kernel currency
+    # vocabulary (superseded_by · retracted · amended_by · clarified_by). Highest-confidence,
+    # zero-LLM change source; the kernel's CurrencyStore sweeps it into approved events + stamps.
+    lineage: tuple = ()
     # Optional extraction LENSES (domain vocabulary) for the claims-first pipeline: the aspects the
     # extractor should cover per atom (e.g. interventions, outcomes, safety). Passed as a checklist
     # in ONE extraction call (not fanned out). Empty → generic "extract every fact". Kernel-neutral.

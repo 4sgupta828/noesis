@@ -3743,6 +3743,8 @@ function sessionWhereNext(sdbody, row, turns){
   wr.querySelectorAll(".hopchip").forEach(b=>b.addEventListener("click", ()=>{
     seed(); askQuestion(lastTurn.question || row.question, {engine: b.dataset.eng, skipRefine: true, skipDuel: true});
   }));
+  wr.querySelectorAll(".wn-watch").forEach(b=>b.addEventListener("click", ()=>
+    watchTopic(lastTurn.question || row.question, b)));
   const slot = wr.querySelector("#wn-follow");
   if(!slot) return;
   slot.innerHTML = `<button type="button" class="chip-q" id="wn-fetch">◇ Find follow-up questions</button>`;

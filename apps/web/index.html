@@ -88,7 +88,8 @@
 
   /* effort dial — a labeled snap slider (Standard→Deeper→Deepest); scales how hard the agent
      works on a hard question. Distinct from the source pills so it's never read as a source key. */
-  .ctlbar{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem 1.15rem;margin-top:.55rem;}
+  /* centered so Effort + Integrative sit on the same vertical axis as the mode bar above the box */
+  .ctlbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.45rem 1.15rem;margin-top:.55rem;}
   .ctlbar .effort,.ctlbar .audsel{margin:0;}
   .effort{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:.55rem 0 0;}
   .effort .lbl{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
@@ -1076,14 +1077,8 @@
           <button type="button" class="ebtn" id="effort-inc" aria-label="More effort">+</button>
         </span>
       </div>
-      <div class="audsel" id="audsel" role="group" aria-label="Answer format" hidden>
-        <div class="seg">
-          <button type="button" class="segbtn" data-aud="clinician" aria-pressed="true"
-                  title="Structured, cited — for a medical audience">Clinician brief</button>
-          <button type="button" class="segbtn" data-aud="patient" aria-pressed="false"
-                  title="Plain language for a non-expert — same evidence and accuracy">Patient explanation</button>
-        </div>
-      </div>
+      <!-- audience toggle removed: composer answers are always the clinician brief (the plain-language
+           re-explain lives on the answer itself); setAudience remains for session restore -->
       <div class="audsel" id="integsel" role="group" aria-label="Complementary and integrative approaches" hidden>
         <div class="seg">
           <button type="button" class="segbtn" id="integbtn" aria-pressed="false"
@@ -1326,12 +1321,7 @@ async function loadConfig(){
       $("#effort-inc").addEventListener("click", () => setEffort(EFFORT + 0.25));
       setEffort(1);
     }
-    if(PATIENT_MODE_ENABLED){
-      $("#audsel").hidden = false;
-      $("#audsel").querySelectorAll(".segbtn").forEach(b =>
-        b.addEventListener("click", () => setAudience(b.dataset.aud)));
-      setAudience("clinician");
-    }
+    if(PATIENT_MODE_ENABLED) setAudience("clinician");   // composer is always the clinician brief
     // Past-Sessions tabs — audience (Clinician | Patient) and/or session-kind (Q&A | Specialist Panel),
     // built from whichever flags are on. Panels get their own tab so they don't clutter the Q&A list.
     buildSessionTabs();

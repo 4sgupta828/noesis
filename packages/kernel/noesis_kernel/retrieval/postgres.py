@@ -43,6 +43,11 @@ CREATE TABLE IF NOT EXISTS {table} (
 CREATE INDEX IF NOT EXISTS {table}_facets_gin ON {table} USING gin (facets);
 CREATE INDEX IF NOT EXISTS {table}_tsv_gin    ON {table} USING gin (tsv);
 CREATE INDEX IF NOT EXISTS {table}_emb_hnsw   ON {table} USING hnsw (embedding vector_cosine_ops);
+-- TIME AXIS (Evidence Pulse): when each block first landed — the primitive that makes corpus
+-- deltas queryable over time ("what arrived on topic T in the last 30 days"). Additive; rows
+-- ingested before the column exists stay NULL (= unknown, honestly excluded from windows).
+ALTER TABLE {table} ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now();
+CREATE INDEX IF NOT EXISTS {table}_created ON {table} (created_at DESC);
 """
 
 

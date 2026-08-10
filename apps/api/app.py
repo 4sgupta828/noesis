@@ -1709,14 +1709,43 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=502, detail=f"unwatch failed: {e}") from e
 
     @app.get("/pulse/inbox")
-    async def pulse_inbox(x_noesis_token: str = Header(default="")) -> dict:
-        """The user's Pulse inbox: approved change events matching their watches (+ watch list)."""
+    async def pulse_inbox(days: int = 30, x_noesis_token: str = Header(default="")) -> dict:
+        """The Pulse hub payload: PER-TOPIC rollups answering (1) anything unseen? and (2) how much
+        moved in the rolling window — plus the watch list. Detail loads via /pulse/topic-activity."""
         cur, user = await _pulse_user(x_noesis_token)
         try:
             return {"watches": await cur.list_watches(user_id=user["id"]),
-                    "items": await cur.inbox(user_id=user["id"])}
+                    "days": min(max(days, 1), 365),
+                    "summary": await cur.inbox_summary(user_id=user["id"], days=min(max(days, 1), 365))}
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"inbox failed: {e}") from e
+
+    @app.get("/pulse/topic-activity")
+    async def pulse_topic_activity(topic: str, days: int = 30,
+                                   x_noesis_token: str = Header(default="")) -> dict:
+        """One topic's movement in the rolling window — TOPIC-AS-QUERY composition (generic to any
+        vertical): relational change events matching the topic (structural containment) + NEW
+        corpus sources relevant to it (the existing retrieval engine finds relevance; the corpus
+        time axis supplies first_seen). One query embedding; zero LLM calls."""
+        cur, user = await _pulse_user(x_noesis_token)
+        days = min(max(days, 1), 365)
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        try:
+            events = await cur.events_for_topic(topic, days=days)
+            new_docs = []
+            try:
+                corpus_key = getattr(svc, "corpus_source_key", "") or None
+                hits = await svc.search(question=topic, tenant_id="demo",
+                                        source_keys=[corpus_key] if corpus_key else None, k=40)
+                doc_ids = list({h.document_id for h in hits if getattr(h, "document_id", "")})
+                new_docs = await cur.docs_first_seen(doc_ids, days=days)
+            except Exception as e:   # noqa: BLE001 — activity degrades to events-only
+                __import__("logging").getLogger("api.pulse").warning("topic activity search failed: %r", e)
+            return {"topic": topic, "days": days, "events": events, "new_documents": new_docs}
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"topic activity failed: {e}") from e
 
     async def _topic_registry(cur):
         """The canonical topic registry, seeded once from the vertical's covered-condition names —

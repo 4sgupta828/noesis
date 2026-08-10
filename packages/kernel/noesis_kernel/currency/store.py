@@ -271,6 +271,73 @@ class CurrencyStore:
                 break
         return out
 
+    def _topic_matches(self, topic: str, subjects: list) -> bool:
+        t = (topic or "").lower().strip()
+        subj = " ".join(str(s) for s in (subjects or [])).lower()
+        return bool(t and (t in subj or (subj and subj in t)))
+
+    async def events_for_topic(self, topic: str, *, days: int | None = None,
+                              limit: int = 50) -> list[dict]:
+        """Approved relational events matching a topic (containment), optionally windowed."""
+        events = await self.list_events(status="approved", limit=300)
+        out = []
+        for e in events:
+            if not self._topic_matches(topic, e.get("subjects")):
+                continue
+            if days is not None:
+                import datetime as _dt
+                cut = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=days)
+                if _dt.datetime.fromisoformat(e["created_at"]) < cut:
+                    continue
+            out.append(e)
+            if len(out) >= limit:
+                break
+        return out
+
+    async def inbox_summary(self, *, user_id: str, days: int = 30) -> list[dict]:
+        """Per-watched-topic rollup — question (1) 'anything I haven't seen?' and the headline of
+        question (2) 'movement in the window'. Structural only: relational events here; new-source
+        activity is composed by the caller (topic-as-query needs the retrieval engine)."""
+        watches = await self.list_watches(user_id=user_id)
+        if not watches:
+            return []
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            seen_rows = await conn.fetch(
+                "SELECT event_id FROM noesis_watch_seen WHERE user_id=$1", user_id)
+        seen = {r["event_id"] for r in seen_rows}
+        out = []
+        for w in watches:
+            evs = await self.events_for_topic(w["topic"], days=days)
+            all_evs = await self.events_for_topic(w["topic"])
+            out.append({"topic": w["topic"], "source": w["source"],
+                        "unseen": sum(1 for e in all_evs if e["id"] not in seen),
+                        "events_window": len(evs),
+                        "events": [{**e, "seen": e["id"] in seen} for e in evs[:10]]})
+        return out
+
+    async def docs_first_seen(self, document_ids: list[str], *, days: int = 30) -> list[dict]:
+        """Which of these documents FIRST landed in the corpus within the window (structural: min
+        block created_at; pre-time-axis rows are NULL = unknown and honestly excluded). The caller
+        supplies candidate ids from a topic retrieval — topic-as-query composition."""
+        if not document_ids:
+            return []
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"""SELECT document_id, MIN(created_at) AS first_seen,
+                           MAX(document_title) AS title, MAX(source_key) AS source_key
+                    FROM {self._block_table}
+                    WHERE document_id = ANY($1::text[])
+                    GROUP BY document_id
+                    HAVING MIN(created_at) IS NOT NULL
+                       AND MIN(created_at) >= now() - ($2 || ' days')::interval
+                    ORDER BY MIN(created_at) DESC""",
+                list(document_ids)[:200], str(int(days)))
+        return [{"document_id": r["document_id"], "first_seen": r["first_seen"].isoformat(),
+                 "title": r["title"] or r["document_id"], "source_key": r["source_key"] or ""}
+                for r in rows]
+
     async def mark_seen(self, *, user_id: str, event_id: str) -> None:
         pool = await self._get_pool()
         async with pool.acquire() as conn:

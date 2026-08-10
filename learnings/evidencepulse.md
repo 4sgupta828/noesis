@@ -1,6 +1,8 @@
 # Evidence Pulse — the corpus-currency subsystem
 
-**Status:** SPEC (panel review pending) · **Owner flags:** `NOESIS_PULSE*` (all default OFF, Rule 20)
+**Status:** SPEC v2 — panel-reviewed (Codex GPT-5.5 + Gemini 2.5 Pro + code-grounded subagent,
+2026-08-10; unanimous "build with named changes" — see Panel Amendments at the bottom, which
+OVERRIDE the body where they conflict) · **Owner flags:** `NOESIS_PULSE*` (all default OFF, Rule 20)
 
 ## The idea in one paragraph
 
@@ -165,3 +167,69 @@ marketing surface ("the corpus that visibly stays current") and costs nothing be
   feeds the corpus roadmap.
 - **Fast-follow risk** (OpenEvidence could ship generic alerts): our moat is personalization from
   session history + grounded diffs; speed of P0→P1 matters more than perfection.
+
+---
+
+## Panel Amendments (v2 — these override the body where they conflict)
+
+Reviewed 2026-08-10 by Codex (GPT-5.5), Gemini 2.5 Pro (3 Pro was 503-unavailable), and a
+code-grounded subagent with file:line verification. Verdict: **build, with the following changes.**
+
+### A1 — PREREQUISITE: edition identity + clean-replace ingest (the premise was broken as-built)
+Verified in code: guideline editions re-ingest under the SAME `document_id`
+(`Document.id = f"{source_key}:{native_id}"`, and registry entries like `kdigo-anemia-fulltext`
+are EDITED in place when a new edition lands — no old/new pair ever exists to detect). Worse,
+block ids are content-addressed and upsert never deletes: a re-ingested new edition INSERTS its
+changed blocks while the old edition's rows stay searchable forever under the same document with
+stale year facets — **a live corpus-hygiene bug today, independent of Pulse**. Required first:
+  (a) **edition-scoped identity** — a new edition is a NEW registry entry (`kdigo-anemia-2026-
+      fulltext`), the old entry retained (this is what creates the old/new pair);
+  (b) **clean-replace on same-document re-ingest** — delete rows whose block_id is not in the new
+      ingest's key set (fixes the mixed-edition bug for ALL sources);
+  (c) upsert must also update `document_title` (currently stale on conflict).
+
+### A2 — the event table is the SOURCE OF TRUTH; facet stamps are derived cache
+`upsert_blocks` sets `facets=EXCLUDED.facets` — a re-ingest ERASES a stamp. So
+`noesis_change_event` holds authoritative lineage; `superseded_by` stamps are derived from it and
+re-applied by a periodic re-stamp job. Stamps are repairable, reversible (see A4), and auditable.
+
+### A3 — demotion must act at RETRIEVAL too, and the claim-stage version has two traps
+Claim-stage demotion alone is too late: superseded blocks win the candidate pool and crowd out
+fresh blocks before any claim exists → add the penalty in retrieval ranking (`rank_candidates`)
+as well. In `_rank_claims_by_relevance`: (i) the function early-returns when `claims <= top` —
+demotion must apply unconditionally; (ii) the design is deliberately boost-only, and a hard
+demotion cannot be an additive negative — implement as a SORT PARTITION (un-superseded first),
+explicitly documented as a break of the boost-only invariant.
+
+### A4 — human-in-the-loop at launch (unanimous) + reversal path
+All three panelists: the LLM supersession/materiality judge is the single highest-risk element —
+a wrong "superseded" stamp demotes valid clinical guidance (liability, trust, potential harm).
+At launch: (a) answer-currency demotion proceeds automatically ONLY for high-confidence
+supersessions; (b) every notification-bearing `major` event passes an admin approval queue
+(minutes/month at our ingest volume; builds the ground-truth set that later earns automation);
+(c) a one-click UN-STAMP + event-retraction admin path exists from day one; (d) shadow-mode event
+logging runs before anything user-visible.
+
+### A5 — P0 scope adjustments
+- Title annotation moves to P1 (the compose path does not reliably carry document titles into
+  findings today; verify before relying on it). 2-of-3 panelists; Gemini dissented (keep) — moot
+  until A1 lands anyway.
+- ADD to P0: subject/topic facets on guideline blocks (conditions currently live only in the
+  connector registry, not on blocks — candidate generation needs them), or a minimal
+  document-metadata view over the corpus.
+- Detection runs as periodic sweep (primary) + ingest hook (fast path): the hook alone misses
+  non-queue ingest paths and returns only a block count today.
+
+### A6 — additional named risks
+Nuance beyond binary supersession (a new guideline may NARROW rather than replace — future
+relation types `clarified_by`/`extended_by`); jurisdictional mismatch (US answer vs EU guideline
+update); institutional tenants whose protocols intentionally lag; `noesis_watch` topics are
+clinician-interest data needing retention/privacy treatment; change events are discoverable
+records of "when the system knew" (answers must not lag events); licensing/auditability of
+full-guideline diffs; CME gaming if credit-bearing.
+
+### Revised P0 (post-panel)
+1. A1 ingest primitives (edition identity + clean replace + title update) — also fixes the live
+   mixed-edition bug.  2. `noesis_change_event` + shadow-mode detection (sweep + hook).
+3. Derived stamping + re-stamp job.  4. Retrieval + claim-stage demotion (sort partition).
+5. Admin approve/retract surface.  Held-out gates unchanged. Everything else → P1.

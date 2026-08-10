@@ -3489,13 +3489,12 @@ const fmtDate = s => { try{ return new Date(s).toLocaleString([], {dateStyle:"me
 function buildSessionTabs(){
   const tabs = $("#stabs"); if(!tabs) return;
   const defs = [];
-  if(PATIENT_MODE_ENABLED){
-    defs.push({key:"clinician", aud:"clinician", kind:"research", label:"Clinician Q&amp;A"});
-    defs.push({key:"patient",   aud:"patient",   kind:"research", label:"Patient Q&amp;A"});
-  } else if(ASK_PANEL_ENABLED){
+  // audience tabs removed with the composer's audience toggle — one Q&A list (old patient-audience
+  // sessions still appear, wearing their Patient badge)
+  if(ASK_PANEL_ENABLED){
     defs.push({key:"qa", aud:null, kind:"research", label:"Quick Q&amp;A"});
+    defs.push({key:"panel", aud:null, kind:"panel", label:"◈ Specialist Panel"});
   }
-  if(ASK_PANEL_ENABLED) defs.push({key:"panel", aud:null, kind:"panel", label:"◈ Specialist Panel"});
   SESS_TAB = defs[0] || null;
   if(defs.length < 2){ tabs.hidden = true; tabs.innerHTML = ""; return; }
   tabs.hidden = false;

@@ -1284,6 +1284,7 @@ async function loadConfig(){
           DUEL_ENABLED = !!f.duel_enabled;
           ACCOUNTS_ENABLED = !!f.accounts_enabled;
           DYN_ENGINES = !!f.dynamic_engines_enabled;
+          PULSE_ENABLED = !!f.pulse_enabled; maybeShowPulseBell();
           // integrative reveals a control row → wired on the next full load (not hot-applied)
         })
         .catch(()=>{});
@@ -1309,7 +1310,7 @@ async function loadConfig(){
     DUEL_ENABLED = !!c.duel_enabled;
     INTEGRATIVE_ENABLED = !!c.integrative_enabled;
     PULSE_ENABLED = !!c.pulse_enabled;
-    if(PULSE_ENABLED && USER && USER.token){ const b=$("#pulsebell"); if(b){ b.hidden=false; refreshPulseBell(); } }
+    maybeShowPulseBell();
     DYN_ENGINES = !!c.dynamic_engines_enabled;
     if(INTEGRATIVE_ENABLED){
       const isel = $("#integsel"), ib = $("#integbtn");
@@ -3402,6 +3403,13 @@ async function watchTopic(defaultTopic, btn){
     refreshPulseBell();
   }catch(e){ alert("Couldn't add watch: " + (e.message||e)); }
 }
+function maybeShowPulseBell(){
+  const b = $("#pulsebell");
+  if(!b || !PULSE_ENABLED) return;
+  b.hidden = false;
+  if(USER && USER.token){ refreshPulseBell(); }
+  else b.onclick = ()=>{ const m=$("#idmodal"); if(m){ m.hidden=false; } else alert("Sign in to use Pulse."); };
+}
 async function refreshPulseBell(){
   const b = $("#pulsebell"), badge = $("#pbadge");
   if(!b || !PULSE_ENABLED || !USER || !USER.token) return;
@@ -3948,6 +3956,7 @@ $("#idgo").addEventListener("click", async ()=>{
   }
   localStorage.setItem("noesis_user", JSON.stringify(USER));
   $("#idmodal").hidden = true;
+  maybeShowPulseBell();          // token may have just landed — arm the Pulse bell
 });
 $("#idmodal").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#idgo").click(); });
 

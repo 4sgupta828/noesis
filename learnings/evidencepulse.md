@@ -228,6 +228,18 @@ clinician-interest data needing retention/privacy treatment; change events are d
 records of "when the system knew" (answers must not lag events); licensing/auditability of
 full-guideline diffs; CME gaming if credit-bearing.
 
+### A7 — HORIZONTAL DESIGN DECISION: Pulse is a KERNEL subsystem, not medical code
+Corpus currency is domain-universal (legal citators — Shepard's/KeyCite — are this exact
+primitive hand-built and are LexisNexis/Westlaw's moat; retracted papers in RAG is a documented
+failure class; factra's rate-case change detection is the same pattern in a second live domain).
+Therefore P0 builds in `noesis_kernel.currency` with domain-neutral naming and TYPED relations
+(`superseded_by` · `retracted` · `amended_by` · `clarified_by`), and the vertical supplies the
+judgment via contract hooks (edition-candidate generation, supersession/materiality judge prompts,
+digest voice) — exactly the Rule 18 split the rest of the kernel uses. Medical gains `retracted`
+handling immediately. Commercial optionality (second vertical via the factra pattern; currency-as-
+a-service for other AI-search platforms; vertical citator products) is deliberately NOT built now —
+the kernel/vertical seam is the cheap generality; an external API is not.
+
 ### Revised P0 (post-panel)
 1. A1 ingest primitives (edition identity + clean replace + title update) — also fixes the live
    mixed-edition bug.  2. `noesis_change_event` + shadow-mode detection (sweep + hook).

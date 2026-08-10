@@ -140,7 +140,11 @@ class ResearchService:
                 except Exception:
                     pass
             return await self.ask(**kw)
-        if kw.get("history"):
+        # History counts as a CONVERSATION only if some prior turn was actually ANSWERED — a thread of
+        # error/retry turns is a fresh question (else a retry-after-failure silently demoted the engine
+        # to the standard format: the "where did Do-now go?" bug).
+        _hist = kw.get("history") or []
+        if any((t.get("answer") or "").strip() for t in _hist if isinstance(t, dict)):
             if not route:   # explicitly forced reasoned (duel arm / hop chip) → keep the decision-gated format
                 kw = dict(kw)
                 kw["answer_format_override"] = self.reasoned_answer_format

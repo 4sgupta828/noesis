@@ -97,6 +97,10 @@ class VerticalManifest:
     # applied only when the user explicitly opts in for a question. Opaque prose.
     integrative_prompt: str | None = None
     integrative_query_hint: str | None = None
+    # Optional UNDERSTANDING engine (Discover·Understand·Act middle): causal-model compose contract +
+    # mechanism-steering retrieval hint, selected by the dynamic router for WHY/HOW questions.
+    understanding_answer_format: str | None = None
+    understanding_query_hint: str | None = None
     # Optional vertical-supplied instruction for the VISION pre-step: how to DESCRIBE a
     # user-uploaded image (color/shape/borders/texture/distribution), producing a labeled
     # visual observation — never a diagnosis. Opaque prose; the kernel only threads it into

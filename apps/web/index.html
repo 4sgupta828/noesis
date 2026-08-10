@@ -2334,7 +2334,7 @@ function traceLine(ev){
   if(ev.type==="resolved_question") return `<div class="tstep">↳ Interpreting your follow-up as: <span class="tq">${esc(ev.question||"")}</span></div>`;
   if(ev.type==="clarify")   return `<div class="tstep">↳ Need a quick clarification…</div>`;
   if(ev.type==="operate_prior") return `<div class="tstep">↻ Reshaping your previous answer…</div>`;
-  if(ev.type==="engine")    return `<div class="tstep">🧭 ${ev.engine==="reasoned"?"Management question — decision-first engine":"Evidence lookup — standard synthesis engine"}</div>`;
+  if(ev.type==="engine")    return `<div class="tstep">🧭 ${ev.engine==="reasoned"?"Management question — decision-first engine":ev.engine==="understanding"?"Why-question — understanding engine (causal model)":"Evidence lookup — standard synthesis engine"}</div>`;
   if(ev.type==="scaffold")  return `<div class="tstep">🧠 Mapping the clinical decision space — ${ev.branches} branches to cover</div>`;
   if(ev.type==="step")      return `<div class="tstep">▸ Step ${ev.step}</div>`;
   if(ev.type==="search")    return `<div class="tstep">🔎 Searching <span class="tq">${esc(ev.query||"")}</span>${(ev.variants&&ev.variants.length)?` <span class="tvar">+${ev.variants.length} reformulations</span>`:""}</div>`;
@@ -3614,7 +3614,7 @@ const SET_LABELS = {
   triage_enabled:    ["Guided intake mode", "The ◍ Guided clarify-then-route mode"],
   ask_panel_enabled: ["Specialist Panel", "The ◈ multi-specialist panel mode"],
   integrative_enabled: ["Integrative-medicine opt-in", "Offers the 🌿 per-question complementary/integrative section (user still opts in per question)"],
-  reasoned_default_enabled: ["Dynamic engine selection", "Each question is auto-routed: management/case → decision-first reasoned engine; pure evidence lookup → standard synthesis. Duel arms unaffected."],
+  reasoned_default_enabled: ["Dynamic engine selection", "Auto-routes each question: management/case → decision-first engine · why/how → understanding engine (causal model) · evidence lookup → standard synthesis. Duel arms unaffected."],
 };
 function openSettings(){
   $("#setmodal").hidden = false;

@@ -502,6 +502,8 @@ def build_default_service() -> ResearchService:
         reasoned_scaffold_prompt=reasoned_scaffold, reasoned_answer_format=reasoned_format,
         integrative_prompt=getattr(manifest, "integrative_prompt", None),
         integrative_query_hint=getattr(manifest, "integrative_query_hint", None),
+        understanding_answer_format=getattr(manifest, "understanding_answer_format", None),
+        understanding_query_hint=getattr(manifest, "understanding_query_hint", None),
         vertical_name=manifest.name, ui=manifest.ui,
         connectors=connectors, corpus_source_key=corpus_key,
     )

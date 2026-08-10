@@ -74,6 +74,8 @@ class ResearchService:
     reasoned_answer_format: str | None = None    # alternate-engine compose directive (decision-gated answer)
     integrative_prompt: str | None = None        # opt-in complementary/integrative answer-section directive
     integrative_query_hint: str | None = None    # retrieval-steering hint appended when the user opts in
+    understanding_answer_format: str | None = None  # UNDERSTANDING engine: causal-model compose contract
+    understanding_query_hint: str | None = None     # UNDERSTANDING engine: mechanism-steering hint
     max_calls: int = 40
     vertical_name: str = ""
     ui: object | None = None                # the vertical's UIContract (for /config)
@@ -133,7 +135,7 @@ class ResearchService:
 
         class _Scaffold(BaseModel):
             # kind = the routing judgment (LLM-owned, Rule 18). Lists are QUESTIONS/topics to cover.
-            kind: Literal["management", "lookup"] = "management"
+            kind: Literal["management", "lookup", "understanding"] = "management"
             likely_causes: list[str] = Field(default_factory=list)
             cant_miss: list[str] = Field(default_factory=list)
             key_decisions: list[str] = Field(default_factory=list)
@@ -153,6 +155,15 @@ class ResearchService:
             if route and s.kind == "lookup":
                 # pure evidence lookup → the standard adaptive engine fits better; say so in the trace
                 await _emit({"type": "engine", "engine": "standard", "why": "evidence lookup"})
+                return await self.ask(**kw)
+            if route and s.kind == "understanding" and self.understanding_answer_format:
+                # WHY/HOW question → the UNDERSTANDING engine: mechanism-steered retrieval + the
+                # causal-model compose contract (per-link evidence-status labels)
+                kw = dict(kw)
+                if self.understanding_query_hint:
+                    kw["question"] = question + "\n\n[" + self.understanding_query_hint + "]"
+                kw["answer_format_override"] = self.understanding_answer_format
+                await _emit({"type": "engine", "engine": "understanding", "why": "why/how question"})
                 return await self.ask(**kw)
             lines = ([f"- likely/common: {x}" for x in s.likely_causes[:6]]
                      + [f"- can't-miss: {x}" for x in s.cant_miss[:6]]

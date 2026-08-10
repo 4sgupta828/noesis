@@ -18,8 +18,11 @@ FIRST, classify the question (`kind`):
 - "management" — a patient-management or case question: differential, workup, treatment choice,
   monitoring, what-to-do. These deserve a decision-structured answer.
 - "lookup" — a pure evidence lookup: what a trial showed, a drug's pharmacokinetics/dose/interactions
-  as facts, definitions, epidemiology, mechanism, "what does the evidence say about X". These deserve a
-  plain evidence synthesis, NOT a decision frame — set kind="lookup" and leave every list EMPTY.
+  as facts, definitions, epidemiology, "what does the evidence say about X". These deserve a plain
+  evidence synthesis, NOT a decision frame — set kind="lookup" and leave every list EMPTY.
+- "understanding" — a WHY/HOW question: why does an intervention work, what causes what, what is the
+  mechanism/pathophysiology, why do two conditions travel together, why did trials show a result.
+  These deserve a CAUSAL-MODEL answer — set kind="understanding" and leave every list EMPTY.
 
 For "management" questions ONLY, produce the decision structure a good physician would want covered —
 as short QUESTIONS or topics to investigate, NEVER as answers, conclusions, diagnoses, or

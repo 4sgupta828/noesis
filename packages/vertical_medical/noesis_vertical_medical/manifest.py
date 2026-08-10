@@ -26,6 +26,7 @@ from .refine import MEDICAL_REFINE_PROMPT
 from .triage import MEDICAL_TRIAGE_PROMPT
 from .reasoned import REASONED_SCAFFOLD_PROMPT, REASONED_ANSWER_FORMAT
 from .integrative import INTEGRATIVE_DIRECTIVE, INTEGRATIVE_QUERY_HINT
+from .understanding import UNDERSTANDING_ANSWER_FORMAT, UNDERSTANDING_QUERY_HINT
 from .web_domains import TRUSTED_WEB_DOMAINS
 from .authority import MedicalAuthorityPolicy
 from .connector import ClinicalTrialsConnector
@@ -87,6 +88,8 @@ def build_manifest() -> VerticalManifest:
         reasoned_answer_format=REASONED_ANSWER_FORMAT,
         integrative_prompt=INTEGRATIVE_DIRECTIVE,
         integrative_query_hint=INTEGRATIVE_QUERY_HINT,
+        understanding_answer_format=UNDERSTANDING_ANSWER_FORMAT,
+        understanding_query_hint=UNDERSTANDING_QUERY_HINT,
         web_domains=TRUSTED_WEB_DOMAINS,
         extraction_lenses=(
             "interventions/treatments/drugs studied",

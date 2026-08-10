@@ -1763,6 +1763,44 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             _log.warning("watch-topic suggestion failed: %r", e)
             return {"topics": []}
 
+    @app.get("/pulse/watch-suggestions")
+    async def pulse_watch_suggestions(x_noesis_token: str = Header(default="")) -> dict:
+        """Cross-session watch suggestions: the recurring durable subjects in THIS user's question
+        history (LLM judgment against the canonical registry; already-watched excluded). One small
+        call, fired when the Pulse panel opens; degrades to an empty list on any failure."""
+        cur, user = await _pulse_user(x_noesis_token)
+        prompt = getattr(load_active_vertical(), "watch_suggest_prompt", None)
+        store = _store()
+        if not prompt or store is None or not user.get("email"):
+            return {"suggestions": []}
+        if app.state.service is None:
+            app.state.service = build_default_service()
+
+        class _Sug(BaseModel):
+            topics: list[str] = []
+        try:
+            rows = await store.list(tenant_id="demo", q=user["email"], limit=40)
+            questions = [r.get("question", "") for r in rows if r.get("question")][:40]
+            if not questions:
+                return {"suggestions": []}
+            watched = [w["topic"] for w in await cur.list_watches(user_id=user["id"])]
+            registry = await _topic_registry(cur)
+            body_txt = ("QUESTION HISTORY (most recent first):\n"
+                        + "\n".join(f"- {q[:200]}" for q in questions)
+                        + ("\n\nALREADY WATCHED (never re-suggest):\n"
+                           + "\n".join(f"- {w}" for w in watched) if watched else ""))
+            comp = await app.state.service.llm.complete(
+                system=prompt + _registry_block(registry),
+                messages=[{"role": "user", "content": body_txt}],
+                response_format=_Sug, max_tokens=300)
+            raw = [t.strip() for t in (comp.parsed.topics or []) if t and t.strip()][:5]
+            watched_lc = {w.lower() for w in watched}
+            canon = await cur.ensure_topics(raw)
+            return {"suggestions": [t for t in canon if t.lower() not in watched_lc]}
+        except Exception as e:   # noqa: BLE001
+            __import__("logging").getLogger("api.pulse").warning("watch suggestions failed: %r", e)
+            return {"suggestions": []}
+
     @app.post("/pulse/seen")
     async def pulse_seen(body: SeenIn, x_noesis_token: str = Header(default="")) -> dict:
         cur, user = await _pulse_user(x_noesis_token)

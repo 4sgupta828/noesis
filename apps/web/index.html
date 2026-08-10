@@ -776,6 +776,17 @@
   .pitem-s{font-size:.86rem;color:var(--ink);margin:.25rem 0 .4rem;line-height:1.4;}
   .pitem-b{font-size:.78rem;color:var(--muted);margin-bottom:.4rem;}
   .pitem-empty{font-size:.82rem;color:var(--muted);line-height:1.5;padding:.4rem 0;}
+  .psec-h{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.09em;
+    color:var(--muted);margin:.75rem 0 .4rem;border-top:1px dashed var(--hair);padding-top:.6rem;}
+  .pulsepanel .psec-h:first-of-type{border-top:none;padding-top:0;margin-top:.2rem;}
+  .wtags{display:flex;gap:.4rem;flex-wrap:wrap;}
+  .wtag{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;color:var(--ink);
+    border:1px solid var(--gold);border-radius:999px;padding:.22rem .35rem .22rem .6rem;}
+  .wtag-x{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:.68rem;padding:0 .2rem;}
+  .wtag-x:hover{color:var(--gap);}
+  .psugs{margin-top:.6rem;display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;}
+  .psugs-h{flex-basis:100%;font-family:var(--mono);font-size:.62rem;text-transform:uppercase;
+    letter-spacing:.09em;color:var(--muted);margin-bottom:.15rem;}
   .pulsewarn{margin:.9rem 0;padding:.7rem .9rem;border:1px solid var(--gap);border-left-width:3px;
     border-radius:10px;font-size:.84rem;color:var(--ink);line-height:1.5;}
   .wn-watch{opacity:.92;}
@@ -3473,16 +3484,22 @@ async function refreshPulseBell(){
   try{
     const r = await fetch("/pulse/inbox",{headers:{"x-noesis-token":USER.token}});
     if(!r.ok) return;
-    const {items} = await r.json();
+    const {items, watches} = await r.json();
     const unseen = (items||[]).filter(i=>!i.seen).length;
     if(badge){ badge.hidden = !unseen; badge.textContent = unseen > 9 ? "9+" : String(unseen); }
-    b.onclick = ()=>openPulsePanel(items||[]);
+    b.onclick = ()=>openPulsePanel(items||[], watches||[]);
   }catch(e){}
 }
-function openPulsePanel(items){
+let _WATCH_SUGGESTIONS = null;   // per-page-load cache: at most ONE suggestion call per visit
+function openPulsePanel(items, watches){
+  items = items || []; watches = watches || [];
   document.querySelectorAll(".pulsepanel").forEach(p=>p.remove());
   const p = document.createElement("div"); p.className = "pulsepanel";
-  const rows = items.length ? items.map(i=>{
+  const watchRow = watches.length
+    ? watches.map(w=>`<span class="wtag" data-t="${esc(w.topic)}">${esc(w.topic)}
+        <button type="button" class="wtag-x" title="Stop watching" aria-label="Stop watching">✕</button></span>`).join("")
+    : `<span class="pitem-empty">Nothing watched yet — add a topic below.</span>`;
+  const changeRows = items.length ? items.map(i=>{
     const what = i.relation === "retracted" ? "Retracted" : "Guidance changed";
     const subj = (i.subjects||[]).join("; ") || i.old_document_id || "";
     return `<div class="pitem${i.seen?"":" unseen"}">
@@ -3491,18 +3508,76 @@ function openPulsePanel(items){
       ${i.brief_md?`<div class="pitem-b">${esc(i.brief_md).slice(0,400)}</div>`:""}
       <button type="button" class="chip-q pitem-ask">Ask about this</button>
     </div>`;
-  }).join("") : `<div class="pitem-empty">No changes on your watched topics yet. Watch topics from
-    any answer's "⊕ Watch topic" chip — material evidence changes will land here.</div>`;
-  p.innerHTML = `<div class="pulsepanel-h">◉ Pulse — changes on your watches
-    <button type="button" class="pclose" aria-label="Close">✕</button></div>${rows}`;
+  }).join("") : `<div class="pitem-empty">${watches.length
+      ? "No material changes yet on: " + esc(watches.map(w=>w.topic).join(" · "))
+        + ". New guidelines, label changes, and retractions on these will land here."
+      : "Material evidence changes on your watched topics will land here."}</div>`;
+  p.innerHTML = `<div class="pulsepanel-h">◉ Pulse
+      <button type="button" class="pclose" aria-label="Close">✕</button></div>
+    <div class="psec-h">Watching</div>
+    <div class="wtags">${watchRow}</div>
+    <div class="psec-h">Changes</div>
+    ${changeRows}
+    <div class="psec-h">Watch something new</div>
+    <div class="watchpick-row"><input type="text" class="watchpick-in" maxlength="120"
+      placeholder="Any topic, in your own words — e.g. afib blood thinners">
+      <button type="button" class="chip-q watchpick-add">Add</button></div>
+    <div class="psugs"><span class="suggest-loading">Looking across your sessions for topics worth watching…</span></div>`;
   document.body.appendChild(p);
+  const reopen = async ()=>{             // re-fetch + re-render in place after any change
+    try{
+      const r = await fetch("/pulse/inbox",{headers:{"x-noesis-token":USER.token}});
+      const d = r.ok ? await r.json() : {items:[],watches:[]};
+      openPulsePanel(d.items||[], d.watches||[]);
+    }catch(e){}
+  };
   p.querySelector(".pclose").addEventListener("click", ()=>p.remove());
+  p.querySelectorAll(".wtag-x").forEach(x=>x.addEventListener("click", async (e)=>{
+    const t = e.currentTarget.closest(".wtag").dataset.t;
+    try{ await fetch("/pulse/watch?topic="+encodeURIComponent(t),
+      {method:"DELETE", headers:{"x-noesis-token":USER.token}}); }catch(err){}
+    reopen();
+  }));
   p.querySelectorAll(".pitem-ask").forEach(btn=>btn.addEventListener("click", (e)=>{
-    const it = e.currentTarget.closest(".pitem");
-    const subj = it.querySelector(".pitem-s").textContent.trim();
+    const subj = e.currentTarget.closest(".pitem").querySelector(".pitem-s").textContent.trim();
     p.remove();
     askQuestion(`What changed in the evidence regarding: ${subj}? What should I do differently now?`);
   }));
+  const inp = p.querySelector(".watchpick-in"), add = p.querySelector(".watchpick-add");
+  const addFree = async ()=>{
+    const t = (inp.value||"").trim(); if(!t) return;
+    add.disabled = true; add.textContent = "…";
+    try{ const stored = await addWatch(t, "manual");
+         add.textContent = "✓ " + (stored.toLowerCase() !== t.toLowerCase() ? `added as “${stored}”` : "added");
+         setTimeout(reopen, 1400); }
+    catch(e){ add.disabled = false; add.textContent = "Add"; alert("Couldn't add watch: "+(e.message||e)); }
+  };
+  add.addEventListener("click", addFree);
+  inp.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); addFree(); } });
+  // cross-session suggestions (recurring subjects in YOUR question history) — cached per page load
+  const sugHolder = p.querySelector(".psugs");
+  (async ()=>{
+    try{
+      if(_WATCH_SUGGESTIONS === null){
+        const r = await fetch("/pulse/watch-suggestions",{headers:{"x-noesis-token":USER.token}});
+        _WATCH_SUGGESTIONS = r.ok ? ((await r.json()).suggestions || []) : [];
+      }
+      const watched = new Set(watches.map(w=>w.topic.toLowerCase()));
+      const sugs = _WATCH_SUGGESTIONS.filter(s=>!watched.has(s.toLowerCase()));
+      if(!sugs.length){ sugHolder.remove(); return; }
+      sugHolder.innerHTML = `<div class="psugs-h">Suggested from your sessions</div>`;
+      sugs.forEach(topic=>{
+        const c = document.createElement("button");
+        c.type = "button"; c.className = "chip-q watchchip"; c.textContent = topic;
+        c.addEventListener("click", async ()=>{
+          c.disabled = true; c.textContent = "…";
+          try{ await addWatch(topic, "suggested"); c.textContent = "✓ " + topic; setTimeout(reopen, 900); }
+          catch(e){ c.disabled = false; c.textContent = topic; }
+        });
+        sugHolder.appendChild(c);
+      });
+    }catch(e){ sugHolder.remove(); }
+  })();
   // opening marks everything seen (the badge clears; items keep their highlight until next open)
   items.filter(i=>!i.seen).forEach(i=>{
     fetch("/pulse/seen",{method:"POST",headers:{"content-type":"application/json",

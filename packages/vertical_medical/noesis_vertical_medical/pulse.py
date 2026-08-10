@@ -21,6 +21,21 @@ Rules:
 - If the exchange has no watchable clinical subject, return an empty list.
 """
 
+SUGGEST_WATCHES_PROMPT = """\
+From this clinician's recent QUESTION HISTORY, propose 3-5 topics worth WATCHING — the durable
+clinical subjects they keep returning to, whose future evidence changes (guideline updates,
+practice-changing trials, label changes, retractions) they would plausibly want flagged.
+
+Rules:
+- FIRST PREFERENCE: reuse an entry from the EXISTING CANONICAL TOPICS list verbatim when one
+  covers the subject — never introduce a variant phrasing of an existing topic.
+- Weight RECURRING subjects over one-off curiosities; a subject asked about once but managed
+  longitudinally (a chronic disease, a standing therapy) still counts.
+- Never propose anything in the ALREADY WATCHED list, nor near-duplicates of it.
+- Topics are SUBJECTS, never patient details. At most 5 words each.
+- Fewer good suggestions beat padded ones; an empty list is valid for a thin history.
+"""
+
 CANONIZE_TOPIC_PROMPT = """\
 Map the user's free-text watch topic onto the field's standard vocabulary.
 

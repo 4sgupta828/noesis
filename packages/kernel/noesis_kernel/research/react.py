@@ -998,6 +998,42 @@ async def run_react(
                     + " " + _REF_MARK_RE.sub(" ", result.composed_answer or ""))
                 result.reasoning_purpose = _frame_grounded(getattr(parsed, "reasoning_purpose", ""), _all_tokens)
                 result.reasoning_conclusion = _frame_grounded(getattr(parsed, "reasoning_conclusion", ""), _all_tokens)
+                # REPAIR (once): when the guard blanks a frame the model DID write (it stated a figure
+                # outside the allowance), the judgment itself is usually valid — only the number is
+                # unlicensed. One small call restates the frame QUALITATIVELY (no figures), then the
+                # SAME guard re-validates. The guard stays authoritative (a still-failing repair stays
+                # blank); the LLM owns the rewrite (Rule 18). This is why "Informed judgment" no longer
+                # vanishes at random on numerically-dense answers.
+                _blank = [k for k, raw in (("reasoning_purpose", getattr(parsed, "reasoning_purpose", "")),
+                                           ("reasoning_conclusion", getattr(parsed, "reasoning_conclusion", "")))
+                          if (raw or "").strip() and not getattr(result, k)]
+                if _blank and not budget.exhausted:
+                    if diag is not None:
+                        diag["retries"]["frame_repair"] = list(_blank)
+                    try:
+                        class _FrameFix(BaseModel):
+                            reasoning_purpose: str = ""
+                            reasoning_conclusion: str = ""
+                        fix = await llm.complete(
+                            system=("Restate these reasoning-frame fields WITHOUT any specific numbers, "
+                                    "dates, doses, or percentages — express the same judgment "
+                                    "qualitatively (e.g. 'a small absolute benefit', 'roughly double'). "
+                                    "Keep the direction and force of the judgment; do not add facts and "
+                                    "do not hedge it into vagueness. Return both fields."),
+                            messages=[{"role": "user", "content":
+                                       "reasoning_purpose: " + (getattr(parsed, "reasoning_purpose", "") or "")
+                                       + "\n\nreasoning_conclusion: "
+                                       + (getattr(parsed, "reasoning_conclusion", "") or "")}],
+                            response_format=_FrameFix, max_tokens=400)
+                        fp = fix.parsed
+                        if "reasoning_purpose" in _blank:
+                            result.reasoning_purpose = _frame_grounded(
+                                getattr(fp, "reasoning_purpose", ""), _all_tokens)
+                        if "reasoning_conclusion" in _blank:
+                            result.reasoning_conclusion = _frame_grounded(
+                                getattr(fp, "reasoning_conclusion", ""), _all_tokens)
+                    except Exception as _e:   # noqa: BLE001 — best-effort; guard outcome stands
+                        _log.warning("reasoning frame repair failed: %r", _e)
             # Honesty signal → coverage gap: a "grounded-on-analogues" answer still flags the gap,
             # so the UI shows the prominent fill-the-gaps affordance (LLM-owned judgment, no regex).
             if parsed.directly_addresses is False and (parsed.gap_note or "").strip():

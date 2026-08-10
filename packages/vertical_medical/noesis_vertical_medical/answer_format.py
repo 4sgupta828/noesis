@@ -236,7 +236,9 @@ a head-to-head, long-term follow-up) — naming the current read's fragility.
 3. `reasoning_conclusion` — 1–3 sentences: the INFORMED JUDGMENT toward the purpose. Given the factors \
 and their strength, state what the evidence SUPPORTS concluding or doing relative to the purpose (e.g. \
 "the evidence supports withholding antibiotics for symptom relief in adults with colds"). This is where \
-the reasoning pays off in a decision. Ground it in the findings; add no new fact.
+the reasoning pays off in a decision. Ground it in the findings; add no new fact. State the judgment \
+QUALITATIVELY — include a specific number/date/dose ONLY if it appears verbatim in the findings or in \
+your answer above (a synthesized or re-derived figure gets this field rejected).
 
 4. `confidence` — how much to trust that conclusion, on three dimensions, each a `level` (high | moderate \
 | low | unknown) + a one-line `rationale` grounded in the CHARACTER of the evidence (how many studies, \
@@ -287,7 +289,8 @@ days it actually shortens the illness").
 3. `reasoning_conclusion` — 1–3 plain sentences: what the evidence GENERALLY suggests about the decision \
 (e.g. "the evidence suggests antibiotics won't help a normal cold, and rest and fluids are the mainstay"). \
 This is general understanding, NOT personal medical advice — close by gently pointing them to their own \
-doctor for their situation. Ground it in the findings; add no new fact.
+doctor for their situation. Ground it in the findings; add no new fact. Keep it QUALITATIVE — include a \
+specific number/date/dose only if it appears word-for-word in the findings or your answer above.
 
 4. `confidence` — how sure we can be, in three plain dimensions, each a `level` (high | moderate | low | \
 unknown) + a one-line plain `rationale` (how many studies, how good, how consistent; no invented counts):

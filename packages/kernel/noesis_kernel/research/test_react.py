@@ -344,6 +344,44 @@ def test_rank_claims_recency_breaks_controlling_tier_ties_only():
     assert top1c[0].text == "old guideline"
 
 
+def test_reasoning_conclusion_repaired_when_guard_blanks_it(monkeypatch):
+    # Robustness (the "Informed judgment randomly absent" bug): a conclusion stating a figure OUTSIDE
+    # the allowance (findings + answer) is blanked by the guard — the repair pass restates it
+    # qualitatively and it SURVIVES. Guard stays authoritative throughout.
+    import noesis_kernel.research.react as react
+    monkeypatch.setattr(react, "_COMPOSE_BACKOFF_S", 0)
+    from noesis_kernel.research.react import (ComposedAnswer, ConfidenceRead, ConfidenceDim)
+    src, make = _compose_setup()
+    def compose_fn(call_n):
+        return LLMResult(parsed=ComposedAnswer(
+            answer="The approved metric value was 9.8 percent [1].",
+            reasoning_purpose="Whether the metric value can be relied on.",
+            # "3.4 percent" appears in NEITHER the finding NOR the answer → guard blanks this
+            reasoning_conclusion="The value implies a 3.4 percent shortfall, so act cautiously.",
+            confidence=ConfidenceRead(
+                factual=ConfidenceDim(level="low", rationale="single source"),
+                causal=ConfidenceDim(level="unknown", rationale=""),
+                generalization=ConfidenceDim(level="low", rationale="one period"))),
+            output_tokens=5)
+    llm = make(compose_fn)
+    _orig = llm.complete
+    async def _complete(*, system, messages, response_format, max_tokens=2048, temperature=None):
+        if "Restate these reasoning-frame fields" in (system or ""):     # the repair call
+            class _Fix:
+                reasoning_purpose = "Whether the metric value can be relied on."
+                reasoning_conclusion = "The value implies a meaningful shortfall, so act cautiously."
+            return LLMResult(parsed=_Fix(), output_tokens=3)
+        return await _orig(system=system, messages=messages,
+                           response_format=response_format, max_tokens=max_tokens, temperature=temperature)
+    llm.complete = _complete
+    res = asyncio.run(run_react(question="what was the metric value?", llm=llm,
+        embedder=FakeEmbedder(dim=8), source=src, tenant_id="A",
+        budget=BudgetState(max_calls=20), reasoning_read=True))
+    assert res.grounded
+    assert res.reasoning_conclusion == "The value implies a meaningful shortfall, so act cautiously."
+    assert res.reasoning_purpose                                # untouched frame survives as-is
+
+
 def test_reasoning_read_flows_through_when_enabled(monkeypatch):
     # End-to-end: with reasoning_read=True, a compose that emits a GROUNDED interpretation item +
     # confidence surfaces both on the result (validated). The basis finding [1] is "9.8 percent".

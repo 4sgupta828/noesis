@@ -315,6 +315,16 @@ def _refs_valid(text: str, n_findings: int) -> bool:
 _EVIDENCE_FITNESS_WEIGHT = 0.15
 _EVIDENCE_MAX_RANK = 6
 _COUNTRY_BOOST_WEIGHT = 0.12   # bounded, comparable to the tier boost; boost-only, never demotes
+# Recency boost — CONTROLLING tiers only (guideline / systematic review, rank >= _CONTROLLING_RANK):
+# for normative evidence the newest genuinely supersedes (KDIGO 2026 > KDIGO 2012), whereas a
+# landmark RCT must never lose to a newer small trial — so lower tiers get NO recency term. Linear
+# decay to zero at the horizon; unknown year is a no-op (absence never demotes). Rides the same
+# evidence-fitness seam as the tier boost (only active when `evidence_ranker` is supplied).
+_RECENCY_BOOST_WEIGHT = 0.10
+_RECENCY_HORIZON_YEARS = 12
+_CONTROLLING_RANK = 6
+_LOW_YIELD_ATOMS = 2           # a search adding fewer than this many NEW atoms counts as diminishing-returns
+#                               (two in a row → force an answer; catches the steady +1 grind, not just zero)
 _LOW_YIELD_ATOMS = 2           # a search adding fewer than this many NEW atoms counts as diminishing-returns
 #                               (two in a row → force an answer; catches the steady +1 grind, not just zero)
 
@@ -341,12 +351,21 @@ async def _rank_claims_by_relevance(question, claims, embedder, top, *,
     qn = math.sqrt(sum(x * x for x in qv)) or 1.0
     cb = set(country_boost or ())
 
+    import datetime
+    this_year = datetime.date.today().year   # real-world currency: rankings age with the calendar
+
     def _boost(i: int) -> float:
         b = 0.0
         if evidence_ranker is not None:
             try:
                 r = evidence_ranker(getattr(claims[i], "evidence_kind", "") or "")
                 b += _EVIDENCE_FITNESS_WEIGHT * (max(0, int(r)) / _EVIDENCE_MAX_RANK)
+                if int(r) >= _CONTROLLING_RANK:
+                    # controlling tier + known year → bounded recency term (newest guidance governs)
+                    yr = str((getattr(claims[i], "facets", None) or {}).get("year") or "")[:4]
+                    if yr.isdigit():
+                        age = max(0, this_year - int(yr))
+                        b += _RECENCY_BOOST_WEIGHT * max(0.0, 1.0 - age / _RECENCY_HORIZON_YEARS)
             except Exception:   # noqa: BLE001 — ranking must never break selection
                 pass
         if cb:

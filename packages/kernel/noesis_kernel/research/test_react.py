@@ -320,6 +320,30 @@ def test_rank_claims_by_relevance_keeps_the_most_relevant():
     assert asyncio.run(_rank_claims_by_relevance("x", claims[:2], _FE(), 5)) == claims[:2]
 
 
+def test_rank_claims_recency_breaks_controlling_tier_ties_only():
+    # Recency term: among equally-relevant CONTROLLING-tier claims (guideline rank 6), the newer year
+    # wins the cap cut; lower tiers get NO recency term (a landmark RCT never loses to a newer small
+    # trial via recency), and an unknown year is a no-op.
+    import datetime
+    from noesis_kernel.research.react import _rank_claims_by_relevance, VerifiedClaim
+    class _FE:
+        def dim(self): return 2
+        def embed(self, texts): return [[1.0, 0.0] for _ in texts]     # everything equally relevant
+    now = datetime.date.today().year
+    ranker = lambda kind: {"guideline": 6, "rct": 5}.get(kind, 0)
+    old_g = VerifiedClaim("old guideline", "a1", "q", facets={"year": str(now - 10)}, evidence_kind="guideline")
+    new_g = VerifiedClaim("new guideline", "a2", "q", facets={"year": str(now)}, evidence_kind="guideline")
+    top1 = asyncio.run(_rank_claims_by_relevance("q", [old_g, new_g], _FE(), 1, evidence_ranker=ranker))
+    assert top1[0].text == "new guideline"                      # newest controlling guidance governs
+    # tier still dominates recency: an old guideline (rank 6) beats a brand-new RCT (rank 5)
+    new_rct = VerifiedClaim("new rct", "a3", "q", facets={"year": str(now)}, evidence_kind="rct")
+    top1b = asyncio.run(_rank_claims_by_relevance("q", [new_rct, old_g], _FE(), 1, evidence_ranker=ranker))
+    assert top1b[0].text == "old guideline"
+    # no ranker (evidence-fitness off) → recency inert, original order kept
+    top1c = asyncio.run(_rank_claims_by_relevance("q", [old_g, new_g], _FE(), 1))
+    assert top1c[0].text == "old guideline"
+
+
 def test_reasoning_read_flows_through_when_enabled(monkeypatch):
     # End-to-end: with reasoning_read=True, a compose that emits a GROUNDED interpretation item +
     # confidence surfaces both on the result (validated). The basis finding [1] is "9.8 percent".

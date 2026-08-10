@@ -88,6 +88,8 @@
 
   /* effort dial — a labeled snap slider (Standard→Deeper→Deepest); scales how hard the agent
      works on a hard question. Distinct from the source pills so it's never read as a source key. */
+  .ctlbar{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem 1.15rem;margin-top:.55rem;}
+  .ctlbar .effort,.ctlbar .audsel{margin:0;}
   .effort{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:.55rem 0 0;}
   .effort .lbl{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
   .effort .estep{display:inline-flex;align-items:center;gap:.55rem;}
@@ -97,7 +99,7 @@
   .effort .ebtn:hover:not(:disabled){border-color:var(--gold);color:var(--gold);}
   .effort .ebtn:disabled{opacity:.4;cursor:default;}
   .effort .ebtn:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
-  .effort .eval{font-family:var(--mono);font-size:.72rem;color:var(--gold);white-space:nowrap;min-width:8.5rem;text-align:center;}
+  .effort .eval{font-family:var(--mono);font-size:.72rem;color:var(--gold);white-space:nowrap;min-width:7rem;text-align:center;}
   .effort .ehint{flex-basis:100%;font-family:var(--mono);font-size:.63rem;color:var(--muted);opacity:.85;}
   .effort[data-tier="1"] .eval{color:var(--muted);}
   /* effort on a saved turn: a small gold badge + a retry-deeper affordance */
@@ -327,12 +329,12 @@
   .empty .k{color:var(--ink);font-weight:560;}
 
   /* mission — the resting state */
-  .motto{display:flex;align-items:flex-start;justify-content:center;gap:1.4rem;flex-wrap:wrap;
-    margin-top:3.5rem;font-family:var(--mono);font-size:.82rem;letter-spacing:.32em;
-    text-transform:uppercase;color:var(--gold);opacity:.9;}
+  .motto{display:flex;align-items:flex-start;justify-content:center;gap:1.2rem;flex-wrap:wrap;
+    margin-top:2.6rem;font-family:var(--mono);font-size:.72rem;letter-spacing:.3em;
+    text-transform:uppercase;color:var(--gold);opacity:.75;}
   .mstep{display:flex;flex-direction:column;align-items:center;gap:.7rem;}
   .motto b{font-weight:600;color:var(--ink);letter-spacing:.32em;}
-  .micon{width:30px;height:30px;color:var(--gold);opacity:.85;}
+  .micon{width:24px;height:24px;color:var(--gold);opacity:.8;}
   .motto i{width:5px;height:5px;border-radius:50%;background:var(--gold);opacity:.7;flex:none;margin-top:.35rem;}
 
   .summary{font-size:.82rem;color:var(--muted);display:flex;gap:.9rem;flex-wrap:wrap;
@@ -1025,29 +1027,31 @@
     </div>
     <input type="file" id="file" accept="image/*,.pdf,application/pdf,.dcm,application/dicom" multiple hidden />
     <div class="attns" id="attns" hidden></div>
-    <div class="effort" id="effort" data-tier="1" hidden>
-      <span class="lbl">Effort</span>
-      <span class="estep">
-        <button type="button" class="ebtn" id="effort-dec" aria-label="Less effort">−</button>
-        <span class="eval" id="effort-val">Standard · 1×</span>
-        <button type="button" class="ebtn" id="effort-inc" aria-label="More effort">+</button>
-      </span>
-      <span class="ehint" id="effort-hint">Standard depth. Raise it for a hard question — uses more credits and time.</span>
-    </div>
-    <div class="audsel" id="audsel" role="group" aria-label="Answer format" hidden>
-      <span class="lbl">Format answer for</span>
-      <div class="seg">
-        <button type="button" class="segbtn" data-aud="clinician" aria-pressed="true">Clinician brief</button>
-        <button type="button" class="segbtn" data-aud="patient" aria-pressed="false">Patient explanation</button>
+    <!-- ONE slim control bar — intent lives in tooltips, not prose (minimal landing page) -->
+    <div class="ctlbar">
+      <div class="effort" id="effort" data-tier="1" hidden
+           title="Research effort — deeper digs harder but uses more credits and time">
+        <span class="lbl">Effort</span>
+        <span class="estep">
+          <button type="button" class="ebtn" id="effort-dec" aria-label="Less effort">−</button>
+          <span class="eval" id="effort-val">Standard · 1×</span>
+          <button type="button" class="ebtn" id="effort-inc" aria-label="More effort">+</button>
+        </span>
       </div>
-      <span class="ahint" id="aud-hint">Clinician brief — structured, cited, for a medical audience.</span>
-    </div>
-    <div class="audsel" id="integsel" role="group" aria-label="Complementary and integrative approaches" hidden>
-      <span class="lbl">Complementary</span>
-      <div class="seg">
-        <button type="button" class="segbtn" id="integbtn" aria-pressed="false">🌿 Include integrative &amp; natural options</button>
+      <div class="audsel" id="audsel" role="group" aria-label="Answer format" hidden>
+        <div class="seg">
+          <button type="button" class="segbtn" data-aud="clinician" aria-pressed="true"
+                  title="Structured, cited — for a medical audience">Clinician brief</button>
+          <button type="button" class="segbtn" data-aud="patient" aria-pressed="false"
+                  title="Plain language for a non-expert — same evidence and accuracy">Patient explanation</button>
+        </div>
       </div>
-      <span class="ahint">Off by default. Adds an evidence-based complementary/integrative section (proven &amp; adopted approaches only, with interactions) to this answer.</span>
+      <div class="audsel" id="integsel" role="group" aria-label="Complementary and integrative approaches" hidden>
+        <div class="seg">
+          <button type="button" class="segbtn" id="integbtn" aria-pressed="false"
+                  title="Adds an evidence-based complementary/integrative section — proven &amp; adopted approaches only, with interactions. Off by default.">🌿 Integrative options</button>
+        </div>
+      </div>
     </div>
   </form>
 
@@ -1329,10 +1333,10 @@ function setEffort(v){
   const dec = $("#effort-dec"); if(dec) dec.disabled = EFFORT <= 1;      // stepper bounds
   const inc = $("#effort-inc"); if(inc) inc.disabled = EFFORT >= 2.5;
   const val = $("#effort-val"); if(val) val.textContent = `${name} · ${EFFORT}×`;
-  const hint = $("#effort-hint");
-  if(hint) hint.textContent = EFFORT<=1
-    ? "Standard depth. Raise it for a hard question — uses more credits and time."
-    : `Searches ~${EFFORT}× as hard (more turns, evidence & citations) — more credits and time.`;
+  const ew = $("#effort");   // the hint is a TOOLTIP now (minimal landing page)
+  if(ew) ew.title = EFFORT <= 1
+    ? "Research effort — deeper digs harder but uses more credits and time"
+    : `Searching ~${EFFORT}× as hard (more turns, evidence & citations) — more credits and time`;
 }
 // Audience switch: clinician (default, structured + cited) vs patient (plain-language, same evidence).
 function setAudience(a){
@@ -1340,10 +1344,6 @@ function setAudience(a){
   const sel = $("#audsel");
   if(sel) sel.querySelectorAll(".segbtn").forEach(b =>
     b.setAttribute("aria-pressed", b.dataset.aud === AUDIENCE ? "true" : "false"));
-  const hint = $("#aud-hint");
-  if(hint) hint.textContent = AUDIENCE === "patient"
-    ? "Patient explanation — plain language for a non-expert, same evidence and accuracy."
-    : "Clinician brief — structured, cited, for a medical audience.";
 }
 const audienceName = a => (a === "patient" ? "Patient" : "Clinician");
 

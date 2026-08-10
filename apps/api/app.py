@@ -703,6 +703,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "accounts_enabled": accounts_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
             "duel_enabled": live_duel and bool(getattr(svc, "reasoned_answer_format", None)),
             "integrative_enabled": (await _flag_live("integrative_enabled")) and bool(getattr(svc, "integrative_prompt", None)),
+            "dynamic_engines_enabled": (await _flag_live("reasoned_default_enabled")) and bool(getattr(svc, "reasoned_answer_format", None)),
         }
 
     @app.post("/search")
@@ -973,21 +974,21 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         focus = answer_focus_enabled()
         # A/B duel arm: engine="reasoned" routes through the alternate scaffold+decision-gated engine.
         # Flag off (or unknown engine) → plain ask, param ignored (byte-identical, Rule 20).
-        # Engine resolution: explicit "standard" (duel control arm) → standard; explicit "reasoned" →
-        # reasoned when duel or the reasoned-default setting allows; UNSET → the reasoned-default
-        # setting decides (the "default to engine B outside duel mode" behavior).
-        _eng = (body.engine or "").strip()
-        if _eng == "standard":
-            _use_reasoned = False
-        elif _eng == "reasoned":
-            _use_reasoned = (await _flag_live("duel_enabled")) or (await _flag_live("reasoned_default_enabled"))
-        else:
-            _use_reasoned = await _flag_live("reasoned_default_enabled")
-        # Explicit engine="reasoned" (the duel arm) FORCES the reasoned pipeline; auto mode lets the
-        # scaffold call route lookups to the standard engine (dynamic per-question selection).
+        # Engine resolution — explicit values (duel arms + interlock hop chips) force a pipeline;
+        # UNSET + dynamic-selection on → the scaffold call routes per question kind.
         import functools as _ft
-        _ask = (_ft.partial(app.state.service.ask_reasoned, route=(_eng != "reasoned"))
-                if _use_reasoned else app.state.service.ask)
+        _eng = (body.engine or "").strip()
+        _dyn = await _flag_live("reasoned_default_enabled")
+        if _eng == "standard":
+            _ask = app.state.service.ask
+        elif _eng == "understanding" and _dyn:
+            _ask = _ft.partial(app.state.service.ask_reasoned, route=False, force_kind="understanding")
+        elif _eng == "reasoned" and (_dyn or await _flag_live("duel_enabled")):
+            _ask = _ft.partial(app.state.service.ask_reasoned, route=False)
+        elif not _eng and _dyn:
+            _ask = app.state.service.ask_reasoned          # auto: the question picks the engine
+        else:
+            _ask = app.state.service.ask
         # per-question integrative opt-in (double opt-in: live flag AND body.integrative). Steers the
         # search (question hint) + appends the section directive; persisted question stays the original.
         _q, _extra = body.question, None

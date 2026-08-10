@@ -1189,6 +1189,7 @@ let TRIAGE_ENABLED = false;     // guided-intake / triage mode (clarify → rout
 let ACCOUNTS_ENABLED = false;   // accounts + verified-clinician tier + per-answer feedback (W-taxonomy)
 let DUEL_ENABLED = false;       // A/B duel: fresh questions run standard + reasoned engines, user votes
 let INTEGRATIVE_ENABLED = false; // feature flag: the per-question integrative opt-in is offered
+let DYN_ENGINES = false;         // dynamic engine selection on → interlock hop chips render
 let INTEGRATIVE_ON = false;      // the per-question opt-in state (off by default)
 let PANEL_SPECIALISTS = [];      // roster from /config [{id, specialty, default}]
 let PANEL_EXAMPLES = [];         // sample multi-specialty cases seeded into the panel intake
@@ -1223,6 +1224,7 @@ async function loadConfig(){
           // patient mode) still take effect on the next load.
           DUEL_ENABLED = !!f.duel_enabled;
           ACCOUNTS_ENABLED = !!f.accounts_enabled;
+          DYN_ENGINES = !!f.dynamic_engines_enabled;
           // integrative reveals a control row → wired on the next full load (not hot-applied)
         })
         .catch(()=>{});
@@ -1247,6 +1249,7 @@ async function loadConfig(){
     ACCOUNTS_ENABLED = !!c.accounts_enabled;
     DUEL_ENABLED = !!c.duel_enabled;
     INTEGRATIVE_ENABLED = !!c.integrative_enabled;
+    DYN_ENGINES = !!c.dynamic_engines_enabled;
     if(INTEGRATIVE_ENABLED){
       const isel = $("#integsel"), ib = $("#integbtn");
       if(isel) isel.hidden = false;
@@ -3098,6 +3101,7 @@ async function askQuestion(question, opts){
   if(PATIENT_MODE_ENABLED && AUDIENCE === "patient") payload.audience = "patient";
   if(ATTACHMENTS.length) payload.attachments = ATTACHMENTS.slice();
   if(INTEGRATIVE_ENABLED && INTEGRATIVE_ON) payload.integrative = true;   // per-question opt-in
+  if(opts.engine) payload.engine = opts.engine;   // interlock hop: force a specific engine
   if(USER){ payload.user_name = USER.name; payload.user_email = USER.email; }
   if(conv){
     if(THREAD.turns.length) payload.history = threadHistoryPayload();
@@ -3142,8 +3146,10 @@ async function askQuestion(question, opts){
   };
   try{
     if(STREAM_ENABLED){                                   // live agent trace → final answer
-      const data = await streamResearch(payload, ev=>pushTrace(traceEl(), ev), ctrl.signal);
+      let engUsed = null;
+      const data = await streamResearch(payload, ev=>{ if(ev.type==="engine") engUsed = ev.engine; pushTrace(traceEl(), ev); }, ctrl.signal);
       clearTimeout(timer); ATTACHMENTS=[]; renderAttachments();
+      data._engine = engUsed || payload.engine || "standard";
       if(conv) finishTurn(data); else render(data);
       return;
     }
@@ -3195,6 +3201,26 @@ function threadHistoryPayload(){ return THREAD.turns.map(t=>({question:t.questio
   answer:t.answer || (t.clarification ? "(I asked to clarify) "+t.clarification : ""),
   // episodic memory: send the turn's verified findings (text only, capped) so the agent builds on them.
   claims:(t.claims||[]).slice(0,8).map(c=>({text:c.text}))})); }
+// ---- engine interlock (Discover · Understand · Act as one-click hops on the SAME question) ----
+const ENGINE_HOPS = {
+  understanding: ["🧠 Understand why", "the causal model behind this answer"],
+  reasoned:      ["⚡ What should I do", "the decision-first plan"],
+  standard:      ["📚 Just the evidence", "plain adaptive synthesis"],
+};
+function engineHopsMarkup(t){
+  if(!DYN_ENGINES || !t || t._pending || !t.answer) return "";
+  const cur = t._engine || "standard";
+  const hops = Object.entries(ENGINE_HOPS).filter(([k]) => k !== cur);
+  return `<div class="suggest hoprow"><div class="suggest-h">◈ Same question, another lens</div>
+    <div class="suggest-chips">` + hops.map(([k, [l, d]]) =>
+      `<button type="button" class="chip-q hopchip" data-eng="${k}" title="${esc(d)}">${esc(l)}</button>`).join("")
+    + `</div></div>`;
+}
+function wireEngineHops(root, t){
+  root.querySelectorAll(".hopchip").forEach(b => b.addEventListener("click", () =>
+    askQuestion(t.question || CURRENT_Q, {engine: b.dataset.eng, skipRefine: true, skipDuel: true})));
+}
+
 function newConversation(){
   THREAD = {session_id:null, turns:[]};
   GUIDED_REFINED = false;
@@ -3234,6 +3260,9 @@ function renderThread(){
   if(lt && !lt._pending && !lt.clarification && !lt.derived_from_prior){
     const act = document.createElement("div"); act.innerHTML = convoActionsMarkup(lt);
     if(act.firstChild){ out.appendChild(act); wireConvo(act, lt); }
+    const hm = engineHopsMarkup(lt);
+    if(hm){ const hr = document.createElement("div"); hr.innerHTML = hm;
+      out.appendChild(hr); wireEngineHops(hr, lt); }
   }
   const last = out.querySelector(".turn:last-child"); if(last) last.scrollIntoView({behavior:"smooth", block:"start"});
   syncComposerPad();

@@ -1,0 +1,126 @@
+# Engine Primitives — Discover · Understand · Act
+### The design and reasoning behind Noesis's three answer engines
+*(learnings doc, 2026-08 · written as the design landed; markdown text in a .doc for easy reading)*
+
+---
+
+## 1. The founding observation
+
+Noesis's motto — **Discover · Understand · Act** — turned out to be more than branding: it names the
+three distinct *epistemic acts* a clinician performs with knowledge, and each demands a differently
+shaped answer. We had built two engines before noticing the pattern, and the pattern told us what was
+missing:
+
+| Primitive | The question | The epistemic act | Signature artifact |
+|---|---|---|---|
+| **Discover** | *What is known?* | Retrieval + synthesis of evidence | Adaptive evidence summary |
+| **Understand** | *Why is it so? What causes what?* | Building a causal model | Cited causal chain, per-link honesty labels |
+| **Act** | *What should I do?* | Decision-making under constraints | Do now / Do if ⟨trigger⟩ plan |
+
+A trial summary forced into an action plan is mis-shaped; an action plan without the causal model is
+memorization; a causal story without evidence is folklore. One engine cannot serve all three well —
+the *shape of the answer* is part of its correctness.
+
+## 2. The three engines
+
+### 2.1 Discover — the standard engine (retrieval-first)
+The original pipeline: plan search → retrieve → span-verify claims → compose adaptively from whatever
+the evidence supports. Its virtue is **shape-flexibility and serendipity** — the evidence drives the
+structure, and retrieval can surface what nobody thought to ask about. Its measured weakness
+(warrant eval, W5/W6): the loudest topic can dominate, and nothing forces coverage of a branch the
+search never surfaced.
+
+### 2.2 Act — the reasoned engine (decision-first)
+Born from an external critique ("you accumulate citations instead of reasoning like a doctor"),
+validated by our judge panel, then measured before building. A pre-retrieval **scaffold** maps the
+clinical decision space — likely causes / can't-miss / key decisions — **strictly as questions**
+(never conclusions), which steers retrieval to cover every branch while adding zero facts. Compose is
+**decision-gated**: Assessment → Do now → Do if ⟨trigger⟩ → if-unrevealing → uncertainties; priority
+by probability × severity-if-missed × actionability (qualitative — never a computed score); wording
+strength must match evidence tier; a citation must support the *inference*, not just the topic;
+citation volume ≠ importance.
+
+### 2.3 Understand — the understanding engine (causal-model-first)
+The missing middle. WHY/HOW questions get an explicit **causal chain**: core mechanism → A → B → C
+with **every link cited and labeled** — *established / supported / hypothesized* — then "why the
+evidence looks this way", "how the dots connect" (cross-domain shared pathways), and "where the model
+breaks". Its design discipline exists because causal explanation is the most fabrication-prone genre
+in medicine: LLMs love smooth mechanism stories, and the literature itself is littered with plausible
+mechanisms that died in trials. "Biologically plausible" is never allowed to masquerade as
+established; an honest partial model beats a smooth invented one.
+
+First live output (SGLT2i in HF without diabetes) demonstrated the discipline working: the osmotic-
+diuresis link labeled *established*, the NHE-3 mechanism honestly labeled *supported (proposed)* —
+differential honesty within a single chain.
+
+## 3. Dynamic routing — the question picks its engine
+
+**Zero extra LLM calls.** The scaffold call the reasoned engine already makes doubles as the router:
+its first judgment classifies the question — `management | lookup | understanding` — then either
+builds the coverage scaffold (→ Act), falls through to standard (→ Discover), or applies the causal
+contract (→ Understand). Design rules:
+
+- **The LLM owns the classification** (Rule 18) — the kinds are defined in the vertical prompt in
+  clinical language; no keyword heuristics anywhere.
+- **Transparency**: the live trace announces the route ("🧭 Why-question — understanding engine").
+- **Control**: one live setting ("Dynamic engine selection", ⚙ panel) turns the whole router off —
+  reverting to plain standard — with no redeploy.
+- **Explicit forcing**: duel arms and interlock chips pass an explicit engine, which bypasses
+  classification so A/B contrast and user intent stay honest.
+- **Follow-ups** skip the scaffold (the thread already frames the problem, and the coverage brief
+  would interfere with follow-up resolution) and use the standard adaptive compose — unless an
+  engine is explicitly forced (a hop chip mid-thread).
+
+## 4. The invariants shared by all three
+
+1. **Grounding is engine-independent.** Every claim in every engine needs a verbatim quote
+   span-verified in its source. Engines change orchestration and composition contracts — never the
+   trust machinery. (Provenance ≠ correctness: the residual gap — a real quote that doesn't fully
+   entail its sentence — was measured at ~5% by strict audit and is tracked by the W-taxonomy.)
+2. **Scaffolds may steer, never assert.** Any pre-retrieval reasoning emits *questions/coverage
+   targets only*. Parametric priors may direct the search; they may not write the answer.
+3. **The patient-audience directive always wins** over any engine format — per-audience contracts
+   outrank per-engine contracts.
+4. **Format confers authority, so format must be earned.** A "Do now" list and a causal chain both
+   read more confident than prose; each engine carries explicit wording-vs-evidence-tier rules to
+   compensate.
+5. **Everything ships flag-gated and live-controllable** (Rule 20 → the ⚙ settings registry), with
+   the trace showing what ran.
+
+## 5. How we decided — learnings worth keeping
+
+- **Measure before architecting.** The critique that inspired the Act engine proposed a 17-point
+  rebuild around its most vivid failure mode (descriptive→normative). The warrant eval measured that
+  mode at ~5% frequency while coverage gaps ran ~10× higher — the build order changed accordingly, and
+  a two-judge audit later showed the original engine was ~95% sound at the claim level. *Plausible
+  architecture ≠ better answers.*
+- **Votes > vibes.** The A/B duel (blinded, randomized, preference votes into the shared feedback
+  store) exists because "sounds more logical" is untrustworthy — including our own reasoning about
+  our own engines. The duel's explicit arms survive every routing change for exactly this reason.
+- **Fold judgments into calls you already make.** The router costs nothing because the scaffold call
+  existed; the eval judge, the auditor, and user feedback share one W-taxonomy so every signal lands
+  in one store. New capability ≠ new pipeline.
+- **The honest trade-off of reason-first**: coverage and decision-readiness bought with reduced
+  serendipity and a dependence on the model's prior map of the problem. Dynamic routing is the
+  resolution — pay the trade only on the questions where it pays back.
+
+## 6. The interlock — the triad as UX
+
+After any answer, chips offer the *same question through another lens*:
+- **🧠 Understand why** → the causal model behind this answer
+- **⚡ What should I do** → the decision-first plan
+- **📚 Just the evidence** → plain adaptive synthesis
+
+Each hop is an explicit-engine re-ask (a new thread turn, full context kept), making the motto a
+navigable loop: discover facts → build the model → decide — each one click from the others. No
+incumbent (UpToDate/OpenEvidence/Perplexity) has an explicit understanding layer, let alone
+first-class movement between epistemic modes.
+
+## 7. Current state & open threads
+
+- All three engines live in prod; dynamic routing verified both ways (lookup → standard,
+  management → reasoned) and understanding verified on SGLT2i/HF (routing event + all sections +
+  all three link labels).
+- Open: duel-vote accumulation to validate the reasoned bet empirically; per-link causal chains as
+  first-class data (today they're markdown); porting decision-gates into the panel synthesis (C3)
+  once votes justify; the C1 claim→evidence auditor as the entailment layer all engines would share.

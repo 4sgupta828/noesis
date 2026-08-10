@@ -113,7 +113,7 @@ class ResearchService:
             return MultiSourceRetriever(chosen), None
         return MultiSourceRetriever(corpus), (MultiSourceRetriever(aux) if aux else None)
 
-    async def ask_reasoned(self, route: bool = True, **kw):
+    async def ask_reasoned(self, route: bool = True, force_kind: str | None = None, **kw):
         """REASONED engine with DYNAMIC per-question routing. The single scaffold call does double duty
         (zero extra LLM calls): it first CLASSIFIES the question — management/case (differential, workup,
         treatment choice) vs pure evidence LOOKUP (trial results, pharmacokinetics, definitions) — then:
@@ -126,7 +126,24 @@ class ResearchService:
         would interfere with follow-up resolution). Fail-open everywhere — errors → reasoned-no-brief."""
         if not (self.reasoned_scaffold_prompt and self.reasoned_answer_format):
             return await self.ask(**kw)
+        if force_kind == "understanding" and self.understanding_answer_format:
+            # EXPLICIT hop to the understanding engine (interlock chip) — no classification needed;
+            # works mid-thread too (the causal lens on the same question).
+            kw = dict(kw)
+            if self.understanding_query_hint:
+                kw["question"] = (kw.get("question", "") + "\n\n[" + self.understanding_query_hint + "]")
+            kw["answer_format_override"] = self.understanding_answer_format
+            oe = kw.get("on_event")
+            if oe is not None:
+                try:
+                    await oe({"type": "engine", "engine": "understanding", "why": "user-selected"})
+                except Exception:
+                    pass
+            return await self.ask(**kw)
         if kw.get("history"):
+            if not route:   # explicitly forced reasoned (duel arm / hop chip) → keep the decision-gated format
+                kw = dict(kw)
+                kw["answer_format_override"] = self.reasoned_answer_format
             return await self.ask(**kw)
         question = kw.get("question", "")
         on_event = kw.get("on_event")

@@ -607,6 +607,13 @@ async def _gap_processor_loop(dsn: str, vertical: str) -> None:
     embedder = build_embedder(mode=resolve_mode())
     pg = PostgresRetrievalSource(dsn, dim=embedder.dim, table="rs_block")
     connectors = dict(load_active_vertical().connectors)
+    # Evidence Pulse re-stamp hook: re-ingest overwrites block facets (erasing supersession/
+    # retraction stamps) — after each completed job, re-derive stamps from the approved ledger.
+    # THIS thread's own store/pool (the API loop's store must never be awaited from here).
+    currency = None
+    if pulse_enabled():
+        from noesis_kernel.currency import CurrencyStore
+        currency = CurrencyStore(dsn)
     while True:
         try:
             job = await q.claim_one()
@@ -625,6 +632,11 @@ async def _gap_processor_loop(dsn: str, vertical: str) -> None:
                 window={"query": job["query"], "limit": job["limit"]},
                 facet_overrides={"source_country": sc} if sc else None)
             await q.complete(job["id"], n)
+            if currency is not None:
+                try:
+                    await currency.apply_stamps()      # heal any stamps this ingest overwrote
+                except Exception:   # noqa: BLE001 — best-effort; the admin scan is the backstop
+                    pass
         except Exception as e:   # noqa: BLE001 — record + move on
             await q.fail(job["id"], str(e))
 
@@ -1473,6 +1485,36 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             return await cur.sweep_declared(list(getattr(manifest, "lineage", ()) or ()))
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"pulse scan failed: {e}") from e
+
+    @app.post("/admin/pulse/retraction-scan")
+    async def admin_pulse_retraction_scan(x_admin_token: str = Header(default="")) -> dict:
+        """Sweep the corpus's Europe PMC holdings against publisher-declared retractions (P1's
+        first real detector — structural, zero-LLM). Retracted papers get auto-approved `retracted`
+        events (publisher fact = high confidence, A4) and their blocks are excluded from grounding."""
+        cur = _pulse_admin_gate(x_admin_token)
+        from noesis_vertical_medical.retractions import retraction_lineage
+        try:
+            doc_ids = await cur.list_document_ids(prefix="europepmc:")
+            relations = await retraction_lineage(doc_ids)
+            result = await cur.sweep_declared(relations)
+            return {"checked": len(doc_ids), "retracted_found": len(relations), **result}
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"retraction scan failed: {e}") from e
+
+    @app.get("/pulse/recent")
+    async def pulse_recent(limit: int = 20) -> dict:
+        """PUBLIC what-changed feed (spec C3): recent approved change events — the visible proof
+        the corpus stays current. No auth; approved events only; audit metadata redacted."""
+        cur = _currency()
+        if cur is None:
+            raise HTTPException(status_code=404, detail="pulse not enabled")
+        try:
+            events = await cur.list_events(status="approved", limit=min(limit, 50))
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"pulse feed failed: {e}") from e
+        return {"events": [{k: e[k] for k in
+                            ("relation", "old_document_id", "new_document_id", "subjects",
+                             "materiality", "brief_md", "created_at")} for e in events]}
 
     @app.get("/admin/pulse/events")
     async def admin_pulse_events(status: str | None = None, limit: int = 100,

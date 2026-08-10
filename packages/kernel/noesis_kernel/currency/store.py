@@ -155,6 +155,16 @@ class CurrencyStore:
                 f"UPDATE {self._block_table} SET facets = facets - $2 WHERE document_id=$1",
                 old_doc, key)
 
+    async def list_document_ids(self, *, prefix: str, limit: int = 50000) -> list[str]:
+        """Distinct corpus document ids under a source prefix (e.g. 'europepmc:') — the input a
+        detector sweeps. Structural read on the block table."""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"""SELECT DISTINCT document_id FROM {self._block_table}
+                    WHERE document_id LIKE $1 LIMIT $2""", prefix + "%", limit)
+        return [r["document_id"] for r in rows]
+
     # ---- P0 sweep: curator-declared lineage → approved events + stamps -------------------------
 
     async def sweep_declared(self, lineage: list[dict]) -> dict:

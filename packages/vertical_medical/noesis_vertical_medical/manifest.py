@@ -27,7 +27,7 @@ from .triage import MEDICAL_TRIAGE_PROMPT
 from .reasoned import REASONED_SCAFFOLD_PROMPT, REASONED_ANSWER_FORMAT
 from .integrative import INTEGRATIVE_DIRECTIVE, INTEGRATIVE_QUERY_HINT
 from .understanding import UNDERSTANDING_ANSWER_FORMAT, UNDERSTANDING_QUERY_HINT
-from .web_domains import TRUSTED_WEB_DOMAINS
+from .web_domains import TRUSTED_WEB_DOMAINS, WEB_DOMAIN_FACETS
 from .authority import MedicalAuthorityPolicy
 from .connector import ClinicalTrialsConnector
 from .openfda import OpenFdaConnector
@@ -91,6 +91,7 @@ def build_manifest() -> VerticalManifest:
         understanding_answer_format=UNDERSTANDING_ANSWER_FORMAT,
         understanding_query_hint=UNDERSTANDING_QUERY_HINT,
         web_domains=TRUSTED_WEB_DOMAINS,
+        web_domain_facets=WEB_DOMAIN_FACETS,
         extraction_lenses=(
             "interventions/treatments/drugs studied",
             "outcomes, findings and effect sizes",

@@ -29,7 +29,11 @@ class ExaWebSearch:
             "query": query,
             "numResults": max_results,
             "type": "auto",                       # let Exa pick neural vs keyword
-            "contents": {"text": {"maxCharacters": 4000}},   # inline page text for provenance
+            # text: inline page body for provenance. highlights: QUERY-AWARE extracts pulled from
+            # anywhere in the page — the discriminating paragraph of a long guideline surfaces even
+            # when it sits beyond the text-budget truncation window.
+            "contents": {"text": {"maxCharacters": 4000},
+                         "highlights": {"numSentences": 5, "highlightsPerUrl": 2, "query": query}},
         }
         if self._include_domains:
             payload["includeDomains"] = self._include_domains   # trusted-sources-only
@@ -46,5 +50,7 @@ class ExaWebSearch:
                 title=r.get("title") or r.get("url", ""),
                 snippet=(text[:400] if text else (r.get("summary") or "")),
                 body=text or r.get("summary") or "",
+                published=r.get("publishedDate") or None,
+                highlights=tuple(h for h in (r.get("highlights") or []) if h and h.strip()),
             ))
         return out

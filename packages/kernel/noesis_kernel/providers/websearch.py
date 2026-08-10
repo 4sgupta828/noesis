@@ -19,6 +19,8 @@ class WebResult:
     title: str
     snippet: str
     body: str | None = None
+    published: str | None = None       # ISO-ish publish date when the provider reports one
+    highlights: tuple[str, ...] = ()   # query-aware extracts (Exa) — spans from ANYWHERE in the page
 
 
 @runtime_checkable

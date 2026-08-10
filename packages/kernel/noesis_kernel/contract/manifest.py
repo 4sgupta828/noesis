@@ -123,6 +123,10 @@ class VerticalManifest:
     # authoritative gov/db sources). When set, web search is restricted to these — the corpus is
     # augmented only with high-quality sources, never the open web. Empty → open web.
     web_domains: tuple[str, ...] = ()
+    # Optional domain → facets map stamped on web-retrieved blocks (venue authority as structural
+    # metadata: e.g. a guideline body's pages carry pub_type "practice guideline"), so the vertical's
+    # evidence classifier and authority pyramid grade web evidence like corpus evidence. Empty → none.
+    web_domain_facets: dict = field(default_factory=dict)
     # Optional extraction LENSES (domain vocabulary) for the claims-first pipeline: the aspects the
     # extractor should cover per atom (e.g. interventions, outcomes, safety). Passed as a checklist
     # in ONE extraction call (not fanned out). Empty → generic "extract every fact". Kernel-neutral.

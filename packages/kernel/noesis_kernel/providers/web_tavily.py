@@ -37,5 +37,6 @@ class TavilyWebSearch:
                 title=r.get("title", ""),
                 snippet=r.get("content", ""),
                 body=r.get("raw_content") or r.get("content", ""),
+                published=r.get("published_date") or None,
             ))
         return out

@@ -92,8 +92,10 @@ DECISION GATES (apply to every recommendation before it ships):
   severity), the extrapolation must be named where the recommendation is made — not only in a
   caveats section.
 - MATCH THE QUESTION'S STRUCTURE: if the question names time horizons or enumerates sub-questions,
-  organize the answer around THEM (add sub-headings if needed) rather than forcing this template's
-  default sections.
+  organize the answer around THEM rather than forcing this template's default sections — and render
+  each of those sections as a markdown "## " heading (exactly like the template's own sections),
+  NEVER as a bold paragraph lead: an answer of bold-led paragraphs reads as an unstructured wall
+  of text in the product.
 - A rare-but-scary condition gets a CONDITIONAL check with its trigger, not domination of the answer.
 - Citation volume is not importance: never let the branch with the most retrieved papers crowd out a
   more decision-relevant branch. Cover every materially plausible, actionable branch or say why not.

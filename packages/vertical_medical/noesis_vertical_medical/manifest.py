@@ -29,6 +29,8 @@ from .integrative import INTEGRATIVE_DIRECTIVE, INTEGRATIVE_QUERY_HINT
 from .understanding import UNDERSTANDING_ANSWER_FORMAT, UNDERSTANDING_QUERY_HINT
 from .web_domains import TRUSTED_WEB_DOMAINS, WEB_DOMAIN_FACETS
 from .global_guidelines import declared_lineage
+from .pulse import CANONIZE_TOPIC_PROMPT, WATCH_TOPIC_PROMPT
+from .coverage import COVERED_CONDITIONS
 from .authority import MedicalAuthorityPolicy
 from .connector import ClinicalTrialsConnector
 from .openfda import OpenFdaConnector
@@ -94,6 +96,9 @@ def build_manifest() -> VerticalManifest:
         web_domains=TRUSTED_WEB_DOMAINS,
         web_domain_facets=WEB_DOMAIN_FACETS,
         lineage=tuple(declared_lineage()),
+        watch_topic_prompt=WATCH_TOPIC_PROMPT,
+        watch_canonize_prompt=CANONIZE_TOPIC_PROMPT,
+        watch_topic_seed=tuple(sorted({c["name"] for c in COVERED_CONDITIONS})),
         extraction_lenses=(
             "interventions/treatments/drugs studied",
             "outcomes, findings and effect sizes",

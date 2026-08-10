@@ -436,10 +436,16 @@ class PulseEventIn(BaseModel):
 
 class WatchIn(BaseModel):
     topic: str
+    source: str = "manual"     # manual (free text → canonicalized) | suggested (already canonical)
 
 
 class SeenIn(BaseModel):
     event_id: str
+
+
+class TopicsIn(BaseModel):
+    question: str = ""
+    answer: str = ""
 
 
 class Citation(BaseModel):
@@ -1661,11 +1667,33 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
 
     @app.post("/pulse/watch")
     async def pulse_watch_add(body: WatchIn, x_noesis_token: str = Header(default="")) -> dict:
-        """Watch a topic: material approved change events matching it appear in the Pulse inbox."""
+        """Watch a topic. FREE-TEXT topics are canonicalized against the stable registry first
+        ("afib" → "atrial fibrillation") so watches actually match event subjects; topics chosen
+        from the suggested chips are already canonical and skip the call. Fails open to raw text."""
         cur, user = await _pulse_user(x_noesis_token)
+        topic = (body.topic or "").strip()
+        if body.source == "manual" and topic:
+            canon_prompt = getattr(load_active_vertical(), "watch_canonize_prompt", None)
+            if canon_prompt:
+                try:
+                    if app.state.service is None:
+                        app.state.service = build_default_service()
+
+                    class _Canon(BaseModel):
+                        topic: str = ""
+                    registry = await _topic_registry(cur)
+                    comp = await app.state.service.llm.complete(
+                        system=canon_prompt + _registry_block(registry),
+                        messages=[{"role": "user", "content": topic[:200]}],
+                        response_format=_Canon, max_tokens=60)
+                    canon = (comp.parsed.topic or "").strip()
+                    if canon:
+                        topic = (await cur.ensure_topics([canon]))[0]
+                except Exception:   # noqa: BLE001 — canonicalization is an enhancer; raw text stands
+                    pass
         try:
-            await cur.add_watch(user_id=user["id"], topic=body.topic)
-            return {"watches": await cur.list_watches(user_id=user["id"])}
+            await cur.add_watch(user_id=user["id"], topic=topic, source=body.source or "manual")
+            return {"watches": await cur.list_watches(user_id=user["id"]), "stored_as": topic}
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:   # noqa: BLE001
@@ -1689,6 +1717,51 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     "items": await cur.inbox(user_id=user["id"])}
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"inbox failed: {e}") from e
+
+    async def _topic_registry(cur):
+        """The canonical topic registry, seeded once from the vertical's covered-condition names —
+        the STABILITY substrate: LLM calls prefer exact reuse, so repeated runs converge."""
+        topics = await cur.list_topics()
+        if not topics:
+            seed = list(getattr(load_active_vertical(), "watch_topic_seed", ()) or ())
+            if seed:
+                await cur.ensure_topics(seed, source="seed")
+                topics = await cur.list_topics()
+        return topics
+
+    def _registry_block(topics: list[str]) -> str:
+        return ("\n\nEXISTING CANONICAL TOPICS (prefer exact verbatim reuse):\n"
+                + "\n".join(f"- {t}" for t in topics[:400])) if topics else ""
+
+    @app.post("/pulse/topics")
+    async def pulse_topics(body: TopicsIn, x_noesis_token: str = Header(default="")) -> dict:
+        """Suggest 2-5 WATCHABLE topics for a Q&A (LLM-owned judgment, Rule 18 — durable subjects,
+        never patient specifics), converged onto the canonical registry: existing entries are
+        reused verbatim; a genuinely novel subject is minted ONCE and becomes the stable form.
+        User-initiated (the watch picker), token-gated, one small call."""
+        cur, user = await _pulse_user(x_noesis_token)
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        prompt = getattr(load_active_vertical(), "watch_topic_prompt", None)
+        if not prompt:
+            return {"topics": []}
+
+        class _Topics(BaseModel):
+            topics: list[str] = []
+        try:
+            registry = await _topic_registry(cur)
+            comp = await svc.llm.complete(
+                system=prompt + _registry_block(registry),
+                messages=[{"role": "user", "content":
+                           f"QUESTION:\n{(body.question or '')[:2000]}\n\nANSWER:\n{(body.answer or '')[:4000]}"}],
+                response_format=_Topics, max_tokens=300)
+            raw = [t.strip() for t in (comp.parsed.topics or []) if t and t.strip()][:5]
+            return {"topics": await cur.ensure_topics(raw)}   # registry canonical form wins
+        except Exception as e:   # noqa: BLE001 — picker degrades to free-text
+            _log = __import__("logging").getLogger("api.pulse")
+            _log.warning("watch-topic suggestion failed: %r", e)
+            return {"topics": []}
 
     @app.post("/pulse/seen")
     async def pulse_seen(body: SeenIn, x_noesis_token: str = Header(default="")) -> dict:

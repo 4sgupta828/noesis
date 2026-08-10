@@ -47,7 +47,17 @@ CREATE TABLE IF NOT EXISTS noesis_watch_seen (
     seen_at  timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (user_id, event_id)
 );
+CREATE TABLE IF NOT EXISTS noesis_topic (
+    label      text PRIMARY KEY,          -- canonical form; lowercase-unique via norm below
+    norm       text NOT NULL UNIQUE,
+    source     text NOT NULL DEFAULT 'seed',   -- seed | llm
+    created_at timestamptz NOT NULL DEFAULT now()
+);
 """
+
+
+def _topic_norm(label: str) -> str:
+    return " ".join((label or "").lower().split())
 
 
 def _event_id(relation: str, old: str, new: str) -> str:
@@ -182,6 +192,35 @@ class CurrencyStore:
                 f"""SELECT DISTINCT document_id FROM {self._block_table}
                     WHERE document_id LIKE $1 LIMIT $2""", prefix + "%", limit)
         return [r["document_id"] for r in rows]
+
+    # ---- canonical topic registry (P1) ---------------------------------------------------------
+    # STABILITY CONTRACT: LLM runs never mint variants of an existing topic — suggesters/
+    # canonicalizers are shown this registry and must prefer exact reuse; a genuinely novel topic
+    # is inserted ONCE and becomes the stable form for every later run and user.
+
+    async def list_topics(self, *, limit: int = 500) -> list[str]:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT label FROM noesis_topic ORDER BY created_at LIMIT $1", limit)
+        return [r["label"] for r in rows]
+
+    async def ensure_topics(self, labels: list[str], *, source: str = "llm") -> list[str]:
+        """Insert missing topics (case/whitespace-insensitive) and return the CANONICAL label for
+        each input — an existing registry entry wins over the incoming variant."""
+        pool = await self._get_pool()
+        out: list[str] = []
+        async with pool.acquire() as conn:
+            for lb in labels or []:
+                lb = (lb or "").strip()[:120]
+                if not lb:
+                    continue
+                row = await conn.fetchrow(
+                    """INSERT INTO noesis_topic (label, norm, source) VALUES ($1,$2,$3)
+                       ON CONFLICT (norm) DO UPDATE SET norm=EXCLUDED.norm
+                       RETURNING label""", lb, _topic_norm(lb), source)
+                out.append(row["label"] if row else lb)
+        return out
 
     # ---- watches + inbox (P1) ------------------------------------------------------------------
 

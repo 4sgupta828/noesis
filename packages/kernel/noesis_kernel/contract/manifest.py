@@ -127,6 +127,15 @@ class VerticalManifest:
     # metadata: e.g. a guideline body's pages carry pub_type "practice guideline"), so the vertical's
     # evidence classifier and authority pyramid grade web evidence like corpus evidence. Empty → none.
     web_domain_facets: dict = field(default_factory=dict)
+    # Optional Evidence Pulse watch-topic prompts (LLM-owned judgment, Rule 18): suggest watchable
+    # subjects for a Q&A / canonicalize a free-text topic — both against the stable topic registry
+    # (repeated runs must converge on the same canonical strings, never variants). None → the
+    # watch picker falls back to raw free-text only.
+    watch_topic_prompt: str | None = None
+    watch_canonize_prompt: str | None = None
+    # Optional seed vocabulary for the canonical topic registry (e.g. the vertical's covered-
+    # condition names) — loaded once into the registry on first Pulse topic use.
+    watch_topic_seed: tuple = ()
     # Optional CURATOR-DECLARED document lineage (Evidence Pulse P0): a tuple of
     # {old_document_id, new_document_id, relation, subjects} dicts in the kernel currency
     # vocabulary (superseded_by · retracted · amended_by · clarified_by). Highest-confidence,

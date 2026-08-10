@@ -190,6 +190,8 @@
   .attns .consent{display:flex;align-items:flex-start;gap:.5rem;font-size:.74rem;color:var(--muted);
     width:100%;line-height:1.4;margin-top:.1rem;}
   .attns .consent input{accent-color:var(--gold);margin-top:.15rem;flex:none;}
+  .attns .consent{align-items:center;white-space:nowrap;}
+  .consent-q{color:var(--muted);opacity:.7;font-size:.7rem;cursor:help;}
 
   /* identity gate (name + email at landing) */
   .idmodal[hidden]{display:none;}
@@ -2270,8 +2272,8 @@ function renderAttachments(){
                            : esc(a.name||"file");
       return `<span class="chip">${isText?"📄":"📎"} ${label}<button class="x" data-i="${i}" title="Remove" aria-label="Remove">×</button></span>`;
     }).join("") +
-    `<label class="consent"><input type="checkbox" id="consent">
-       Images/documents are sent to the AI model for analysis. I confirm they contain <b>no identifying patient information</b> (faces, names, IDs).</label>`;
+    `<label class="consent" title="Images/documents are sent to the AI model for analysis. By checking, you confirm they contain no identifying patient information — faces, names, IDs.">
+       <input type="checkbox" id="consent"> No identifying patient info <span class="consent-q">ⓘ</span></label>`;
   box.querySelectorAll(".x").forEach(b=>b.addEventListener("click",()=>{ ATTACHMENTS.splice(+b.dataset.i,1); renderAttachments(); }));
 }
 $("#attach").addEventListener("click", ()=>$("#file").click());

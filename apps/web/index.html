@@ -3214,6 +3214,25 @@ function threadHistoryPayload(){ return THREAD.turns.map(t=>({question:t.questio
   answer:t.answer || (t.clarification ? "(I asked to clarify) "+t.clarification : ""),
   // episodic memory: send the turn's verified findings (text only, capped) so the agent builds on them.
   claims:(t.claims||[]).slice(0,8).map(c=>({text:c.text}))})); }
+// Recover a mid-stream-dropped answer: the server finishes + persists it, so poll the sessions list
+// for THIS question (newest first) and return it shaped like a research result. null → not found.
+async function recoverSession(question, tries, gapMs){
+  for(let i = 0; i < tries; i++){
+    await new Promise(r => setTimeout(r, gapMs));
+    try{
+      const {sessions} = await (await fetch("/sessions?limit=10&kind=research")).json();
+      const hit = (sessions || []).find(s => (s.question || "").trim() === question.trim()
+        && (Date.now() - new Date(s.created_at).getTime()) < 20 * 60 * 1000);
+      if(hit){
+        const row = await (await fetch("/sessions/" + encodeURIComponent(hit.id))).json();
+        const t = (row.thread && row.thread[0]) || row;
+        return {...t, question, session_id: row.id, grounded: t.grounded ?? row.grounded};
+      }
+    }catch(e){ /* keep polling */ }
+  }
+  return null;
+}
+
 // ---- engine interlock (Discover · Understand · Act as one-click hops on the SAME question) ----
 const ENGINE_HOPS = {
   understanding: ["🧠 Understand why", "the causal model behind this answer"],

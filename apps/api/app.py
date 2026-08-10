@@ -943,8 +943,10 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                         break
                     yield f"data: {json.dumps(ev)}\n\n"
             finally:
-                if not task.done():
-                    task.cancel()
+                # Client disconnect must NOT cancel the research — the run completes and PERSISTS the
+                # session server-side, so a dropped connection becomes a delayed answer the FE recovers
+                # by polling /sessions (instead of lost work + an error). Completed task → no-op.
+                pass
 
         return StreamingResponse(gen(), media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
@@ -1128,8 +1130,10 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                         break
                     yield f"data: {json.dumps(ev)}\n\n"
             finally:
-                if not task.done():
-                    task.cancel()
+                # Client disconnect must NOT cancel the research — the run completes and PERSISTS the
+                # session server-side, so a dropped connection becomes a delayed answer the FE recovers
+                # by polling /sessions (instead of lost work + an error). Completed task → no-op.
+                pass
 
         return StreamingResponse(gen(), media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
@@ -1452,6 +1456,28 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"settings store error: {e}") from e
         return await _settings_payload()
+
+    @app.get("/admin/stream-test")
+    async def admin_stream_test(minutes: int = 7, x_admin_password: str = Header(default="")):
+        """LLM-free SSE endurance test: pings every 15s + a tick each minute for `minutes`. Lets us
+        measure exactly if/when the edge cuts an actively-pinging stream (diagnosing mid-answer drops)
+        without spending a single model call."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        from fastapi.responses import StreamingResponse
+
+        async def gen():
+            yield ": open\n\n"
+            total = max(1, min(minutes, 20)) * 60
+            for sec in range(0, total, 15):
+                await asyncio.sleep(15)
+                if (sec + 15) % 60 == 0:
+                    yield f"data: {{\"type\":\"tick\",\"minute\":{(sec+15)//60}}}\n\n"
+                else:
+                    yield ": ping\n\n"
+            yield "data: {\"type\":\"done\"}\n\n"
+        return StreamingResponse(gen(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
 
     @app.get("/admin/feedback")
     async def admin_feedback(limit: int = 25, x_admin_token: str = Header(default="")) -> dict:

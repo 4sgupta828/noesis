@@ -1488,18 +1488,41 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
 
     @app.post("/admin/pulse/retraction-scan")
     async def admin_pulse_retraction_scan(x_admin_token: str = Header(default="")) -> dict:
-        """Sweep the corpus's Europe PMC holdings against publisher-declared retractions (P1's
-        first real detector — structural, zero-LLM). Retracted papers get auto-approved `retracted`
-        events (publisher fact = high confidence, A4) and their blocks are excluded from grounding."""
+        """Start a BACKGROUND sweep of the corpus's Europe PMC holdings against publisher-declared
+        retractions (P1's first real detector — structural, zero-LLM). Backgrounded because ~25
+        batched API calls outlive the edge's request window (a synchronous scan gets its response
+        cut). Poll GET /admin/pulse/retraction-scan for the result; retracted papers get
+        auto-approved `retracted` events (publisher fact = high confidence, A4) and their blocks
+        are excluded from grounding."""
         cur = _pulse_admin_gate(x_admin_token)
-        from noesis_vertical_medical.retractions import retraction_lineage
-        try:
-            doc_ids = await cur.list_document_ids(prefix="europepmc:")
-            relations = await retraction_lineage(doc_ids)
-            result = await cur.sweep_declared(relations)
-            return {"checked": len(doc_ids), "retracted_found": len(relations), **result}
-        except Exception as e:   # noqa: BLE001
-            raise HTTPException(status_code=502, detail=f"retraction scan failed: {e}") from e
+        state = getattr(app.state, "pulse_scan", None)
+        if state and state.get("status") == "running":
+            return {"status": "already_running", "started_at": state.get("started_at")}
+        import datetime as _dt
+        app.state.pulse_scan = {"status": "running",
+                                "started_at": _dt.datetime.utcnow().isoformat() + "Z"}
+
+        async def _run():
+            from noesis_vertical_medical.retractions import retraction_lineage
+            try:
+                doc_ids = await cur.list_document_ids(prefix="europepmc:")
+                relations = await retraction_lineage(doc_ids)
+                result = await cur.sweep_declared(relations)
+                app.state.pulse_scan = {"status": "done",
+                                        "checked": len(doc_ids),
+                                        "retracted_found": len(relations), **result,
+                                        "finished_at": _dt.datetime.utcnow().isoformat() + "Z"}
+            except Exception as e:   # noqa: BLE001
+                app.state.pulse_scan = {"status": "failed", "error": str(e)[:300]}
+
+        app.state.pulse_scan_task = asyncio.create_task(_run())   # ref kept → not GC'd
+        return {"status": "started"}
+
+    @app.get("/admin/pulse/retraction-scan")
+    async def admin_pulse_retraction_status(x_admin_token: str = Header(default="")) -> dict:
+        """Status/result of the latest retraction sweep on THIS replica."""
+        _pulse_admin_gate(x_admin_token)
+        return getattr(app.state, "pulse_scan", None) or {"status": "never_run"}
 
     @app.get("/pulse/recent")
     async def pulse_recent(limit: int = 20) -> dict:

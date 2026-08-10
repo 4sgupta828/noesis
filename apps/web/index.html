@@ -729,6 +729,25 @@
   .suggest{margin:.6rem 0 .4rem;padding:1rem 1.15rem;border:1px solid var(--hair);border-radius:14px;background:var(--panel2);}
   .suggest-h{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:.7rem;}
   .suggest-loading{font-size:.82rem;color:var(--muted);}
+  /* "Where next" — the ONE diverging-paths block: follow-up chips (primary) + lens hops (subordinate
+     dashed-rule row). The slim transform row above it is deliberately quieter than both. */
+  .wn-lens{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-top:.85rem;padding-top:.75rem;
+    border-top:1px dashed var(--hair);}
+  .wn-lenslbl{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);}
+  .hopchip.mini{font-size:.74rem;padding:.3rem .7rem;opacity:.92;}
+  .xformrow{display:flex;gap:.55rem;align-items:center;flex-wrap:wrap;margin:1rem 0 .3rem;}
+  .xformrow .xlbl{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);}
+  .xbtn{font-family:var(--mono);font-size:.74rem;cursor:pointer;background:transparent;
+    border:1px solid var(--hair);border-radius:999px;padding:.32rem .75rem;color:var(--muted);}
+  .xbtn:hover{color:var(--ink);border-color:var(--gold);}
+  .xbtn:disabled{opacity:.55;cursor:default;}
+  .xhint{font-size:.76rem;color:var(--muted);}
+  .xitem.expanded{display:block;flex-basis:100%;border:1px solid var(--hair);border-radius:12px;
+    padding:.8rem .95rem;margin-top:.35rem;}
+  .xitem.expanded video{display:block;max-width:100%;border-radius:8px;margin:.55rem 0;}
+  .xformrow>details.plain-d{flex-basis:100%;}
+  .gapfix.infoot{margin:1rem 0 .1rem;padding:.65rem .85rem;border-left-color:var(--hair);background:transparent;}
+  .gapfix.infoot .gapfix-hint{margin-bottom:.5rem;}
   .suggest-chips{display:flex;flex-direction:column;gap:.5rem;}
   .chip-q{text-align:left;font-family:inherit;font-size:.92rem;line-height:1.4;color:var(--ink);cursor:pointer;
     background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:.6rem .8rem;transition:border-color .15s,color .15s;}
@@ -1676,15 +1695,19 @@ function render(data, target, opts){
       </article>`;
     }).join("");
     const ngaps = (data.coverage_gaps||[]).length;
+    // strong answer → "strengthen" lives INSIDE the dossier (one less box in the bottom stack);
+    // weak answer → it stands alone below, prominent (see next block)
+    const weakEv = !data.grounded || ngaps || n < 2;
+    const gapFoot = (GAP_ENABLED && !weakEv) ? gapPanelMarkup(false, true) : "";
     evBits.push(`<details class="evblock" id="evblock">
       <summary><h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}${ngaps?` · <span class="evgaps">${ngaps} gap${ngaps===1?"":"s"}</span>`:""}<span class="evtoggle"></span></h4>
         <div class="evhint">The passages this answer is built on — each shows a quote located in its cited source.</div></summary>
-      <div class="evbody">${gapsHtml}${cards}</div>
+      <div class="evbody">${gapsHtml}${cards}${gapFoot}</div>
     </details>`);
   }
   if(GAP_ENABLED){
     const weak = !data.grounded || (data.coverage_gaps||[]).length || n < 2;
-    evBits.push(gapPanelMarkup(weak));
+    if(weak || !n) evBits.push(gapPanelMarkup(weak));
   }
   // DIAGNOSTICS joins the same bottom-box cluster (Evidence · Strengthen · Diagnostics) so the three
   // read as one consistent set of left-highlighted boxes. Grounding meta, collapsed by default.
@@ -1791,14 +1814,15 @@ function diagTraceMarkup(dg){
   const failsHtml = fails ? `<div class="dgrow"><span class="dglbl bad">Failures</span><ul class="dgfails">${fails}</ul></div>` : "";
   return `<div class="diagtrace">${funnel}${chipsHtml}${turnsHtml}${failsHtml}</div>`;
 }
-function gapPanelMarkup(weak){
-  // weak = under-evidenced (not grounded / stated gaps / thin / no direct evidence). When the
-  // answer looks solid we still OFFER gap-fill (an answer can always be strengthened), but with
-  // softer copy so we never wrongly imply a good answer is inadequate.
+function gapPanelMarkup(weak, infoot){
+  // weak = under-evidenced (not grounded / stated gaps / thin / no direct evidence) → the panel
+  // stands ALONE and prominent, because filling gaps IS the top value action for that answer.
+  // Strong answers get the soft variant tucked INSIDE the evidence dossier (infoot) so it's
+  // available without claiming a slot in the bottom stack.
   const hint = weak
     ? "This question is under-evidenced — the answer may not directly address it. Find high-quality sources to add to the corpus so it's answerable next time; the corpus heals itself."
     : "Want deeper or more authoritative evidence behind this answer? Suggest high-quality sources to add to the corpus.";
-  return `<div class="gapfix${weak?"":" soft"}" id="gapfix">
+  return `<div class="gapfix${weak?"":" soft"}${infoot?" infoot":""}" id="gapfix">
     <div class="gapfix-h">◈ ${weak?"Fill the evidence gaps":"Strengthen the evidence"}</div>
     <div class="gapfix-hint">${hint}</div>
     <button type="button" class="vbtn" id="gapgo">◈ Suggest sources to add</button>
@@ -1812,32 +1836,34 @@ function wireGap(root, data){
 // CONVERSATION-LEVEL actions box: briefing video + explain-in-plain-language. Rendered once (per
 // answer in single mode, per CONVERSATION at the thread bottom). The two share one compact box.
 function convoActionsMarkup(data){
-  const bits = [];
-  // briefing video — existing player if a video was generated, else the generate affordance
+  // Generated ARTIFACTS keep full treatment (they're content); un-generated affordances collapse
+  // into ONE slim row of quiet pill-buttons — transforms of this answer, deliberately subordinate
+  // to the "Where next" block that follows (decluttering: 2 boxes → 1 line).
+  const boxes = [], slim = [];
   if(data.video_filename){
-    bits.push(`<div class="vid" id="vid">
+    boxes.push(`<div class="vid" id="vid">
       <div class="vhint" id="vhint">🎬 ${esc(data.video_title||"Briefing video")}${data.video_duration?" · "+Math.round(data.video_duration)+"s":""}</div>
       <video controls preload="metadata" src="/video/file/${encodeURIComponent(data.video_filename)}"
         onerror="this.insertAdjacentHTML('afterend','<div class=&quot;vhint&quot;>This video is no longer available.</div>');this.remove();"></video>
       ${VIDEO_ENABLED?`<button type="button" class="vbtn" id="vgo" style="margin-top:.6rem">↻ Regenerate briefing video</button>`:""}
     </div>`);
   } else if(VIDEO_ENABLED && data.grounded){
-    bits.push(`<div class="vid" id="vid">
-      <button type="button" class="vbtn" id="vgo">▶ Generate briefing video</button>
-      <div class="vhint" id="vhint">A ~60-second clinical evidence briefing on this conversation — for clinicians and researchers, not patients. Takes ~2 minutes.</div>
-    </div>`);
+    slim.push(`<span class="xitem" id="vid"><button type="button" class="xbtn" id="vgo"
+      title="A ~60-second clinical evidence briefing on this conversation — for clinicians, not patients. Takes ~2 minutes.">▶ Briefing video</button>
+      <span class="xhint vhint" id="vhint" hidden></span></span>`);
   }
-  // plain-language explanation — saved copy if present, else an on-demand button
   if(data.layman_answer){
-    bits.push(`<details class="plain plain-d"><summary class="plain-h">◍ In plain language</summary>
+    boxes.push(`<details class="plain plain-d"><summary class="plain-h">◍ In plain language</summary>
       <div class="plain-b md">${mdToHtml(data.layman_answer)}</div></details>`);
   } else if(LAYMAN_ENABLED && data.grounded && data.audience !== "patient"){
-    bits.push(`<div class="plain" id="plain">
-      <button type="button" class="vbtn" id="plaingo">◍ Explain in plain language</button>
-      <div class="plain-hint">The same answer, re-explained for a patient — plain words, same essence, no new claims.</div>
-    </div>`);
+    slim.push(`<span class="xitem" id="plain"><button type="button" class="xbtn" id="plaingo"
+      title="The same answer, re-explained for a patient — plain words, same essence, no new claims.">◍ Plain language</button>
+      <span class="xhint plain-hint" hidden></span></span>`);
   }
-  return bits.length ? `<div class="addons convobox">${bits.join("")}</div>` : "";
+  const out = [];
+  if(boxes.length) out.push(`<div class="addons convobox">${boxes.join("")}</div>`);
+  if(slim.length) out.push(`<div class="xformrow"><span class="xlbl">This answer, another format</span>${slim.join("")}</div>`);
+  return out.join("");
 }
 function wireConvo(target, data){
   const vgo = target.querySelector("#vgo"); if(vgo) vgo.addEventListener("click", ()=>generateVideo(target));
@@ -1941,6 +1967,7 @@ async function generatePlain(root){
   const btn = root.querySelector("#plaingo");
   const hint = panel.querySelector(".plain-hint");
   btn.disabled = true; btn.textContent = "Explaining…";
+  if(hint) hint.hidden = false;
   try{
     const r = await fetch("/explain",{method:"POST",headers:{"content-type":"application/json"},
       body:JSON.stringify(LAST)});
@@ -1951,8 +1978,8 @@ async function generatePlain(root){
     panel.outerHTML = `<details class="plain plain-d" open><summary class="plain-h">◍ In plain language</summary>
       <div class="plain-b md">${mdToHtml(explanation)}</div></details>`;
   }catch(e){
-    btn.disabled = false; btn.textContent = "◍ Explain in plain language";
-    if(hint) hint.textContent = "Couldn't generate: "+(e.message||e);
+    btn.disabled = false; btn.textContent = "◍ Plain language";
+    if(hint){ hint.hidden = false; hint.textContent = "Couldn't generate: "+(e.message||e); }
   }
 }
 
@@ -2187,6 +2214,8 @@ async function generateVideo(root){
   const hint = panel.querySelector("#vhint") || panel.querySelector(".vhint");
   const prevLabel = btn.textContent;
   btn.disabled = true; btn.textContent = "Generating…";
+  panel.classList.add("expanded");                 // slim row item → block while working
+  hint.hidden = false;
   hint.textContent = "Storyboarding, narrating, and assembling the briefing… (~2 min)";
   try{
     const r = await fetch("/video/generate",{method:"POST",headers:{"content-type":"application/json"},
@@ -2209,8 +2238,8 @@ async function generateVideo(root){
     }
     throw new Error("timed out waiting for the video");
   }catch(e){
-    btn.disabled = false; btn.textContent = prevLabel.includes("Regenerate") ? "↻ Regenerate briefing video" : "▶ Generate briefing video";
-    hint.textContent = "Couldn't generate the video: "+(e.message||e);
+    btn.disabled = false; btn.textContent = prevLabel.includes("Regenerate") ? "↻ Regenerate briefing video" : "▶ Briefing video";
+    hint.hidden = false; hint.textContent = "Couldn't generate the video: "+(e.message||e);
   }
 }
 
@@ -3272,14 +3301,24 @@ const ENGINE_HOPS = {
   reasoned:      ["⚡ What should I do", "the decision-first plan"],
   standard:      ["📚 Just the evidence", "plain adaptive synthesis"],
 };
-function engineHopsMarkup(t){
-  if(!DYN_ENGINES || !t || t._pending || !t.answer) return "";
-  const cur = t._engine || "standard";
-  const hops = Object.entries(ENGINE_HOPS).filter(([k]) => k !== cur);
-  return `<div class="suggest hoprow"><div class="suggest-h">◈ Same question, another lens</div>
-    <div class="suggest-chips">` + hops.map(([k, [l, d]]) =>
-      `<button type="button" class="chip-q hopchip" data-eng="${k}" title="${esc(d)}">${esc(l)}</button>`).join("")
-    + `</div></div>`;
+// ONE "Where next" block hosts every diverging path forward: follow-up questions (the primary
+// engagement driver — real new content, filled async by loadSuggestions) + the engine-lens hops
+// (same question, different reasoning mode) as a subordinate second row. One header, one box —
+// replaces the two separate stacked boxes that made the bottom feel cluttered.
+function whereNextMarkup(t){
+  const lens = (()=>{
+    if(!DYN_ENGINES || !t || t._pending || !t.answer) return "";
+    const cur = t._engine || "standard";
+    const hops = Object.entries(ENGINE_HOPS).filter(([k]) => k !== cur);
+    return `<div class="wn-lens"><span class="wn-lenslbl">Same question, another lens</span>` +
+      hops.map(([k, [l, d]]) =>
+        `<button type="button" class="chip-q hopchip mini" data-eng="${k}" title="${esc(d)}">${esc(l)}</button>`).join("")
+      + `</div>`;
+  })();
+  const follow = (SUGGEST_ENABLED && t && t.answer)
+    ? `<div id="wn-follow"><div class="suggest-loading">Finding good next questions…</div></div>` : "";
+  if(!lens && !follow) return "";
+  return `<div class="suggest wherenext" id="wherenext"><div class="suggest-h">◇ Where next</div>${follow}${lens}</div>`;
 }
 function wireEngineHops(root, t){
   root.querySelectorAll(".hopchip").forEach(b => b.addEventListener("click", () =>
@@ -3320,14 +3359,16 @@ function renderThread(){
     out.appendChild(block);
     render(t, ans, {noLink:true, noConvo:true});   // per-turn keeps its Evidence box; convo box is once, below
   });
-  // Conversation-level box — ONE briefing-video + explain group for the whole thread (latest answer).
+  // Bottom stack, in deliberate order of prominence: slim transform row (this answer, other
+  // formats) → the ONE "Where next" block (follow-ups + lens hops), sitting closest to the
+  // composer since it's where the next question comes from.
   const lt = THREAD.turns[THREAD.turns.length-1];
   if(lt && !lt._pending && !lt.clarification && !lt.derived_from_prior){
     const act = document.createElement("div"); act.innerHTML = convoActionsMarkup(lt);
     if(act.firstChild){ out.appendChild(act); wireConvo(act, lt); }
-    const hm = engineHopsMarkup(lt);
-    if(hm){ const hr = document.createElement("div"); hr.innerHTML = hm;
-      out.appendChild(hr); wireEngineHops(hr, lt); }
+    const wm = whereNextMarkup(lt);
+    if(wm){ const wr = document.createElement("div"); wr.innerHTML = wm;
+      out.appendChild(wr); wireEngineHops(wr, lt); }
   }
   const last = out.querySelector(".turn:last-child"); if(last) last.scrollIntoView({behavior:"smooth", block:"start"});
   syncComposerPad();
@@ -3335,29 +3376,40 @@ function renderThread(){
 async function loadSuggestions(){
   if(!SUGGEST_ENABLED || !THREAD.turns.length) return;
   const last = THREAD.turns[THREAD.turns.length-1];
-  const holder = document.createElement("div"); holder.className = "suggest"; holder.id = "suggest";
-  holder.innerHTML = `<div class="suggest-h">◇ Go deeper</div><div class="suggest-loading">Finding good next questions…</div>`;
-  // IN NORMAL FLOW at the bottom of the thread (NOT a fixed overlay — that covered the answer on
-  // mobile). out's padding-bottom reserves room so it clears the fixed composer.
-  out.appendChild(holder);
+  // Fill the "Where next" block's follow-up slot (renderThread laid it out); fall back to a
+  // standalone holder only if the block isn't there (e.g. lens hops disabled AND markup absent).
+  let slot = out.querySelector("#wn-follow"), holder = null;
+  if(!slot){
+    holder = document.createElement("div"); holder.className = "suggest wherenext"; holder.id = "wherenext";
+    holder.innerHTML = `<div class="suggest-h">◇ Where next</div><div id="wn-follow"><div class="suggest-loading">Finding good next questions…</div></div>`;
+    out.appendChild(holder);
+    slot = holder.querySelector("#wn-follow");
+  }
   syncComposerPad();
+  const dropFollow = ()=>{
+    const wn = out.querySelector("#wherenext");
+    if(slot) slot.remove();
+    if(wn && !wn.querySelector(".wn-lens")) wn.remove();   // nothing left in the block → no empty shell
+    syncComposerPad();
+  };
   try{
     const r = await fetch("/suggest",{method:"POST",headers:{"content-type":"application/json"},
       body:JSON.stringify({question:last.question, answer:last.answer||"", history:threadHistoryPayload()})});
     if(!r.ok) throw new Error();
     const {suggestions} = await r.json();
-    if(!suggestions || !suggestions.length){ holder.remove(); syncComposerPad(); return; }
-    holder.innerHTML = `<div class="suggest-h">◇ Go deeper</div><div class="suggest-chips">` +
+    if(!suggestions || !suggestions.length){ dropFollow(); return; }
+    slot.innerHTML = `<div class="suggest-chips">` +
       suggestions.map(s=>`<button type="button" class="chip-q">${esc(s)}</button>`).join("") + `</div>`;
-    holder.querySelectorAll(".chip-q").forEach(b=>b.addEventListener("click",()=>askQuestion(b.textContent.trim())));
+    slot.querySelectorAll(".chip-q").forEach(b=>b.addEventListener("click",()=>askQuestion(b.textContent.trim())));
     syncComposerPad();
     // Bring the chips into view above the composer if the (short-answer) layout left them covered.
     if(document.body.classList.contains("chatting")){
       const a = $("#ask");
-      const cover = holder.getBoundingClientRect().bottom - (window.innerHeight - (a ? a.offsetHeight : 0) - 12);
+      const wn = out.querySelector("#wherenext");
+      const cover = (wn||slot).getBoundingClientRect().bottom - (window.innerHeight - (a ? a.offsetHeight : 0) - 12);
       if(cover > 4) window.scrollBy({top: cover, behavior:"smooth"});
     }
-  }catch(e){ holder.remove(); syncComposerPad(); }
+  }catch(e){ dropFollow(); }
 }
 
 // ChatGPT-style auto-grow: the intake box grows with content up to a generous max, then scrolls.

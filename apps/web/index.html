@@ -748,8 +748,17 @@
     padding:.8rem .95rem;margin-top:.35rem;}
   .xitem.expanded video{display:block;max-width:100%;border-radius:8px;margin:.55rem 0;}
   .xformrow>details.plain-d{flex-basis:100%;}
+  /* dossier tabs: Backing evidence ⇄ Coverage gaps/Strengthen */
+  .evtabs{display:flex;gap:.35rem;margin:.3rem 0 1rem;border-bottom:1px solid var(--hair);}
+  .evtab{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--muted);background:transparent;border:none;border-bottom:2px solid transparent;
+    padding:.45rem .6rem;cursor:pointer;margin-bottom:-1px;}
+  .evtab:hover{color:var(--ink);}
+  .evtab.on{color:var(--ink);border-bottom-color:var(--gold);}
+  .evtab-warn{color:var(--gap);}
+  .evtab-warn.on{border-bottom-color:var(--gap);color:var(--gap);}
   /* nested in the dossier: compact; the WEAK (non-.soft) variant keeps its gold urgency accent */
-  .gapfix.infoot{margin:1rem 0 .1rem;padding:.65rem .85rem;}
+  .gapfix.infoot{margin:.2rem 0 .1rem;padding:.65rem .85rem;}
   .gapfix.infoot.soft{border-left-color:var(--hair);background:transparent;}
   .gapfix.infoot .gapfix-hint{margin-bottom:.5rem;}
   /* diagnostics nested in the dossier: dashed-rule sub-section, not a second box */
@@ -1714,15 +1723,26 @@ function render(data, target, opts){
     // strong answer → "strengthen" lives INSIDE the dossier (one less box in the bottom stack);
     // weak answer → it stands alone below, prominent (see next block)
     const weakEv = !data.grounded || ngaps || n < 2;
-    // Gap-fill ALWAYS lives inside the dossier as a sub-box (weak answers keep the gold-accented
-    // urgent variant + the gap count in the header; strong get the soft "strengthen" one).
-    // DIAGNOSTICS nests here too — same "how this answer came to be" family as the findings, so
-    // the bottom stack carries ONE trust disclosure instead of three boxes.
+    // The dossier is TABBED (and closed by default — the header's gap count is the signal):
+    //   Backing evidence — the claim cards;
+    //   Coverage gaps / Strengthen — the model's stated gap NOTES + the fill-gaps ACTION in one
+    //   tab (the notes explain what's missing, the action resolves it — separate tabs would be
+    //   duplicative). DIAGNOSTICS stays a nested disclosure below the panes.
     const gapFoot = GAP_ENABLED ? gapPanelMarkup(weakEv, true) : "";
-    evBits.push(`<details class="evblock" id="evblock" ${weakEv&&GAP_ENABLED?"open":""}>
+    const gapsPane = gapsHtml || gapFoot;
+    const gapsTabLabel = ngaps ? `Coverage gaps (${ngaps})` : "Strengthen evidence";
+    evBits.push(`<details class="evblock" id="evblock">
       <summary><h4 class="evhead">Evidence — ${n} verified finding${n===1?"":"s"}${ngaps?` · <span class="evgaps">${ngaps} gap${ngaps===1?"":"s"}</span>`:""}<span class="evtoggle"></span></h4>
         <div class="evhint">The passages this answer is built on — each shows a quote located in its cited source.</div></summary>
-      <div class="evbody">${gapsHtml}${cards}${gapFoot}${diagBoxMarkup(data)}</div>
+      <div class="evbody">
+        ${gapsPane?`<div class="evtabs" role="tablist">
+          <button type="button" class="evtab on" data-pane="ev">Backing evidence (${n})</button>
+          <button type="button" class="evtab${weakEv?" evtab-warn":""}" data-pane="gaps">${gapsTabLabel}</button>
+        </div>`:""}
+        <div class="evpane" data-pane="ev">${cards}</div>
+        ${gapsPane?`<div class="evpane" data-pane="gaps" hidden>${gapsHtml}${gapFoot}</div>`:""}
+        ${diagBoxMarkup(data)}
+      </div>
     </details>`);
   }
   // no dossier to host it (unverified / error answer) → the gap panel stands alone
@@ -1740,9 +1760,17 @@ function render(data, target, opts){
   if(data.answer && DISCLAIMER.answer) parts.push(`<div class="ansdisc">${esc(DISCLAIMER.answer)}</div>`);
   target.innerHTML = parts.join("");
   wireFeedback(target, data);
+  // dossier tabs: Backing evidence ⇄ Coverage gaps/Strengthen
+  target.querySelectorAll(".evtabs .evtab").forEach(tb=>tb.addEventListener("click",()=>{
+    const box = tb.closest(".evbody");
+    box.querySelectorAll(".evtab").forEach(x=>x.classList.toggle("on", x===tb));
+    box.querySelectorAll(".evpane").forEach(p=>p.hidden = p.dataset.pane !== tb.dataset.pane);
+  }));
   // clicking a [n] reference scrolls to and highlights its finding (within this pane)
   target.querySelectorAll(".ref").forEach(r=>r.addEventListener("click",()=>{
     const ev = target.querySelector("#evblock"); if(ev) ev.open = true;   // reveal the dossier
+    const evTab = target.querySelector('.evtab[data-pane="ev"]');         // land on the evidence pane
+    if(evTab && !evTab.classList.contains("on")) evTab.click();
     const el = target.querySelector("#f"+r.dataset.n);
     if(el){ requestAnimationFrame(()=>{ el.scrollIntoView({behavior:"smooth",block:"center"});
       el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1200); }); }

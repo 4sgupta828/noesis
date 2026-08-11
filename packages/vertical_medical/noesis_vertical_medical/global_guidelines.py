@@ -404,7 +404,15 @@ GLOBAL_GUIDELINES: tuple[dict, ...] = (
                     "tsat", "transferrin saturation", "esa", "erythropoiesis stimulating agent",
                     "hemoglobin target", "hif-ph inhibitor"],
      "url": "https://kdigo.org/wp-content/uploads/2026/01/KDIGO-2026-Anemia-in-CKD-Guideline.pdf",
-     "year": 2026},
+     "year": 2026,
+     # the FIRST real supersession pair (edition policy in action): 2026 replaces the 2012 edition
+     # below — /admin/pulse/scan turns this into an approved event + demotion stamps
+     "supersedes": "kdigo-anemia-2012-fulltext"},
+    {"id": "kdigo-anemia-2012-fulltext", "issuer": "KDIGO",
+     "title": "KDIGO 2012 Clinical Practice Guideline — Anemia in CKD (FULL TEXT, superseded 2026)",
+     "conditions": ["anemia in ckd", "anemia", "iron deficiency", "esa", "hemoglobin target"],
+     "url": "https://kdigo.org/wp-content/uploads/2016/10/KDIGO-2012-Anemia-Guideline-English.pdf",
+     "year": 2012},
 
     # ---- iron-deficiency anemia workup ----
     {"id": "aga-ida-workup", "issuer": "American Gastroenterological Association",
@@ -448,8 +456,11 @@ GLOBAL_GUIDELINES: tuple[dict, ...] = (
 
 def _facets(g: dict) -> dict:
     # pub_type=guideline → top authority tier in evidence_kind; source_country=global (never filtered).
+    # conditions ride along as SUBJECT facets (Pulse A5): supersession-judge candidate generation
+    # needs (issuer, subjects, year) per document — never used as a retrieval filter.
     return {"pub_type": "guideline", "source_country": "global",
             "issuer": g.get("issuer", ""), "year": g.get("year"),
+            "conditions": list(g.get("conditions", [])),
             "source_country_label": "Global"}
 
 

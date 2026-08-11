@@ -634,6 +634,23 @@ async def _gap_processor_loop(dsn: str, vertical: str) -> None:
         except Exception:
             await asyncio.sleep(10); continue
         if job is None:
+            # WEEKLY retraction sweep, replica-safe via the DB clock (runs on the idle path so it
+            # never delays a queued ingest; free — Europe PMC API only).
+            if currency is not None:
+                try:
+                    import datetime as _dt
+                    st = await currency.get_state("last_retraction_sweep") or {}
+                    last = st.get("at", "")
+                    due = (not last or (_dt.datetime.now(_dt.timezone.utc)
+                           - _dt.datetime.fromisoformat(last)).days >= 7)
+                    if due:
+                        await currency.set_state("last_retraction_sweep",
+                            {"at": _dt.datetime.now(_dt.timezone.utc).isoformat()})
+                        from noesis_vertical_medical.retractions import retraction_lineage
+                        doc_ids = await currency.list_document_ids(prefix="europepmc:")
+                        await currency.sweep_declared(await retraction_lineage(doc_ids))
+                except Exception:   # noqa: BLE001 — the admin scan remains the manual backstop
+                    pass
             await asyncio.sleep(8); continue
         conn = connectors.get(job["connector"])
         if conn is None:
@@ -1510,12 +1527,12 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         auto-approved `retracted` events (publisher fact = high confidence, A4) and their blocks
         are excluded from grounding."""
         cur = _pulse_admin_gate(x_admin_token)
-        state = getattr(app.state, "pulse_scan", None)
+        state = await cur.get_state("retraction_scan")
         if state and state.get("status") == "running":
             return {"status": "already_running", "started_at": state.get("started_at")}
         import datetime as _dt
-        app.state.pulse_scan = {"status": "running",
-                                "started_at": _dt.datetime.utcnow().isoformat() + "Z"}
+        await cur.set_state("retraction_scan", {"status": "running",
+                            "started_at": _dt.datetime.utcnow().isoformat() + "Z"})
 
         async def _run():
             from noesis_vertical_medical.retractions import retraction_lineage
@@ -1523,21 +1540,89 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 doc_ids = await cur.list_document_ids(prefix="europepmc:")
                 relations = await retraction_lineage(doc_ids)
                 result = await cur.sweep_declared(relations)
-                app.state.pulse_scan = {"status": "done",
-                                        "checked": len(doc_ids),
-                                        "retracted_found": len(relations), **result,
-                                        "finished_at": _dt.datetime.utcnow().isoformat() + "Z"}
+                await cur.set_state("retraction_scan", {"status": "done",
+                                    "checked": len(doc_ids),
+                                    "retracted_found": len(relations), **result,
+                                    "finished_at": _dt.datetime.utcnow().isoformat() + "Z"})
             except Exception as e:   # noqa: BLE001
-                app.state.pulse_scan = {"status": "failed", "error": str(e)[:300]}
+                await cur.set_state("retraction_scan", {"status": "failed", "error": str(e)[:300]})
 
         app.state.pulse_scan_task = asyncio.create_task(_run())   # ref kept → not GC'd
         return {"status": "started"}
 
     @app.get("/admin/pulse/retraction-scan")
     async def admin_pulse_retraction_status(x_admin_token: str = Header(default="")) -> dict:
-        """Status/result of the latest retraction sweep on THIS replica."""
-        _pulse_admin_gate(x_admin_token)
-        return getattr(app.state, "pulse_scan", None) or {"status": "never_run"}
+        """Status/result of the latest retraction sweep — DB-backed (replica-safe)."""
+        cur = _pulse_admin_gate(x_admin_token)
+        return (await cur.get_state("retraction_scan")) or {"status": "never_run"}
+
+    @app.post("/admin/pulse/detect")
+    async def admin_pulse_detect(x_admin_token: str = Header(default="")) -> dict:
+        """SHADOW-MODE supersession detection (spec 3.2, approval-gated per A4): structural
+        candidate pairs (same issuer + overlapping subjects + different years, versioned-document
+        tier) → LLM judge → SHADOW events only. Nothing stamps or notifies until a human approves
+        via /admin/pulse/event. Background task; status in /admin/pulse/detect (GET)."""
+        cur = _pulse_admin_gate(x_admin_token)
+        prompt = getattr(load_active_vertical(), "supersession_judge_prompt", None)
+        if not prompt:
+            raise HTTPException(status_code=404, detail="no supersession judge for this vertical")
+        state = await cur.get_state("detect_scan")
+        if state and state.get("status") == "running":
+            return {"status": "already_running", "started_at": state.get("started_at")}
+        import datetime as _dt
+        await cur.set_state("detect_scan", {"status": "running",
+                            "started_at": _dt.datetime.utcnow().isoformat() + "Z"})
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+
+        async def _run():
+            from noesis_kernel.currency.candidates import edition_candidates
+            try:
+                docs = await cur.list_documents_meta(
+                    facet_key="pub_type", facet_values=("guideline", "practice guideline"))
+                decided = {(e["old_document_id"], e["new_document_id"])
+                           for e in await cur.list_events(limit=500)}
+                pairs = edition_candidates(docs, exclude_pairs=decided)
+                registry = await _topic_registry(cur)
+
+                class _Verdict(BaseModel):
+                    supersedes: bool = False
+                    materiality: str = "minor"
+                    subjects: list[str] = []
+                shadowed = 0
+                for old, new in pairs:
+                    comp = await svc.llm.complete(
+                        system=prompt + _registry_block(registry),
+                        messages=[{"role": "user", "content":
+                                   f"OLDER: {old['title']} (issuer {old['issuer']}, {old['year']}; "
+                                   f"subjects: {', '.join(old['conditions'][:8])})\n"
+                                   f"NEWER: {new['title']} (issuer {new['issuer']}, {new['year']}; "
+                                   f"subjects: {', '.join(new['conditions'][:8])})"}],
+                        response_format=_Verdict, max_tokens=200)
+                    v = comp.parsed
+                    if v.supersedes:
+                        subs = await cur.ensure_topics([s for s in (v.subjects or []) if s][:5])
+                        await cur.record(relation="superseded_by",
+                                         old_document_id=old["document_id"],
+                                         new_document_id=new["document_id"],
+                                         subjects=subs,
+                                         materiality=("major" if v.materiality == "major" else "minor"),
+                                         confidence="judge", status="shadow")
+                        shadowed += 1
+                await cur.set_state("detect_scan", {"status": "done", "candidates": len(pairs),
+                                    "shadow_events": shadowed,
+                                    "finished_at": _dt.datetime.utcnow().isoformat() + "Z"})
+            except Exception as e:   # noqa: BLE001
+                await cur.set_state("detect_scan", {"status": "failed", "error": str(e)[:300]})
+
+        app.state.pulse_detect_task = asyncio.create_task(_run())
+        return {"status": "started"}
+
+    @app.get("/admin/pulse/detect")
+    async def admin_pulse_detect_status(x_admin_token: str = Header(default="")) -> dict:
+        cur = _pulse_admin_gate(x_admin_token)
+        return (await cur.get_state("detect_scan")) or {"status": "never_run"}
 
     @app.get("/pulse/recent")
     async def pulse_recent(limit: int = 20) -> dict:

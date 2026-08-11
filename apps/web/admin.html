@@ -94,6 +94,23 @@ async function load(){
   const live = d.live||{}, plan = d.plan||{};
   const parts = [];
 
+  // ◉ Pulse — what changed in the corpus (public /pulse/recent; absent when the flag is off)
+  try{
+    const pr = await fetch("/pulse/recent?limit=12");
+    if(pr.ok){
+      const evs = (await pr.json()).events||[];
+      if(evs.length){
+        parts.push(`<h2>◉ What changed recently</h2>` + evs.map(e=>{
+          const what = e.relation === "retracted" ? "RETRACTED"
+                     : e.relation === "superseded_by" ? "SUPERSEDED" : e.relation.toUpperCase();
+          const subj = (e.subjects||[]).join("; ") || e.old_document_id || e.new_document_id || "";
+          return `<div class="item"><span class="dot d-rem"></span>
+            <b>${esc(what)}</b> · ${esc((e.created_at||"").slice(0,10))} — ${esc(subj).slice(0,140)}</div>`;
+        }).join(""));
+      }
+    }
+  }catch(e){}
+
   // totals
   parts.push(`<div class="totals">
     <div class="stat"><div class="n">${fmt(live.total_blocks)}</div><div class="l">Blocks indexed</div></div>

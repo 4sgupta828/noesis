@@ -134,6 +134,8 @@ class VerticalManifest:
     watch_topic_prompt: str | None = None
     watch_canonize_prompt: str | None = None
     watch_suggest_prompt: str | None = None    # cross-session watch suggestions (recurring subjects)
+    # Optional supersession-judge prompt (shadow-mode edition detection; approval-gated per spec A4)
+    supersession_judge_prompt: str | None = None
     # Optional seed vocabulary for the canonical topic registry (e.g. the vertical's covered-
     # condition names) — loaded once into the registry on first Pulse topic use.
     watch_topic_seed: tuple = ()

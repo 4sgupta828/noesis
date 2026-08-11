@@ -47,6 +47,11 @@ CREATE TABLE IF NOT EXISTS noesis_watch_seen (
     seen_at  timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (user_id, event_id)
 );
+CREATE TABLE IF NOT EXISTS noesis_pulse_state (
+    key        text PRIMARY KEY,          -- e.g. retraction_scan | detect_scan | last_retraction_sweep
+    value      jsonb NOT NULL DEFAULT '{}'::jsonb,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS noesis_topic (
     label      text PRIMARY KEY,          -- canonical form; lowercase-unique via norm below
     norm       text NOT NULL UNIQUE,
@@ -269,6 +274,51 @@ class CurrencyStore:
                 out.append({**e, "seen": e["id"] in seen})
             if len(out) >= limit:
                 break
+        return out
+
+    # ---- shared state (replica-safe: scan statuses, sweep clocks) ------------------------------
+
+    async def set_state(self, key: str, value: dict) -> None:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """INSERT INTO noesis_pulse_state (key, value) VALUES ($1, $2::jsonb)
+                   ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()""",
+                key, json.dumps(value or {}))
+
+    async def get_state(self, key: str) -> dict | None:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT value FROM noesis_pulse_state WHERE key=$1", key)
+        if row is None:
+            return None
+        v = row["value"]
+        return v if isinstance(v, dict) else json.loads(v)
+
+    async def list_documents_meta(self, *, facet_key: str, facet_values: tuple[str, ...],
+                                  limit: int = 2000) -> list[dict]:
+        """Per-document metadata for detector candidate generation (structural): distinct documents
+        whose facets[facet_key] is one of facet_values, with issuer/year/conditions/title. Generic —
+        the caller (vertical/app) decides which facet marks its 'versioned-document' tier."""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"""SELECT document_id, MAX(document_title) AS title,
+                           MAX(facets->>'issuer') AS issuer, MAX(facets->>'year') AS year,
+                           MAX(facets->>'conditions') AS conditions
+                    FROM {self._block_table}
+                    WHERE facets->>$1 = ANY($2::text[])
+                    GROUP BY document_id LIMIT $3""",
+                facet_key, list(facet_values), limit)
+        out = []
+        for r in rows:
+            try:
+                conds = json.loads(r["conditions"]) if r["conditions"] else []
+            except Exception:   # noqa: BLE001
+                conds = []
+            out.append({"document_id": r["document_id"], "title": r["title"] or "",
+                        "issuer": r["issuer"] or "", "year": r["year"] or "",
+                        "conditions": conds if isinstance(conds, list) else []})
         return out
 
     def _topic_matches(self, topic: str, subjects: list) -> bool:

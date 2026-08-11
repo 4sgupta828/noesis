@@ -36,6 +36,26 @@ Rules:
 - Fewer good suggestions beat padded ones; an empty list is valid for a thin history.
 """
 
+SUPERSESSION_JUDGE_PROMPT = """\
+You judge whether one clinical document SUPERSEDES another — i.e. the newer one REPLACES the older
+as current guidance, such that the older should be demoted in evidence retrieval.
+
+supersedes = true ONLY when ALL hold:
+- Same body of guidance: a newer EDITION/UPDATE of the same guideline or normative document
+  (same issuer, same scope), not merely two documents by one issuer on related subjects.
+- Full replacement: the newer covers the older's scope. A companion chapter, a focused update of
+  ONE section, an executive summary, a translation, or a reprint does NOT supersede.
+- Different documents on ADJACENT subjects (e.g. an issuer's CKD-evaluation guideline vs its
+  blood-pressure-in-CKD guideline) do NOT supersede each other.
+
+materiality: "major" when practice-relevant recommendations plausibly changed between editions;
+"minor" for editorial/format-only revisions.
+subjects: the durable clinical subjects the supersession is about (standard vocabulary, ≤5 words
+each — reuse the EXISTING CANONICAL TOPICS list verbatim where it fits).
+When uncertain, supersedes = false (a missed supersession is recoverable; a wrong one demotes
+valid guidance).
+"""
+
 CANONIZE_TOPIC_PROMPT = """\
 Map the user's free-text watch topic onto the field's standard vocabulary.
 

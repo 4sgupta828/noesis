@@ -290,6 +290,18 @@ class GraphStore:
         adj = await self._adjacency()
         return neighbors_from(adj, topics, limit=limit)
 
+    async def edge_topics(self, *, limit: int = 300) -> list[str]:
+        """Distinct LABELS of active-edge endpoints (+ hierarchy children) — the closed
+        vocabulary the LLM mapping layer maps INTO (verbatim membership is code-validated,
+        so the model can never mint a topic). Snapshot-served."""
+        adj = await self._adjacency()
+        labels: set[str] = set()
+        for lst in adj["by_norm"].values():
+            for e, _d in lst:
+                labels.add(e["subject"])
+                labels.add(e["object"])
+        return sorted(labels)[:limit]
+
     async def match_topics(self, text: str, *, limit: int = 3) -> list[str]:
         """Which EDGE-BEARING topic labels appear verbatim in the text — precision-biased
         STRUCTURAL containment (the Pulse-inbox P1 pattern), word-boundary safe, longest

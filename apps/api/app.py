@@ -152,7 +152,50 @@ def graph_expand_mode() -> str:
     return "on" if v in ("1", "true", "yes", "on") else ""
 
 
+def graph_map_mode() -> str:
+    """v3-P1 (default OFF): "llm" → when structural containment finds NO graph topic in the
+    question, ONE small vocabulary-aware mapping call resolves synonyms/abbreviations
+    ("parkinsonism" → Parkinson disease). Code validates verbatim vocabulary membership —
+    the model can never mint a topic. "" → containment-only, byte-identical."""
+    if not graph_enabled():
+        return ""
+    return "llm" if os.environ.get("NOESIS_GRAPH_MAP", "").lower() == "llm" else ""
+
+
 _GRAPH_STORE = None
+_GRAPH_MAP_LLM = None
+
+
+def _graph_map_llm():
+    global _GRAPH_MAP_LLM
+    if _GRAPH_MAP_LLM is None:
+        _GRAPH_MAP_LLM = build_llm(mode=resolve_mode())
+    return _GRAPH_MAP_LLM
+
+
+async def _map_question_topics(question: str, g) -> list[str]:
+    """LLM fallback mapping (v3-P1). Fail-safe: any error/abstention → [] (no expansion)."""
+    manifest = load_active_vertical()
+    prompt = getattr(manifest, "graph_map_prompt", None)
+    if not prompt:
+        return []
+    try:
+        vocab = await g.edge_topics()
+        if not vocab:
+            return []
+        from pydantic import BaseModel
+
+        class _Mapped(BaseModel):
+            topics: list[str] = []
+
+        comp = await _graph_map_llm().complete(
+            system=prompt + "\n\nTOPIC LIST:\n" + "\n".join(f"- {t}" for t in vocab),
+            messages=[{"role": "user", "content": question[:2000]}],
+            response_format=_Mapped, max_tokens=150)
+        allowed = set(vocab)
+        return [t for t in comp.parsed.topics if t in allowed][:2]   # verbatim members only
+    except Exception:   # noqa: BLE001
+        return []
 
 
 def _graph_store():
@@ -203,6 +246,8 @@ def _make_graph_expander():
         if g is None or not mode:
             return None
         topics = await g.match_topics(question)
+        if not topics and graph_map_mode() == "llm":
+            topics = await _map_question_topics(question, g)   # synonym/abbrev fallback (+1 small call)
         if not topics:
             return None
         nbs = [nb for nb in await g.neighbors(topics, limit=12)

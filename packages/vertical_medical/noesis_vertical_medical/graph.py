@@ -149,6 +149,23 @@ def curated_edges() -> list[dict]:
     return [dict(e) for e in CURATED_EDGES]
 
 
+# v3-P1 LLM topic-mapping (the semantic layer over structural containment — spec C-4/C-0
+# noted containment misses synonyms/abbreviations by design: "parkinsonism", "HFpEF", "afib").
+# Fires ONLY when containment finds nothing; the model maps into a CLOSED shown vocabulary
+# and code validates verbatim membership (Rule 18: LLM owns the judgment, never mints).
+MAP_QUESTION_TOPICS_PROMPT = """A clinical question needs to be mapped onto a fixed list of graph topics.
+
+Return the topics from the list that are the question's PRINCIPAL clinical subject(s) — the
+condition(s) the question is fundamentally about, including when the question uses a synonym,
+abbreviation, or related phrasing ("afib" → atrial fibrillation; "parkinsonism" → Parkinson
+disease; "sugar problems" → type 2 diabetes).
+
+STRICT rules:
+- Copy topics EXACTLY VERBATIM from the list. Never invent, reword, or add topics.
+- Only subjects the question is ABOUT — not every condition it merely mentions.
+- Max 2. Return an empty list when nothing in the list genuinely covers the subject."""
+
+
 # v3 growth campaign (spec C-6/C-7): LLM-drafted masquerade candidates per cover-story
 # condition. Drafts are CANDIDATES ONLY — every one is corpus-entailment-verified (kernel
 # graph.verify) before activation, and activation is capped at label 'supported'.

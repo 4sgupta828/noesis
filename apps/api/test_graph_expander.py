@@ -71,3 +71,51 @@ def test_outgoing_masquerade_edge_is_skipped_for_the_masquerader_itself():
     assert got is None or all(
         not leg["query"].startswith("cardiac amyloidosis presenting")
         for leg in got["legs"])
+
+
+class _FakeMapLLM:
+    """Returns a scripted topic mapping; counts calls (containment-first must not call it)."""
+    def __init__(self, topics):
+        self.topics = topics
+        self.calls = 0
+
+    async def complete(self, *, system, messages, response_format, max_tokens=150,
+                       temperature=None):
+        self.calls += 1
+        assert "TOPIC LIST" in system            # vocabulary must be shown
+
+        class R:
+            parsed = response_format(topics=self.topics)
+        return R()
+
+
+def test_llm_mapping_fires_only_on_containment_miss_and_validates_vocabulary():
+    os.environ["NOESIS_GRAPH_MAP"] = "llm"
+    import api.app as appmod
+    exp = _expander(None)
+    fake = _FakeMapLLM(["heart failure", "not-a-real-topic"])
+    appmod._GRAPH_MAP_LLM = fake
+    try:
+        # containment miss ("HFpEF" only) → mapper fires, non-vocab label filtered out,
+        # masquerade legs come from the mapped topic
+        got = asyncio.run(exp("Refractory HFpEF workup?"))
+        assert fake.calls == 1
+        assert got and got["legs"][0]["query"].startswith("cardiac amyloidosis presenting")
+        # containment HIT → mapper must NOT be called
+        asyncio.run(exp("worsening heart failure management"))
+        assert fake.calls == 1
+        # mapper returns only garbage → filtered → no legs, fail-safe
+        appmod._GRAPH_MAP_LLM = _FakeMapLLM(["made-up condition"])
+        assert asyncio.run(exp("Refractory HFpEF workup?")) is None
+    finally:
+        os.environ.pop("NOESIS_GRAPH_MAP", None)
+        appmod._GRAPH_MAP_LLM = None
+
+
+def test_mapping_off_by_default_no_llm_touched():
+    os.environ.pop("NOESIS_GRAPH_MAP", None)
+    import api.app as appmod
+    exp = _expander(None)
+    appmod._GRAPH_MAP_LLM = None
+    assert asyncio.run(exp("Refractory HFpEF workup?")) is None   # containment miss → no legs
+    assert appmod._GRAPH_MAP_LLM is None                          # and no client was built

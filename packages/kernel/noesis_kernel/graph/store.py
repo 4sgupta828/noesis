@@ -281,12 +281,19 @@ class GraphStore:
         STRUCTURAL containment (the Pulse-inbox P1 pattern), word-boundary safe, longest
         match first. Misses synonyms BY DESIGN (fail-safe: no match → no expansion); the
         LLM-owned mapping layer (reasoned-scaffold piggyback) is the semantic upgrade.
-        Served from the snapshot — no DB round trip at steady state."""
+        Served from the snapshot — no DB round trip at steady state.
+        NOTE: needle AND haystack go through the SAME punctuation-stripping normalize —
+        norms keep punctuation ("NASH / MASH", "low-voltage ECG") while question text is
+        stripped, so an asymmetric compare can never match those labels (v3 panel bug)."""
         import re
+
+        def _flat(s: str) -> str:
+            return " ".join(re.sub(r"[^\w\s]", " ", (s or "").lower()).split())
+
         adj = await self._adjacency()
-        hay = " " + " ".join(re.sub(r"[^\w\s]", " ", (text or "").lower()).split()) + " "
+        hay = " " + _flat(text) + " "
         cands = set(adj["by_norm"].keys()) | set(adj["up"].keys())
-        found = [n for n in cands if f" {n} " in hay]
+        found = [n for n in cands if f" {_flat(n)} " in hay]
         found.sort(key=len, reverse=True)
         return found[:limit]
 

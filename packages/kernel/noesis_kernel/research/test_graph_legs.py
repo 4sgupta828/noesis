@@ -128,3 +128,25 @@ def test_match_topics_containment_word_boundary():
         ["chronic kidney disease"]
     assert asyncio.run(go("anemia, refractory")) == ["anemia"]     # punctuation-safe
     assert asyncio.run(go("pandemic response")) == []              # no substring false-positive
+
+
+def test_match_topics_punctuated_labels_match_stripped_text():
+    """v3 panel bug: labels like 'NASH / MASH' keep punctuation in their norm while the
+    question text is stripped — the compare must normalize BOTH sides."""
+    from noesis_kernel.graph.store import GraphStore, build_adjacency
+
+    g = GraphStore.__new__(GraphStore)
+    adj = build_adjacency([
+        {"id": "e1", "subject": "NASH / MASH", "subject_norm": "nash / mash",
+         "relation": "causes", "object": "variceal bleeding / cirrhosis",
+         "object_norm": "variceal bleeding / cirrhosis", "context_topic": "",
+         "label": "established", "provenance": "curated", "confidence": 1.0},
+    ])
+
+    async def _adj():
+        return adj
+    g._adjacency = _adj
+
+    async def go(text):
+        return await g.match_topics(text)
+    assert asyncio.run(go("patient with NASH MASH and fibrosis")) == ["nash / mash"]

@@ -409,3 +409,96 @@ harness) are the natural eval traffic: masquerade-style cases by construction.
 - **v3-P1:** `manifests_as` profiles for the ~8 great imitators + C4 intersection consumer
   dark + its eval.
 - **v3-P2:** long-shadow/population relations; C4 ON after the masquerade eval passes.
+
+## v3 Panel Amendments (C-series) — these override the §v3 body above
+
+Panel per Rule 17 (Codex GPT-5.5 + Gemini 3.1 Pro + code-grounded subagent, all returned,
+2026-08-11). Plus one EMPIRICAL result that arbitrates the panel's sharpest disagreement.
+
+### C-0 — Live bug found and FIXED: match_topics norm asymmetry (subagent)
+
+Punctuation was stripped from the question but not from edge labels, so "NASH / MASH",
+"delirium (older adults)" — and v3's flagship "low-voltage ECG" — could never match. Fixed
+(shared normalize both sides + regression test) the same day; everything in v3 depended on it.
+
+### C-1 — The intersection gap is REAL (empirical; refutes the cut-C4-entirely position)
+
+Gemini argued dense retrieval already solves intersections. Tested against the live prod
+corpus: "uveitis hypercalcemia cough" (± 'unifying diagnosis' phrasing) does NOT surface
+sarcoidosis in the top results, and "carpal tunnel LVH low voltage ECG" surfaces HCM/sarcoid
+masquerade papers but NOT amyloidosis — the unifying answers are absent exactly as the
+hard-case thesis predicts. So C4 is DEFERRED to v3-P1 with discipline (below), not killed.
+
+### C-2 — Relation vocabulary trimmed (all three)
+
+- MERGE `unmasks`/`precipitates` → one `precipitates` (semantic inverses fragment dedup).
+- DROP `late_complication_of` (existing `complication_of` + latency in context covers it).
+- DROP `heralds` from the vocabulary for now (clinically hazardous, base-rate-sensitive;
+  revisit as shadow-only `can_signal` with required risk-window evidence).
+- DROP `presents_atypically_in` (fails v3's own bar: "MI in diabetes" IS reachable by
+  reformulation — both terms are in the question).
+- ADD `underlies_presentation_of` (masquerader → cover-story): amyloid→HFpEF and
+  Conn→resistant-HTN are hidden ETIOLOGIES, not mere mimics — this is the flagship
+  hard-case relation, consumed direction-aware (incoming edges of the asked subject).
+- `mimics` kept, direction-aware (masquerader → cover-story), `distinguished_by` carried in
+  a DEDICATED nullable column (identity-excluded — overloading `context_topic` splits dedup;
+  needs an ALTER-ensure, both DDLs are CREATE-IF-NOT-EXISTS and won't add columns).
+- `adverse_effect_of` kept in vocabulary; ACTIVATION deferred until drug-exposure context
+  exists (fan-out: every drug "causes" fatigue somewhere — Gemini's prevalence point).
+
+### C-3 — Mimic-leg firing policy: always-fire under LATE-merge, LLM atypia gate later
+
+Gemini/Codex want an atypia/refractoriness gate before a mimic leg fires; the subagent
+correctly notes a textual trigger is exactly the banned keyword heuristic, and that LATE
+merge makes always-fire structurally safe (graph atoms only FILL remaining compose-cap
+slots, never displace planner claims — react.py's first-come cap). DECISION: P0 =
+always-fire on the asked cover-story + the no-harm eval + the impact monitor watching;
+P1 = LLM-owned atypia/intent signal (scaffold piggyback field), which then also gates leg
+PRIORITY. Expander changes required either way: relation-aware priority (an incoming
+`underlies_presentation_of`/`mimics` edge outranks confidence-1.0 comorbidity edges when
+the question is the cover-story), per-relation leg templates (extend _GRAPH_REL_PHRASE),
+and the discriminator finding joins the leg query.
+
+### C-4 — Intersection consumer discipline (for its P1)
+
+Raw match-count is unsound ("fatigue" matches everything; big profiles beat hallmark pairs).
+Required: rarity weighting (1/degree — free from the adjacency snapshot), ≥1 high-specificity
+finding in any qualifying intersection, profile-denominator awareness, a dedicated
+match pass with a higher limit than the expander's 3 (a 3-finding vignette + asked condition
+overflows it), and top-3 candidates logged to diag for the precision eval. Finding nodes need
+the minimal registry discipline (Codex): canonical punctuation-free labels + 2-3 controlled
+aliases + specificity weight + C4-eligibility flag — generic symptoms (fatigue, fever, cough,
+nausea) are NEVER C4 triggers alone. No LOINC/HPO build.
+
+### C-5 — Registry `kind` is a ROLE, not a partition (subagent — design now, migration later hurts)
+
+`norm UNIQUE` forces one row per label, but "anemia"/"hypercalcemia" are BOTH covered
+conditions and findings — exactly the overlap C4 needs. Rule: condition wins the row;
+`manifests_as` may target condition-kind nodes. AND the prompt blast radius is P0 work:
+`_topic_registry`/`list_topics` must filter kind=condition BEFORE any drug/finding is
+minted, or hundreds of new rows contaminate every Pulse watch/canonize prompt.
+
+### C-6 — The verification pipeline, honestly scoped (subagent + Codex + Gemini)
+
+Not "reuse the entailment gate": it is retrieval → QUOTE-SELECTION adapter → span gate →
+entail_claims (edge rendered as a sentence) — a new ~80-line pipeline reusing two gates.
+Activation contracts: label capped at `supported` (corpus statement ≠ established fact);
+prefer ≥2 independent documents; the judge must also grade CLINICAL NOTABILITY, not bare
+entailment (a case-report zebra sentence passes entailment but shouldn't activate); negation/
+qualification cases ("rarely mimics", "unlike X") in the held-out eval; low activation rate
+expected (mimicry knowledge lives in textbooks, not PMC) — an inactive draft is a gap
+signal, not proof of absence.
+
+### C-7 — Revised v3 phasing (final)
+
+- **v3-P0:** matcher fix (DONE) · `kind` role column + ALTER-ensures + kind-filtered
+  registry prompts · trimmed vocabulary (mimics, underlies_presentation_of, precipitates,
+  manifests_as dark) + `distinguished_by` column · direction-aware relation-priority
+  expander + per-relation templates · ~20-30 HAND-CURATED masquerade edges for the great
+  imitators (amyloid, sarcoid, IgG4, lupus, endocarditis, TB, Conn, pheo) · held-out
+  masquerade eval (incl. HFpEF→amyloid) · always-fire policy under late-merge.
+- **v3-P1:** drafting campaign (mimics/underlies first) through the C-6 pipeline ·
+  finding mini-registry + C4 dark with C-4 discipline · LLM atypia signal · C4/masquerade
+  eval gates before anything merges into prod answers beyond the curated set.
+- **v3-P2:** adverse_effect activation (with drug-exposure context) · exposure/population
+  kinds · Pulse/UI surfaces for graph relations.

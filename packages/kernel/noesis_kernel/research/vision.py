@@ -109,7 +109,7 @@ async def read_documents(
             comp = await llm.complete(
                 system=report_prompt + _DOC_GUARD,
                 messages=[{"role": "user", "content": content}],
-                response_format=VisualObservation, max_tokens=4000)
+                response_format=VisualObservation, max_tokens=16000)
             digest = (comp.parsed.observation or "").strip()
             if digest:
                 import logging

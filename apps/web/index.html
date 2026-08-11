@@ -225,6 +225,25 @@
   .setlive{font-family:var(--mono);font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;
     border-radius:999px;padding:.06rem .45rem;border:1px solid var(--hair);color:var(--muted);}
   .setlive.on{color:var(--verified);border-color:var(--verified);}
+  /* relationship-graph console */
+  .grcard{max-width:56rem;width:min(96vw,56rem);max-height:88vh;overflow-y:auto;}
+  .grstats{display:flex;gap:.45rem;flex-wrap:wrap;margin:.5rem 0 .7rem;}
+  .grchip{font-size:.72rem;padding:.22rem .55rem;border:1px solid var(--hair);border-radius:999px;color:var(--muted);}
+  .grchip b{color:var(--ink);font-weight:600;}
+  .grimpact{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin:.4rem 0 .8rem;}
+  .grimp{border:1px solid var(--hair);border-radius:.55rem;padding:.55rem .7rem;font-size:.78rem;}
+  .grimp h4{margin:0 0 .3rem;font-size:.72rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
+  .grverdict{font-size:.8rem;margin:.1rem 0 .7rem;padding:.45rem .65rem;border-radius:.5rem;border:1px solid var(--hair);}
+  .grverdict.good{border-color:var(--verified);color:var(--verified);}
+  .grverdict.warn{border-color:#b5762a;color:#b5762a;}
+  .gredge{display:flex;gap:.5rem;align-items:baseline;flex-wrap:wrap;padding:.4rem 0;border-bottom:1px solid var(--hair);font-size:.8rem;}
+  .gredge .rel{color:var(--muted);font-size:.72rem;}
+  .gredge .ctx{color:var(--muted);font-size:.7rem;font-style:italic;}
+  .grtag{font-size:.62rem;padding:.1rem .4rem;border-radius:999px;border:1px solid var(--hair);color:var(--muted);}
+  .grtag.demoted,.grtag.review{border-color:#b5762a;color:#b5762a;}
+  .grtag.shadow{opacity:.7;}
+  #grfilter{margin:.2rem 0 .4rem;padding:.4rem .6rem;font-size:.8rem;width:100%;}
+  @media (max-width:640px){ .grimpact{grid-template-columns:1fr;} }
   .idcard .idrow{display:flex;gap:.5rem;} .idcard .idrow>*{flex:1;min-width:0;}
   .idcard .idhint{font-size:.68rem;color:var(--muted);line-height:1.45;margin:-.1rem 0 .5rem;}
   /* per-answer feedback (accounts flag) — the W-taxonomy signal loop. The RESTING state is a
@@ -1320,6 +1339,21 @@
     </div>
     <div id="setbody" hidden></div>
     <button type="button" class="setclose" id="setclose">Close ✕</button>
+  </div>
+</div>
+
+<!-- relationship-graph console (admin, password-gated, READ-ONLY) -->
+<div class="idmodal" id="graphmodal" hidden>
+  <div class="idcard grcard">
+    <h2>⬡ Relationship graph</h2>
+    <div id="grlock">
+      <p>Admin only — enter the settings password.</p>
+      <input id="grpw" type="password" placeholder="Admin password" autocomplete="off" />
+      <div class="iderr" id="grerr"></div>
+      <button type="button" class="idgo" id="grgo">Unlock</button>
+    </div>
+    <div id="grbody" hidden></div>
+    <button type="button" class="setclose" id="grclose">Close ✕</button>
   </div>
 </div>
 
@@ -4396,7 +4430,11 @@ function renderSettingsUI(d){
       <span class="setlive ${s.resolved ? "on" : ""}">${s.resolved ? "ACTIVE" : "off"}</span>
       <span class="sethint">${esc(hint)}</span></div>`;
   }).join("");
-  body.innerHTML = rows + `<div class="sethint" style="margin-top:.6rem;">Applies to the API within ~15 s; this page picks it up on the next reload.</div>`;
+  body.innerHTML = rows + `<div class="sethint" style="margin-top:.6rem;">Applies to the API within ~15 s; this page picks it up on the next reload.</div>` +
+    `<div class="setrow"><b>⬡ Relationship graph</b><button type="button" class="idgo" id="setgraph" style="width:auto;padding:.3rem .8rem;font-size:.78rem;">Open console</button>
+     <span class="sethint">Curated clinical edges powering retrieval expansion + the is-it-helping quality watch.</span></div>`;
+  const gbtn = body.querySelector("#setgraph");
+  if(gbtn) gbtn.addEventListener("click", () => { $("#setmodal").hidden = true; openGraphConsole(); });
   body.querySelectorAll("select[data-k]").forEach(sel => sel.addEventListener("change", async () => {
     const r = await fetch("/admin/settings", {method: "POST",
       headers: {"content-type": "application/json", "x-admin-password": sessionStorage.getItem("noesis_apw") || ""},
@@ -4411,6 +4449,91 @@ $("#setpw").addEventListener("keydown", e => { if(e.key === "Enter") loadSetting
 $("#setclose").addEventListener("click", () => { $("#setmodal").hidden = true; });
 $("#setmodal").addEventListener("click", e => { if(e.target === $("#setmodal")) $("#setmodal").hidden = true; });
 
+// ---- relationship-graph console (⬡, password-gated, read-only) ----
+function openGraphConsole(){
+  $("#graphmodal").hidden = false;
+  const unlocked = sessionStorage.getItem("noesis_apw");
+  $("#grlock").hidden = !!unlocked;
+  if(unlocked) loadGraphConsole(); else setTimeout(()=>$("#grpw").focus(), 60);
+}
+async function loadGraphConsole(){
+  const pw = sessionStorage.getItem("noesis_apw") || $("#grpw").value.trim();
+  try{
+    const r = await fetch("/admin/graph/view?days=30", {headers: {"x-admin-password": pw}});
+    if(r.status === 401){
+      sessionStorage.removeItem("noesis_apw");
+      $("#grlock").hidden = false; $("#grbody").hidden = true;
+      $("#grerr").textContent = "Wrong password."; return;
+    }
+    if(r.status === 404){ $("#grerr").textContent = "Graph is not enabled on this deployment."; return; }
+    if(!r.ok) throw new Error(r.status);
+    sessionStorage.setItem("noesis_apw", pw);
+    $("#grlock").hidden = true; $("#grerr").textContent = "";
+    renderGraphConsole(await r.json());
+  }catch(e){ $("#grerr").textContent = "Graph console unavailable — try again."; $("#grlock").hidden = false; }
+}
+function renderGraphConsole(d){
+  const body = $("#grbody"); body.hidden = false;
+  const st = (d.stats && d.stats.edges) || {};
+  const chips = `<div class="grstats">
+    <span class="grchip">retrieval expansion: <b>${esc(d.expand_mode || "off")}</b></span>
+    <span class="grchip">active edges: <b>${st.active || 0}</b></span>
+    <span class="grchip">shadow: <b>${st.shadow || 0}</b></span>
+    <span class="grchip">demoted: <b>${st.demoted || 0}</b></span>
+    <span class="grchip">evidence rows: <b>${(d.stats && d.stats.evidence_rows) || 0}</b></span>
+  </div>`;
+  let impact = "", verdict = "";
+  const im = d.impact;
+  if(im){
+    const w = im.with_legs || {}, wo = im.without_legs || {};
+    const fmt = x => (x === null || x === undefined) ? "–" : x;
+    impact = `<div class="grimpact">
+      <div class="grimp"><h4>Answers WITH graph evidence (${im.days}d)</h4>
+        ${fmt(w.answers)} answers · grounded ${w.grounded_rate === null ? "–" : Math.round((w.grounded_rate||0)*100) + "%"} ·
+        avg ${fmt(w.avg_claims)} claims · ${fmt(w.atoms_merged)} atoms merged</div>
+      <div class="grimp"><h4>Answers without (${im.days}d)</h4>
+        ${fmt(wo.answers)} answers · grounded ${wo.grounded_rate === null ? "–" : Math.round((wo.grounded_rate||0)*100) + "%"} ·
+        avg ${fmt(wo.avg_claims)} claims</div>
+    </div>`;
+    if(w.answers >= 3 && wo.answers >= 3){
+      const delta = (w.grounded_rate || 0) - (wo.grounded_rate || 0);
+      verdict = delta >= -0.02
+        ? `<div class="grverdict good">✓ Graph evidence is not degrading grounding (Δ ${(delta*100).toFixed(0)}pt on ${w.answers + wo.answers} answers).</div>`
+        : `<div class="grverdict warn">⚠ Grounded rate is ${Math.abs(delta*100).toFixed(0)}pt LOWER with graph legs — review the edge list and recent sessions.</div>`;
+    } else {
+      verdict = `<div class="grverdict">Not enough answers yet to compare quality (needs ≥3 per arm in the window).</div>`;
+    }
+  }
+  const edges = (d.edges || []);
+  const rows = edges.map(e => `<div class="gredge" data-t="${esc((e.subject + " " + e.relation + " " + e.object + " " + (e.context_topic||"")).toLowerCase())}">
+      <b>${esc(e.subject)}</b> <span class="rel">—${esc(e.relation)}→</span> <b>${esc(e.object)}</b>
+      ${e.context_topic ? `<span class="ctx">(${esc(e.context_topic)})</span>` : ""}
+      <span class="grtag">${esc(e.label)}</span>
+      <span class="grtag">${esc(e.provenance)}</span>
+      <span class="grtag ${esc(e.status)}">${esc(e.status)}</span>
+      ${e.seen_count ? `<span class="grtag">seen ${e.seen_count}</span>` : ""}
+      ${e.needs_review ? `<span class="grtag review">needs review</span>` : ""}
+    </div>`).join("");
+  const topq = (im && im.top_leg_queries && im.top_leg_queries.length)
+    ? `<h4 style="margin:1rem 0 .2rem;font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Top expansion queries (${im.days}d)</h4>` +
+      im.top_leg_queries.map(([q2, n]) => `<div class="gredge"><span>${esc(q2)}</span><span class="grtag">×${n}</span></div>`).join("")
+    : "";
+  body.innerHTML = chips + verdict + impact +
+    `<input id="grfilter" placeholder="Filter ${edges.length} edges… (topic or relation)" />` +
+    `<div id="gredges">${rows || '<p style="color:var(--muted);font-size:.8rem;">No edges yet — run /admin/graph/sync.</p>'}</div>` + topq +
+    `<p style="font-size:.68rem;color:var(--muted);margin-top:.8rem;">Read-only console. Edges are stored in Postgres (noesis_topic_edge / noesis_edge_evidence); activate/demote via the admin API. The graph steers retrieval — it is never cited as evidence.</p>`;
+  $("#grfilter").addEventListener("input", () => {
+    const t = $("#grfilter").value.trim().toLowerCase();
+    document.querySelectorAll("#gredges .gredge").forEach(el => {
+      el.style.display = (!t || (el.dataset.t || "").includes(t)) ? "" : "none";
+    });
+  });
+}
+$("#grgo").addEventListener("click", loadGraphConsole);
+$("#grpw").addEventListener("keydown", e => { if(e.key === "Enter") loadGraphConsole(); });
+$("#grclose").addEventListener("click", () => { $("#graphmodal").hidden = true; });
+$("#graphmodal").addEventListener("click", e => { if(e.target === $("#graphmodal")) $("#graphmodal").hidden = true; });
+
 initIdentity();
 function routeHash(){    // #s/<id> → Q&A answer/thread · #p/<id> → panel session page · #sessions/#panel
   const mp = location.hash.match(/^#p\/(.+)$/);
@@ -4420,6 +4543,7 @@ function routeHash(){    // #s/<id> → Q&A answer/thread · #p/<id> → panel s
   else if(location.hash === "#sessions"){ openSessions(); }
   else if(location.hash === "#panel" && ASK_PANEL_ENABLED){ openPanel(""); }
   else if(location.hash === "#triage" && TRIAGE_ENABLED){ setMode("triage"); }
+  else if(location.hash === "#graph"){ openGraphConsole(); }
 }
 // route only AFTER config loads, so CONV_ENABLED is known (shared threads render as conversations)
 loadConfig().then(routeHash);

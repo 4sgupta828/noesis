@@ -46,6 +46,15 @@ def test_neighbors_dedupe_rank_by_confidence_and_cap():
     assert len(hits) == 1 and hits[0]["object"] == "gout"  # highest confidence wins the cap
 
 
+def test_neighbor_order_is_deterministic_on_confidence_ties():
+    edges = [_e("ckd", "increases_risk_of", "osteoporosis"),
+             _e("ckd", "increases_risk_of", "anemia"),
+             _e("diabetes", "increases_risk_of", "ckd")]
+    a = neighbors_from(build_adjacency(edges), ["ckd"])
+    b = neighbors_from(build_adjacency(list(reversed(edges))), ["ckd"])
+    assert [x["id"] for x in a] == [x["id"] for x in b]     # insertion order must not matter
+
+
 def test_demotion_requires_all_evidence_dead():
     ev = {"e1": ["d1"], "e2": ["d1", "d2"], "e3": []}
     assert edges_fully_dead(ev, {"d1"}) == ["e1"]          # e2 survives on d2; e3 has no evidence

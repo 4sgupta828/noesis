@@ -257,6 +257,62 @@ class SessionStore:
                 session_id, self._vertical, bool(value))
         return res.endswith("1")
 
+    async def graph_impact(self, *, days: int = 30, limit: int = 1000) -> dict[str, Any]:
+        """The always-on graph-quality watch: compare answers WITH graph legs merged vs without,
+        from the diagnostics already persisted on each session turn (no extra instrumentation).
+        Structural aggregate only — grounded rate, claim counts, merged-atom volume."""
+        await self._ensure()
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT grounded, jsonb_array_length(claims) AS n_claims,
+                          thread->0->'diagnostics'->'graph_legs' AS gl
+                   FROM noesis_research_session
+                   WHERE vertical=$1 AND NOT deleted
+                     AND created_at >= now() - ($2 || ' days')::interval
+                   ORDER BY created_at DESC LIMIT $3""",
+                self._vertical, str(int(days)), limit)
+        import json as _json
+        legs = {"answers": 0, "grounded": 0, "claims": 0, "atoms_merged": 0, "shadow_runs": 0}
+        base = {"answers": 0, "grounded": 0, "claims": 0}
+        top_queries: dict[str, int] = {}
+        for r in rows:
+            gl = r["gl"]
+            if isinstance(gl, str):
+                try:
+                    gl = _json.loads(gl)
+                except Exception:   # noqa: BLE001
+                    gl = None
+            merged = 0
+            if isinstance(gl, dict):
+                for leg in gl.get("legs") or []:
+                    merged += int(leg.get("merged") or 0)
+                    q = (leg.get("query") or "")[:80]
+                    if q:
+                        top_queries[q] = top_queries.get(q, 0) + 1
+                if gl.get("shadow"):
+                    legs["shadow_runs"] += 1
+            if merged > 0:
+                legs["answers"] += 1
+                legs["grounded"] += 1 if r["grounded"] else 0
+                legs["claims"] += r["n_claims"] or 0
+            else:
+                base["answers"] += 1
+                base["grounded"] += 1 if r["grounded"] else 0
+                base["claims"] += r["n_claims"] or 0
+            legs["atoms_merged"] += merged
+        def _rate(d):
+            return round(d["grounded"] / d["answers"], 3) if d["answers"] else None
+        def _avg(d):
+            return round(d["claims"] / d["answers"], 1) if d["answers"] else None
+        return {"days": days, "sampled": len(rows),
+                "with_legs": {"answers": legs["answers"], "grounded_rate": _rate(legs),
+                              "avg_claims": _avg(legs), "atoms_merged": legs["atoms_merged"],
+                              "shadow_runs": legs["shadow_runs"]},
+                "without_legs": {"answers": base["answers"], "grounded_rate": _rate(base),
+                                 "avg_claims": _avg(base)},
+                "top_leg_queries": sorted(top_queries.items(), key=lambda x: -x[1])[:10]}
+
     async def get(self, session_id: str) -> dict[str, Any] | None:
         await self._ensure()
         pool = await self._get_pool()

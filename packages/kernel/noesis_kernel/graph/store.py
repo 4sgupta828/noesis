@@ -114,7 +114,10 @@ def neighbors_from(adj: dict, topics: list[str], *, limit: int = 12) -> list[dic
                         "label": e["label"], "confidence": e.get("confidence", 0),
                         "provenance": e.get("provenance", ""), "direction": direction,
                         "via": via, "id": e["id"]})
-    out.sort(key=lambda d: -float(d.get("confidence") or 0))
+    # Deterministic order: confidence desc, then lexical — leg selection (A9 caps at 2) must be
+    # reproducible across processes/snapshots, or A/B runs and prod behavior silently differ.
+    out.sort(key=lambda d: (-float(d.get("confidence") or 0),
+                            d["subject"], d["relation"], d["object"]))
     return out[:limit]
 
 

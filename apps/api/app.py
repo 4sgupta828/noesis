@@ -1835,6 +1835,31 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="unknown edge")
         return {"edge_id": body.edge_id, "status": status}
 
+    @app.get("/admin/graph/view")
+    async def admin_graph_view(days: int = 30,
+                               x_admin_password: str = Header(default="")) -> dict:
+        """READ-ONLY graph console payload for the UI (panel-password gate — curated clinical
+        relations + aggregate quality stats, no user data). Edge MUTATIONS stay behind the
+        admin token (/admin/graph/edge). Includes the impact rollup: grounded rate and claim
+        counts for answers with graph legs merged vs without — the standing 'is the graph
+        helping, never hurting' watch."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        g = _graph()
+        if g is None:
+            raise HTTPException(status_code=404, detail="graph not enabled")
+        try:
+            edges = await g.list_edges(limit=500)
+            stats = await g.stats()
+            impact = None
+            store = _store()
+            if store is not None:
+                impact = await store.graph_impact(days=min(max(days, 1), 365))
+            return {"edges": edges, "stats": stats, "impact": impact,
+                    "expand_mode": graph_expand_mode()}
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"graph view failed: {e}") from e
+
     @app.get("/graph/related")
     async def graph_related(topic: str, limit: int = 8) -> dict:
         """Active graph neighbors of a topic (hierarchy-lifted, confidence-ranked) — the public

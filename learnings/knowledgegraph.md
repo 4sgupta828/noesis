@@ -197,9 +197,12 @@ degraded answer. **New phasing:**
 - **P0:** schema per A2 + relation manifest + curated edges (incl. `narrower_than`, A6) +
   invalidation hook (A5) + admin/read API + **C2 dark** behind `NOESIS_GRAPH_PULSE`.
 - **P1:** chain harvester writing SHADOW edges + no-invention/entailment eval (A4) + C2 ON.
-  Related-change inbox items visually distinct, lower priority than direct hits.
-- **P2:** C1 dark behind `NOESIS_GRAPH_EXPAND` + its A/B (metrics must include evidence-floor
-  pass rate AND steps-consumed / `stopped_reason=max_steps` rate); ON only after a clean A/B.
+  Related-change inbox items visually distinct, lower priority than direct hits. PLUS
+  **C1 shadow-counterfactual logging** (per A9 — zero user-facing change, starts accumulating
+  the recall-value evidence here).
+- **P2:** C1 (graph-guided evidence legs, A9) behind `NOESIS_GRAPH_EXPAND`; ON only after the
+  win-seeking A/B passes (must recall gold evidence graph-off misses on multi-hop questions,
+  AND hold evidence-floor pass rate + steps-consumed on single-topic questions).
 - **P3:** related-topic chips; graph view; seeding revisit per A1.
 
 ## A4 — Harvester: eval gates WRITES, not reads; labels need an entailment check (unanimous)
@@ -265,3 +268,55 @@ queries, and floor deltas every time.
 (case/whitespace norm + LLM-shown registry), not medical entity resolution — synonyms are
 prompt-mediated, not deterministic. The spec's claims and the granularity policy (A6) are
 written against that weaker, true foundation.
+
+## A9 — C1 redesigned: graph-guided evidence legs (post-panel, user-driven deepening)
+
+The panel reviewed C1 as "a RELATED-topics hint to the planner" and rightly contained it. But
+that mechanism undersells the graph's actual value: **search can only find evidence semantically
+near the question as asked.** Two structural misses follow — vocabulary miss (the CKD-fatigue
+question never reaches evidence indexed under "erythropoietin deficiency / ESA therapy") and
+multi-hop miss (the load-bearing evidence is about an intermediate topic — CKD → anemia →
+fatigue — that appears nowhere in the question text; no reformulation is guaranteed to reach
+it, and the planner reformulates only toward its own priors). The graph knows the hop as
+verified data, so it can generate the query the user never typed. That is recall the search
+stack cannot achieve alone — the graph compensates for missing semantic capture and missing
+reformulations.
+
+**Mechanism (replaces the planner context line as C1's primary design):**
+
+1. Question → registry topics (the one semantic step — scaffold piggyback per A7, or +1 small
+   call).
+2. Walk **1-hop** edges above the confidence bar (2 hops compounds edge error multiplicatively
+   and explodes fan-out — not in P0/P1).
+3. **Generate sub-queries from edge templates in code** — `CKD —increases_risk_of→ anemia
+   [context: CKD]` ⇒ "anemia in chronic kidney disease". Deterministic, auditable, zero LLM.
+4. Run them as **capped additional retrieval legs** (P0 caps: ≤2 graph legs, smaller k per leg)
+   alongside the normal legs; merged candidates flow through the EXISTING ranking, evidence
+   floors, and span gate unchanged. Every graph-pulled block is provenance-tagged with the edge
+   that fetched it (diagnostics + measurement).
+
+This deletes the panel's planner-pollution objection at the root: the planner's step budget is
+untouched, nothing is suggested to an LLM, and the graph's contribution is exactly measurable.
+The A7 invariants hold unchanged — graph text never enters compose, never gets cited; the graph
+only widens what the span gate chooses from. A bad edge's block still has to out-rank
+on-question evidence and survive the floors. Residual risk is candidate-pool dilution — managed
+by the caps, not by not building it. The planner hint (old C1) is demoted to an optional
+secondary experiment.
+
+**Shadow-counterfactual mode (how the value hypothesis gets proven before anything changes):**
+run steps 1–4 but DON'T merge — log what would have happened: "graph legs surfaced N blocks;
+M would have entered the top-k pool; K cover a topic no searched query touched." Zero
+user-facing change, so this is as safe as C2-dark and starts in **P1** (amending A3's ordering:
+C1-shadow no longer waits for P2; only C1-ON stays behind the eval). A week of prod shadow
+traffic turns the value question from a design debate into a measurement.
+
+**Eval reframed from no-harm to win-seeking:** on held-out multi-hop questions with known gold
+evidence, graph-on must recall evidence graph-off provably misses; PLUS the no-harm check
+(evidence-floor pass rate, steps consumed) on single-topic questions. The A/B ships C1 ON only
+on a win, not merely an absence of harm.
+
+**Consequences elsewhere:** ~30 curated edges for top conditions (CKD↔anemia, AF↔stroke,
+diabetes↔CKD, HFpEF↔cardiac amyloidosis, …) are sufficient to test the recall hypothesis —
+seeding (A1) remains unnecessary for this. And the write-side discipline (A2/A4/A5) becomes
+MORE important, not less: under this design a bad edge silently spends retrieval budget, so
+shadow status, entailment gates, and invalidation are what make retrieval-side trust possible.

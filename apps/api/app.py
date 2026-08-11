@@ -170,7 +170,24 @@ def _graph_store():
 
 
 _GRAPH_REL_PHRASE = {"increases_risk_of": "in", "causes": "in", "comorbid_with": "with",
-                     "complication_of": "after", "treats": "for"}
+                     "complication_of": "after", "treats": "for", "precipitates": "induced"}
+# v3 C-3: masquerade relations OUTRANK confidence-1.0 comorbidity edges when consumed via an
+# INCOMING edge (the question names the cover story) — that's the hard-case payoff.
+_GRAPH_REL_PRIORITY = {"underlies_presentation_of": 0, "mimics": 0}
+_GRAPH_DARK_RELATIONS = {"manifests_as"}     # C4's primitive — no leg consumer until v3-P1
+
+
+def _graph_leg_query(nb: dict) -> str:
+    """Per-relation leg template (v3 C-3). Masquerade legs search the HIDDEN topic presenting
+    as the asked cover-story, discriminator included — the query the user never typed."""
+    other = nb["object"] if nb["direction"] == "out" else nb["subject"]
+    if nb["relation"] in ("mimics", "underlies_presentation_of") and nb["direction"] == "in":
+        q = f"{nb['subject']} presenting as {nb['via']}"
+        if nb.get("distinguished_by"):
+            q += f" {nb['distinguished_by']}"
+        return q
+    phrase = _GRAPH_REL_PHRASE.get(nb["relation"], "and")
+    return f"{other} {phrase} {nb['via']}"
 
 
 def _make_graph_expander():
@@ -188,14 +205,19 @@ def _make_graph_expander():
         topics = await g.match_topics(question)
         if not topics:
             return None
+        nbs = [nb for nb in await g.neighbors(topics, limit=12)
+               if nb["relation"] not in _GRAPH_DARK_RELATIONS
+               and not (nb["relation"] in _GRAPH_REL_PRIORITY and nb["direction"] == "out")]
+        # masquerade edges (incoming) first, then the neighbor order (via-rank, confidence)
+        nbs.sort(key=lambda nb: _GRAPH_REL_PRIORITY.get(nb["relation"], 1)
+                 if nb["direction"] == "in" else 1)
         legs, seen = [], {t.lower() for t in topics}
-        for nb in await g.neighbors(topics, limit=8):
+        for nb in nbs:
             other = nb["object"] if nb["direction"] == "out" else nb["subject"]
             if other.lower() in seen:
                 continue
             seen.add(other.lower())
-            phrase = _GRAPH_REL_PHRASE.get(nb["relation"], "and")
-            legs.append({"query": f"{other} {phrase} {nb['via']}",
+            legs.append({"query": _graph_leg_query(nb),
                          "note": f"{nb['subject']} {nb['relation']} {nb['object']}"})
             if len(legs) == 2:
                 break
@@ -1805,9 +1827,18 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         g = _graph_admin_gate(x_admin_token)
         manifest = load_active_vertical()
         try:
-            synced = await g.sync_curated(list(getattr(manifest, "graph_edges", ()) or ()))
+            edges = list(getattr(manifest, "graph_edges", ()) or ())
+            synced = await g.sync_curated(edges)
+            # v3: edge endpoints are registry topics — mint any new ones as CONDITION kind
+            # (masqueraders are real conditions; the stability contract applies). Best-effort:
+            # the graph works without the registry row; Pulse consistency is what this buys.
+            minted = 0
+            cur = _currency()
+            if cur is not None and edges:
+                names = sorted({e["subject"] for e in edges} | {e["object"] for e in edges})
+                minted = len(await cur.ensure_topics(names, source="seed", kind="condition"))
             invalidated = await _graph_invalidate(g)
-            return {**synced, **invalidated, **(await g.stats())}
+            return {**synced, "endpoints_ensured": minted, **invalidated, **(await g.stats())}
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"graph sync failed: {e}") from e
 
@@ -2095,13 +2126,15 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
 
     async def _topic_registry(cur):
         """The canonical topic registry, seeded once from the vertical's covered-condition names —
-        the STABILITY substrate: LLM calls prefer exact reuse, so repeated runs converge."""
-        topics = await cur.list_topics()
+        the STABILITY substrate: LLM calls prefer exact reuse, so repeated runs converge.
+        CONDITION-kind only (v3 C-5): graph-minted drug/finding rows must never contaminate the
+        watchable-topic prompts this feeds."""
+        topics = await cur.list_topics(kind="condition")
         if not topics:
             seed = list(getattr(load_active_vertical(), "watch_topic_seed", ()) or ())
             if seed:
                 await cur.ensure_topics(seed, source="seed")
-                topics = await cur.list_topics()
+                topics = await cur.list_topics(kind="condition")
         return topics
 
     def _registry_block(topics: list[str]) -> str:

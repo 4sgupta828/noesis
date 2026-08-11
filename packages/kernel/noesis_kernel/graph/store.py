@@ -37,6 +37,10 @@ CREATE TABLE IF NOT EXISTS noesis_topic_edge (
     object        text NOT NULL,
     object_norm   text NOT NULL,
     context_topic text NOT NULL DEFAULT '',   -- A6 qualifier (setting/population), not a new node
+    distinguished_by text NOT NULL DEFAULT '',-- v3/C-2: the discriminating finding on a mimic/
+    --                                           underlies edge (identity-EXCLUDED — two drafts of
+    --                                           the same pair with different discriminators must
+    --                                           dedup onto one edge)
     label         text NOT NULL DEFAULT 'hypothesized',
     provenance    text NOT NULL,              -- curated | harvested | seed
     status        text NOT NULL DEFAULT 'shadow',   -- shadow | active | demoted
@@ -47,6 +51,8 @@ CREATE TABLE IF NOT EXISTS noesis_topic_edge (
     created_at    timestamptz NOT NULL DEFAULT now(),
     updated_at    timestamptz NOT NULL DEFAULT now()
 );
+-- v3 ALTER-ensure: CREATE TABLE IF NOT EXISTS never migrates an existing prod table (C-2)
+ALTER TABLE noesis_topic_edge ADD COLUMN IF NOT EXISTS distinguished_by text NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS noesis_topic_edge_subj ON noesis_topic_edge (subject_norm, status);
 CREATE INDEX IF NOT EXISTS noesis_topic_edge_obj  ON noesis_topic_edge (object_norm, status);
 CREATE TABLE IF NOT EXISTS noesis_edge_evidence (
@@ -111,6 +117,7 @@ def neighbors_from(adj: dict, topics: list[str], *, limit: int = 12) -> list[dic
             seen_ids.add(e["id"])
             out.append({"subject": e["subject"], "relation": e["relation"],
                         "object": e["object"], "context_topic": e.get("context_topic", ""),
+                        "distinguished_by": e.get("distinguished_by", ""),
                         "label": e["label"], "confidence": e.get("confidence", 0),
                         "provenance": e.get("provenance", ""), "direction": direction,
                         "via": via, "id": e["id"], "_rank": rank})
@@ -158,7 +165,8 @@ class GraphStore:
     # ---- writes (all invalidate the snapshot) --------------------------------------------------
 
     async def upsert_edge(self, *, subject: str, relation: str, object_: str,
-                          context_topic: str = "", label: str = "hypothesized",
+                          context_topic: str = "", distinguished_by: str = "",
+                          label: str = "hypothesized",
                           provenance: str = "harvested", status: str = "shadow",
                           confidence: float = 0.0, note: str = "") -> str:
         """Idempotent on identity. Re-upsert refreshes label/confidence/note but NEVER
@@ -173,10 +181,13 @@ class GraphStore:
             await conn.execute(
                 """INSERT INTO noesis_topic_edge
                      (id, subject, subject_norm, relation, object, object_norm, context_topic,
-                      label, provenance, status, confidence, note)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+                      distinguished_by, label, provenance, status, confidence, note)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
                    ON CONFLICT (id) DO UPDATE SET
                      label=EXCLUDED.label, confidence=EXCLUDED.confidence,
+                     distinguished_by=CASE WHEN EXCLUDED.distinguished_by != ''
+                                           THEN EXCLUDED.distinguished_by
+                                           ELSE noesis_topic_edge.distinguished_by END,
                      note=EXCLUDED.note, updated_at=now(),
                      status=CASE WHEN noesis_topic_edge.status='demoted'
                                  THEN noesis_topic_edge.status
@@ -185,7 +196,8 @@ class GraphStore:
                    """,
                 eid, subject.strip()[:200], _norm(subject), relation,
                 object_.strip()[:200], _norm(object_), context_topic.strip()[:200],
-                label, provenance, status, float(confidence), note[:500])
+                distinguished_by.strip()[:300], label, provenance, status,
+                float(confidence), note[:500])
         self._snap = None
         return eid
 
@@ -226,7 +238,9 @@ class GraphStore:
         for e in edges or []:
             await self.upsert_edge(
                 subject=e["subject"], relation=e["relation"], object_=e["object"],
-                context_topic=e.get("context_topic", ""), label=e.get("label", "established"),
+                context_topic=e.get("context_topic", ""),
+                distinguished_by=e.get("distinguished_by", ""),
+                label=e.get("label", "established"),
                 provenance="curated", status="active",
                 confidence=float(e.get("confidence", 1.0)), note=e.get("note", ""))
             n += 1
@@ -304,7 +318,7 @@ class GraphStore:
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 """SELECT id, subject, subject_norm, relation, object, object_norm,
-                          context_topic, label, provenance, confidence
+                          context_topic, distinguished_by, label, provenance, confidence
                    FROM noesis_topic_edge WHERE status='active' LIMIT 20000""")
         edges = [dict(r) for r in rows]
         self._snap = {"at": time.monotonic(), "adj": build_adjacency(edges)}
@@ -325,9 +339,9 @@ class GraphStore:
         args.append(min(limit, 1000))
         async with pool.acquire() as conn:
             rows = await conn.fetch(
-                f"""SELECT id, subject, relation, object, context_topic, label, provenance,
-                           status, needs_review, confidence, seen_count, note,
-                           created_at, updated_at
+                f"""SELECT id, subject, relation, object, context_topic, distinguished_by,
+                           label, provenance, status, needs_review, confidence, seen_count,
+                           note, created_at, updated_at
                     FROM noesis_topic_edge {where}
                     ORDER BY updated_at DESC LIMIT ${len(args)}""", *args)
         out = []

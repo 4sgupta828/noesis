@@ -16,11 +16,16 @@ GRAPH_RELATIONS = (
     "complication_of",     # A is a recognized complication of B
     "comorbid_with",       # established bidirectional association
     "narrower_than",       # topic hierarchy (A6) — never surfaced as a clinical relation
+    # --- v3 hard-case relations (spec C-2). Direction: masquerader → cover-story.
+    "mimics",                    # A masquerades as B clinically (distinguished_by on the edge)
+    "underlies_presentation_of", # A is the hidden ETIOLOGY behind presentation B (amyloid→HFpEF)
+    "precipitates",              # A acutely triggers/unmasks B (merged unmasks/precipitates)
+    "manifests_as",              # A → finding (C4 intersection primitive; DARK until v3-P1)
 )
 
-_E = lambda s, r, o, ctx="", note="": {  # noqa: E731
+_E = lambda s, r, o, ctx="", note="", dx="": {  # noqa: E731
     "subject": s, "relation": r, "object": o, "context_topic": ctx,
-    "label": "established", "confidence": 1.0, "note": note}
+    "distinguished_by": dx, "label": "established", "confidence": 1.0, "note": note}
 
 CURATED_EDGES: tuple[dict, ...] = (
     # --- renal / metabolic core
@@ -72,6 +77,71 @@ CURATED_EDGES: tuple[dict, ...] = (
     _E("TB preventive treatment", "narrower_than", "tuberculosis"),
     _E("acute coronary syndrome", "narrower_than", "coronary artery disease"),
     _E("giant cell arteritis", "narrower_than", "vasculitis"),
+    # ================= v3-P0 MASQUERADE SET (spec C-7) =================
+    # Hidden etiologies and mimics behind common cover-story presentations — the connections
+    # a linear search never makes because the answer topic is absent from the question.
+    # Direction: masquerader → cover-story; consumed via INCOMING edges of the asked subject.
+    # --- cardiology
+    _E("cardiac amyloidosis", "underlies_presentation_of", "heart failure", "HFpEF phenotype",
+       dx="LVH on echo with LOW-voltage ECG; carpal tunnel history"),
+    _E("cardiac sarcoidosis", "underlies_presentation_of", "heart failure",
+       "non-ischemic cardiomyopathy", dx="AV block or ventricular arrhythmia in a young patient"),
+    _E("hyperthyroidism", "underlies_presentation_of", "atrial fibrillation",
+       "new-onset AF", dx="suppressed TSH"),
+    _E("infective endocarditis", "underlies_presentation_of", "stroke", "embolic stroke",
+       dx="fever, new murmur, positive blood cultures"),
+    # --- resistant / secondary hypertension
+    _E("primary aldosteronism", "underlies_presentation_of", "hypertension",
+       "resistant hypertension", dx="hypokalemia; aldosterone-renin ratio"),
+    _E("pheochromocytoma", "underlies_presentation_of", "hypertension",
+       "paroxysmal or labile hypertension", dx="episodic headache, palpitations, diaphoresis"),
+    _E("renal artery stenosis", "underlies_presentation_of", "hypertension",
+       "resistant hypertension", dx="flash pulmonary edema; creatinine rise on ACE inhibitor"),
+    _E("obstructive sleep apnea", "underlies_presentation_of", "hypertension",
+       "resistant nocturnal hypertension", dx="snoring, daytime somnolence, obesity"),
+    # --- endocrine masquerades of psych/neuro presentations
+    _E("hypothyroidism", "underlies_presentation_of", "depression", "",
+       dx="elevated TSH; cold intolerance, weight gain, bradycardia"),
+    _E("adrenal insufficiency", "underlies_presentation_of", "depression",
+       "fatigue-predominant", dx="hyponatremia, hyperpigmentation, orthostatic hypotension"),
+    _E("hyperthyroidism", "underlies_presentation_of", "anxiety disorder", "",
+       dx="suppressed TSH; tremor, heat intolerance, weight loss"),
+    _E("Wilson disease", "underlies_presentation_of", "Parkinson disease",
+       "young-onset parkinsonism", dx="Kayser-Fleischer rings; low ceruloplasmin"),
+    # --- anemia with a hidden driver
+    _E("colorectal cancer", "underlies_presentation_of", "anemia",
+       "iron-deficiency anemia in older adults", dx="occult GI blood loss — colonoscopy"),
+    _E("celiac disease", "underlies_presentation_of", "anemia",
+       "iron-refractory iron-deficiency anemia", dx="tissue transglutaminase antibodies"),
+    _E("multiple myeloma", "underlies_presentation_of", "osteoporosis",
+       "fragility fractures", dx="monoclonal protein; hypercalcemia, renal impairment"),
+    _E("hemochromatosis", "underlies_presentation_of", "type 2 diabetes",
+       "bronze diabetes", dx="elevated ferritin and transferrin saturation"),
+    # --- the great chest imitators
+    _E("sarcoidosis", "mimics", "tuberculosis", "granulomatous lung disease",
+       dx="NON-caseating granulomas; negative mycobacterial studies"),
+    _E("tuberculosis", "mimics", "sarcoidosis", "granulomatous lung disease",
+       dx="caseating granulomas; positive AFB/culture/NAAT"),
+    _E("lung cancer", "mimics", "tuberculosis", "non-resolving infiltrate or mass",
+       dx="no response to anti-TB therapy; biopsy"),
+    _E("tuberculosis", "mimics", "lung cancer", "pulmonary nodule or mass",
+       dx="AFB positivity; response to anti-TB therapy"),
+    _E("lymphoma", "mimics", "tuberculosis", "fever, night sweats, lymphadenopathy",
+       dx="excisional node biopsy"),
+    _E("pulmonary embolism", "mimics", "COPD", "exacerbation-like acute dyspnea",
+       dx="hypoxia disproportionate to wheeze; no sputum change"),
+    # --- oncology / systemic imitators
+    _E("IgG4-related disease", "mimics", "pancreatic cancer", "pancreatic mass",
+       dx="elevated serum IgG4; diffuse sausage-shaped pancreas; steroid response"),
+)
+
+# New condition-kind nodes this curated set legitimately mints into the registry
+# (masqueraders are real conditions; the stability contract applies — minted once).
+NEW_CONDITION_NODES: tuple[str, ...] = (
+    "cardiac amyloidosis", "cardiac sarcoidosis", "sarcoidosis", "IgG4-related disease",
+    "infective endocarditis", "primary aldosteronism", "pheochromocytoma",
+    "renal artery stenosis", "obstructive sleep apnea", "hypothyroidism", "hyperthyroidism",
+    "adrenal insufficiency", "hemochromatosis", "Wilson disease", "pulmonary embolism",
 )
 
 

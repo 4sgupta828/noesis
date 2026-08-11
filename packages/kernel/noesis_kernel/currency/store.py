@@ -58,6 +58,11 @@ CREATE TABLE IF NOT EXISTS noesis_topic (
     source     text NOT NULL DEFAULT 'seed',   -- seed | llm
     created_at timestamptz NOT NULL DEFAULT now()
 );
+-- v3 kind-as-ROLE (KG spec C-5): condition | drug | finding | exposure | population.
+-- norm UNIQUE keeps one row per label; overlap labels (anemia = condition AND finding)
+-- keep kind='condition' — condition WINS the row; manifests_as may target condition rows.
+-- ALTER-ensure because CREATE TABLE IF NOT EXISTS never migrates the existing prod table.
+ALTER TABLE noesis_topic ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'condition';
 """
 
 
@@ -203,16 +208,25 @@ class CurrencyStore:
     # canonicalizers are shown this registry and must prefer exact reuse; a genuinely novel topic
     # is inserted ONCE and becomes the stable form for every later run and user.
 
-    async def list_topics(self, *, limit: int = 500) -> list[str]:
+    async def list_topics(self, *, limit: int = 500, kind: str | None = None) -> list[str]:
+        """kind filter (v3 C-5): Pulse watch/canonize/suggest prompts pass kind='condition' so
+        drug/finding rows minted for the graph never contaminate the watchable-topic prompts."""
         pool = await self._get_pool()
+        where, args = "", [limit]
+        if kind:
+            args.append(kind)
+            where = "WHERE kind=$2"
         async with pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT label FROM noesis_topic ORDER BY created_at LIMIT $1", limit)
+                f"SELECT label FROM noesis_topic {where} ORDER BY created_at LIMIT $1", *args)
         return [r["label"] for r in rows]
 
-    async def ensure_topics(self, labels: list[str], *, source: str = "llm") -> list[str]:
+    async def ensure_topics(self, labels: list[str], *, source: str = "llm",
+                            kind: str = "condition") -> list[str]:
         """Insert missing topics (case/whitespace-insensitive) and return the CANONICAL label for
-        each input — an existing registry entry wins over the incoming variant."""
+        each input — an existing registry entry wins over the incoming variant, INCLUDING its
+        kind (condition wins the row per C-5: minting 'anemia' as a finding never downgrades
+        the existing condition row)."""
         pool = await self._get_pool()
         out: list[str] = []
         async with pool.acquire() as conn:
@@ -221,9 +235,9 @@ class CurrencyStore:
                 if not lb:
                     continue
                 row = await conn.fetchrow(
-                    """INSERT INTO noesis_topic (label, norm, source) VALUES ($1,$2,$3)
+                    """INSERT INTO noesis_topic (label, norm, source, kind) VALUES ($1,$2,$3,$4)
                        ON CONFLICT (norm) DO UPDATE SET norm=EXCLUDED.norm
-                       RETURNING label""", lb, _topic_norm(lb), source)
+                       RETURNING label""", lb, _topic_norm(lb), source, kind)
                 out.append(row["label"] if row else lb)
         return out
 

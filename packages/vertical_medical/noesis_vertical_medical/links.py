@@ -44,4 +44,16 @@ def source_url(document_id: str, quote: str | None = None) -> str | None:
         return f"https://data.cdc.gov/d/{native}"
     if src == "faers":                                # no clean per-report page
         return None
+    if src in ("global_guidelines", "india_guidelines"):   # native = registry entry id → its url
+        try:
+            if src == "global_guidelines":
+                from .global_guidelines import GLOBAL_GUIDELINES as _REG
+            else:
+                from .india_guidelines import INDIA_GUIDELINES as _REG
+            for g in _REG:
+                if g.get("id") == native:
+                    return g.get("url") or None
+        except Exception:   # noqa: BLE001
+            return None
+        return None
     return None

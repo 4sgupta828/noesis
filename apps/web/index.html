@@ -800,6 +800,9 @@
   .psub{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.09em;color:var(--gold);margin:.55rem 0 .3rem;}
   .pdoc{font-size:.78rem;color:var(--ink);line-height:1.45;margin:.25rem 0;}
   .pdoc-d{font-family:var(--mono);font-size:.66rem;color:var(--muted);margin-right:.35rem;}
+  .pdoc-a{color:var(--ink);text-decoration:underline;text-decoration-color:var(--hair);}
+  .pdoc-a:hover{color:var(--gold);}
+  .pitem-l{font-size:.76rem;margin:-.15rem 0 .4rem;}
   .pdoc-s{font-family:var(--mono);font-size:.66rem;color:var(--gold);margin-right:.35rem;}
   .psugs{margin-top:.6rem;display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;}
   .psugs-h{flex-basis:100%;font-family:var(--mono);font-size:.62rem;text-transform:uppercase;
@@ -3613,14 +3616,20 @@ function openPulsePanel(summary, watches, days){
       const d = await r.json();
       const evs = (d.events||[]).map(i=>{
         const what = i.relation === "retracted" ? "Retracted" : "Guidance changed";
+        const links = [i.old_url ? `<a class="pdoc-a" href="${esc(i.old_url)}" target="_blank" rel="noopener noreferrer">${i.relation==="retracted"?"retracted paper":"previous version"} ↗</a>` : "",
+                       i.new_url ? `<a class="pdoc-a" href="${esc(i.new_url)}" target="_blank" rel="noopener noreferrer">current version ↗</a>` : ""].filter(Boolean).join(" · ");
         return `<div class="pitem${i.seen?"":" unseen"}">
           <div class="pitem-k">${esc(what)} · ${esc((i.created_at||"").slice(0,10))}</div>
           <div class="pitem-s">${esc((i.subjects||[]).join("; ") || i.old_document_id || "")}</div>
+          ${links?`<div class="pitem-l">${links}</div>`:""}
           <button type="button" class="chip-q pitem-ask">Ask about this</button></div>`;
       }).join("");
-      const docs = (d.new_documents||[]).slice(0,12).map(nd=>
-        `<div class="pdoc"><span class="pdoc-d">${esc((nd.first_seen||"").slice(0,10))}</span>
-         <span class="pdoc-s">${esc(nd.source_key)}</span> ${esc(nd.title).slice(0,110)}</div>`).join("");
+      const docs = (d.new_documents||[]).slice(0,12).map(nd=>{
+        const t = esc(nd.title).slice(0,110);
+        return `<div class="pdoc"><span class="pdoc-d">${esc((nd.first_seen||"").slice(0,10))}</span>
+         <span class="pdoc-s">${esc(nd.source_key)}</span> ${nd.url
+           ? `<a class="pdoc-a" href="${esc(nd.url)}" target="_blank" rel="noopener noreferrer">${t} ↗</a>` : t}</div>`;
+      }).join("");
       body.innerHTML =
         (evs ? `<div class="psub">Changes</div>${evs}` : "")
         + (docs ? `<div class="psub">New sources on this topic</div>${docs}` : "")

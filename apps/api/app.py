@@ -1641,9 +1641,12 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             events = await cur.list_events(status="approved", limit=min(limit, 50))
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"pulse feed failed: {e}") from e
-        return {"events": [{k: e[k] for k in
+        return {"events": [{**{k: e[k] for k in
                             ("relation", "old_document_id", "new_document_id", "subjects",
-                             "materiality", "brief_md", "created_at")} for e in events]}
+                             "materiality", "brief_md", "created_at")},
+                            "old_url": _pulse_doc_url(e.get("old_document_id", "")),
+                            "new_url": _pulse_doc_url(e.get("new_document_id", ""))}
+                           for e in events]}
 
     @app.get("/admin/pulse/events")
     async def admin_pulse_events(status: str | None = None, limit: int = 100,
@@ -1811,6 +1814,21 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"inbox failed: {e}") from e
 
+    def _pulse_doc_url(document_id: str):
+        """Best-effort canonical link for a pulse item (vertical URL mapper; None when no page)."""
+        try:
+            svc = app.state.service
+            fn = getattr(getattr(svc, "ui", None), "source_url", None)
+            return fn(document_id, "") if (fn and document_id) else None
+        except Exception:   # noqa: BLE001
+            return None
+
+    def _pulse_enrich_events(events: list[dict]) -> list[dict]:
+        for e in events:
+            e["old_url"] = _pulse_doc_url(e.get("old_document_id", ""))
+            e["new_url"] = _pulse_doc_url(e.get("new_document_id", ""))
+        return events
+
     @app.get("/pulse/topic-activity")
     async def pulse_topic_activity(topic: str, days: int = 30,
                                    x_noesis_token: str = Header(default="")) -> dict:
@@ -1834,7 +1852,10 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 new_docs = await cur.docs_first_seen(doc_ids, days=days)
             except Exception as e:   # noqa: BLE001 — activity degrades to events-only
                 __import__("logging").getLogger("api.pulse").warning("topic activity search failed: %r", e)
-            return {"topic": topic, "days": days, "events": events, "new_documents": new_docs}
+            for nd in new_docs:
+                nd["url"] = _pulse_doc_url(nd.get("document_id", ""))
+            return {"topic": topic, "days": days,
+                    "events": _pulse_enrich_events(events), "new_documents": new_docs}
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"topic activity failed: {e}") from e
 

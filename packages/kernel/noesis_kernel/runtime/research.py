@@ -387,13 +387,14 @@ class ResearchService:
             source_keys, extra_sources={"attachment": att_source} if att_source else None)
         # A9 graph-guided evidence legs (app-injected hook; best-effort — a graph failure never
         # delays or breaks the answer path). The hook decides legs AND mode (shadow vs merged).
-        graph_legs, graph_shadow = None, False
+        graph_legs, graph_shadow, graph_late = None, False, False
         if self.graph_expander is not None:
             try:
                 _gx = await self.graph_expander(question)
                 if _gx and _gx.get("legs"):
                     graph_legs = list(_gx["legs"])
                     graph_shadow = bool(_gx.get("shadow"))
+                    graph_late = bool(_gx.get("late"))
             except Exception:   # noqa: BLE001
                 graph_legs = None
         res = await run_react(
@@ -413,7 +414,7 @@ class ResearchService:
             collect_diagnostics=self.collect_diagnostics,
             classify_evidence=self.classify_evidence,
             evidence_fitness=self.evidence_fitness, evidence_ranker=self.evidence_ranker,
-            graph_legs=graph_legs, graph_shadow=graph_shadow,
+            graph_legs=graph_legs, graph_shadow=graph_shadow, graph_late=graph_late,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)
         res.effort = sc.effort                   # echo the resolved multiplier (observability)

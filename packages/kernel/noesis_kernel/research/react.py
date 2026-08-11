@@ -510,6 +510,10 @@ async def run_react(
     #                                           SAME ranking/floors/span gate. Graph text NEVER enters
     #                                           any prompt — only real retrieved blocks do.
     graph_shadow: bool = False,               # shadow-counterfactual: run+log legs, merge NOTHING
+    graph_late: bool = False,                 # LATE merge: stash leg hits during the loop (planner
+    #                                           runs byte-identical to graph-off — no early-stop
+    #                                           possible), merge them post-loop just before the
+    #                                           claims-first extraction. Purely additive evidence.
 ) -> AnswerResult:
     import asyncio
     atoms = AtomStore()
@@ -691,8 +695,10 @@ async def run_react(
     # are REAL retrieved blocks. The graph itself contributes no prompt text — the planner
     # only ever sees retrieved evidence, so "graph steers search, never cites" holds
     # structurally. Shadow mode retrieves + logs and merges nothing (counterfactual telemetry).
+    _g_stash: list[tuple[dict, list]] = []     # late mode: (leg, hits) held back until post-loop
     if graph_legs:
         _g_diag: list[dict] = []
+        _g_mode = "shadow" if graph_shadow else ("late" if graph_late else "early")
         for _leg in list(graph_legs)[:2]:
             _gq = (_leg.get("query") or "").strip()
             if not _gq:
@@ -706,21 +712,24 @@ async def run_react(
                 _log.warning("graph leg failed on %r: %s", _gq, _ge)
                 _g_hits = []
             _merged = 0
-            if not graph_shadow and _g_hits:
+            if _g_mode == "early" and _g_hits:
                 _before = len(atoms.all())
                 atoms.add_hits(_g_hits)
                 _merged = len(atoms.all()) - _before
                 searched_queries.append(_gq)   # planner sees it as tried — no duplicate searching
+            elif _g_mode == "late" and _g_hits:
+                _g_stash.append((_leg, _g_hits))   # planner never sees these — loop is byte-
+                #                                    identical to graph-off (no early-stop)
             _g_diag.append({"query": _gq, "note": str(_leg.get("note", ""))[:120],
                             "hits": len(_g_hits), "merged": _merged})
         if _g_diag:
-            _log.info("graph legs (%s): %s", "shadow" if graph_shadow else "merged",
+            _log.info("graph legs (%s): %s", _g_mode,
                       [(d["query"], d["hits"], d["merged"]) for d in _g_diag])
             if diag is not None:
-                diag["graph_legs"] = {"shadow": graph_shadow, "legs": _g_diag}
-            await emit({"type": "graph_legs", "shadow": graph_shadow,
+                diag["graph_legs"] = {"shadow": graph_shadow, "mode": _g_mode, "legs": _g_diag}
+            await emit({"type": "graph_legs", "shadow": graph_shadow, "mode": _g_mode,
                         "queries": [d["query"] for d in _g_diag]})
-            if not graph_shadow and any(d["merged"] for d in _g_diag):
+            if _g_mode == "early" and any(d["merged"] for d in _g_diag):
                 # planner-only note (never reaches compose): pre-gathered adjacent-topic
                 # evidence SUPPLEMENTS the question — it must not replace searching it.
                 notes.append("Background evidence on closely-related topics was pre-gathered "
@@ -870,6 +879,26 @@ async def run_react(
                             "rejected": len(result.rejected_claims)})
         except Exception:   # noqa: BLE001 — fallback is best-effort; never break the answer
             pass
+
+    # A9 LATE MERGE: stashed graph-leg evidence joins the atom pool ONLY NOW — after the planner
+    # finished its own (graph-blind) searching and after the fallback grounder (which must never
+    # ground an answer from adjacent-topic atoms alone). The claims-first extraction below then
+    # mines planner AND graph atoms through the same span + entailment gates, and under the
+    # first-come compose cap graph-derived claims can only FILL remaining slots, never displace
+    # a planner claim. Strictly additive: retrieval breadth cannot regress.
+    if _g_stash:
+        _late_added = 0
+        for _leg, _hits in _g_stash:
+            _before = len(atoms.all())
+            atoms.add_hits(_hits)
+            _n = len(atoms.all()) - _before
+            _late_added += _n
+            if diag is not None:
+                for _d in diag.get("graph_legs", {}).get("legs", []):
+                    if _d["query"] == (_leg.get("query") or "").strip():
+                        _d["merged"] = _n
+        result.atoms_gathered = len(atoms.all())
+        _log.info("graph legs late-merged %d atoms post-loop", _late_added)
 
     # CLAIMS-FIRST comprehensive extraction (flag): the terse loop cites only a few atoms, so most
     # retrieved evidence goes unused (e.g. 2 grounded from 18). Mine EVERY atom with a cheap batched

@@ -138,15 +138,17 @@ def graph_pulse_enabled() -> bool:
 
 
 def graph_expand_mode() -> str:
-    """Consumer C1 (A9 graph-guided evidence legs), tri-state via NOESIS_GRAPH_EXPAND:
-    "" (default) → off, byte-identical; "shadow" → legs retrieve + log, merge nothing
-    (counterfactual telemetry); "1/true/on" → legs merge into the candidate pool (same
-    ranking/floors/span gate). Requires NOESIS_GRAPH."""
+    """Consumer C1 (A9 graph-guided evidence legs) via NOESIS_GRAPH_EXPAND:
+    "" (default) → off, byte-identical; "shadow" → legs retrieve + log, merge nothing;
+    "late" (RECOMMENDED) → legs merge POST-LOOP before claims-first extraction — the planner
+    searches exactly as with graph off (no early-stop possible), graph evidence is strictly
+    additive; "1/true/on" → EARLY merge into the pre-loop pool (steers the planner; kept as
+    the A/B arm). Requires NOESIS_GRAPH."""
     if not graph_enabled():
         return ""
     v = os.environ.get("NOESIS_GRAPH_EXPAND", "").lower()
-    if v == "shadow":
-        return "shadow"
+    if v in ("shadow", "late"):
+        return v
     return "on" if v in ("1", "true", "yes", "on") else ""
 
 
@@ -197,7 +199,8 @@ def _make_graph_expander():
                          "note": f"{nb['subject']} {nb['relation']} {nb['object']}"})
             if len(legs) == 2:
                 break
-        return {"legs": legs, "shadow": mode == "shadow"} if legs else None
+        return ({"legs": legs, "shadow": mode == "shadow", "late": mode == "late"}
+                if legs else None)
 
     return _expand
 

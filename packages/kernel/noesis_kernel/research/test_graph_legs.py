@@ -43,11 +43,11 @@ def _source() -> InMemoryRetrievalSource:
 _LEGS = [{"query": "anemia kdigo guideline treated", "note": "ckd increases_risk_of anemia"}]
 
 
-def _run(llm, *, legs=None, shadow=False):
+def _run(llm, *, legs=None, shadow=False, late=False):
     return asyncio.run(run_react(
         question="fatigue workup examination", llm=llm, embedder=FakeEmbedder(dim=8),
         source=_source(), tenant_id="A", budget=BudgetState(max_calls=10), max_steps=4,
-        graph_legs=legs, graph_shadow=shadow, collect_diagnostics=True))
+        graph_legs=legs, graph_shadow=shadow, graph_late=late, collect_diagnostics=True))
 
 
 def test_merged_leg_evidence_is_present_and_citable():
@@ -81,6 +81,21 @@ def test_shadow_leg_merges_nothing_but_logs():
     assert gl["legs"][0]["hits"] >= 1 and gl["legs"][0]["merged"] == 0
     # only the planner's own search contributed atoms
     assert res.atoms_gathered == 1
+
+
+def test_late_merge_keeps_loop_identical_but_adds_atoms_post_loop():
+    llm = ScriptedLLM([
+        AgentStep(action="search", query="fatigue workup examination"),
+        AgentStep(action="answer", claims=[_Q_CLAIM]),
+    ])
+    res = _run(llm, legs=_LEGS, late=True)
+    gl = res.diagnostics["graph_legs"]
+    assert gl["mode"] == "late" and gl["legs"][0]["hits"] >= 1
+    # the loop's own claim verified exactly as in the no-legs run (planner untouched)...
+    assert res.stopped_reason == "answered" and len(res.verified_claims) == 1
+    # ...and the stash landed AFTER the loop: total atoms = planner's 1 + late-merged
+    assert gl["legs"][0]["merged"] >= 1
+    assert res.atoms_gathered == 1 + gl["legs"][0]["merged"]
 
 
 def test_no_legs_is_byte_identical_loop():

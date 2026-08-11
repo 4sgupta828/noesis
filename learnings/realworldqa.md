@@ -1,7 +1,9 @@
 # Real-World Q&A Learning Strategy — measure, learn, and grow the graph from real questions
 
-**Status:** PLAN v1 (panel review pending) · **Companions:** `learnings/knowledgegraph.md`
-(the graph this feeds), `learnings/evidencepulse.md` (currency), `evals/` (existing internal gates)
+**Status:** PLAN v2 — panel-reviewed (Codex GPT-5.5 + Gemini 3.1 Pro + code-grounded subagent,
+2026-08-11; all three returned). Where the Panel Amendments at the end conflict with the v1
+body, the AMENDMENTS WIN. · **Companions:** `learnings/knowledgegraph.md` (the graph this
+feeds), `learnings/evidencepulse.md` (currency)
 
 ## Why (the gap this closes)
 
@@ -92,14 +94,111 @@ full re-run when a major subsystem lands.
   BioASQ retrieval gate; graph harvester on eval answers (shadow).
 - **P2:** weekly cadence + regression gates on frozen slices + public scorecard page.
 
-## Open questions for the panel
+## Open questions for the panel (v1 — all answered below)
 
-1. Dataset priority + anything better we're missing (esp. non-US/consumer distributions)?
-2. Split sizes: is 50/run T2 enough signal to rank failure modes, or do we need 100+?
-3. LLM-judge validity: HealthBench rubrics were built for a specific judge setup — do we need
-   judge-calibration (e.g. double-grade 20 answers, human spot-check) before trusting deltas?
-4. Contamination: MedQA/MedMCQA are in every frontier model's pretraining — does the
-   closed-book-vs-grounded delta still measure what we want, or do we need decontamination?
-5. Graph growout: is harvesting from eval answers (vs real user traffic) a distribution risk —
-   edges biased toward exam-style relations?
-6. What's the single highest-leverage P0 cut if we had to halve the scope?
+1. Dataset priority + gaps? 2. Slice sizes? 3. Judge validity? 4. Contamination?
+5. Graph-growout risk? 6. Highest-leverage cut?
+
+---
+
+# Panel Amendments (v2) — these override the v1 body above
+
+Three-member panel per Rule 17 (Codex, Gemini 3.1 Pro, code-grounded subagent; all returned).
+
+## B1 — The condition filter as written is broken — replace it (subagent, load-bearing)
+
+"Structural containment against the registry" fails twice: real questions don't name conditions
+textbook-style (a vignette says "crushing substernal chest pain", a patient says "sugar"), so
+recall is terrible AND the surviving slice is biased toward the easiest register — poisoning
+every downstream number. It is also exactly the Rule 18 keyword-heuristic-for-semantics ban.
+**Fix:** dataset-native topic metadata (MedMCQA `subject`, HealthBench theme tags) as a
+structural pre-cut, then ONE cached cheap-LLM classification call per candidate question
+(immutable input → cache forever). Read `COVERED_CONDITIONS` from the file at run time (the
+count drifts — it is not "106").
+
+## B2 — Cost model corrected: the ANSWER side dominates (subagent)
+
+v1 priced only grading. Every answered question costs the full ReAct loop — roughly 10–20+ LLM
+calls (planner per step ×8–16, compose, grounding-fix, claims-extraction batches — some not even
+charged to BudgetState per the known governor undercount). The v1 baseline campaign ≈ 350
+answer runs ≈ **4–7k LLM calls before any grading** — an order of magnitude above "modest".
+**Fix:** restate budgets answer-side-inclusive; explicit sign-off on real spend before P0;
+BioASQ runs the retrieval-only `/search` path (genuinely cheap) and says so.
+
+## B3 — MCQ sets demoted to directional probes; kill the closed-book delta claim (unanimous)
+
+MedQA/MedMCQA/PubMedQA are in every frontier model's pretraining; the closed-book-vs-grounded
+delta measures memorization margins, not corpus value (and can go negative when retrieval
+distracts from a memorized answer). Gemini's cut: drop them from P0 entirely and put the budget
+into larger long-form slices. **Retrieval value is instead proven by**: temporal splits
+(post-cutoff questions — newest BioASQ cycle, fresh guideline content e.g. KDIGO 2026),
+paraphrase/entity-swap probes (brand↔generic), and BioASQ gold-snippet recall.
+
+## B4 — Dataset corrections (Codex)
+
+HealthBench-**hard** is a frontier stress set, not a distribution baseline — sample stratified
+full HealthBench (or Consensus) beside it, or we optimize for pathological difficulty. Add
+**HealthSearchQA** (3.2k real consumer search questions) for the patient distribution. K-QA is
+kept but noted US-consumer-skewed. **BioASQ license is non-commercial/registration-gated —
+legal check before any use** (Gemini flags it a trap). LiveQA-Med (2017) is stale — deprioritize.
+**India gap is real and unserved by all of these**: adapt NEET-PG-style vignettes (stripped of
+MCQ form) / build an internal India slice against the India-programme conditions and guidelines
+— the corpus investment `coverage.py` already made deserves an eval slice.
+
+## B5 — Judge calibration is a gate, not a nicety (unanimous)
+
+Before ANY delta is trusted or published: pin judge model+version+prompt (Rule 11 provenance);
+double-grade 20–50 answers with a second independent judge; human spot-check discordant items
+(measure the judge's entailment-hallucination rate); grade HealthBench **per criterion**
+(batching all criteria into one call breaks comparability with published baselines — pay
+per-criterion or drop the "place ourselves vs frontier" claim); control verbosity bias
+(rubric judges reward length); K-QA must-have and contradiction calibrated separately. Note:
+the repo has ZERO LLM-judge infra today (`eval_clinical_gold.py` is deterministic smoke-grade)
+— T2 is net-new machinery. A HealthBench score can rise while evidence-warrant quality falls —
+keep our own span/warrant audit beside external rubrics.
+
+## B6 — Failure routing needs named machinery + counterfactual probes (Gemini + Codex)
+
+v1 never said WHO classifies failures. **Fix:** a trace-aware LLM classifier that sees the full
+diagnostics (searched queries, graph_legs, candidate pools, verified/rejected claims) — final
+text alone cannot distinguish a ranking miss from a span-gate drop; plus a human misroute audit
+on a sample. Before a failure becomes corpus/graph/directive work, run the cheap counterfactual
+probe that isolates the stage: oracle-evidence rerun (compose-only), expanded top-k rerun,
+graph-shadow comparison. Route only what survives.
+
+## B7 — Runner path + side-effect policy (subagent)
+
+Default runner is **kernel-direct `svc.ask`** (the `record_medical_baseline.py` pattern): no
+session rows, no gap side effects, no HTTP. Prod-`/research` runs are a deliberate second mode
+behind a dedicated eval tenant (or a new no-persist flag on `ResearchIn`). Eval→gap-queue
+enqueues are REVIEWED (not auto) and land only at run boundaries — mid-campaign corpus
+mutation destroys frozen-slice reproducibility. The gap queue API exists (`gap_queue.enqueue`)
+but is flag-gated (`NOESIS_GAP_HEALING`) — the plan must state that dependency.
+
+## B8 — Graph growout demoted to P2, conditional (unanimous — v1's biggest false premise)
+
+The chain harvester does NOT exist yet (only the schema's provenance/shadow support does); it
+additionally needs the `engine` column on sessions, reasoned-engine answers (chains are that
+engine's artifact), and session rows the kernel-direct runner never creates. And Gemini's
+distribution warning stands: exam-style questions harvest zebra-trivia edges misaligned with
+the high-prevalence registry. **Fix:** growout is P2, conditional on KG-P1 landing; harvest
+only from realistic long-form slices (K-QA/HealthBench, never MCQ); edges born shadow with
+dataset-provenance recorded; activation only through the A4 entailment gate + curation.
+
+## B9 — Repo corrections (subagent)
+
+`evals/` is EMPTY — real gates live in `scripts/eval_*.py` + `packages/*/eval_*` +
+`noesis_kernel/eval/runner.py`. Build `evals/realworld/` but REUSE `run_qa_eval`'s scoring
+conventions and result schema rather than inventing a parallel one.
+
+## Revised phasing (supersedes v1)
+
+- **P0:** harness (kernel-direct runner, frozen slices, Rule-11 provenance) + license-verified
+  fetch of HealthBench (stratified + hard) and K-QA + LLM condition-classifier (cached) +
+  judge-calibration protocol (B5) + T0 structural scorecard + first T2 baseline at 50+50
+  (directional), with the REAL answer-side budget signed off first.
+- **P1:** failure classifier + counterfactual probes + reviewed routing (gap queue / edge
+  candidates / directive list); HealthSearchQA consumer slice; India internal slice; temporal/
+  paraphrase retrieval-value probes; scale key long-form slices toward ≥200.
+- **P2:** graph growout (conditional on KG-P1; long-form slices only, shadow + curation);
+  weekly cadence + regression gates; public scorecard only after judge calibration passes.

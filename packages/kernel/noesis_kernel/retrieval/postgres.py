@@ -46,7 +46,12 @@ CREATE INDEX IF NOT EXISTS {table}_emb_hnsw   ON {table} USING hnsw (embedding v
 -- TIME AXIS (Evidence Pulse): when each block first landed — the primitive that makes corpus
 -- deltas queryable over time ("what arrived on topic T in the last 30 days"). Additive; rows
 -- ingested before the column exists stay NULL (= unknown, honestly excluded from windows).
-ALTER TABLE {table} ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now();
+-- NOTE: added WITHOUT a default, then default set separately — ADD COLUMN ... DEFAULT now()
+-- BACKFILLS every existing row with the migration instant (Postgres fast-path), which stamped
+-- the whole legacy corpus as "new today" (the saturated first coverage board). Two statements
+-- keep pre-existing rows NULL while new inserts get now().
+ALTER TABLE {table} ADD COLUMN IF NOT EXISTS created_at timestamptz;
+ALTER TABLE {table} ALTER COLUMN created_at SET DEFAULT now();
 CREATE INDEX IF NOT EXISTS {table}_created ON {table} (created_at DESC);
 """
 

@@ -40,6 +40,20 @@ def test_paraphrased_quote_is_rejected_by_the_span_gate():
     assert not r["supported"] and r["reason"] == "quote_not_verbatim"
 
 
+def test_quote_lacking_subject_is_vetoed_structurally():
+    r = asyncio.run(verify_edge_candidate(
+        sentence=_SENT, blocks=_BLOCKS, subject="autoimmune hepatitis",
+        llm=ScriptedLLM(EdgeVerdict(verdict="supported", notable=True, block_index=0,
+                                    quote="underdiagnosed cause of resistant hypertension"))))
+    assert not r["supported"] and r["reason"] == "quote_lacks_subject"
+    r2 = asyncio.run(verify_edge_candidate(
+        sentence=_SENT, blocks=_BLOCKS, subject="primary aldosteronism",
+        llm=ScriptedLLM(EdgeVerdict(verdict="supported", notable=True, block_index=0,
+                                    quote="Primary aldosteronism is a common and "
+                                          "underdiagnosed cause of resistant hypertension"))))
+    assert r2["supported"]
+
+
 def test_unsupported_bad_index_and_no_blocks_fail_safe():
     assert not _run(EdgeVerdict(verdict="unsupported"))["supported"]
     assert not _run(EdgeVerdict(verdict="supported", quote="x", block_index=7))["supported"]

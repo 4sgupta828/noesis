@@ -101,7 +101,8 @@ async def main(n_conditions: int, per_condition: int) -> None:
                             + (f" (context: {c.context})" if c.context else "")
                             + (f"; discriminator: {c.distinguished_by}"
                                if c.distinguished_by else ""))
-                v = await verify_edge_candidate(sentence=sentence, blocks=blocks, llm=svc.llm)
+                v = await verify_edge_candidate(sentence=sentence, blocks=blocks,
+                                                llm=svc.llm, subject=c.subject)
                 status = "shadow"
                 if v["supported"]:
                     supported += 1

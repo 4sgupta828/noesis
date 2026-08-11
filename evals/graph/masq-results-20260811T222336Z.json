@@ -1,0 +1,281 @@
+{
+  "git": "fe7d237",
+  "cases": 10,
+  "off": [
+    {
+      "id": "masq-1",
+      "grounded": true,
+      "claims": 18,
+      "hits": [
+        "amyloid"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-2",
+      "grounded": true,
+      "claims": 18,
+      "hits": [
+        "renin"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-3",
+      "grounded": true,
+      "claims": 28,
+      "hits": [
+        "colonoscopy",
+        "occult",
+        "GI blood loss"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-4",
+      "grounded": true,
+      "claims": 23,
+      "hits": [
+        "TSH"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-5",
+      "grounded": true,
+      "claims": 17,
+      "hits": [
+        "TSH",
+        "thyroid"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-6",
+      "grounded": true,
+      "claims": 27,
+      "hits": [],
+      "legs": []
+    },
+    {
+      "id": "masq-7",
+      "grounded": true,
+      "claims": 17,
+      "hits": [
+        "pulmonary embolism"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-8",
+      "grounded": true,
+      "claims": 22,
+      "hits": [
+        "ceruloplasmin",
+        "Kayser-Fleischer"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-9",
+      "grounded": true,
+      "claims": 15,
+      "hits": [
+        "monoclonal",
+        "SPEP",
+        "myeloma"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-10",
+      "grounded": true,
+      "claims": 9,
+      "hits": [
+        "blood cultures",
+        "echocardiography",
+        "endocarditis"
+      ],
+      "legs": []
+    }
+  ],
+  "on": [
+    {
+      "id": "masq-1",
+      "grounded": true,
+      "claims": 27,
+      "hits": [
+        "amyloid",
+        "low-voltage"
+      ],
+      "legs": [
+        [
+          "cardiac amyloidosis presenting as heart failure LVH on echo ",
+          4
+        ],
+        [
+          "cardiac sarcoidosis presenting as heart failure AV block or ",
+          4
+        ]
+      ]
+    },
+    {
+      "id": "masq-2",
+      "grounded": true,
+      "claims": 19,
+      "hits": [
+        "renin"
+      ],
+      "legs": [
+        [
+          "obstructive sleep apnea presenting as hypertension snoring, ",
+          5
+        ],
+        [
+          "pheochromocytoma presenting as hypertension episodic headach",
+          5
+        ]
+      ]
+    },
+    {
+      "id": "masq-3",
+      "grounded": true,
+      "claims": 30,
+      "hits": [
+        "colonoscopy",
+        "occult",
+        "GI blood loss"
+      ],
+      "legs": [
+        [
+          "celiac disease presenting as anemia tissue transglutaminase ",
+          5
+        ],
+        [
+          "colorectal cancer presenting as anemia occult GI blood loss ",
+          4
+        ]
+      ]
+    },
+    {
+      "id": "masq-4",
+      "grounded": true,
+      "claims": 30,
+      "hits": [
+        "TSH"
+      ],
+      "legs": [
+        [
+          "hyperthyroidism presenting as atrial fibrillation suppressed",
+          2
+        ],
+        [
+          "heart failure with atrial fibrillation",
+          5
+        ]
+      ]
+    },
+    {
+      "id": "masq-5",
+      "grounded": true,
+      "claims": 19,
+      "hits": [
+        "TSH",
+        "thyroid"
+      ],
+      "legs": [
+        [
+          "adrenal insufficiency presenting as depression hyponatremia,",
+          5
+        ],
+        [
+          "hypothyroidism presenting as depression elevated TSH; cold i",
+          3
+        ]
+      ]
+    },
+    {
+      "id": "masq-6",
+      "grounded": true,
+      "claims": 20,
+      "hits": [
+        "malignancy"
+      ],
+      "legs": [
+        [
+          "lung cancer presenting as tuberculosis no response to anti-T",
+          5
+        ],
+        [
+          "lymphoma presenting as tuberculosis excisional node biopsy",
+          4
+        ]
+      ]
+    },
+    {
+      "id": "masq-7",
+      "grounded": true,
+      "claims": 18,
+      "hits": [
+        "pulmonary embolism",
+        "D-dimer"
+      ],
+      "legs": [
+        [
+          "pulmonary embolism presenting as copd hypoxia disproportiona",
+          2
+        ],
+        [
+          "pulmonary hypertension after copd",
+          4
+        ]
+      ]
+    },
+    {
+      "id": "masq-8",
+      "grounded": true,
+      "claims": 20,
+      "hits": [],
+      "legs": []
+    },
+    {
+      "id": "masq-9",
+      "grounded": true,
+      "claims": 22,
+      "hits": [
+        "monoclonal",
+        "myeloma"
+      ],
+      "legs": [
+        [
+          "multiple myeloma presenting as osteoporosis monoclonal prote",
+          4
+        ],
+        [
+          "chronic kidney disease in osteoporosis",
+          4
+        ]
+      ]
+    },
+    {
+      "id": "masq-10",
+      "grounded": true,
+      "claims": 20,
+      "hits": [
+        "blood cultures",
+        "echocardiography",
+        "endocarditis"
+      ],
+      "legs": [
+        [
+          "infective endocarditis presenting as stroke fever, new murmu",
+          1
+        ],
+        [
+          "atrial fibrillation in stroke",
+          5
+        ]
+      ]
+    }
+  ]
+}

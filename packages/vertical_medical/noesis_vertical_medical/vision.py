@@ -65,6 +65,9 @@ abnormal/flagged results FIRST under "Abnormal:", then "Within range:" compactly
    - Imaging/pathology reports: transcribe the IMPRESSION verbatim (quoted), then key findings.
    - Prescriptions/medication lists: drug, dose, route, frequency — exactly as written.
 3. Illegible/uncertain — name any value you could not read confidently rather than guessing.
+4. End with one line — "SECTIONS PRESENT: <every panel/section in the document, comma-separated>" \
+(e.g. "SECTIONS PRESENT: CBC, comprehensive metabolic panel, lipid panel, TSH") — the downstream \
+analysis uses this as its completeness checklist.
 
 Rules: transcription fidelity over completeness of prose — numbers, units, and ranges must be \
 EXACT; no diagnosis, no interpretation, no treatment advice; no invented reference ranges (if the \

@@ -374,6 +374,13 @@ class ResearchService:
                         locator=_Loc("block_span", _did, {"block_id": _bid}),
                         document_title=f"{_nm} (user upload)", content_type="text/plain",
                         source_key="attachment"))
+        if att_texts:
+            # COMPLETENESS HINT (attachment-triggered, per-request — the validated compose
+            # directive is untouched): an "analyze this" over a document means ALL of it.
+            question = (question + "\n\n[The user attached document(s). Analyze them COMPLETELY: "
+                        "address EVERY section/panel the document digest lists (see SECTIONS "
+                        "PRESENT), searching for interpretive evidence per section — partially "
+                        "analyzing an attached report is a failure.]")
         corpus_src, web_src = self._split_retriever(
             source_keys, extra_sources={"attachment": att_source} if att_source else None)
         res = await run_react(

@@ -109,9 +109,12 @@ async def read_documents(
             comp = await llm.complete(
                 system=report_prompt + _DOC_GUARD,
                 messages=[{"role": "user", "content": content}],
-                response_format=VisualObservation, max_tokens=1500)
+                response_format=VisualObservation, max_tokens=4000)
             digest = (comp.parsed.observation or "").strip()
             if digest:
+                import logging
+                logging.getLogger("noesis.documents").info(
+                    "native read: %s → %d chars", pdf.get("name"), len(digest))
                 out.append({"name": pdf.get("name") or "document", "digest": digest})
         except Exception:   # noqa: BLE001 — a failed native read must not break research
             continue

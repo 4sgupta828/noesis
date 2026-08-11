@@ -184,11 +184,24 @@ class GraphStore:
                       distinguished_by, label, provenance, status, confidence, note)
                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
                    ON CONFLICT (id) DO UPDATE SET
-                     label=EXCLUDED.label, confidence=EXCLUDED.confidence,
+                     -- CURATED rows are immune to non-curated overwrites (a harvested draft
+                     -- colliding on identity must never dilute curator label/confidence or
+                     -- get the row demoted on ITS weak evidence — the Wilson-edge incident)
+                     label=CASE WHEN noesis_topic_edge.provenance='curated'
+                                     AND EXCLUDED.provenance != 'curated'
+                                THEN noesis_topic_edge.label ELSE EXCLUDED.label END,
+                     confidence=CASE WHEN noesis_topic_edge.provenance='curated'
+                                          AND EXCLUDED.provenance != 'curated'
+                                THEN noesis_topic_edge.confidence ELSE EXCLUDED.confidence END,
                      distinguished_by=CASE WHEN EXCLUDED.distinguished_by != ''
+                                                AND NOT (noesis_topic_edge.provenance='curated'
+                                                         AND EXCLUDED.provenance != 'curated')
                                            THEN EXCLUDED.distinguished_by
                                            ELSE noesis_topic_edge.distinguished_by END,
-                     note=EXCLUDED.note, updated_at=now(),
+                     note=CASE WHEN noesis_topic_edge.provenance='curated'
+                                    AND EXCLUDED.provenance != 'curated'
+                               THEN noesis_topic_edge.note ELSE EXCLUDED.note END,
+                     updated_at=now(),
                      status=CASE WHEN noesis_topic_edge.status='demoted'
                                  THEN noesis_topic_edge.status
                                  WHEN noesis_topic_edge.status='active' THEN 'active'

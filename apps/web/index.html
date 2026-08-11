@@ -749,6 +749,9 @@
     padding:.8rem .95rem;margin-top:.35rem;}
   .xitem.expanded video{display:block;max-width:100%;border-radius:8px;margin:.55rem 0;}
   .xformrow>details.plain-d{flex-basis:100%;}
+  /* real-world patient case marker — the noesis circle in warm orange */
+  .rpdot{color:#f28c2e;font-size:.9em;text-shadow:0 0 6px rgba(242,140,46,.45);}
+  .sact.rp-on{color:#f28c2e;border-color:#f28c2e;}
   /* Evidence Pulse: labeled Pulse button + badge · inbox panel · integrity banner · watch picker */
   .pulsebtn{position:relative;color:var(--gold);border-color:var(--gold);}
   .pulsebtn:hover{background:var(--gold);color:var(--on-accent);}
@@ -3825,7 +3828,7 @@ async function loadSessionList(){
       const who = s.user_name || s.user_email;
       const isPanel = s.kind === "panel";
       return `<button class="srow" data-id="${esc(s.id)}" data-kind="${esc(s.kind||"research")}">
-        <div class="sq">${isPanel?'<span class="skind">◈ Panel</span> ':""}${esc(s.question)}</div>
+        <div class="sq">${s.real_patient?'<span class="rpdot" title="Real-world patient case">◉</span> ':""}${isPanel?'<span class="skind">◈ Panel</span> ':""}${esc(s.question)}</div>
         <div class="sm">
           ${who?`<span class="swho">${esc(who)}</span>`:""}
           ${s.grounded?'<span class="sg">✓ grounded</span>':'<span>ungrounded</span>'}
@@ -3964,6 +3967,9 @@ function buildSessionActions(box, row, firstTurn, firstAns, rowEl){
   if(hasHl) bits.push(btn("sa-hl", "✦", "Highlights", "Show color highlights (facts · reasoning · context)"));
   if(hasAns) bits.push(btn("sa-copy", "⧉", "Copy", "Copy this answer"));
   bits.push(btn("sa-link", "🔗", "Link", "Copy a shareable link to this session"));
+  bits.push(btn("sa-rp", "◉", row.real_patient ? "Patient case" : "Mark patient case",
+    "Mark this session as a real-world patient case (orange ◉ in the session list)",
+    row.real_patient ? "rp-on" : ""));
   if(canRetry) bits.push(btn("sa-retry", "↻", "More effort", `Retry at ${effortTier(nextEf).name} · ${nextEf}×`));
   if(CONV_ENABLED) bits.push(btn("sa-cont", "↳", "Continue in chat", "Continue this conversation in the main chat"));
   bits.push(btn("sa-del", "🗑", "Delete", "Delete session", "sact-danger"));
@@ -3993,6 +3999,26 @@ function buildSessionActions(box, row, firstTurn, firstAns, rowEl){
   });
   const dl = box.querySelector("#sa-del");
   if(dl) dl.addEventListener("click", ()=>deleteSession(row.id, rowEl));
+  const rp = box.querySelector("#sa-rp");
+  if(rp) rp.addEventListener("click", async ()=>{
+    const want = !row.real_patient;
+    try{
+      const r = await fetch("/sessions/"+encodeURIComponent(row.id)+"/patient-flag",
+        {method:"POST", headers:{"content-type":"application/json"},
+         body:JSON.stringify({real_patient: want})});
+      if(!r.ok) throw 0;
+      row.real_patient = want;
+      rp.classList.toggle("rp-on", want);
+      rp.querySelector(".sact-t").textContent = want ? "Patient case" : "Mark patient case";
+      const sq = rowEl && rowEl.querySelector(".sq");
+      if(sq){
+        const dot = sq.querySelector(".rpdot");
+        if(want && !dot) sq.insertAdjacentHTML("afterbegin",
+          '<span class="rpdot" title="Real-world patient case">◉</span> ');
+        else if(!want && dot) dot.remove();
+      }
+    }catch(e){ alert("Couldn't update the patient-case flag."); }
+  });
 }
 // Re-ask a past question in the main chat at a higher effort — a fresh run (new thread), not an
 // append, so the deeper answer stands on its own next to the original in the session list.

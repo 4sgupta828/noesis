@@ -448,6 +448,10 @@ class TopicsIn(BaseModel):
     answer: str = ""
 
 
+class PatientFlagIn(BaseModel):
+    real_patient: bool = True
+
+
 class Citation(BaseModel):
     text: str
     quote: str
@@ -2052,6 +2056,16 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if not await store.soft_delete(session_id):
             raise HTTPException(status_code=404, detail="session not found")
         return {"deleted": True}
+
+    @app.post("/sessions/{session_id}/patient-flag")
+    async def session_patient_flag(session_id: str, body: PatientFlagIn) -> dict:
+        """Mark/unmark a session as a REAL-WORLD PATIENT case (orange ◉ in the session list)."""
+        store = _store()
+        if store is None:
+            raise HTTPException(status_code=404, detail="no session store")
+        if not await store.set_real_patient(session_id, body.real_patient):
+            raise HTTPException(status_code=404, detail="session not found")
+        return {"id": session_id, "real_patient": body.real_patient}
 
     @app.get("/admin/coverage")
     async def admin_coverage() -> dict:

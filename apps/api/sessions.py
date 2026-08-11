@@ -46,6 +46,7 @@ ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS user_name  TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS user_email TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS visual_observation TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS real_patient BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS layman_answer TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS deleted BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS thread JSONB NOT NULL DEFAULT '[]'::jsonb;
@@ -211,7 +212,7 @@ class SessionStore:
             rows = await conn.fetch(
                 f"""SELECT id, question, grounded, video_filename, user_name, user_email,
                            jsonb_array_length(attachments) AS n_attach, audience, created_at,
-                           thread->0->>'kind' AS kind
+                           real_patient, thread->0->>'kind' AS kind
                     FROM noesis_research_session
                     WHERE {where} ORDER BY created_at DESC LIMIT ${len(params)}""",
                 *params)
@@ -221,6 +222,7 @@ class SessionStore:
             "user_name": r["user_name"], "user_email": r["user_email"],
             "audience": r["audience"] or "clinician",
             "kind": r["kind"] or "research",
+            "real_patient": bool(r["real_patient"]),
             "created_at": r["created_at"].isoformat(),
         } for r in rows]
 
@@ -243,6 +245,17 @@ class SessionStore:
             "user_name": r["user_name"], "user_email": r["user_email"],
             "created_at": r["created_at"].isoformat(),
         } for r in rows]
+
+    async def set_real_patient(self, session_id: str, value: bool) -> bool:
+        """Mark/unmark a session as a REAL-WORLD PATIENT case (the orange ◉ in the list)."""
+        await self._ensure()
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            res = await conn.execute(
+                "UPDATE noesis_research_session SET real_patient=$3 "
+                "WHERE id=$1 AND vertical=$2 AND NOT deleted",
+                session_id, self._vertical, bool(value))
+        return res.endswith("1")
 
     async def get(self, session_id: str) -> dict[str, Any] | None:
         await self._ensure()
@@ -272,5 +285,6 @@ class SessionStore:
             "layman_answer": r["layman_answer"],
             "thread": _j(r["thread"], []),
             "audience": r["audience"] or "clinician",
+            "real_patient": bool(r["real_patient"]),
             "created_at": r["created_at"].isoformat(),
         }

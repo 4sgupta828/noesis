@@ -4,7 +4,8 @@
 **Companion docs:** `learnings/evidencepulse.md` (the panel-reviewed spec v2.1 — its Panel
 Amendments A1–A7 override the body where they conflict; read it first) ·
 `learnings/engineprimitives.md` (the answer-engine design this plugs into).
-**Status date:** 2026-08-10. Everything in "BUILT" below is deployed and prod-verified.
+**Status date:** 2026-08-10 (updated same day, post supersession-E2E). Everything in "BUILT"
+below is deployed and prod-verified — including the FIRST REAL SUPERSESSION, end to end.
 
 ---
 
@@ -78,7 +79,7 @@ management over a dense corpus over time").
   axis filters to the window — one embedding, zero LLM), `POST /pulse/topics` (watch picker
   suggestions for one Q&A), `GET /pulse/watch-suggestions` (cross-session, from the user's own
   question history), `POST /pulse/seen`.
-- Public: `GET /pulse/recent` (approved events; the coverage-page rendering of it is NOT built).
+- Public: `GET /pulse/recent` (approved events; rendered on the coverage page as 'What changed recently').
 
 ### FE (`apps/web/index.html`)
 - Gold "◉ Pulse" header button + unseen badge (`maybeShowPulseBell` — shows whenever the flag is
@@ -92,100 +93,103 @@ management over a dense corpus over time").
 - `NOESIS_PULSE` env flag (static, default OFF; currently ON in prod). OFF = no ledger, no stamps,
   no demotion, no UI — true no-op. `/config` echoes `pulse_enabled`.
 
+### Also built (added after the first handoff draft)
+- **THE FIRST REAL SUPERSESSION PAIR — E2E-verified in prod.** KDIGO Anemia 2012 re-ingested as
+  its own edition entry (`kdigo-anemia-2012-fulltext`); the 2026 entry declares `supersedes`.
+  Verified live: scan → approved `superseded_by` event → stamps → RETRIEVAL DEMOTION (search
+  "ESA therapy hemoglobin target anemia CKD": 2026 holds top positions, 2012 absent from top-8,
+  yet still in the corpus per demote-never-delete) → event leads the public feed.
+- **Subject facets on guideline blocks** (A5 prerequisite done): `_facets` now carries
+  `conditions`; both anemia editions ingested with them (older guideline docs get facets on their
+  next re-ingest).
+- **Shadow supersession judge deployed** (`POST/GET /admin/pulse/detect`, background): structural
+  candidate pairing in `currency/candidates.py` (same issuer + overlapping subjects + different
+  years; decided pairs excluded; held-out pairing tests) → vertical `SUPERSESSION_JUDGE_PROMPT` →
+  SHADOW events only (confidence "judge"); human approval via the existing event endpoint is the
+  ONLY path to stamps. Never yet run against prod (see §3.2).
+- **Weekly automatic retraction sweep** on the ingest thread's idle path (DB clock
+  `last_retraction_sweep` in `noesis_pulse_state` — replica-safe, free).
+- **DB-backed scan statuses** (`noesis_pulse_state`) — the per-replica "never_run" quirk is fixed.
+- **Coverage page renders `/pulse/recent`** ("What changed recently" section on admin.html).
+- **Panel v3 per-topic activity**: corpus time axis (`rs_block.created_at`), per-topic rolling
+  window (`/pulse/topic-activity` — topic-as-query + time filter), per-topic rows with lazy
+  expansion, canonical topic registry (`noesis_topic`, seeded, stability contract), NL add with
+  server canonicalization, cross-session watch suggestions.
+- (Adjacent, not Pulse: sessions now carry a `real_patient` flag — orange ◉ marker in the session
+  list, toggle in the session toolbar, `POST /sessions/{id}/patient-flag`.)
+
 ### Verification state (honest)
 - Unit: ledger lifecycle, claim partition (incl. early-return), clean-replace, detector batching/
-  titles/doc-id mapping, registry canonical-wins. DOM harness: all panel/picker/banner behaviors.
-- Prod: retraction sweep on real corpus (4 events), watch→inbox→seen E2E, topic-activity E2E.
-- NOT yet exercised anywhere: a real supersession pair end-to-end (none exists yet — see §3.4).
+  titles/doc-id mapping, registry canonical-wins, edition-candidate pairing. DOM harness: all
+  panel/picker/banner/row behaviors.
+- Prod: retraction sweep on real corpus (4 events) · watch→inbox→seen E2E · topic-activity E2E ·
+  **full supersession loop E2E (scan → event → stamps → retrieval demotion → public feed)**.
+- NOT yet exercised: the LLM judge against prod (§3.2); `new_documents` windows are cold-starting
+  (time axis began 2026-08-10; only newly-ingested docs are dated).
 
 ---
 
 ## 3. REMAINING WORK (priority order, each with design + acceptance)
 
-### 3.1 The change-brief composer (biggest content gap; LLM, ~1 call per event)
-Events carry empty `brief_md`/`brief_claims`. The inbox shows *that* something changed, not *what*.
-- **Design (spec "LLM contracts #2"):** on event APPROVAL (not creation — shadow events get no
-  brief), compose "what changed / what it means for practice / what it replaced" from the NEW
-  document's blocks (and old's, for supersessions). Every claim must pass the EXISTING span-
-  verification gate (reuse the kernel verifier — see `research/react.py` claim verification; the
-  brief's quotes must be locatable in the source blocks). Verification failure → event stays
-  approved with empty brief + retry next scan; NEVER ship an unverified brief.
-- **Touchpoints:** vertical prompt in `noesis_vertical_medical/pulse.py`; manifest field;
-  compose+verify helper in kernel `currency/` (mechanism) called from the approval path and a
-  backfill admin trigger; FE already renders `brief_md` when present.
-- **Acceptance:** the rosacea retraction event carries a cited brief whose quotes locate in the
-  retraction notice/paper record; a deliberately corrupted quote is rejected (unit test with fake
-  LLM); briefs backfill via `/admin/pulse/scan` for the 4 existing events.
+### 3.1 The change-brief composer — DELIBERATELY DEFERRED by the product owner
+Do not build without an explicit go. Events carry empty `brief_md` — the inbox shows *that*
+something changed, not *what*. When green-lit: compose on event APPROVAL from the new (and old)
+document's blocks, every claim through the EXISTING span-verification gate; verification failure →
+approved event, empty brief, retry next scan; NEVER an unverified brief. Vertical prompt in
+`pulse.py`; backfill via `/admin/pulse/scan`. Acceptance: the rosacea retraction and the KDIGO
+supersession both carry cited briefs whose quotes locate; a corrupted quote is rejected (fake-LLM
+unit test).
 
-### 3.2 LLM supersession judge (shadow-first; prerequisite A5 below)
-Auto-detect edition pairs beyond curator declaration.
-- **Prereq (spec A5):** guideline blocks lack subject facets (conditions live only in the
-  connector registry). Add `conditions`→facets stamping in `global_guidelines.py::_facets` (and
-  india_guidelines) + re-ingest, OR build a doc-metadata view. Candidate generation needs
-  (issuer, subjects, year) per document.
-- **Design:** periodic sweep (admin-triggered first): candidates = same issuer + overlapping
-  subjects + different years, guideline tier only. LLM judge → {supersedes, materiality,
-  subjects}; events recorded as **shadow**; admin approves via the existing queue (spec A4 —
-  unanimous panel requirement; do NOT auto-approve judge output). Chains stamp each edition with
-  its immediate successor. Partial supersession (one chapter) → `minor`, no stamp.
-- **Held-out eval BEFORE trusting (spec eval section):** (a) true pair (KDIGO 2012 vs 2026 anemia)
-  → supersedes; (b) translation/reprint of the same edition → NO; (c) adjacent-but-distinct
-  (KDIGO CKD vs KDIGO BP-in-CKD) → NO. Wire as unit tests with recorded/fake LLM responses plus
-  a small live-judged set. The judge does not ship to auto-run until these pass.
-- **Cost:** ~1 small call per candidate pair; guideline ingests are a handful/week.
+### 3.2 First REAL run of the supersession judge + its held-out gates
+The judge is deployed (shadow-only, `/admin/pulse/detect`) but has never run against prod, and its
+LLM verdicts have no eval coverage yet. Before trusting it on real candidates:
+- Wire the spec's three held-out cases as tests (recorded/fake LLM): true pair (KDIGO 2012 vs 2026
+  anemia) → supersedes; translation/reprint of one edition → NO; adjacent-but-distinct (KDIGO CKD
+  vs KDIGO BP-in-CKD) → NO.
+- Then one admin-triggered prod run (`POST /admin/pulse/detect`; cost ≈ 1 small call per candidate;
+  today's candidate count is tiny — most old guideline docs lack `conditions` facets until
+  re-ingested). Review shadow events at `/admin/pulse/events?status=shadow`; approve/reject via
+  `/admin/pulse/event`. The declared KDIGO pair is already decided, so a correct run should mostly
+  find nothing — that null result is itself the first precision datum.
 
 ### 3.3 Label-change detector (structural; second real detector)
-DailyMed/openFDA re-ingests silently replace label content (clean-replace now makes the old
-version vanish). Detect actionable-section changes → `amended_by` events.
-- **Design:** at ingest time (or a diff sweep), compare the new label's actionable sections
-  (boxed warning / contraindications / warnings / dosing — SPL section codes are structural)
-  against the previous version's blocks BEFORE clean-replace deletes them. Simplest robust order:
-  compute the diff inside `materialize`'s clean-replace step (it knows old vs new block sets), emit
-  a candidate; materiality of the section change can start structural (which section changed) with
-  an LLM materiality judge later. Note: label events are `amended_by` with old==new document id —
-  the ledger supports empty `new_document_id`; consider a `version` field in `subjects` or extend
-  the schema additively if needed.
-- **Acceptance:** re-ingesting a label fixture with an added boxed warning yields exactly one
-  `amended_by` event naming the section; a cosmetic reflow yields none.
+DailyMed/openFDA re-ingests silently replace label content — and clean-replace now DELETES the old
+rows, so the diff must be computed BEFORE deletion (inside `materialize_to_postgres`'s clean-replace
+step, which knows old vs new block sets). Emit `amended_by` candidates when actionable sections
+(boxed warning / contraindications / dosing — SPL section identification is structural) change;
+cosmetic reflow emits nothing. Ledger supports empty `new_document_id`; extend additively if a
+version marker is needed. Acceptance: a label fixture with an added boxed warning → exactly one
+event naming the section; reflow → none.
 
-### 3.4 First real supersession pair + the answer-currency surfaces that wait on it
-The demotion machinery is live but has never seen a real pair (declared lineage list is empty).
-- **Action:** next time ANY watched guideline updates (or deliberately: re-add KDIGO 2012 Anemia
-  as `kdigo-anemia-2012-fulltext` and mark the 2026 entry `"supersedes"` it), follow the edition
-  policy, run `/admin/pulse/scan`, then verify end-to-end: old blocks stamped → a question on the
-  topic cites the new edition (or names the old as prior) → `/pulse/recent` shows the event.
-- **Then build the two deferred surfaces:** (a) superseded-title annotation ("[superseded by …]")
-  — verify the compose path actually carries document titles into findings first (panel flagged
-  this as unreliable); (b) the answer-page currency chip ("◉ guidance in this area changed
-  <month>") — subject-level match between an answer's cited docs/subjects and recent events
-  (the integrity banner's structural sibling, for FRESH answers).
+### 3.4 Answer-currency surfaces now UNBLOCKED by the real pair
+- **Superseded-title annotation**: verify the compose path actually carries document titles into
+  findings (panel flagged this as unreliable), then append "[superseded by <new> (<year>)]" so a
+  deliberately-cited old edition can never read as current.
+- **Currency chip on fresh answers**: "◉ guidance in this area changed <month>" when an answer's
+  cited docs/subjects intersect recent events — the structural sibling of the past-session
+  integrity banner. Both are small now that a live supersession exists to test against.
+- Also verify the claim-stage partition on a REAL answer citing both editions (retrieval demotion
+  is prod-proven; the claim-stage path has unit coverage only).
 
-### 3.5 Coverage-page rendering of `/pulse/recent`
-The public feed is raw JSON. Render "What changed this month" on `apps/web/admin.html` (coverage
-page) — titles, relation badges, dates, briefs when 3.1 lands. Pure FE, ~an hour.
+### 3.5 Digest delivery (P2 — only after precision is proven)
+Weekly email of `major` events on watched topics. Needs a mail provider (none integrated), opt-in,
+hard item cap, and human-approved events only until the held-out precision gates hold. CME wrapper
+and institutional dashboards further out.
 
-### 3.6 Digest delivery (P2 — only after precision is proven)
-Weekly email of `major` events on watched topics. Needs: a mail provider (none integrated),
-per-user digest opt-in, hard item cap, and the spec's launch condition — human-approved events
-only until the held-out precision gates hold. The in-app inbox is deliberately the only push-free
-channel until then. CME wrapper and institutional dashboards are further out (spec P2).
-
-### 3.7 Hygiene / smaller items
-- **Per-replica scan status:** `GET /admin/pulse/retraction-scan` reads this replica's memory;
-  with 2 replicas polls can hit the other one ("never_run"). Move scan state into
-  `noesis_change_event`-adjacent storage or a `noesis_worker_setting`-style row.
-- **Periodic re-scans:** retractions are checked only on manual trigger. Add a scheduled sweep
-  (weekly) — the app has no scheduler; simplest is an admin-cron hitting the endpoint, or a loop
-  in the gap-processor thread with a long interval.
-- **Watch-data privacy (spec A6):** `noesis_watch` topics are clinician-interest data tied to
-  user ids — needs a retention statement and deletion on account removal (no account-deletion
-  flow exists yet either).
-- **Inbox matching upgrade:** containment matching misses paraphrases ("HFpEF" watch vs an event
-  subject "heart failure with preserved ejection fraction"). The canonical registry narrows this;
-  the principled fix is embedding-similarity gate + LLM confirm for borderline (spec C2), batched
-  at digest cadence. Keep precision-biased.
-- **`new_documents` cold start:** time axis exists only from 2026-08-10; windows fill organically.
-  Do not backfill dates.
+### 3.6 Hygiene / smaller items
+- **Judge candidate coverage**: older guideline documents lack `conditions` facets until
+  re-ingested — a one-time re-ingest sweep of the guideline registry would give the judge a real
+  candidate pool.
+- **Inbox matching upgrade**: containment misses paraphrases ("HFpEF" vs the spelled-out subject).
+  The registry narrows it; the principled fix is embedding-similarity gate + LLM confirm for
+  borderline, batched at digest cadence, precision-biased.
+- **Watch-data privacy (spec A6)**: retention statement + deletion on account removal (no
+  account-deletion flow exists yet either).
+- **`new_documents` cold start**: time axis began 2026-08-10; windows fill organically. Never
+  backfill dates.
+- **Periodic judge/declared sweeps**: retractions are weekly-automated; declared-lineage scan still
+  manual after re-ingests (the per-job hook re-stamps, but new registry declarations need one
+  `/admin/pulse/scan`) — could join the weekly idle-path clock.
 
 ## 4. Invariants you must not break (hard-earned)
 1. **Ledger over stamps** — never treat block facets as the truth; anything that rewrites facets
@@ -217,11 +221,9 @@ channel until then. CME wrapper and institutional dashboards are further out (sp
 - Test account for E2E: `pulse-e2e-test@noesis.dev` (register endpoint re-issues its token).
 
 ## 6. Suggested sequencing for the next builder
-1. 3.1 brief composer (immediate user-visible value on existing events; exercises the verify path
-   the judge will also need).
-2. 3.5 coverage-page feed (an hour; makes the system publicly visible).
-3. 3.4 first real supersession pair (proves the core promise end-to-end; unblocks the chip/title
-   surfaces).
-4. A5 subject facets → 3.2 judge (shadow) → its held-out gates → approval workflow in anger.
-5. 3.3 label-change detector.
-6. 3.7 hygiene as you touch each area; 3.6 only after precision is demonstrated.
+1. 3.2 judge eval gates + one reviewed prod run (cheap; produces the first precision data).
+2. 3.6 guideline re-ingest sweep (gives the judge a real candidate pool; also refreshes facets).
+3. 3.4 answer-currency surfaces (small, unblocked, user-visible).
+4. 3.3 label-change detector.
+5. 3.1 brief composer — ONLY once the owner green-lights it.
+6. 3.5 digests only after precision is demonstrated; hygiene items as you touch each area.

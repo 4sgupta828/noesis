@@ -3674,9 +3674,18 @@ async function ppExpand(card){
   if(body.dataset.loaded) return;
   body.innerHTML = `<div class="suggest-loading">Loading ${PULSE_DAYS}-day activity…</div>`;
   try{
-    const r = await fetch("/pulse/topic-activity?days="+PULSE_DAYS+"&topic="+encodeURIComponent(card.dataset.t),
-      {headers:{"x-noesis-token":USER.token}});
-    if(!r.ok) throw 0;
+    // first call on a cold replica builds the service (slow) — retry once before failing
+    let r = null, err = "";
+    for(let attempt = 0; attempt < 2; attempt++){
+      try{
+        r = await fetch("/pulse/topic-activity?days="+PULSE_DAYS+"&topic="+encodeURIComponent(card.dataset.t),
+          {headers:{"x-noesis-token":USER.token}});
+        if(r.ok) break;
+        err = "HTTP " + r.status + " " + ((await r.json().catch(()=>({}))).detail || "");
+      }catch(e2){ err = e2.message || "network error"; r = null; }
+      await new Promise(res=>setTimeout(res, 1200));
+    }
+    if(!r || !r.ok) throw new Error(err || "failed");
     const d = await r.json();
     const evs = (d.events||[]).map(i=>{
       const what = i.relation === "retracted" ? "Retracted" : "Guidance changed";
@@ -3711,7 +3720,8 @@ async function ppExpand(card){
     const dot = card.querySelector(".ppdot"); if(dot) dot.classList.remove("ping");
     const un = card.querySelector(".ppun"); if(un) un.remove();
     refreshPulseBell();
-  }catch(err){ body.innerHTML = `<div class="pitem-empty">Couldn't load activity — try again.</div>`; }
+  }catch(err){ body.innerHTML = `<div class="pitem-empty">Couldn't load activity: ${esc(err.message||String(err))} — click to retry.</div>`;
+    delete body.dataset.loaded; }
 }
 
 // ONE "Where next" block hosts every diverging path forward: follow-up questions (the primary

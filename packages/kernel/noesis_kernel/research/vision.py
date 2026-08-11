@@ -70,6 +70,16 @@ async def observe_images(
     return (res.parsed.observation or "").strip()
 
 
+# Guardrail for DOCUMENT reading (the image guard would misdirect: it asks for visual features,
+# which makes the model DESCRIBE a report instead of TRANSCRIBING it — caught in live verification).
+_DOC_GUARD = (
+    "\n\nYou are transcribing a user-provided document to aid a downstream evidence search. "
+    "Reproduce the document's CONTENT faithfully per the instructions above. Do NOT diagnose, "
+    "interpret, or recommend treatment; do NOT transcribe patient-identifying details; if a value "
+    "is unreadable, say so rather than guessing. Return the digest as the observation field."
+)
+
+
 async def read_documents(
     *,
     llm: LLMClient,
@@ -97,7 +107,7 @@ async def read_documents(
         ]
         try:
             comp = await llm.complete(
-                system=report_prompt + _GUARD,
+                system=report_prompt + _DOC_GUARD,
                 messages=[{"role": "user", "content": content}],
                 response_format=VisualObservation, max_tokens=1500)
             digest = (comp.parsed.observation or "").strip()

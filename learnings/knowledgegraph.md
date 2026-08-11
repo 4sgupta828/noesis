@@ -1,6 +1,8 @@
 # Grounded Relationship Graph — the knowledge layer over canonical topics
 
-**Status:** SPEC v1 (panel review pending) · **Flags:** `NOESIS_GRAPH*` (all default OFF, Rule 20)
+**Status:** SPEC v2 — panel-reviewed (Codex GPT-5.5 + Gemini 3.1 Pro + code-grounded subagent,
+2026-08-11; all three returned). Where the Panel Amendments below conflict with the v1 body,
+the AMENDMENTS WIN. · **Flags:** `NOESIS_GRAPH*` (all default OFF, Rule 20)
 **Companions:** `learnings/evidencepulse.md` (the currency subsystem this composes with) ·
 `learnings/engineprimitives.md` (the Understanding engine whose causal chains this captures as data)
 
@@ -141,9 +143,125 @@ only if the planner chooses them. Registry growth: bounded by skip-unmatched pol
 - The graph must never become an uncited answer shortcut — the contract's "graph steers search,
   never cites" line is the guardrail; violating it would break the product's core promise.
 
-## Phasing
+## Phasing (v1 — SUPERSEDED by Amendment A3; kept for the record)
 
-- **P0:** schema + curated edges + PrimeKG seed import (license-checked) + C1 expansion dark
-  behind flag + seed-mapping eval.
-- **P1:** chain harvester + its no-invention eval + C1 ON after the expansion A/B passes.
-- **P2:** Pulse propagation; related-topic chips; graph view last.
+- ~~P0: schema + curated edges + PrimeKG seed import + C1 dark + seed-mapping eval.~~
+- ~~P1: chain harvester + no-invention eval + C1 ON after A/B.~~
+- ~~P2: Pulse propagation; related-topic chips; graph view last.~~
+
+---
+
+# Panel Amendments (v2) — these override the v1 body above
+
+Three-member panel per Rule 17: **Codex (GPT-5.5)**, **Gemini 3.1 Pro**, and a **code-grounded
+subagent** (file:line verification), all with repo access, all returned. Convergence was
+unusually strong — all three independently demanded the same four structural changes (A1–A4).
+
+## A1 — Drop seeding from P0 entirely (unanimous)
+
+At ~106 disease-only registry topics with skip-unmatched, PrimeKG yields near-zero edges
+(disease–drug edges map to nothing — no drug topics exist; disease–disease among 106 common
+conditions is a few hundred max, further cut by MONDO-vs-clinical-phrase name mismatch).
+Licensing is also NOT "MIT-ish": PrimeKG bundles DrugBank-derived data with commercial
+restrictions; SemMedDB requires a UTS/UMLS license (redistribution limits). **P0 graph content =
+curated + (later) harvested only.** Revisit seeding when the registry is materially larger,
+preferring **Hetionet (CC0)**, and even then as an offline experiment reporting match rate and
+sampled precision BEFORE any prod write.
+
+## A2 — Schema: edge + evidence tables, `status` column, norm identity (unanimous)
+
+The v1 single-table design has four verified defects:
+
+1. **No `status` column** — the change-event ledger's defining feature (shadow→approved gating
+   effect, `store.py:32,138-153`) is missing, so "the ledger pattern again" wasn't actually the
+   ledger pattern. Every edge gets `status` (`shadow` | `active` | `demoted`); **harvested edges
+   are BORN shadow** and only the eval gate (A4) activates them. Consumers read `active` only.
+2. **Evidence must be its own table** (`noesis_edge_evidence`, `document_id` indexed), not a
+   jsonb blob — because of A5 (invalidation): finding every edge that leans on a retracted
+   document must be an index lookup, not a full jsonb scan.
+3. **Identity on NORM, not label** (`store.py:64-65`), with direction preserved and an optional
+   `context_topic` in the identity key (A6). v1's "FK noesis_topic by norm" was not implementable
+   as written (label is the PK; edge stored raw labels).
+4. **`seen_count` = count of DISTINCT evidence document_ids**, not raw re-harvests — the same
+   user re-asking the same question must not manufacture "independent" agreement.
+
+## A3 — Reorder consumers: C2 (Pulse propagation) FIRST, C1 (retrieval expansion) LAST (unanimous)
+
+C1 touches the live answer path; its real failure mode (all three panelists) is **planner
+pollution** — a "RELATED topics" line competing with the planner's own search budget
+(`react.py:643,718`) can crowd out on-question evidence BEFORE the span gate ever runs. C2 is
+the cheap, safe first consumer: change-event subjects are already canonical topics
+(`app.py:1611`), adjacency is one join, and the worst case is a low-priority inbox item — not a
+degraded answer. **New phasing:**
+
+- **P0:** schema per A2 + relation manifest + curated edges (incl. `narrower_than`, A6) +
+  invalidation hook (A5) + admin/read API + **C2 dark** behind `NOESIS_GRAPH_PULSE`.
+- **P1:** chain harvester writing SHADOW edges + no-invention/entailment eval (A4) + C2 ON.
+  Related-change inbox items visually distinct, lower priority than direct hits.
+- **P2:** C1 dark behind `NOESIS_GRAPH_EXPAND` + its A/B (metrics must include evidence-floor
+  pass rate AND steps-consumed / `stopped_reason=max_steps` rate); ON only after a clean A/B.
+- **P3:** related-topic chips; graph view; seeding revisit per A1.
+
+## A4 — Harvester: eval gates WRITES, not reads; labels need an entailment check (unanimous)
+
+Code-verified reality: Understanding-engine chains are **prose only** — a composer directive
+(`understanding.py:14-49`), never persisted as structure (`ComposedAnswer`/`AnswerResult` have no
+chain field). So the harvester is prose re-extraction, and three leaks survive v1's index check:
+label inflation (hypothesized→established lives only in prose — no code check can catch it),
+wrong relation choice (causes vs. increases_risk_of), and citing a claim that merely MENTIONS
+both endpoints without supporting the relation (the exact failure `understanding.py:43` warns
+about). Therefore: **(a)** harvested edges are born `status='shadow'` (A2) and the no-invention
+eval must PASS before any edge activates — eval-before-effect is structural, not procedural;
+**(b)** add an LLM **entailment gate** at write time (does the quoted claim entail this relation
+at this label?) — claims_first's entail pattern is the model; **(c)** code-enforced label
+monotonicity (a raise requires a strictly stronger, independently-sourced label) and
+distinct-document independence; **(d)** relation must be in the vertical manifest allowlist;
+**(e)** NO silent failure drops — counters + a quarantine record for ambiguous extractions
+(auditability is the product promise). **(f)** Persist an `engine` field on
+`noesis_research_session` so the harvester selects Understanding answers structurally instead of
+sniffing markdown headings.
+
+## A5 — Evidence invalidation invariant (Gemini: "fatal if missing")
+
+The graph must LISTEN to the currency subsystem it lives beside: when a document receives a
+`retracted` or `superseded_by` change event (`CurrencyStore.apply_stamps`), every edge whose
+evidence cites that `document_id` is re-evaluated — retracted-only evidence ⇒ edge demoted
+(`status='demoted'`, consumers stop reading it); superseded evidence ⇒ flagged for re-harvest
+against the successor. This is why evidence is a normalized indexed table (A2.2). An edge whose
+evidence has died must never keep steering search or propagating Pulse pings.
+
+## A6 — Topic granularity: minimal policy NOW, not deferred (unanimous)
+
+Full deferral is unacceptable — WATCH_TOPIC_PROMPT itself mints composites ("anemia in CKD" is
+its own example, `pulse.py:18`), so near-duplicate nodes are guaranteed and every harvested edge
+would land on an arbitrary one, while exact-norm matching makes "anemia" and "anemia in CKD"
+totally disconnected (C2 would never reach the "anemia" watcher). Minimal policy, no ontology
+machinery: **(a)** edge endpoints prefer BROAD subjects, with an optional `context_topic`
+qualifier carrying the setting/population (subject=CKD, relation=increases_risk_of,
+object=anemia, context=CKD — not a new compound node per relation); **(b)** add
+`narrower_than` as a curated-only relation in P0 (~20 rows for known composites) and have C2/C1
+traverse it upward; **(c)** harvest endpoints must pass CANONIZE against the shown registry, and
+"returned unchanged AND not in registry" = unmapped = SKIP (the prompt's return-unchanged rule
+otherwise silently mints raw strings).
+
+## A7 — C1 mechanics: planner-only `graph_context`, and the honest cost line (Codex + subagent)
+
+v1's "in `ask()`, after the scaffold" doesn't exist — the scaffold lives in `ask_reasoned()`
+(`research.py:161-204`); and appending to `question` is forbidden because `question` flows into
+the COMPOSE prompt (`react.py:643,898`) — graph text could then shape uncited prose (the span
+gate protects claims, not prose). The real design: a new **planner-only `graph_context` param**
+threaded into `run_react`, modeled on `conv_ctx` (`react.py:553-559`), structurally excluded
+from compose. New invariant alongside "never cites": **graph text never enters the compose
+prompt.** And drop v1's "zero extra LLM calls" claim — mapping the question onto registry topics
+is semantic (Rule 18); either piggyback the existing scaffold call in `ask_reasoned()` (add a
+`canonical_topics` field — genuinely zero extra calls, reasoned-path-only) or admit +1 small
+call. P0 expansion is capped at **one** adjacent topic and disabled on dosing/contraindication/
+safety questions unless the edge relation is directly on-point; log suggested topics, searched
+queries, and floor deltas every time.
+
+## A8 — Honesty edit to the premise
+
+"The topic registry solved entity resolution" is overstated: it solved stable string REUSE
+(case/whitespace norm + LLM-shown registry), not medical entity resolution — synonyms are
+prompt-mediated, not deterministic. The spec's claims and the granularity policy (A6) are
+written against that weaker, true foundation.

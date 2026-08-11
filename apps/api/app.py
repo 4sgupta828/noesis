@@ -1817,8 +1817,9 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     def _pulse_doc_url(document_id: str):
         """Best-effort canonical link for a pulse item (vertical URL mapper; None when no page)."""
         try:
-            svc = app.state.service
-            fn = getattr(getattr(svc, "ui", None), "source_url", None)
+            if app.state.service is None:
+                app.state.service = build_default_service()
+            fn = getattr(getattr(app.state.service, "ui", None), "source_url", None)
             return fn(document_id, "") if (fn and document_id) else None
         except Exception:   # noqa: BLE001
             return None

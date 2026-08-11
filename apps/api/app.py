@@ -137,6 +137,71 @@ def graph_pulse_enabled() -> bool:
         "NOESIS_GRAPH_PULSE", "").lower() in ("1", "true", "yes")
 
 
+def graph_expand_mode() -> str:
+    """Consumer C1 (A9 graph-guided evidence legs), tri-state via NOESIS_GRAPH_EXPAND:
+    "" (default) → off, byte-identical; "shadow" → legs retrieve + log, merge nothing
+    (counterfactual telemetry); "1/true/on" → legs merge into the candidate pool (same
+    ranking/floors/span gate). Requires NOESIS_GRAPH."""
+    if not graph_enabled():
+        return ""
+    v = os.environ.get("NOESIS_GRAPH_EXPAND", "").lower()
+    if v == "shadow":
+        return "shadow"
+    return "on" if v in ("1", "true", "yes", "on") else ""
+
+
+_GRAPH_STORE = None
+
+
+def _graph_store():
+    """Module-level lazy GraphStore singleton (one pool + one adjacency snapshot per process),
+    shared by the API endpoints and the answer-path expander. None when off/unconfigured."""
+    global _GRAPH_STORE
+    if _GRAPH_STORE is None:
+        dsn = os.environ.get("NOESIS_CORPUS_DSN")
+        if dsn and graph_enabled():
+            from noesis_kernel.graph import GraphStore
+            manifest = load_active_vertical()
+            _GRAPH_STORE = GraphStore(
+                dsn, relations=tuple(getattr(manifest, "graph_relations", ()) or ()))
+    return _GRAPH_STORE
+
+
+_GRAPH_REL_PHRASE = {"increases_risk_of": "in", "causes": "in", "comorbid_with": "with",
+                     "complication_of": "after", "treats": "for"}
+
+
+def _make_graph_expander():
+    """A9 hook for ResearchService: question → ≤2 edge-templated evidence-leg queries.
+    Topic detection is precision-biased structural containment over EDGE-BEARING labels
+    (no LLM call — no match means no expansion, fail-safe). None when the flag is off."""
+    if not graph_expand_mode():
+        return None
+
+    async def _expand(question: str):
+        mode = graph_expand_mode()          # resolved live so an env flip needs no rebuild
+        g = _graph_store()
+        if g is None or not mode:
+            return None
+        topics = await g.match_topics(question)
+        if not topics:
+            return None
+        legs, seen = [], {t.lower() for t in topics}
+        for nb in await g.neighbors(topics, limit=8):
+            other = nb["object"] if nb["direction"] == "out" else nb["subject"]
+            if other.lower() in seen:
+                continue
+            seen.add(other.lower())
+            phrase = _GRAPH_REL_PHRASE.get(nb["relation"], "and")
+            legs.append({"query": f"{other} {phrase} {nb['via']}",
+                         "note": f"{nb['subject']} {nb['relation']} {nb['object']}"})
+            if len(legs) == 2:
+                break
+        return {"legs": legs, "shadow": mode == "shadow"} if legs else None
+
+    return _expand
+
+
 def stream_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, /research/stream serves live SSE progress events
     (searching/found/verifying/composing → final). OFF → the endpoint 404s; /research unchanged."""
@@ -596,6 +661,7 @@ def build_default_service() -> ResearchService:
         patient_directive = patient_directive + "\n\n" + manifest.patient_reasoning_format
     return ResearchService(
         llm=build_llm(mode=mode), embedder=embedder, planner_llm=planner_llm,
+        graph_expander=_make_graph_expander(),
         claims_first=claims_first, extraction_lenses=getattr(manifest, "extraction_lenses", ()),
         evidence_select=evidence_select, atom_cap=atom_cap,
         reasoning_read=reasoning_read_enabled(),
@@ -785,20 +851,10 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         return app.state.currency
 
     def _graph():
-        """Grounded Relationship Graph store (Postgres). None unless a corpus DSN is set AND the
-        graph flag is on — so OFF is a true no-op (no tables, no lookups). The store serves
-        neighbor lookups from an in-process TTL snapshot (speed contract: zero DB round trips
-        on the hot path at steady state)."""
-        if getattr(app.state, "graph", "unset") == "unset":
-            dsn = os.environ.get("NOESIS_CORPUS_DSN")
-            if dsn and graph_enabled():
-                from noesis_kernel.graph import GraphStore
-                manifest = load_active_vertical()
-                app.state.graph = GraphStore(
-                    dsn, relations=tuple(getattr(manifest, "graph_relations", ()) or ()))
-            else:
-                app.state.graph = None
-        return app.state.graph
+        """Grounded Relationship Graph store — the module-level singleton (one pool + one
+        adjacency snapshot per process, shared with the answer-path expander). None unless a
+        corpus DSN is set AND the graph flag is on — so OFF is a true no-op."""
+        return _graph_store()
 
     @app.on_event("startup")
     async def _start_gap_processor() -> None:
@@ -876,6 +932,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "triage_enabled": live_triage and bool(getattr(svc, "triage_prompt", None)),
             "pulse_enabled": pulse_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
             "graph_enabled": graph_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
+            "graph_expand": graph_expand_mode(),
             "accounts_enabled": accounts_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
             "duel_enabled": live_duel and bool(getattr(svc, "reasoned_answer_format", None)),
             "integrative_enabled": (await _flag_live("integrative_enabled")) and bool(getattr(svc, "integrative_prompt", None)),

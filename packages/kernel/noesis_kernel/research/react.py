@@ -504,6 +504,12 @@ async def run_react(
     evidence_fitness: bool = False,           # boost stronger evidence tiers into the compose cap (flag)
     evidence_ranker=None,                     # vertical hook: evidence_kind -> int rank (the authority pyramid)
     country_boost=None,                       # set of country codes to boost (surface region evidence, no filter)
+    graph_legs: list[dict] | None = None,     # A9 graph-guided evidence legs: [{query, note}] from the
+    #                                           relationship graph (caller-computed). Run ONCE before the
+    #                                           loop as extra retrieval; merged atoms flow through the
+    #                                           SAME ranking/floors/span gate. Graph text NEVER enters
+    #                                           any prompt — only real retrieved blocks do.
+    graph_shadow: bool = False,               # shadow-counterfactual: run+log legs, merge NOTHING
 ) -> AnswerResult:
     import asyncio
     atoms = AtomStore()
@@ -677,6 +683,49 @@ async def run_react(
             # extract — bounded by `attempts`/budget so a stubborn model can't spin forever.
         if diag is not None and attempts:
             diag["retries"]["extract_recovery"] = attempts
+
+    # A9 GRAPH-GUIDED EVIDENCE LEGS (flagged; caller computes the legs from the relationship
+    # graph). Deterministic pre-loop retrieval on ≤2 edge-templated queries — the multi-hop
+    # evidence the question's own wording can never reach (CKD-fatigue → anemia guideline).
+    # Merged atoms are ordinary evidence: same ranking, same span gate, citable because they
+    # are REAL retrieved blocks. The graph itself contributes no prompt text — the planner
+    # only ever sees retrieved evidence, so "graph steers search, never cites" holds
+    # structurally. Shadow mode retrieves + logs and merges nothing (counterfactual telemetry).
+    if graph_legs:
+        _g_diag: list[dict] = []
+        for _leg in list(graph_legs)[:2]:
+            _gq = (_leg.get("query") or "").strip()
+            if not _gq:
+                continue
+            try:
+                _gvec = await asyncio.to_thread(lambda q=_gq: list(embedder.embed([q])[0]))
+                _g_hits = await source.search(RetrievalRequest(
+                    query=_gq, tenant_id=tenant_id, workspace_id=workspace_id,
+                    query_embedding=_gvec, k=max(4, k // 2), facets=dict(facets or {})))
+            except Exception as _ge:   # noqa: BLE001 — a dead leg never breaks the answer
+                _log.warning("graph leg failed on %r: %s", _gq, _ge)
+                _g_hits = []
+            _merged = 0
+            if not graph_shadow and _g_hits:
+                _before = len(atoms.all())
+                atoms.add_hits(_g_hits)
+                _merged = len(atoms.all()) - _before
+                searched_queries.append(_gq)   # planner sees it as tried — no duplicate searching
+            _g_diag.append({"query": _gq, "note": str(_leg.get("note", ""))[:120],
+                            "hits": len(_g_hits), "merged": _merged})
+        if _g_diag:
+            _log.info("graph legs (%s): %s", "shadow" if graph_shadow else "merged",
+                      [(d["query"], d["hits"], d["merged"]) for d in _g_diag])
+            if diag is not None:
+                diag["graph_legs"] = {"shadow": graph_shadow, "legs": _g_diag}
+            await emit({"type": "graph_legs", "shadow": graph_shadow,
+                        "queries": [d["query"] for d in _g_diag]})
+            if not graph_shadow and any(d["merged"] for d in _g_diag):
+                # planner-only note (never reaches compose): pre-gathered adjacent-topic
+                # evidence SUPPLEMENTS the question — it must not replace searching it.
+                notes.append("Background evidence on closely-related topics was pre-gathered "
+                             "(see atoms above). It supplements the question — still SEARCH the "
+                             "question itself before answering.")
 
     stale_searches = 0          # consecutive searches that added NO new atoms (spinning detector)
     premature_answers = 0       # zero-evidence answer attempts (see the guard below)

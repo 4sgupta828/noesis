@@ -92,6 +92,8 @@ class ResearchService:
     classify_evidence: object | None = None # vertical structural evidence-tier classifier (source_key, facets) -> kind
     evidence_fitness: bool = False          # boost stronger evidence tiers into the compose cap (flag)
     evidence_ranker: object | None = None   # vertical authority pyramid: evidence_kind -> int rank
+    graph_expander: object | None = None    # A9: async (question) -> {"legs":[{query,note}],"shadow":bool}|None
+    #                                         — app-injected relationship-graph hook; None → byte-identical
     panel_specialists: tuple = ()           # Ask-Panel roster (vertical-supplied specialist configs)
     panel_default_ids: tuple = ()           # ids the default panel runs
     panel_synthesis_directive: str | None = None
@@ -383,6 +385,17 @@ class ResearchService:
                         "analyzing an attached report is a failure.]")
         corpus_src, web_src = self._split_retriever(
             source_keys, extra_sources={"attachment": att_source} if att_source else None)
+        # A9 graph-guided evidence legs (app-injected hook; best-effort — a graph failure never
+        # delays or breaks the answer path). The hook decides legs AND mode (shadow vs merged).
+        graph_legs, graph_shadow = None, False
+        if self.graph_expander is not None:
+            try:
+                _gx = await self.graph_expander(question)
+                if _gx and _gx.get("legs"):
+                    graph_legs = list(_gx["legs"])
+                    graph_shadow = bool(_gx.get("shadow"))
+            except Exception:   # noqa: BLE001
+                graph_legs = None
         res = await run_react(
             question=question, llm=self.llm, embedder=self.embedder,
             source=corpus_src, aux_source=web_src,
@@ -400,6 +413,7 @@ class ResearchService:
             collect_diagnostics=self.collect_diagnostics,
             classify_evidence=self.classify_evidence,
             evidence_fitness=self.evidence_fitness, evidence_ranker=self.evidence_ranker,
+            graph_legs=graph_legs, graph_shadow=graph_shadow,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)
         res.effort = sc.effort                   # echo the resolved multiplier (observability)

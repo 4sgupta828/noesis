@@ -269,6 +269,20 @@ class GraphStore:
         adj = await self._adjacency()
         return neighbors_from(adj, topics, limit=limit)
 
+    async def match_topics(self, text: str, *, limit: int = 3) -> list[str]:
+        """Which EDGE-BEARING topic labels appear verbatim in the text — precision-biased
+        STRUCTURAL containment (the Pulse-inbox P1 pattern), word-boundary safe, longest
+        match first. Misses synonyms BY DESIGN (fail-safe: no match → no expansion); the
+        LLM-owned mapping layer (reasoned-scaffold piggyback) is the semantic upgrade.
+        Served from the snapshot — no DB round trip at steady state."""
+        import re
+        adj = await self._adjacency()
+        hay = " " + " ".join(re.sub(r"[^\w\s]", " ", (text or "").lower()).split()) + " "
+        cands = set(adj["by_norm"].keys()) | set(adj["up"].keys())
+        found = [n for n in cands if f" {n} " in hay]
+        found.sort(key=len, reverse=True)
+        return found[:limit]
+
     async def _adjacency(self) -> dict:
         if self._snap is not None and (time.monotonic() - self._snap["at"]) < self._cache_ttl:
             return self._snap["adj"]

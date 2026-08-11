@@ -753,6 +753,38 @@
   /* real-world patient case marker — the noesis circle in warm orange */
   .rpdot{color:#f28c2e;font-size:.9em;text-shadow:0 0 6px rgba(242,140,46,.45);}
   .sact.rp-on{color:#f28c2e;border-color:#f28c2e;}
+  /* ◉ Pulse full page */
+  .pulsepage{position:fixed;inset:0;z-index:50;background:var(--bg);overflow-y:auto;padding:1rem 1.4rem 3rem;}
+  .pphead{display:flex;align-items:center;gap:.9rem;padding:.4rem 0 .9rem;border-bottom:1px solid var(--hair);flex-wrap:wrap;}
+  .pptitle{font-family:var(--mono);font-size:1rem;letter-spacing:.06em;color:var(--gold);font-weight:700;}
+  .ppsub{font-size:.78rem;color:var(--muted);}
+  .ppseg{margin-left:auto;display:inline-flex;border:1px solid var(--hair);border-radius:999px;overflow:hidden;}
+  .ppwin{font-family:var(--mono);font-size:.7rem;background:transparent;border:none;color:var(--muted);padding:.32rem .8rem;cursor:pointer;}
+  .ppwin.on{background:var(--gold);color:var(--on-accent);}
+  .ppstats{display:flex;gap:1rem;flex-wrap:wrap;padding:1rem 0;}
+  .ppstat{min-width:8.5rem;padding:.7rem 1rem;border:1px solid var(--hair);border-radius:12px;background:var(--panel2);}
+  .ppstat .n{font-size:1.5rem;font-weight:700;color:var(--ink);}
+  .ppstat.hot .n{color:var(--gap);}
+  .ppstat .l{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+  .ppbody{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:1.6rem;align-items:start;padding-top:.4rem;}
+  @media (max-width: 880px){ .ppbody{grid-template-columns:1fr;} .pprail{order:2;} }
+  .ppcard{border:1px solid var(--hair);border-radius:14px;background:var(--panel2);margin-bottom:.8rem;overflow:hidden;}
+  .ppcard-h{display:flex;align-items:center;gap:.6rem;padding:.8rem 1rem;cursor:pointer;}
+  .ppcard-h:hover{background:var(--panel);}
+  .ppdot{color:var(--gold);position:relative;font-size:.9rem;}
+  .ppdot.ping::after{content:"";position:absolute;inset:-4px;border:2px solid var(--gap);border-radius:50%;
+    animation:pping 1.8s ease-out infinite;}
+  @keyframes pping{0%{transform:scale(.5);opacity:.9}100%{transform:scale(1.6);opacity:0}}
+  @media (prefers-reduced-motion: reduce){ .ppdot.ping::after{animation:none;opacity:.5;} }
+  .ppcard-t{font-size:.95rem;color:var(--ink);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ppcard-m{font-family:var(--mono);font-size:.66rem;color:var(--muted);white-space:nowrap;}
+  .ppun{color:var(--gap);}
+  .ppcard-b{padding:.2rem 1rem 1rem;border-top:1px dashed var(--hair);}
+  .pprail{border:1px solid var(--hair);border-radius:14px;background:var(--panel2);padding:1rem;}
+  .pprail-h{font-family:var(--mono);font-size:.64rem;text-transform:uppercase;letter-spacing:.09em;color:var(--gold);margin-bottom:.6rem;}
+  .ppfeed-i{border-top:1px dashed var(--hair);padding:.55rem 0;font-size:.8rem;line-height:1.45;}
+  .ppfeed-k{font-family:var(--mono);font-size:.6rem;color:var(--gap);letter-spacing:.06em;}
+  .ppfeed-d{font-family:var(--mono);font-size:.6rem;color:var(--muted);margin-left:.4rem;}
   /* Evidence Pulse: labeled Pulse button + badge · inbox panel · integrity banner · watch picker */
   .pulsebtn{position:relative;color:var(--gold);border-color:var(--gold);}
   .pulsebtn:hover{background:var(--gold);color:var(--on-accent);}
@@ -1166,7 +1198,35 @@
   </section>
   <!-- Specialist Panel body — lives in the SAME shell as Q&A (shared header + heading + mode switch +
        intake box). Mode is driven by body[data-mode]; the panel phase by body[data-panel]. -->
-  <section class="panelbody" id="panelbody" hidden aria-label="Specialist panel"></section>
+  
+<!-- ◉ Pulse: full-page hub — per-topic movement over a rolling window -->
+<section class="pulsepage" id="pulsepage" hidden aria-label="Pulse">
+  <div class="pphead">
+    <button type="button" class="sback" id="ppback">← Back</button>
+    <span class="pptitle">◉ Pulse</span>
+    <span class="ppsub">evidence movement on your watched topics</span>
+    <div class="ppseg" role="tablist" aria-label="Window">
+      <button type="button" class="ppwin" data-d="7">7d</button>
+      <button type="button" class="ppwin on" data-d="30">30d</button>
+      <button type="button" class="ppwin" data-d="90">90d</button>
+    </div>
+  </div>
+  <div class="ppstats" id="ppstats"></div>
+  <div class="ppbody">
+    <div class="ppmain" id="ppmain"><div class="suggest-loading">Loading…</div></div>
+    <aside class="pprail">
+      <div class="pprail-h">Watch something new</div>
+      <div class="watchpick-row"><input type="text" class="watchpick-in" id="ppwatch-in" maxlength="120"
+        placeholder="Any topic, in your own words…">
+        <button type="button" class="chip-q watchpick-add" id="ppwatch-add">Add</button></div>
+      <div class="psugs" id="ppsugs"></div>
+      <div class="pprail-h" style="margin-top:1.2rem">Across the corpus</div>
+      <div id="ppfeed" class="ppfeed"><div class="suggest-loading">Loading…</div></div>
+    </aside>
+  </div>
+</section>
+
+<section class="panelbody" id="panelbody" hidden aria-label="Specialist panel"></section>
   <section class="triagebody" id="triagebody" hidden aria-label="Guided intake"></section>
   <footer class="pagefoot" id="pagefoot" hidden></footer>
 </div>
@@ -3500,168 +3560,91 @@ function maybeShowPulseBell(){
   if(!b || !PULSE_ENABLED) return;
   b.hidden = false;
   if(USER && USER.token){
-    b.onclick = openPulseHub;           // ALWAYS clickable — fetches on demand (badge is separate)
+    b.onclick = openPulsePage;          // ALWAYS clickable — the full-page hub
     refreshPulseBell();
   }
   else b.onclick = ()=>{ const m=$("#idmodal"); if(m){ m.hidden=false; } else alert("Sign in to use Pulse."); };
 }
-// A click must ALWAYS show something: loading shell first, then render (or an honest error).
-async function openPulseHub(){
-  document.querySelectorAll(".pulsepanel").forEach(x=>x.remove());
-  const shell = document.createElement("div"); shell.className = "pulsepanel";
-  shell.innerHTML = `<div class="pulsepanel-h">◉ Pulse
-      <button type="button" class="pclose" aria-label="Close">✕</button></div>
-    <div class="suggest-loading">Loading your watches…</div>`;
-  document.body.appendChild(shell);
-  shell.querySelector(".pclose").addEventListener("click", ()=>shell.remove());
+let PULSE_DAYS = 30;
+function closePulsePage(){ const pp=$("#pulsepage"); if(pp) pp.hidden = true; document.body.style.overflow = ""; }
+async function openPulsePage(){
+  if(!USER || !USER.token){ PULSE_REAUTH = true; const m=$("#idmodal"); if(m){ m.hidden=false; } else alert("Sign in to use Pulse."); return; }
+  const pp = $("#pulsepage"); if(!pp) return;
+  try{ closeSessions(); }catch(e){}
+  pp.hidden = false; document.body.style.overflow = "hidden";
+  ppRender();
+}
+async function ppRender(){
+  const main = $("#ppmain"), stats = $("#ppstats");
+  main.innerHTML = `<div class="suggest-loading">Loading your watches…</div>`;
+  let inbox = null, feed = [];
   try{
-    const r = await fetch("/pulse/inbox",{headers:{"x-noesis-token":USER.token}});
-    if(r.status === 401){
-      // STALE TOKEN: registration rotates tokens (alpha design) — a re-register anywhere
-      // (another browser/device) invalidates this one. Recover in place: one modal submit
-      // re-issues a token (same email reclaims the account; watches survive).
-      shell.querySelector(".suggest-loading").textContent =
-        "Your sign-in needs a quick refresh — submit the form once and Pulse will open.";
+    const [ri, rf] = await Promise.all([
+      fetch("/pulse/inbox?days="+PULSE_DAYS, {headers:{"x-noesis-token":USER.token}}),
+      pulseEvents().then(e=>e).catch(()=>[]),
+    ]);
+    feed = Array.isArray(rf) ? rf : [];
+    if(ri.status === 401){
       PULSE_REAUTH = true;
       if(USER){ delete USER.token; localStorage.setItem("noesis_user", JSON.stringify(USER)); }
-      const m = $("#idmodal");
-      if(m){ if(USER){ if(USER.name) $("#idname").value = USER.name;
-                       if(USER.email) $("#idemail").value = USER.email; } m.hidden = false; }
+      main.innerHTML = `<div class="pitem-empty">Your sign-in needs a quick refresh — submit the form once and Pulse will reload.</div>`;
+      const m = $("#idmodal"); if(m){ if(USER){ if(USER.name) $("#idname").value = USER.name;
+        if(USER.email) $("#idemail").value = USER.email; } m.hidden = false; }
       return;
     }
-    if(!r.ok){
-      const d = await r.json().catch(()=>({}));
-      shell.querySelector(".suggest-loading").textContent =
-        "Couldn't load Pulse: " + (d.detail || ("HTTP " + r.status));
-      return;
-    }
-    const d = await r.json();
-    if(!document.body.contains(shell)) return;      // user closed it while loading
-    openPulsePanel(d.summary||[], d.watches||[], d.days||30);
+    if(!ri.ok) throw new Error("HTTP "+ri.status);
+    inbox = await ri.json();
   }catch(e){
-    if(document.body.contains(shell))
-      shell.querySelector(".suggest-loading").textContent = "Couldn't load Pulse — network error.";
+    main.innerHTML = `<div class="pitem-empty">Couldn't load Pulse — ${esc(e.message||"network error")}.</div>`;
+    return;
   }
-}
-async function refreshPulseBell(){
-  const b = $("#pulsebell"), badge = $("#pbadge");
-  if(!b || !PULSE_ENABLED || !USER || !USER.token) return;
-  b.hidden = false;
-  try{
-    const r = await fetch("/pulse/inbox",{headers:{"x-noesis-token":USER.token}});
-    if(!r.ok) return;
-    const d = await r.json();
-    const unseen = (d.summary||[]).reduce((n,t)=>n+(t.unseen||0), 0);
-    if(badge){ badge.hidden = !unseen; badge.textContent = unseen > 9 ? "9+" : String(unseen); }
-  }catch(e){}
-}
-let _WATCH_SUGGESTIONS = null;   // per-page-load cache: at most ONE suggestion call per visit
-let PULSE_REAUTH = false;        // a pulse call hit a stale token → after re-sign-in, reopen the hub
-function openPulsePanel(summary, watches, days){
-  summary = summary || []; watches = watches || []; days = days || 30;
-  document.querySelectorAll(".pulsepanel").forEach(p=>p.remove());
-  const p = document.createElement("div"); p.className = "pulsepanel";
-  const rows = summary.length ? summary.map(t=>{
+  const summary = inbox.summary||[], watches = inbox.watches||[];
+  const unseen = summary.reduce((n,t)=>n+(t.unseen||0),0);
+  const changes = summary.reduce((n,t)=>n+(t.events_window||0),0);
+  stats.innerHTML = `
+    <div class="ppstat"><div class="n">${watches.length}</div><div class="l">watched topics</div></div>
+    <div class="ppstat${unseen?" hot":""}"><div class="n">${unseen}</div><div class="l">unseen changes</div></div>
+    <div class="ppstat"><div class="n">${changes}</div><div class="l">changes · ${PULSE_DAYS}d</div></div>
+    <div class="ppstat"><div class="n">${feed.length}</div><div class="l">corpus events</div></div>`;
+  // topic cards
+  main.innerHTML = summary.length ? summary.map(t=>{
     const un = t.unseen||0, ev = t.events_window||0;
-    const stat = un ? `<span class="prow-unseen">● ${un} unseen</span>`
-               : (ev ? `<span class="prow-quiet">${ev} change${ev>1?"s":""} in ${days}d</span>`
-                     : `<span class="prow-quiet">quiet ${days}d</span>`);
-    return `<div class="prow" data-t="${esc(t.topic)}">
-      <div class="prow-head" role="button" tabindex="0">
-        <span class="prow-t">${esc(t.topic)}</span>${stat}
+    return `<div class="ppcard" data-t="${esc(t.topic)}">
+      <div class="ppcard-h" role="button" tabindex="0">
+        <span class="ppdot${un?" ping":""}">◉</span>
+        <span class="ppcard-t">${esc(t.topic)}</span>
+        <span class="ppcard-m">${un?`<b class="ppun">${un} unseen</b> · `:""}${ev?`${ev} change${ev>1?"s":""}`:"quiet"} · ${PULSE_DAYS}d</span>
+        <button type="button" class="wtag-x" title="Stop watching">✕</button>
         <span class="prow-open">▸</span>
-        <button type="button" class="wtag-x" title="Stop watching" aria-label="Stop watching">✕</button>
       </div>
-      <div class="prow-body" hidden></div>
+      <div class="ppcard-b" hidden></div>
     </div>`;
-  }).join("") : `<div class="pitem-empty">Nothing watched yet — add a topic below, and each will show
-    its last-${days}-day movement here.</div>`;
-  p.innerHTML = `<div class="pulsepanel-h">◉ Pulse <span class="pwin">last ${days} days</span>
-      <button type="button" class="pclose" aria-label="Close">✕</button></div>
-    ${rows}
-    <div class="psec-h">Watch something new</div>
-    <div class="watchpick-row"><input type="text" class="watchpick-in" maxlength="120"
-      placeholder="Any topic, in your own words — e.g. afib blood thinners">
-      <button type="button" class="chip-q watchpick-add">Add</button></div>
-    <div class="psugs"><span class="suggest-loading">Looking across your sessions for topics worth watching…</span></div>`;
-  document.body.appendChild(p);
-  const reopen = async ()=>{
-    try{
-      const r = await fetch("/pulse/inbox",{headers:{"x-noesis-token":USER.token}});
-      const d = r.ok ? await r.json() : {summary:[],watches:[]};
-      openPulsePanel(d.summary||[], d.watches||[], d.days||days);
-    }catch(e){}
-  };
-  p.querySelector(".pclose").addEventListener("click", ()=>p.remove());
-  p.querySelectorAll(".wtag-x").forEach(x=>x.addEventListener("click", async (e)=>{
+  }).join("") : `<div class="pitem-empty">Nothing watched yet — add a topic on the right; each will show
+    its ${PULSE_DAYS}-day movement here (new guidelines, practice-changing sources, label changes, retractions).</div>`;
+  main.querySelectorAll(".wtag-x").forEach(x=>x.addEventListener("click", async (e)=>{
     e.stopPropagation();
-    const t = e.currentTarget.closest(".prow").dataset.t;
+    const t = e.currentTarget.closest(".ppcard").dataset.t;
     try{ await fetch("/pulse/watch?topic="+encodeURIComponent(t),
       {method:"DELETE", headers:{"x-noesis-token":USER.token}}); }catch(err){}
-    reopen();
+    ppRender();
   }));
-  // EXPAND a topic → its rolling-window movement: relational events + NEW relevant sources
-  // (topic-as-query over the corpus time axis). Lazy: one fetch per expansion.
-  p.querySelectorAll(".prow-head").forEach(h=>h.addEventListener("click", async (e)=>{
+  main.querySelectorAll(".ppcard-h").forEach(h=>h.addEventListener("click", (e)=>{
     if(e.target.classList.contains("wtag-x")) return;
-    const row = h.closest(".prow"), body = row.querySelector(".prow-body");
-    if(!body.hidden){ body.hidden = true; row.querySelector(".prow-open").textContent = "▸"; return; }
-    body.hidden = false; row.querySelector(".prow-open").textContent = "▾";
-    if(body.dataset.loaded){ return; }
-    body.innerHTML = `<span class="suggest-loading">Loading ${days}-day activity…</span>`;
-    try{
-      const r = await fetch("/pulse/topic-activity?days="+days+"&topic="+encodeURIComponent(row.dataset.t),
-        {headers:{"x-noesis-token":USER.token}});
-      if(!r.ok) throw 0;
-      const d = await r.json();
-      const evs = (d.events||[]).map(i=>{
-        const what = i.relation === "retracted" ? "Retracted" : "Guidance changed";
-        const links = [i.old_url ? `<a class="pdoc-a" href="${esc(i.old_url)}" target="_blank" rel="noopener noreferrer">${i.relation==="retracted"?"retracted paper":"previous version"} ↗</a>` : "",
-                       i.new_url ? `<a class="pdoc-a" href="${esc(i.new_url)}" target="_blank" rel="noopener noreferrer">current version ↗</a>` : ""].filter(Boolean).join(" · ");
-        return `<div class="pitem${i.seen?"":" unseen"}">
-          <div class="pitem-k">${esc(what)} · ${esc((i.created_at||"").slice(0,10))}</div>
-          <div class="pitem-s">${esc((i.subjects||[]).join("; ") || i.old_document_id || "")}</div>
-          ${links?`<div class="pitem-l">${links}</div>`:""}
-          <button type="button" class="chip-q pitem-ask">Ask about this</button></div>`;
-      }).join("");
-      const docs = (d.new_documents||[]).slice(0,12).map(nd=>{
-        const t = esc(nd.title).slice(0,110);
-        return `<div class="pdoc"><span class="pdoc-d">${esc((nd.first_seen||"").slice(0,10))}</span>
-         <span class="pdoc-s">${esc(nd.source_key)}</span> ${nd.url
-           ? `<a class="pdoc-a" href="${esc(nd.url)}" target="_blank" rel="noopener noreferrer">${t} ↗</a>` : t}</div>`;
-      }).join("");
-      body.innerHTML =
-        (evs ? `<div class="psub">Changes</div>${evs}` : "")
-        + (docs ? `<div class="psub">New sources on this topic</div>${docs}` : "")
-        + ((!evs && !docs) ? `<div class="pitem-empty">Quiet — nothing material landed on this topic
-             in the last ${days} days.</div>` : "");
-      body.dataset.loaded = "1";
-      body.querySelectorAll(".pitem-ask").forEach(btn=>btn.addEventListener("click", (ev2)=>{
-        const subj = ev2.currentTarget.closest(".pitem").querySelector(".pitem-s").textContent.trim();
-        p.remove();
-        askQuestion(`What changed in the evidence regarding: ${subj}? What should I do differently now?`);
-      }));
-      // expanding a topic marks its events seen
-      (d.events||[]).filter(i=>!i.seen).forEach(i=>{
-        fetch("/pulse/seen",{method:"POST",headers:{"content-type":"application/json",
-          "x-noesis-token":USER.token},body:JSON.stringify({event_id:i.id})}).catch(()=>{});
-      });
-      const st = row.querySelector(".prow-unseen"); if(st) st.remove();
-      refreshPulseBell();
-    }catch(err){ body.innerHTML = `<div class="pitem-empty">Couldn't load activity — try again.</div>`; }
+    ppExpand(h.closest(".ppcard"));
   }));
-  const inp = p.querySelector(".watchpick-in"), add = p.querySelector(".watchpick-add");
-  const addFree = async ()=>{
-    const t = (inp.value||"").trim(); if(!t) return;
-    add.disabled = true; add.textContent = "…";
-    try{ const stored = await addWatch(t, "manual");
-         add.textContent = "✓ " + (stored.toLowerCase() !== t.toLowerCase() ? `added as “${stored}”` : "added");
-         setTimeout(reopen, 1400); }
-    catch(e){ add.disabled = false; add.textContent = "Add"; alert("Couldn't add watch: "+(e.message||e)); }
-  };
-  add.addEventListener("click", addFree);
-  inp.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); addFree(); } });
-  const sugHolder = p.querySelector(".psugs");
+  // corpus-wide feed (public)
+  const fd = $("#ppfeed");
+  fd.innerHTML = feed.length ? feed.slice(0,10).map(e=>{
+    const what = e.relation === "retracted" ? "RETRACTED" : e.relation === "superseded_by" ? "SUPERSEDED" : e.relation.toUpperCase();
+    const subj = (e.subjects||[]).join("; ") || e.old_document_id || "";
+    const link = e.new_url || e.old_url;
+    const body = esc(subj).slice(0,90);
+    return `<div class="ppfeed-i"><span class="ppfeed-k">${esc(what)}</span>
+      <span class="ppfeed-d">${esc((e.created_at||"").slice(0,10))}</span><br>
+      ${link?`<a class="pdoc-a" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${body} ↗</a>`:body}</div>`;
+  }).join("") : `<div class="pitem-empty">No corpus change events yet.</div>`;
+  // suggestions rail (cached — one call per visit)
+  const sugHolder = $("#ppsugs");
   (async ()=>{
     try{
       if(_WATCH_SUGGESTIONS === null){
@@ -3670,20 +3653,65 @@ function openPulsePanel(summary, watches, days){
       }
       const watched = new Set(watches.map(w=>w.topic.toLowerCase()));
       const sugs = _WATCH_SUGGESTIONS.filter(x=>!watched.has(x.toLowerCase()));
-      if(!sugs.length){ sugHolder.remove(); return; }
-      sugHolder.innerHTML = `<div class="psugs-h">Suggested from your sessions</div>`;
+      sugHolder.innerHTML = sugs.length ? `<div class="psugs-h">Suggested from your sessions</div>` : "";
       sugs.forEach(topic=>{
         const c = document.createElement("button");
         c.type = "button"; c.className = "chip-q watchchip"; c.textContent = topic;
         c.addEventListener("click", async ()=>{
           c.disabled = true; c.textContent = "…";
-          try{ await addWatch(topic, "suggested"); c.textContent = "✓ " + topic; setTimeout(reopen, 900); }
+          try{ await addWatch(topic, "suggested"); ppRender(); }
           catch(e){ c.disabled = false; c.textContent = topic; }
         });
         sugHolder.appendChild(c);
       });
-    }catch(e){ sugHolder.remove(); }
+    }catch(e){ sugHolder.innerHTML = ""; }
   })();
+}
+async function ppExpand(card){
+  const body = card.querySelector(".ppcard-b"), open = card.querySelector(".prow-open");
+  if(!body.hidden){ body.hidden = true; open.textContent = "▸"; return; }
+  body.hidden = false; open.textContent = "▾";
+  if(body.dataset.loaded) return;
+  body.innerHTML = `<div class="suggest-loading">Loading ${PULSE_DAYS}-day activity…</div>`;
+  try{
+    const r = await fetch("/pulse/topic-activity?days="+PULSE_DAYS+"&topic="+encodeURIComponent(card.dataset.t),
+      {headers:{"x-noesis-token":USER.token}});
+    if(!r.ok) throw 0;
+    const d = await r.json();
+    const evs = (d.events||[]).map(i=>{
+      const what = i.relation === "retracted" ? "Retracted" : "Guidance changed";
+      const links = [i.old_url ? `<a class="pdoc-a" href="${esc(i.old_url)}" target="_blank" rel="noopener noreferrer">${i.relation==="retracted"?"retracted paper":"previous version"} ↗</a>` : "",
+                     i.new_url ? `<a class="pdoc-a" href="${esc(i.new_url)}" target="_blank" rel="noopener noreferrer">current version ↗</a>` : ""].filter(Boolean).join(" · ");
+      return `<div class="pitem${i.seen?"":" unseen"}">
+        <div class="pitem-k">${esc(what)} · ${esc((i.created_at||"").slice(0,10))}</div>
+        <div class="pitem-s">${esc((i.subjects||[]).join("; ") || i.old_document_id || "")}</div>
+        ${links?`<div class="pitem-l">${links}</div>`:""}
+        <button type="button" class="chip-q pitem-ask">Ask about this</button></div>`;
+    }).join("");
+    const docs = (d.new_documents||[]).slice(0,15).map(nd=>{
+      const t = esc(nd.title).slice(0,110);
+      return `<div class="pdoc"><span class="pdoc-d">${esc((nd.first_seen||"").slice(0,10))}</span>
+        <span class="pdoc-s">${esc(nd.source_key)}</span> ${nd.url
+          ? `<a class="pdoc-a" href="${esc(nd.url)}" target="_blank" rel="noopener noreferrer">${t} ↗</a>` : t}</div>`;
+    }).join("");
+    body.innerHTML =
+      (evs ? `<div class="psub">Changes</div>${evs}` : "")
+      + (docs ? `<div class="psub">New sources on this topic</div>${docs}` : "")
+      + ((!evs && !docs) ? `<div class="pitem-empty">Quiet — nothing material landed on this topic in the last ${PULSE_DAYS} days.</div>` : "");
+    body.dataset.loaded = "1";
+    body.querySelectorAll(".pitem-ask").forEach(btn=>btn.addEventListener("click", (e2)=>{
+      const subj = e2.currentTarget.closest(".pitem").querySelector(".pitem-s").textContent.trim();
+      closePulsePage();
+      askQuestion(`What changed in the evidence regarding: ${subj}? What should I do differently now?`);
+    }));
+    (d.events||[]).filter(i=>!i.seen).forEach(i=>{
+      fetch("/pulse/seen",{method:"POST",headers:{"content-type":"application/json",
+        "x-noesis-token":USER.token},body:JSON.stringify({event_id:i.id})}).catch(()=>{});
+    });
+    const dot = card.querySelector(".ppdot"); if(dot) dot.classList.remove("ping");
+    const un = card.querySelector(".ppun"); if(un) un.remove();
+    refreshPulseBell();
+  }catch(err){ body.innerHTML = `<div class="pitem-empty">Couldn't load activity — try again.</div>`; }
 }
 
 // ONE "Where next" block hosts every diverging path forward: follow-up questions (the primary
@@ -3717,6 +3745,27 @@ function wireEngineHops(root, t){
   root.querySelectorAll(".wn-watch").forEach(b => b.addEventListener("click", () =>
     watchTopic(t, b)));
 }
+
+(function wirePulsePage(){
+  const back = document.getElementById("ppback");
+  if(back) back.addEventListener("click", closePulsePage);
+  document.querySelectorAll(".ppwin").forEach(b=>b.addEventListener("click", ()=>{
+    document.querySelectorAll(".ppwin").forEach(x=>x.classList.toggle("on", x===b));
+    PULSE_DAYS = parseInt(b.dataset.d, 10) || 30;
+    ppRender();
+  }));
+  const inp = document.getElementById("ppwatch-in"), add = document.getElementById("ppwatch-add");
+  const addFree = async ()=>{
+    const t = (inp.value||"").trim(); if(!t) return;
+    add.disabled = true; add.textContent = "…";
+    try{ const stored = await addWatch(t, "manual");
+         add.textContent = "✓ " + (stored.toLowerCase() !== t.toLowerCase() ? `added as “${stored}”` : "added");
+         inp.value = ""; setTimeout(()=>{ add.textContent="Add"; add.disabled=false; ppRender(); }, 1200); }
+    catch(e){ add.disabled = false; add.textContent = "Add"; alert("Couldn't add watch: "+(e.message||e)); }
+  };
+  if(add) add.addEventListener("click", addFree);
+  if(inp) inp.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); addFree(); } });
+})();
 
 function newConversation(){
   THREAD = {session_id:null, turns:[]};
@@ -4211,7 +4260,7 @@ $("#idgo").addEventListener("click", async ()=>{
   localStorage.setItem("noesis_user", JSON.stringify(USER));
   $("#idmodal").hidden = true;
   maybeShowPulseBell();          // token may have just landed — arm the Pulse bell
-  if(PULSE_REAUTH && USER && USER.token){ PULSE_REAUTH = false; openPulseHub(); }
+  if(PULSE_REAUTH && USER && USER.token){ PULSE_REAUTH = false; openPulsePage(); }
 });
 $("#idmodal").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#idgo").click(); });
 

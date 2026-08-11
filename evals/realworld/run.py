@@ -56,7 +56,7 @@ async def _run(slice_path: pathlib.Path, limit: int, expand: str, conc: int) -> 
         async with sem:
             t0 = dt.datetime.now(dt.timezone.utc)
             try:
-                res = await svc.ask(question=r["question"], tenant_id="realworld-eval")
+                res = await svc.ask(question=r["question"], tenant_id="demo")
             except Exception as e:               # noqa: BLE001
                 return {"id": r["id"], "error": f"{type(e).__name__}: {e}"[:300]}
             gl = (getattr(res, "diagnostics", None) or {}).get("graph_legs")

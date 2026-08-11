@@ -57,7 +57,7 @@ async def _arm(cases: list[dict], expand: str):
     async def one(c):
         async with sem:
             try:
-                r = await svc.ask(question=c["question"], tenant_id="masq-eval")
+                r = await svc.ask(question=c["question"], tenant_id="demo")
             except Exception as e:               # noqa: BLE001
                 return {"id": c["id"], "error": str(e)[:200]}
             gl = (getattr(r, "diagnostics", None) or {}).get("graph_legs")

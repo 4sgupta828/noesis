@@ -3621,11 +3621,13 @@ async function ppRender(){
   const summary = inbox.summary||[], watches = inbox.watches||[];
   const unseen = summary.reduce((n,t)=>n+(t.unseen||0),0);
   const changes = summary.reduce((n,t)=>n+(t.events_window||0),0);
+  const cutoff = Date.now() - PULSE_DAYS*86400000;
+  const feedWin = feed.filter(e=>{ const t = Date.parse(e.created_at||""); return !isNaN(t) && t >= cutoff; });
   stats.innerHTML = `
     <div class="ppstat"><div class="n">${watches.length}</div><div class="l">watched topics</div></div>
     <div class="ppstat${unseen?" hot":""}"><div class="n">${unseen}</div><div class="l">unseen changes</div></div>
     <div class="ppstat"><div class="n">${changes}</div><div class="l">changes · ${PULSE_DAYS}d</div></div>
-    <div class="ppstat"><div class="n">${feed.length}</div><div class="l">corpus events</div></div>`;
+    <div class="ppstat"><div class="n">${feedWin.length}</div><div class="l">corpus events · ${PULSE_DAYS}d</div></div>`;
   // topic cards
   main.innerHTML = summary.length ? summary.map(t=>{
     const un = t.unseen||0, ev = t.events_window||0;
@@ -3672,8 +3674,10 @@ async function ppRender(){
         <span class="ppcov-t">${esc(c.topic)}</span>
         <span class="ppcov-m">${c.ev?`<b class="ppun">${c.ev} change${c.ev>1?"s":""}</b> · `:""}${c.nd} new</span>
         <span class="prow-open">▸</span></div><div class="ppcov-b" hidden></div>`;
+      const asOf = b.computed_at ? new Date(b.computed_at).toLocaleString([], {dateStyle:"short", timeStyle:"short"}) : "";
       cb.innerHTML = `<div class="pprail-h" style="margin-top:1.4rem">Coverage pulse — all
-          ${conds.length} covered conditions · ${PULSE_DAYS}d${b.refreshing?" <span class='ppsub'>(refreshing…)</span>":""}</div>`
+          ${conds.length} covered conditions · ${PULSE_DAYS}d
+          <span class="ppsub">${b.refreshing?"refreshing…":asOf?("as of "+esc(asOf)):""}</span></div>`
         + (movers.length ? movers.map(row).join("") : `<div class="pitem-empty">Quiet window across the whole coverage map.</div>`)
         + (quiet.length ? `<details class="ppcov-more"><summary>${quiet.length} quiet condition${quiet.length>1?"s":""}</summary>${quiet.map(row).join("")}</details>` : "");
       cb.querySelectorAll(".ppcov").forEach(h=>h.addEventListener("click", async ()=>{
@@ -3686,7 +3690,13 @@ async function ppRender(){
           const ra = await fetch("/pulse/topic-activity?days="+PULSE_DAYS+"&topic="+encodeURIComponent(h.dataset.t),
             {headers:{"x-noesis-token":USER.token}});
           if(!ra.ok) throw new Error("HTTP "+ra.status);
-          renderActivityInto(body, await ra.json());
+          const act = await ra.json();
+          renderActivityInto(body, act);
+          // sync the row's cached counts to the LIVE activity just fetched (the board is a daily
+          // cache — stale counts next to a live timeline read as "counts are wrong")
+          const m = h.querySelector(".ppcov-m");
+          if(m){ const ev = (act.events||[]).length, nd = (act.new_documents||[]).length;
+            m.innerHTML = `${ev?`<b class="ppun">${ev} change${ev>1?"s":""}</b> · `:""}${nd} new`; }
           body.insertAdjacentHTML("afterbegin",
             `<button type="button" class="chip-q ppcov-w">⊕ Watch ${esc(h.dataset.t)}</button>`);
           body.querySelector(".ppcov-w").addEventListener("click", async (e3)=>{
@@ -3786,7 +3796,8 @@ function renderActivityInto(body, d, containerForClose){
     body.querySelectorAll(".pitem-ask").forEach(btn=>btn.addEventListener("click", (e2)=>{
       const subj = e2.currentTarget.closest(".pitem").querySelector(".pitem-s").textContent.trim();
       closePulsePage();
-      askQuestion(`What changed in the evidence regarding: ${subj}? What should I do differently now?`);
+      askQuestion(`What changed in the evidence regarding: ${subj}? What should I do differently now?`,
+                  {skipRefine: true});
     }));
     (d.events||[]).filter(i=>!i.seen).forEach(i=>{
       fetch("/pulse/seen",{method:"POST",headers:{"content-type":"application/json",

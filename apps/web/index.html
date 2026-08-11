@@ -3510,6 +3510,19 @@ async function openPulseHub(){
   shell.querySelector(".pclose").addEventListener("click", ()=>shell.remove());
   try{
     const r = await fetch("/pulse/inbox",{headers:{"x-noesis-token":USER.token}});
+    if(r.status === 401){
+      // STALE TOKEN: registration rotates tokens (alpha design) — a re-register anywhere
+      // (another browser/device) invalidates this one. Recover in place: one modal submit
+      // re-issues a token (same email reclaims the account; watches survive).
+      shell.querySelector(".suggest-loading").textContent =
+        "Your sign-in needs a quick refresh — submit the form once and Pulse will open.";
+      PULSE_REAUTH = true;
+      if(USER){ delete USER.token; localStorage.setItem("noesis_user", JSON.stringify(USER)); }
+      const m = $("#idmodal");
+      if(m){ if(USER){ if(USER.name) $("#idname").value = USER.name;
+                       if(USER.email) $("#idemail").value = USER.email; } m.hidden = false; }
+      return;
+    }
     if(!r.ok){
       const d = await r.json().catch(()=>({}));
       shell.querySelector(".suggest-loading").textContent =
@@ -3537,6 +3550,7 @@ async function refreshPulseBell(){
   }catch(e){}
 }
 let _WATCH_SUGGESTIONS = null;   // per-page-load cache: at most ONE suggestion call per visit
+let PULSE_REAUTH = false;        // a pulse call hit a stale token → after re-sign-in, reopen the hub
 function openPulsePanel(summary, watches, days){
   summary = summary || []; watches = watches || []; days = days || 30;
   document.querySelectorAll(".pulsepanel").forEach(p=>p.remove());
@@ -4185,6 +4199,7 @@ $("#idgo").addEventListener("click", async ()=>{
   localStorage.setItem("noesis_user", JSON.stringify(USER));
   $("#idmodal").hidden = true;
   maybeShowPulseBell();          // token may have just landed — arm the Pulse bell
+  if(PULSE_REAUTH && USER && USER.token){ PULSE_REAUTH = false; openPulseHub(); }
 });
 $("#idmodal").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#idgo").click(); });
 

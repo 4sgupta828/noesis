@@ -57,7 +57,19 @@ CREATE TABLE IF NOT EXISTS noesis_feedback (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_nfb_vertical_created ON noesis_feedback (vertical, created_at DESC);
+-- PER-DEVICE TOKENS: multiple active tokens per user, so signing in on a second browser/device no
+-- longer orphans the first (the old single token_hash column rotated on every register). The legacy
+-- column keeps being written and checked as a FALLBACK so pre-existing sessions stay valid.
+CREATE TABLE IF NOT EXISTS noesis_user_token (
+    token_hash  TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_seen   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_nut_user ON noesis_user_token (user_id, created_at DESC);
 """
+
+_MAX_TOKENS_PER_USER = 10   # prune oldest beyond this (a lost device's token eventually ages out)
 
 _NPI_API = "https://npiregistry.cms.hhs.gov/api/?version=2.1&number="
 
@@ -135,6 +147,17 @@ class AccountStore:
                    RETURNING id, email, name, profession, country, npi_verified, created_at""",
                 uid, self._vertical, email.lower().strip(), name.strip(), profession.strip(),
                 country.strip(), npi.strip(), npi_verified, _hash(token), disclaimer_ack)
+        # PER-DEVICE: this registration's token is ADDED to the user's active set (the legacy
+        # column above still rotates for back-compat, but auth checks this table first — so the
+        # previous device's token, if it's in the table, keeps working).
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO noesis_user_token (token_hash, user_id) VALUES ($1,$2) "
+                "ON CONFLICT DO NOTHING", _hash(token), row["id"])
+            await conn.execute(
+                """DELETE FROM noesis_user_token WHERE user_id=$1 AND token_hash NOT IN (
+                     SELECT token_hash FROM noesis_user_token WHERE user_id=$1
+                     ORDER BY created_at DESC LIMIT $2)""", row["id"], _MAX_TOKENS_PER_USER)
         user = {"id": row["id"], "email": row["email"], "name": row["name"],
                 "profession": row["profession"], "country": row["country"],
                 "verified": row["npi_verified"]}
@@ -145,12 +168,23 @@ class AccountStore:
             return None
         await self._ensure()
         pool = await self._get_pool()
+        h = _hash(token)
         async with pool.acquire() as conn:
+            # per-device table first; legacy single-column hash as fallback (pre-existing sessions)
             row = await conn.fetchrow(
-                """UPDATE noesis_user SET last_seen=now()
-                   WHERE vertical=$1 AND token_hash=$2
-                   RETURNING id, email, name, profession, country, npi_verified""",
-                self._vertical, _hash(token))
+                """SELECT u.id, u.email, u.name, u.profession, u.country, u.npi_verified
+                   FROM noesis_user_token t JOIN noesis_user u ON u.id = t.user_id
+                   WHERE t.token_hash=$2 AND u.vertical=$1""", self._vertical, h)
+            if row:
+                await conn.execute(
+                    "UPDATE noesis_user_token SET last_seen=now() WHERE token_hash=$1", h)
+                await conn.execute("UPDATE noesis_user SET last_seen=now() WHERE id=$1", row["id"])
+            else:
+                row = await conn.fetchrow(
+                    """UPDATE noesis_user SET last_seen=now()
+                       WHERE vertical=$1 AND token_hash=$2
+                       RETURNING id, email, name, profession, country, npi_verified""",
+                    self._vertical, h)
         if not row:
             return None
         return {"id": row["id"], "email": row["email"], "name": row["name"],

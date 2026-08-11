@@ -3796,8 +3796,10 @@ function renderActivityInto(body, d, containerForClose){
     body.querySelectorAll(".pitem-ask").forEach(btn=>btn.addEventListener("click", (e2)=>{
       const subj = e2.currentTarget.closest(".pitem").querySelector(".pitem-s").textContent.trim();
       closePulsePage();
-      askQuestion(`What changed in the evidence regarding: ${subj}? What should I do differently now?`,
-                  {skipRefine: true});
+      // DRAFT, don't launch: the question lands in the composer — visible, editable, submitted
+      // by the user (auto-running hid the question and spent a run without consent).
+      q.value = `What changed in the evidence regarding: ${subj}? What should I do differently now?`;
+      autoGrow(); window.scrollTo({top: 0}); q.focus();
     }));
     (d.events||[]).filter(i=>!i.seen).forEach(i=>{
       fetch("/pulse/seen",{method:"POST",headers:{"content-type":"application/json",

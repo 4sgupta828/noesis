@@ -1,8 +1,8 @@
 # Grounded Relationship Graph — the knowledge layer over canonical topics
 
-**Status:** SPEC v2 — panel-reviewed (Codex GPT-5.5 + Gemini 3.1 Pro + code-grounded subagent,
-2026-08-11; all three returned). Where the Panel Amendments below conflict with the v1 body,
-the AMENDMENTS WIN. · **Flags:** `NOESIS_GRAPH*` (all default OFF, Rule 20)
+**Status:** SPEC v3 — v2 (panel-reviewed, amendments A1–A9 win over the v1 body) + the
+HARD-CASE ONTOLOGY (§v3 at the end, panel review pending). P0+C1 are BUILT and live in prod
+(late-merge mode). · **Flags:** `NOESIS_GRAPH*` (all default OFF, Rule 20)
 **Companions:** `learnings/evidencepulse.md` (the currency subsystem this composes with) ·
 `learnings/engineprimitives.md` (the Understanding engine whose causal chains this captures as data)
 
@@ -320,3 +320,92 @@ diabetes↔CKD, HFpEF↔cardiac amyloidosis, …) are sufficient to test the rec
 seeding (A1) remains unnecessary for this. And the write-side discipline (A2/A4/A5) becomes
 MORE important, not less: under this design a bad edge silently spends retrieval budget, so
 shadow status, entailment gates, and invalidation are what make retrieval-side trust possible.
+
+---
+
+# v3 — The Hard-Case Ontology (panel review pending)
+
+**Reframe (user directive):** the graph must not be a toy of textbook comorbidities — its job
+is the connections that are STRUCTURALLY hard to make: where the load-bearing evidence lives
+under a topic the question never names and no reformulation would reach. v2's curated edges
+(CKD→anemia) proved the retrieval mechanics; v3 defines the vocabulary that earns the graph
+its keep on the hardest case questions.
+
+## The five hard-connection patterns (what real cases actually need)
+
+1. **Masquerade** — "HFpEF not responding to therapy" where the answer is cardiac amyloidosis;
+   resistant hypertension that is Conn's. Needed knowledge: *X mimics Y, distinguished by Z.*
+   (This was our own HFpEF eval failure — the answer needed amyloidosis evidence for a
+   question about HFpEF.)
+2. **The drug did it** — fatigue = statin; chronic cough = ACE inhibitor; parkinsonism =
+   metoclopramide. The connection runs through a DRUG node the differential never names.
+3. **Unifying diagnosis** — uveitis + hypercalcemia + cough = sarcoidosis; carpal tunnel +
+   LVH + low-voltage ECG = amyloid. An INTERSECTION over `manifests_as` edges: which
+   conditions manifest ALL the presented findings? No linear search meets the parent.
+4. **The long shadow** — GBS after Campylobacter; CAD decades after chest radiation;
+   checkpoint-inhibitor myocarditis; VTE/dermatomyositis heralding occult cancer.
+5. **Atypical population** — silent MI in diabetes; afebrile sepsis in the elderly;
+   everything in pregnancy/CKD.
+
+## Node kinds (registry gains a `kind` column, default `condition`)
+
+`condition` (the 112 covered today) · **`drug`** · **`finding`** (symptom, exam sign,
+lab/imaging pattern — "low-voltage ECG", "eosinophilia") · `exposure` (radiation, transplant,
+endemic travel) · `population` (pregnancy, elderly, immunosuppressed). Findings/drugs are
+minted ONLY through the same registry stability contract (canonical, minted once); the
+Pulse watch surface remains conditions-first (a watch on "eosinophilia" is not a P0 goal).
+
+## Hard-case relations (adds to the v2 five; all validated against the manifest)
+
+| relation | direction | powers |
+|---|---|---|
+| `mimics` | condition → condition (+ `distinguished_by` finding on the edge) | masquerade legs: asked topic X → evidence legs for its mimics |
+| `manifests_as` | condition → finding (context = organ/setting) | the INTERSECTION consumer (C4) |
+| `adverse_effect_of` | finding → drug | drug-induced masquerades |
+| `unmasks` / `precipitates` | drug/exposure → condition | steroid → latent TB; contrast → nephropathy |
+| `late_complication_of` | condition → exposure/treatment (context = typical latency) | long-shadow links |
+| `heralds` | finding/condition → condition | paraneoplastic / occult-malignancy signals |
+| `triggered_by` | condition → exposure/infection | post-infectious autoimmunity |
+| `presents_atypically_in` | condition → population (context = the atypical feature) | population traps |
+
+## C4 — the intersection consumer (the hard-case payoff)
+
+When the (pristine) question carries ≥2 graph-known findings/conditions: rank conditions by
+how many of the question's nodes they `manifests_as`-cover (structural count, no LLM), and
+spend ONE evidence leg on the top unifying candidate above a match threshold (≥2 matches).
+`mimics` edges likewise buy a leg for the masquerader whenever its cover-story is the asked
+subject. Same A9 mechanics — late-merge, capped, provenance-tagged, planner untouched.
+
+## Guardrails (unchanged, restated for the new vocabulary)
+
+Every v3 edge is born SHADOW and activates only through corpus-entailment verification (the
+edge's own retrieval must surface supporting evidence — which simultaneously proves the leg
+has something to fetch). Graph text never enters any prompt; answers cite only span-verified
+documents; late-merge means even a wrong mimic edge cannot shrink the planner's own search.
+Invalidation (A5) and the impact monitor apply to all new relations as-is.
+
+## Growth campaign (redirects the acceleration plan)
+
+LLM-drafts per covered condition, corpus-verified before activation: top ~3 mimics with
+discriminators · top drug-induced masquerades · heralding associations · atypical-population
+presentations · manifestation profiles for the great multi-system imitators (sarcoid,
+amyloid, IgG4, lupus, endocarditis, TB, HIV, syphilis). Fewer edges than a comorbidity dump;
+each one is a connection a hard case actually needs. HealthBench-hard slices (the Q&A
+harness) are the natural eval traffic: masquerade-style cases by construction.
+
+## Eval gates (before C4 or any v3 relation feeds prod answers)
+
+- Held-out masquerade set: ~10 cases with known unifying/mimic answers (incl. our HFpEF-
+  amyloid case) — graph-on must surface the hidden-topic evidence; graph-off establishes it
+  can't.
+- Intersection precision: sampled C4 candidates judged for clinical sensibility.
+- No-harm on single-finding questions (C4 must not fire).
+
+## Phasing
+
+- **v3-P0:** registry `kind` column + relation-vocabulary expansion + entailment-gated
+  drafting campaign for MIMIC + ADVERSE_EFFECT edges on the 112 conditions (highest value
+  per edge, simplest to verify) + masquerade eval set.
+- **v3-P1:** `manifests_as` profiles for the ~8 great imitators + C4 intersection consumer
+  dark + its eval.
+- **v3-P2:** long-shadow/population relations; C4 ON after the masquerade eval passes.

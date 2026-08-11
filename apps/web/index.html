@@ -3496,6 +3496,18 @@ async function checkAnswerIntegrity(target, data){
     `<div class="pulsewarn">◉ <b>Evidence has changed since this answer.</b> ${hits.length}
      cited source${hits.length>1?"s have":" has"} since been ${kinds}. Re-ask for a current answer.</div>`);
 }
+// Badge-only refresh: unseen count on the header ◉ Pulse button (the page fetches its own data).
+async function refreshPulseBell(){
+  const b = $("#pulsebell"), badge = $("#pbadge");
+  if(!b || !PULSE_ENABLED || !USER || !USER.token || !badge) return;
+  try{
+    const r = await fetch("/pulse/inbox",{headers:{"x-noesis-token":USER.token}});
+    if(!r.ok) return;
+    const d = await r.json();
+    const unseen = (d.summary||[]).reduce((n,t)=>n+(t.unseen||0), 0);
+    badge.hidden = !unseen; badge.textContent = unseen > 9 ? "9+" : String(unseen);
+  }catch(e){}
+}
 async function addWatch(topic, source){
   const r = await fetch("/pulse/watch",{method:"POST",
     headers:{"content-type":"application/json","x-noesis-token":USER.token},

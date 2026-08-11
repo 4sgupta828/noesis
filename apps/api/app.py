@@ -547,6 +547,7 @@ def build_default_service() -> ResearchService:
     if answer_format and reasoning_read_enabled() and getattr(manifest, "reasoning_format", None):
         answer_format = answer_format + "\n\n" + manifest.reasoning_format
     vision_prompt = manifest.vision_prompt if vision_enabled() else None
+    report_prompt = getattr(manifest, "report_prompt", None) if vision_enabled() else None
     gap_prompt = manifest.gap_prompt if gap_healing_enabled() else None
     suggest_prompt = manifest.suggest_prompt if conversation_enabled() else None
     refine_prompt = getattr(manifest, "refine_prompt", None) if refine_enabled() else None
@@ -591,7 +592,7 @@ def build_default_service() -> ResearchService:
         # patient view selects it per-request by audience, so it must be available even when the
         # clinician structured-answer flags are off (else patient mode would silently no-op).
         patient_answer_format=patient_directive,
-        vision_prompt=vision_prompt,
+        vision_prompt=vision_prompt, report_prompt=report_prompt,
         layman_prompt=manifest.layman_prompt, gap_prompt=gap_prompt,
         suggest_prompt=suggest_prompt, refine_prompt=refine_prompt, triage_prompt=triage_prompt,
         reasoned_scaffold_prompt=reasoned_scaffold, reasoned_answer_format=reasoned_format,
@@ -979,10 +980,11 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         """Uploaded attachments → (images, documents, previews), gated by vision_enabled() — same as
         _do_research. Returns (None, None, []) when off or empty so the panel is byte-identical without vision."""
         if not (body.attachments and vision_enabled()):
-            return None, None, []
+            return None, None, None, []
         from api.media import attachments_to_media, session_previews
-        images, docs, _notes = attachments_to_media([a.model_dump() for a in body.attachments])
-        return images, docs, session_previews(images or [], docs or [])
+        images, docs, pdfs, _notes = attachments_to_media([a.model_dump() for a in body.attachments])
+        return images, docs, pdfs, session_previews(
+            images or [], (docs or []) + [{"name": x.get("name")} for x in (pdfs or [])])
 
     async def _persist_panel(body, r) -> str | None:
         """Best-effort persist of a panel turn as a SHAREABLE session (mirrors _do_research). A follow-up
@@ -1021,12 +1023,12 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="ask panel not enabled")
         if app.state.service is None:
             app.state.service = build_default_service()
-        images, docs, _prev = _panel_media(body)
+        images, docs, pdfs, _prev = _panel_media(body)
         try:
             r = await app.state.service.ask_panel(
                 question=body.question, tenant_id=body.tenant_id, workspace_id=body.workspace_id,
                 specialist_ids=body.specialists or None, source_keys=body.sources, history=body.history,
-                rationales=body.rationales, images=images, documents=docs)
+                rationales=body.rationales, images=images, documents=docs, pdf_docs=pdfs)
         except CassetteMiss as e:
             raise HTTPException(status_code=503, detail="No model available in replay mode.") from e
         except Exception as e:   # noqa: BLE001
@@ -1049,7 +1051,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         async def on_event(ev: dict) -> None:
             _sse_push(run, ev)
 
-        images, docs, _prev = _panel_media(body)
+        images, docs, pdfs, _prev = _panel_media(body)
 
         async def runner() -> None:
             # Runs to completion regardless of client connections — persists, and buffers every
@@ -1059,7 +1061,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     question=body.question, tenant_id=body.tenant_id, workspace_id=body.workspace_id,
                     specialist_ids=body.specialists or None, source_keys=body.sources,
                     history=body.history, rationales=body.rationales,
-                    images=images, documents=docs, on_event=on_event)
+                    images=images, documents=docs, pdf_docs=pdfs, on_event=on_event)
                 sid = await _persist_panel(body, r)
                 _sse_push(run, {"type": "final", "result": _panel_payload(r, session_id=sid or body.session_id)})
             except CassetteMiss:
@@ -1085,12 +1087,12 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         Raises CassetteMiss / provider errors for the caller to handle."""
         if app.state.service is None:
             app.state.service = build_default_service()
-        images, docs, attach_notes, previews = None, None, [], []
+        images, docs, pdfs, attach_notes, previews = None, None, None, [], []
         if body.attachments and vision_enabled():
             from api.media import attachments_to_media, session_previews
-            images, docs, attach_notes = attachments_to_media(
+            images, docs, pdfs, attach_notes = attachments_to_media(
                 [a.model_dump() for a in body.attachments])
-            previews = session_previews(images or [], docs or [])
+            previews = session_previews(images or [], (docs or []) + [{"name": x.get("name")} for x in (pdfs or [])])
         history = body.history if conversation_enabled() else None
         # Effort is HONORED only when the flag is on; otherwise forced to 1.0 (byte-identical no-op).
         effort = body.effort if effort_scale_enabled() else 1.0
@@ -1132,7 +1134,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         res = await _ask(
             question=_q, tenant_id=body.tenant_id,
             workspace_id=body.workspace_id, source_keys=body.sources,
-            images=images, documents=docs, history=history, on_event=on_event,
+            images=images, documents=docs, pdf_docs=pdfs, history=history, on_event=on_event,
             facets=_country_facets(body.countries), country_boost=_country_boost(body.countries),
             effort=effort, audience=audience,
             answer_focus=focus, clarify=followup_clarify_enabled(), extra_directive=_extra)

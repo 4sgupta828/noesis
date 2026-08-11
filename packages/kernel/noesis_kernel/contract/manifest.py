@@ -131,6 +131,9 @@ class VerticalManifest:
     # subjects for a Q&A / canonicalize a free-text topic — both against the stable topic registry
     # (repeated runs must converge on the same canonical strings, never variants). None → the
     # watch picker falls back to raw free-text only.
+    # Optional NATIVE document-reading directive (uploaded PDFs → faithful structured digest;
+    # the model reads the raw file so report tables keep their associations). None → text-layer only.
+    report_prompt: str | None = None
     watch_topic_prompt: str | None = None
     watch_canonize_prompt: str | None = None
     watch_suggest_prompt: str | None = None    # cross-session watch suggestions (recurring subjects)

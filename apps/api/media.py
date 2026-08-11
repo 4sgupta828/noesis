@@ -123,14 +123,20 @@ def _dicom(att: dict) -> list[dict]:
     return [_png_from_pil(img)]
 
 
-def attachments_to_media(attachments: list[dict]) -> tuple[list[dict], list[dict], list[str]]:
+def attachments_to_media(attachments: list[dict]) -> tuple[list[dict], list[dict], list[dict], list[str]]:
     """Route each attachment to the right context channel:
-      - images / scans / image-only PDFs → `images` [{media_type, data(base64 PNG)}] (vision),
-      - text-bearing PDFs → `docs` [{name, text}] (used as document context, not vision).
-    Returns (images, docs, notes); `notes` describe anything skipped. Never raises.
+      - images / scans → `images` [{media_type, data(base64 PNG)}] (vision),
+      - plain text     → `docs` [{name, text}] (document context),
+      - PDFs           → `pdfs` [{name, data, text_fallback}] — the RAW PDF, passed to the model as
+        a NATIVE document block (SOTA parsing: the model sees the page layout, so lab-report tables
+        keep their analyte/value/unit/range associations instead of the scrambled text layer that
+        PyMuPDF's get_text() produces). `text_fallback` = the old extraction, used only if the
+        native read fails. Oversized PDFs (> ~20 MB) fall back to text/pages with a note.
+    Returns (images, docs, pdfs, notes); `notes` describe anything skipped. Never raises.
     """
     images: list[dict] = []
     docs: list[dict] = []
+    pdfs: list[dict] = []
     notes: list[str] = []
 
     def _label(att):
@@ -157,18 +163,24 @@ def attachments_to_media(attachments: list[dict]) -> tuple[list[dict], list[dict
             elif kind == "dicom":
                 images.extend(_tag(_dicom(att), _label(att)))
             elif kind == "pdf":
-                text = _pdf_text(att)
-                if len(text) >= _PDF_TEXT_MIN:            # a real text document
-                    docs.append({"name": _label(att), "text": text})
-                else:                                     # scanned/image PDF → vision
-                    images.extend(_tag(_pdf_images(att), _label(att)))
+                data = att.get("data", "")
+                if len(data) <= 20_000_000 and len(pdfs) < 2:   # native read (max 2 PDFs/request)
+                    pdfs.append({"name": _label(att), "data": data,
+                                 "text_fallback": _pdf_text(att)})
+                else:                                     # oversized/extra → old fallback paths
+                    notes.append(f"'{_label(att)}' read via text extraction (size/count cap)")
+                    text = _pdf_text(att)
+                    if len(text) >= _PDF_TEXT_MIN:
+                        docs.append({"name": _label(att), "text": text})
+                    else:
+                        images.extend(_tag(_pdf_images(att), _label(att)))
             else:
                 notes.append(f"unsupported attachment '{_label(att)}'")
         except ModuleNotFoundError as e:
             notes.append(f"{kind} support unavailable ({e.name} not installed)")
         except Exception as e:  # noqa: BLE001 — never break the request on a bad file
             notes.append(f"couldn't read {kind} attachment ({type(e).__name__})")
-    return images[:_MAX_IMAGES], docs, notes
+    return images[:_MAX_IMAGES], docs, pdfs, notes
 
 
 def _thumb(b64_png: str, edge: int = 220) -> str:

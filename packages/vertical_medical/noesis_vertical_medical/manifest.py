@@ -18,7 +18,7 @@ from .answer_format import (
     MEDICAL_REASONING_FORMAT,
     MEDICAL_PATIENT_REASONING_FORMAT,
 )
-from .vision import MEDICAL_VISION_PROMPT
+from .vision import MEDICAL_REPORT_PROMPT, MEDICAL_VISION_PROMPT
 from .layman import MEDICAL_LAYMAN_PROMPT
 from .gaps import MEDICAL_GAP_PROMPT
 from .suggest import MEDICAL_SUGGEST_PROMPT
@@ -83,6 +83,7 @@ def build_manifest() -> VerticalManifest:
         panel_specialists=SPECIALISTS, panel_default_ids=DEFAULT_PANEL_IDS,
         panel_synthesis_directive=PANEL_SYNTHESIS_DIRECTIVE, panel_examples=PANEL_EXAMPLE_CASES,
         vision_prompt=MEDICAL_VISION_PROMPT,
+        report_prompt=MEDICAL_REPORT_PROMPT,
         layman_prompt=MEDICAL_LAYMAN_PROMPT,
         gap_prompt=MEDICAL_GAP_PROMPT,
         suggest_prompt=MEDICAL_SUGGEST_PROMPT,

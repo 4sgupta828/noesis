@@ -65,6 +65,7 @@ class ResearchService:
     answer_format: str | None = None        # vertical answer-structure directive (opaque, clinician)
     patient_answer_format: str | None = None # vertical PATIENT-audience compose directive (opaque)
     vision_prompt: str | None = None        # vertical image-description directive (opaque)
+    report_prompt: str | None = None        # vertical NATIVE document-reading directive (opaque)
     layman_prompt: str | None = None        # vertical layman-rephrasing directive (opaque)
     gap_prompt: str | None = None           # vertical gap-fill-planner directive (opaque)
     suggest_prompt: str | None = None       # vertical suggested-follow-ups directive (opaque)
@@ -212,6 +213,7 @@ class ResearchService:
         source_keys: list[str] | None = None,
         images: list[dict] | None = None,
         documents: list[dict] | None = None,
+        pdf_docs: list[dict] | None = None,  # raw PDFs → NATIVE model reading (layout-faithful digests)
         history: list[dict] | None = None,
         on_event=None,                       # async callback(dict) for live progress (SSE)
         facets: dict | None = None,          # hard retrieval facet filter (e.g. source_country scope)
@@ -303,6 +305,28 @@ class ResearchService:
         parts: list[str] = []
         if visual_obs:
             parts.append("IMAGE (automated visual description):\n" + visual_obs)
+        # NATIVE PDF reading: the model sees the original file (page layout intact), so report
+        # tables keep their analyte/value/unit/range associations — the fix for scrambled
+        # text-layer extraction on lab reports. Falls back to the text layer per document.
+        if pdf_docs and self.report_prompt:
+            from noesis_kernel.research.vision import read_documents
+            try:
+                reads = await read_documents(llm=self.llm, report_prompt=self.report_prompt,
+                                             pdfs=pdf_docs, budget=budget)
+            except Exception:   # noqa: BLE001
+                reads = []
+            read_names = {r["name"] for r in reads}
+            for r in reads:
+                parts.append(f"DOCUMENT — {r['name']} (structured digest, read natively from the file):\n{r['digest']}")
+            for pdf in pdf_docs:
+                fb = (pdf.get("text_fallback") or "").strip()
+                if pdf.get("name") not in read_names and fb:
+                    parts.append(f"DOCUMENT — {pdf.get('name') or 'document'} (text-layer extraction):\n{fb[:20000]}")
+        elif pdf_docs:
+            for pdf in pdf_docs:
+                fb = (pdf.get("text_fallback") or "").strip()
+                if fb:
+                    parts.append(f"DOCUMENT — {pdf.get('name') or 'document'} (text-layer extraction):\n{fb[:20000]}")
         for d in documents or []:
             txt = (d.get("text") or "").strip()
             if txt:
@@ -360,7 +384,8 @@ class ResearchService:
     async def ask_panel(self, *, question: str, tenant_id: str, workspace_id: str | None = None,
                         specialist_ids: list[str] | None = None, source_keys: list[str] | None = None,
                         history: list[dict] | None = None, rationales: dict | None = None,
-                        images: list[dict] | None = None, documents: list[dict] | None = None, on_event=None):
+                        images: list[dict] | None = None,
+        pdf_docs: list[dict] | None = None, documents: list[dict] | None = None, on_event=None):
         """Ask-Panel (Alpha): run the selected specialists (or the default set) as parallel grounded
         loops and synthesize their pooled findings. Provides the domain-free orchestrator with a
         source-scoping callback so each specialist can prefer its own sources. `history` threads in as
@@ -383,6 +408,25 @@ class ResearchService:
         _parts = []
         if visual_obs:
             _parts.append("IMAGE (automated visual description):\n" + visual_obs)
+        if pdf_docs and self.report_prompt:
+            from noesis_kernel.research.vision import read_documents
+            try:
+                _reads = await read_documents(llm=self.llm, report_prompt=self.report_prompt,
+                                              pdfs=pdf_docs, budget=BudgetState(max_calls=4))
+            except Exception:   # noqa: BLE001
+                _reads = []
+            _rn = {r["name"] for r in _reads}
+            for r in _reads:
+                _parts.append(f"DOCUMENT — {r['name']} (structured digest, read natively from the file):\n{r['digest']}")
+            for pdf in pdf_docs:
+                fb = (pdf.get("text_fallback") or "").strip()
+                if pdf.get("name") not in _rn and fb:
+                    _parts.append(f"DOCUMENT — {pdf.get('name') or 'document'} (text-layer extraction):\n{fb[:20000]}")
+        elif pdf_docs:
+            for pdf in pdf_docs:
+                fb = (pdf.get("text_fallback") or "").strip()
+                if fb:
+                    _parts.append(f"DOCUMENT — {pdf.get('name') or 'document'} (text-layer extraction):\n{fb[:20000]}")
         for d in documents or []:
             txt = (d.get("text") or "").strip()
             if txt:

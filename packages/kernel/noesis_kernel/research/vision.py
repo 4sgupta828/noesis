@@ -68,3 +68,41 @@ async def observe_images(
     )
     budget.charge(calls=1, tokens=res.output_tokens)
     return (res.parsed.observation or "").strip()
+
+
+async def read_documents(
+    *,
+    llm: LLMClient,
+    report_prompt: str,
+    pdfs: list[dict],
+    budget: BudgetState,
+    max_docs: int = 2,
+) -> list[dict]:
+    """NATIVE document reading — pass raw PDFs to the model as document content blocks (the model
+    sees page LAYOUT, so report tables keep their row/column associations — the fix for scrambled
+    text-layer extraction). Returns [{name, digest}] per successfully-read PDF; failures return no
+    entry (the caller falls back to the text layer). Same epistemic contract as observe_images:
+    the digest FRAMES the search / provides faithful transcription context — it is never a
+    verified claim and never enters the grounded answer as evidence."""
+    out: list[dict] = []
+    for pdf in (pdfs or [])[:max_docs]:
+        data = (pdf.get("data") or "").strip()
+        if not data:
+            continue
+        content = [
+            {"type": "document",
+             "source": {"type": "base64", "media_type": "application/pdf", "data": data}},
+            {"type": "text",
+             "text": "Read this document and produce the digest per your instructions."},
+        ]
+        try:
+            comp = await llm.complete(
+                system=report_prompt + _GUARD,
+                messages=[{"role": "user", "content": content}],
+                response_format=VisualObservation, max_tokens=1500)
+            digest = (comp.parsed.observation or "").strip()
+            if digest:
+                out.append({"name": pdf.get("name") or "document", "digest": digest})
+        except Exception:   # noqa: BLE001 — a failed native read must not break research
+            continue
+    return out

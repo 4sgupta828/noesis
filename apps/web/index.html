@@ -901,7 +901,8 @@
     padding:.4rem .75rem;color:var(--ink);display:inline-flex;align-items:center;gap:.4rem;}
   .sessions .sback:hover{border-color:var(--gold);color:var(--gold);}
   .sessions .stitle{font-family:var(--serif);font-size:1.1rem;color:var(--ink);}
-  .sessions .ssearch{margin-left:auto;background:var(--panel2);border:1px solid var(--hair);border-radius:9px;
+  .sessions .ssearchrow{padding:.55rem 1.2rem 0;}
+  .sessions .ssearch{width:100%;display:block;background:var(--panel2);border:1px solid var(--hair);border-radius:9px;
     color:var(--ink);font:inherit;font-size:.82rem;padding:.42rem .7rem;min-width:min(280px,55vw);outline:none;}
   .sessions .ssearch:focus{border-color:rgba(var(--gold-rgb),.5);box-shadow:0 0 0 2px rgba(var(--gold-rgb),.12);}
   .sessions .ssearch::placeholder{color:var(--muted);}
@@ -934,7 +935,7 @@
   .sessions .sempty{color:var(--muted);padding:1rem;font-size:.85rem;}
   @media (max-width:640px){
     .sessions .shead{padding:.75rem .9rem;}
-    .sessions .ssearch{margin-left:0;order:3;width:100%;min-width:0;}
+    .sessions .ssearchrow{padding:.5rem .9rem 0;}
     .sessions .sbody{flex-direction:column;}
     .sessions .sdrag{display:none;}
     /* Mobile = one simple screen at a time: the full list, then drill into one answer. */
@@ -1172,6 +1173,8 @@
   <div class="shead">
     <button type="button" class="sback" id="sback">← Back</button>
     <span class="stitle">Past Sessions</span>
+  </div>
+  <div class="ssearchrow">
     <input type="search" class="ssearch" id="ssearch" placeholder="Search questions or people…" aria-label="Search sessions" />
   </div>
   <div class="stabs" id="stabs" role="tablist" hidden>

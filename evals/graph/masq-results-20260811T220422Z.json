@@ -1,0 +1,137 @@
+{
+  "git": "feb1d8c",
+  "cases": 10,
+  "off": [
+    {
+      "id": "masq-1",
+      "grounded": true,
+      "claims": 18,
+      "hits": [
+        "amyloid"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-2",
+      "grounded": true,
+      "claims": 18,
+      "hits": [
+        "renin"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-3",
+      "grounded": true,
+      "claims": 28,
+      "hits": [
+        "colonoscopy",
+        "occult",
+        "GI blood loss"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-4",
+      "grounded": true,
+      "claims": 23,
+      "hits": [
+        "TSH"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-5",
+      "grounded": true,
+      "claims": 17,
+      "hits": [
+        "TSH",
+        "thyroid"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-6",
+      "grounded": true,
+      "claims": 27,
+      "hits": [],
+      "legs": []
+    },
+    {
+      "id": "masq-7",
+      "grounded": true,
+      "claims": 17,
+      "hits": [
+        "pulmonary embolism"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-8",
+      "grounded": true,
+      "claims": 22,
+      "hits": [
+        "ceruloplasmin",
+        "Kayser-Fleischer"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-9",
+      "grounded": true,
+      "claims": 15,
+      "hits": [
+        "monoclonal",
+        "SPEP",
+        "myeloma"
+      ],
+      "legs": []
+    },
+    {
+      "id": "masq-10",
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha"
+    }
+  ],
+  "on": [
+    {
+      "id": "masq-1",
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha"
+    },
+    {
+      "id": "masq-2",
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha"
+    },
+    {
+      "id": "masq-3",
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha"
+    },
+    {
+      "id": "masq-4",
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha"
+    },
+    {
+      "id": "masq-5",
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha"
+    },
+    {
+      "id": "masq-6",
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha"
+    },
+    {
+      "id": "masq-7",
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha"
+    },
+    {
+      "id": "masq-8",
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha"
+    },
+    {
+      "id": "masq-9",
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha"
+    },
+    {
+      "id": "masq-10",
+      "error": "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purcha"
+    }
+  ]
+}

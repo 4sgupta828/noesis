@@ -68,10 +68,24 @@ async def _arm(cases: list[dict], expand: str):
     return await asyncio.gather(*(one(c) for c in cases))
 
 
-async def main(limit: int):
+async def main(limit: int, off_from: str = ""):
     cases = [json.loads(ln) for ln in (HERE / "masquerade_cases.jsonl").read_text().splitlines()
              if ln.strip()][:limit]
-    off = await _arm(cases, "")
+    if off_from:
+        # CREDIT-WISE reuse: the OFF arm from a prior run (banked results) — only the ON arm
+        # (plus any banked-OFF gaps) spends. Arms then differ in run time; acceptable when the
+        # corpus hasn't materially moved between them (say so in the report).
+        prior = json.loads((HERE / off_from).read_text())
+        banked = {r["id"]: r for r in prior["off"] if "error" not in r}
+        missing = [c for c in cases if c["id"] not in banked]
+        if missing:
+            print(f"re-running {len(missing)} OFF case(s) missing from the bank: "
+                  f"{[c['id'] for c in missing]}")
+            fresh = {r["id"]: r for r in await _arm(missing, "")}
+            banked.update(fresh)
+        off = [banked[c["id"]] for c in cases]
+    else:
+        off = await _arm(cases, "")
     on = await _arm(cases, "late")
     sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
                          text=True, cwd=ROOT).stdout.strip()
@@ -107,10 +121,13 @@ async def main(limit: int):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=10)
+    ap.add_argument("--off-from", default="", help="reuse a prior run's OFF arm (results json)")
     ap.add_argument("--confirm-spend", action="store_true")
     a = ap.parse_args()
-    print(f"PROJECTED SPEND: {a.limit * 2} answers ≈ {a.limit * 20}–{a.limit * 40} LLM calls")
+    arms = 1 if a.off_from else 2
+    print(f"PROJECTED SPEND: {a.limit * arms} answers ≈ "
+          f"{a.limit * arms * 10}–{a.limit * arms * 20} LLM calls")
     if not a.confirm_spend:
         raise SystemExit("refusing without --confirm-spend")
     _prod_env()
-    asyncio.run(main(a.limit))
+    asyncio.run(main(a.limit, a.off_from))

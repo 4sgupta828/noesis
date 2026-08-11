@@ -3493,8 +3493,36 @@ function maybeShowPulseBell(){
   const b = $("#pulsebell");
   if(!b || !PULSE_ENABLED) return;
   b.hidden = false;
-  if(USER && USER.token){ refreshPulseBell(); }
+  if(USER && USER.token){
+    b.onclick = openPulseHub;           // ALWAYS clickable — fetches on demand (badge is separate)
+    refreshPulseBell();
+  }
   else b.onclick = ()=>{ const m=$("#idmodal"); if(m){ m.hidden=false; } else alert("Sign in to use Pulse."); };
+}
+// A click must ALWAYS show something: loading shell first, then render (or an honest error).
+async function openPulseHub(){
+  document.querySelectorAll(".pulsepanel").forEach(x=>x.remove());
+  const shell = document.createElement("div"); shell.className = "pulsepanel";
+  shell.innerHTML = `<div class="pulsepanel-h">◉ Pulse
+      <button type="button" class="pclose" aria-label="Close">✕</button></div>
+    <div class="suggest-loading">Loading your watches…</div>`;
+  document.body.appendChild(shell);
+  shell.querySelector(".pclose").addEventListener("click", ()=>shell.remove());
+  try{
+    const r = await fetch("/pulse/inbox",{headers:{"x-noesis-token":USER.token}});
+    if(!r.ok){
+      const d = await r.json().catch(()=>({}));
+      shell.querySelector(".suggest-loading").textContent =
+        "Couldn't load Pulse: " + (d.detail || ("HTTP " + r.status));
+      return;
+    }
+    const d = await r.json();
+    if(!document.body.contains(shell)) return;      // user closed it while loading
+    openPulsePanel(d.summary||[], d.watches||[], d.days||30);
+  }catch(e){
+    if(document.body.contains(shell))
+      shell.querySelector(".suggest-loading").textContent = "Couldn't load Pulse — network error.";
+  }
 }
 async function refreshPulseBell(){
   const b = $("#pulsebell"), badge = $("#pbadge");
@@ -3506,7 +3534,6 @@ async function refreshPulseBell(){
     const d = await r.json();
     const unseen = (d.summary||[]).reduce((n,t)=>n+(t.unseen||0), 0);
     if(badge){ badge.hidden = !unseen; badge.textContent = unseen > 9 ? "9+" : String(unseen); }
-    b.onclick = ()=>openPulsePanel(d.summary||[], d.watches||[], d.days||30);
   }catch(e){}
 }
 let _WATCH_SUGGESTIONS = null;   // per-page-load cache: at most ONE suggestion call per visit

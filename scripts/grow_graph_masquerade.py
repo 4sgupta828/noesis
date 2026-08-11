@@ -53,7 +53,7 @@ def _prod_env() -> None:
     os.environ["NOESIS_CORPUS_DSN"] = pg["DATABASE_PUBLIC_URL"]
 
 
-async def main(n_conditions: int, per_condition: int) -> None:
+async def main(n_conditions: int, per_condition: int, n_skip: int = 0) -> None:
     import api.app as appmod
     from noesis_kernel.graph import GraphStore, edge_identity
     from noesis_kernel.graph.verify import verify_edge_candidate
@@ -63,7 +63,7 @@ async def main(n_conditions: int, per_condition: int) -> None:
     svc = appmod.build_default_service()
     g = GraphStore(os.environ["NOESIS_CORPUS_DSN"], relations=GRAPH_RELATIONS)
     existing = {e["id"] for e in await g.list_edges(limit=1000)}
-    conditions = [c["name"] for c in COVERED_CONDITIONS][:n_conditions]
+    conditions = [c["name"] for c in COVERED_CONDITIONS][n_skip:n_skip + n_conditions]
     log_path = ROOT / "evals" / "graph" / (
         f"grow-{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.jsonl")
     decisions: list[dict] = []
@@ -91,7 +91,7 @@ async def main(n_conditions: int, per_condition: int) -> None:
                     continue
                 q = f"{c.subject} presenting as {cover} {c.distinguished_by}".strip()
                 try:
-                    hits = await svc.search(question=q, tenant_id="graphgrow", k=6)
+                    hits = await svc.search(question=q, tenant_id="demo", k=6)
                 except Exception as e:           # noqa: BLE001
                     decisions.append({"cover": cover, "subject": c.subject,
                                       "stage": "retrieval", "error": str(e)[:150]})
@@ -138,6 +138,7 @@ async def main(n_conditions: int, per_condition: int) -> None:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--conditions", type=int, default=20)
+    ap.add_argument("--skip", type=int, default=0)
     ap.add_argument("--per-condition", type=int, default=4)
     ap.add_argument("--confirm-spend", action="store_true")
     a = ap.parse_args()
@@ -146,4 +147,4 @@ if __name__ == "__main__":
     if not a.confirm_spend:
         raise SystemExit("refusing without --confirm-spend")
     _prod_env()
-    asyncio.run(main(a.conditions, a.per_condition))
+    asyncio.run(main(a.conditions, a.per_condition, a.skip))

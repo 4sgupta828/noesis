@@ -46,7 +46,7 @@ _COMPOSE_FAIL_NOTE = (
 _COMPOSE_CLAIM_CAP = 30       # max verified findings sent to compose
 _EXTRACT_COLLECT = 80         # under evidence-select, gather up to this many before ranking down
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from noesis_kernel.contract.dto import RetrievalRequest
 from noesis_kernel.contract.protocols import GatingPolicy, RetrievalSource
@@ -66,11 +66,38 @@ class ClaimOut(BaseModel):
     quote: str           # a verbatim span from that atom supporting the claim
 
 
+def _coerce_json_list(v):
+    """PROVIDER-MALFORMATION REPAIR: models occasionally emit a tool arg as TEXT — the JSON
+    list plus trailing XML tool syntax ('[...]</claims>\\n</invoke>') — which arrives here as
+    a string and would hard-fail the whole research run on a stochastic flake. Repair: strip
+    trailing garbage after the last ']', parse; a still-unparseable value degrades to [] —
+    for an answer step that means the empty-claims RECOVERY re-ask runs (graceful), never a
+    user-facing 'provider error'."""
+    if not isinstance(v, str):
+        return v
+    import json as _json
+    s = v.strip()
+    for cand in (s[: s.rfind("]") + 1] if "]" in s else s, s):
+        try:
+            parsed = _json.loads(cand)
+            if isinstance(parsed, list):
+                return parsed
+        except Exception:   # noqa: BLE001
+            continue
+    _log.warning("unparseable list-arg from provider (len=%d) — degrading to []", len(v))
+    return []
+
+
 class AgentStep(BaseModel):
     action: Literal["search", "answer"]
     query: str | None = None
     queries: list[str] = []     # optional reformulations → multi-query fusion (recall)
     claims: list[ClaimOut] = []
+
+    @field_validator("queries", "claims", mode="before")
+    @classmethod
+    def _repair_lists(cls, v):
+        return _coerce_json_list(v)
 
 
 class ChartBar(BaseModel):

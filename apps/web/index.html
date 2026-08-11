@@ -767,6 +767,13 @@
   .ppstat.hot .n{color:var(--gap);}
   .ppstat .l{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
   .ppbody{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:1.6rem;align-items:start;padding-top:.4rem;}
+  .ppcov{display:flex;align-items:center;gap:.6rem;padding:.5rem .6rem;border-top:1px dashed var(--hair);cursor:pointer;}
+  .ppcov:hover{background:var(--panel2);}
+  .ppcov-t{flex:1;min-width:0;font-size:.86rem;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ppcov-m{font-family:var(--mono);font-size:.64rem;color:var(--muted);white-space:nowrap;}
+  .ppcov-b{padding:.3rem .6rem .8rem 1rem;border-left:2px solid var(--hair);margin-left:.4rem;}
+  .ppcov-more{margin-top:.5rem;}
+  .ppcov-more>summary{font-family:var(--mono);font-size:.66rem;color:var(--muted);cursor:pointer;padding:.3rem 0;}
   @media (max-width: 880px){ .ppbody{grid-template-columns:1fr;} .pprail{order:2;} }
   .ppcard{border:1px solid var(--hair);border-radius:14px;background:var(--panel2);margin-bottom:.8rem;overflow:hidden;}
   .ppcard-h{display:flex;align-items:center;gap:.6rem;padding:.8rem 1rem;cursor:pointer;}
@@ -1213,7 +1220,8 @@
   </div>
   <div class="ppstats" id="ppstats"></div>
   <div class="ppbody">
-    <div class="ppmain" id="ppmain"><div class="suggest-loading">Loading…</div></div>
+    <div class="ppmaincol"><div class="ppmain" id="ppmain"><div class="suggest-loading">Loading…</div></div>
+      <div id="ppcoverage"></div></div>
     <aside class="pprail">
       <div class="pprail-h">Watch something new</div>
       <div class="watchpick-row"><input type="text" class="watchpick-in" id="ppwatch-in" maxlength="120"
@@ -3644,6 +3652,53 @@ async function ppRender(){
     if(e.target.classList.contains("wtag-x")) return;
     ppExpand(h.closest(".ppcard"));
   }));
+  // COVERAGE PULSE: movement across EVERY covered condition (cached board, self-refreshing)
+  (async ()=>{
+    const cb = $("#ppcoverage"); if(!cb) return;
+    try{
+      const r = await fetch("/pulse/coverage"); if(!r.ok) throw 0;
+      const b = await r.json();
+      const conds = (b.conditions||[]).map(c=>({...c,
+        ev: PULSE_DAYS<=7?c.e7:PULSE_DAYS<=30?c.e30:c.e90,
+        nd: PULSE_DAYS<=7?c.d7:PULSE_DAYS<=30?c.d30:c.d90}));
+      if(!conds.length){
+        cb.innerHTML = `<div class="pprail-h" style="margin-top:1.4rem">Coverage pulse</div>
+          <div class="pitem-empty">${b.refreshing?"Computing the first coverage board — check back in a few minutes.":"No coverage board yet."}</div>`;
+        return;
+      }
+      conds.sort((a,z)=>(z.ev*3+z.nd)-(a.ev*3+a.nd));
+      const movers = conds.filter(c=>c.ev||c.nd), quiet = conds.filter(c=>!c.ev&&!c.nd);
+      const row = c=>`<div class="ppcov" data-t="${esc(c.topic)}">
+        <span class="ppcov-t">${esc(c.topic)}</span>
+        <span class="ppcov-m">${c.ev?`<b class="ppun">${c.ev} change${c.ev>1?"s":""}</b> · `:""}${c.nd} new</span>
+        <span class="prow-open">▸</span></div><div class="ppcov-b" hidden></div>`;
+      cb.innerHTML = `<div class="pprail-h" style="margin-top:1.4rem">Coverage pulse — all
+          ${conds.length} covered conditions · ${PULSE_DAYS}d${b.refreshing?" <span class='ppsub'>(refreshing…)</span>":""}</div>`
+        + (movers.length ? movers.map(row).join("") : `<div class="pitem-empty">Quiet window across the whole coverage map.</div>`)
+        + (quiet.length ? `<details class="ppcov-more"><summary>${quiet.length} quiet condition${quiet.length>1?"s":""}</summary>${quiet.map(row).join("")}</details>` : "");
+      cb.querySelectorAll(".ppcov").forEach(h=>h.addEventListener("click", async ()=>{
+        const body = h.nextElementSibling, open = h.querySelector(".prow-open");
+        if(!body.hidden){ body.hidden = true; open.textContent = "▸"; return; }
+        body.hidden = false; open.textContent = "▾";
+        if(body.dataset.loaded) return;
+        body.innerHTML = `<div class="suggest-loading">Loading…</div>`;
+        try{
+          const ra = await fetch("/pulse/topic-activity?days="+PULSE_DAYS+"&topic="+encodeURIComponent(h.dataset.t),
+            {headers:{"x-noesis-token":USER.token}});
+          if(!ra.ok) throw new Error("HTTP "+ra.status);
+          renderActivityInto(body, await ra.json());
+          body.insertAdjacentHTML("afterbegin",
+            `<button type="button" class="chip-q ppcov-w">⊕ Watch ${esc(h.dataset.t)}</button>`);
+          body.querySelector(".ppcov-w").addEventListener("click", async (e3)=>{
+            e3.currentTarget.disabled = true;
+            try{ await addWatch(h.dataset.t, "suggested"); e3.currentTarget.textContent = "✓ Watching"; }
+            catch(err){ e3.currentTarget.disabled = false; }
+          });
+          body.dataset.loaded = "1";
+        }catch(err){ body.innerHTML = `<div class="pitem-empty">Couldn't load: ${esc(err.message||"error")}.</div>`; delete body.dataset.loaded; }
+      }));
+    }catch(e){ cb.innerHTML = ""; }
+  })();
   // corpus-wide feed (public)
   const fd = $("#ppfeed");
   fd.innerHTML = feed.length ? feed.slice(0,10).map(e=>{
@@ -3699,6 +3754,15 @@ async function ppExpand(card){
     }
     if(!r || !r.ok) throw new Error(err || "failed");
     const d = await r.json();
+    renderActivityInto(body, d, card);
+    body.dataset.loaded = "1";
+    const dot = card.querySelector(".ppdot"); if(dot) dot.classList.remove("ping");
+    const un = card.querySelector(".ppun"); if(un) un.remove();
+    refreshPulseBell();
+  }catch(err){ body.innerHTML = `<div class="pitem-empty">Couldn't load activity: ${esc(err.message||String(err))} — click to retry.</div>`;
+    delete body.dataset.loaded; }
+}
+function renderActivityInto(body, d, containerForClose){
     const evs = (d.events||[]).map(i=>{
       const what = i.relation === "retracted" ? "Retracted" : "Guidance changed";
       const links = [i.old_url ? `<a class="pdoc-a" href="${esc(i.old_url)}" target="_blank" rel="noopener noreferrer">${i.relation==="retracted"?"retracted paper":"previous version"} ↗</a>` : "",
@@ -3719,7 +3783,6 @@ async function ppExpand(card){
       (evs ? `<div class="psub">Changes</div>${evs}` : "")
       + (docs ? `<div class="psub">New sources on this topic</div>${docs}` : "")
       + ((!evs && !docs) ? `<div class="pitem-empty">Quiet — nothing material landed on this topic in the last ${PULSE_DAYS} days.</div>` : "");
-    body.dataset.loaded = "1";
     body.querySelectorAll(".pitem-ask").forEach(btn=>btn.addEventListener("click", (e2)=>{
       const subj = e2.currentTarget.closest(".pitem").querySelector(".pitem-s").textContent.trim();
       closePulsePage();
@@ -3729,11 +3792,6 @@ async function ppExpand(card){
       fetch("/pulse/seen",{method:"POST",headers:{"content-type":"application/json",
         "x-noesis-token":USER.token},body:JSON.stringify({event_id:i.id})}).catch(()=>{});
     });
-    const dot = card.querySelector(".ppdot"); if(dot) dot.classList.remove("ping");
-    const un = card.querySelector(".ppun"); if(un) un.remove();
-    refreshPulseBell();
-  }catch(err){ body.innerHTML = `<div class="pitem-empty">Couldn't load activity: ${esc(err.message||String(err))} — click to retry.</div>`;
-    delete body.dataset.loaded; }
 }
 
 // ONE "Where next" block hosts every diverging path forward: follow-up questions (the primary

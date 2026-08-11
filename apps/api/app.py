@@ -1905,6 +1905,86 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             _log.warning("watch-topic suggestion failed: %r", e)
             return {"topics": []}
 
+    async def _compute_coverage_activity():
+        """COVERAGE PULSE sweep: rolling-window movement for EVERY covered condition (the
+        vertical's roadmap, already the topic-registry seed). Heavy-ish (one embed + corpus
+        search per condition) → computed in the background, cached in noesis_pulse_state,
+        self-refreshing daily. Buckets 7/30/90d in one pass."""
+        cur = _currency()
+        if cur is None:
+            return
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        seed = list(getattr(load_active_vertical(), "watch_topic_seed", ()) or ())
+        if not seed:
+            return
+        import datetime as _dt
+        await cur.set_state("coverage_scan", {"status": "running",
+                            "started_at": _dt.datetime.utcnow().isoformat() + "Z"})
+        out = []
+        now = _dt.datetime.now(_dt.timezone.utc)
+        try:
+            corpus_key = getattr(svc, "corpus_source_key", "") or None
+            for cond in seed:
+                row = {"topic": cond, "e7": 0, "e30": 0, "e90": 0, "d7": 0, "d30": 0, "d90": 0}
+                try:
+                    evs = await cur.events_for_topic(cond, days=90)
+                    for e in evs:
+                        age = (now - _dt.datetime.fromisoformat(e["created_at"])).days
+                        row["e90"] += 1
+                        if age <= 30: row["e30"] += 1
+                        if age <= 7: row["e7"] += 1
+                    hits = await svc.search(question=cond, tenant_id="demo",
+                                            source_keys=[corpus_key] if corpus_key else None, k=40)
+                    ids = list({h.document_id for h in hits if getattr(h, "document_id", "")})
+                    for nd in await cur.docs_first_seen(ids, days=90):
+                        age = (now - _dt.datetime.fromisoformat(nd["first_seen"])).days
+                        row["d90"] += 1
+                        if age <= 30: row["d30"] += 1
+                        if age <= 7: row["d7"] += 1
+                except Exception:   # noqa: BLE001 — one condition's failure never kills the board
+                    pass
+                out.append(row)
+            await cur.set_state("coverage_activity",
+                {"computed_at": _dt.datetime.utcnow().isoformat() + "Z", "conditions": out})
+            await cur.set_state("coverage_scan", {"status": "done",
+                                "conditions": len(out),
+                                "finished_at": _dt.datetime.utcnow().isoformat() + "Z"})
+        except Exception as e:   # noqa: BLE001
+            await cur.set_state("coverage_scan", {"status": "failed", "error": str(e)[:300]})
+
+    @app.get("/pulse/coverage")
+    async def pulse_coverage() -> dict:
+        """PUBLIC coverage-pulse board: cached movement across every covered condition.
+        Self-refreshing: a stale (>24h) or absent board kicks a background recompute; the
+        current cache (possibly empty on first call) returns immediately."""
+        cur = _currency()
+        if cur is None:
+            raise HTTPException(status_code=404, detail="pulse not enabled")
+        import datetime as _dt
+        board = await cur.get_state("coverage_activity") or {}
+        stale = True
+        if board.get("computed_at"):
+            try:
+                age = _dt.datetime.utcnow() - _dt.datetime.fromisoformat(
+                    board["computed_at"].rstrip("Z"))
+                stale = age.total_seconds() > 86400
+            except Exception:   # noqa: BLE001
+                stale = True
+        scan = await cur.get_state("coverage_scan") or {}
+        if stale and scan.get("status") != "running":
+            app.state.pulse_coverage_task = asyncio.create_task(_compute_coverage_activity())
+            board = {**board, "refreshing": True}
+        return board
+
+    @app.post("/admin/pulse/coverage-scan")
+    async def admin_pulse_coverage_scan(x_admin_token: str = Header(default="")) -> dict:
+        """Force a coverage-pulse recompute now (background; status in noesis_pulse_state)."""
+        _pulse_admin_gate(x_admin_token)
+        app.state.pulse_coverage_task = asyncio.create_task(_compute_coverage_activity())
+        return {"status": "started"}
+
     @app.get("/pulse/watch-suggestions")
     async def pulse_watch_suggestions(x_noesis_token: str = Header(default="")) -> dict:
         """Cross-session watch suggestions: the recurring durable subjects in THIS user's question

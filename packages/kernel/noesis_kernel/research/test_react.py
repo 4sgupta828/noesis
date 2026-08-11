@@ -344,6 +344,40 @@ def test_rank_claims_recency_breaks_controlling_tier_ties_only():
     assert top1c[0].text == "old guideline"
 
 
+def test_zero_evidence_answer_converts_to_search():
+    # The 'Analyze this report' failure: rich attachment context convinced the planner to answer
+    # IMMEDIATELY (zero searches → zero atoms → nothing groundable). The guard must first bounce
+    # the premature answer back to the planner with a note, then (on repeat) force a search — the
+    # run ends GROUNDED instead of empty.
+    from noesis_kernel.research.react import AgentStep, ClaimOut, ComposedAnswer
+    src = _source()
+    calls = {"n": 0}
+    class _LLM:
+        async def complete(self, *, system, messages, response_format, max_tokens=2048, temperature=None):
+            calls["n"] += 1
+            content = messages[0]["content"]
+            if "VERIFIED FINDINGS" in content:      # compose
+                return LLMResult(parsed=ComposedAnswer(answer="Metric value is 9.8 percent [1]."), output_tokens=5)
+            if "no retrieved evidence" in content.lower() or "evidence is" in content.lower():
+                # planner sees the guard note → NOW it searches properly
+                if "the approved metric value" not in content:
+                    return LLMResult(parsed=AgentStep(action="search", query="term metric value"), output_tokens=5)
+            if "term metric value" in content or "approved" in content:
+                # evidence landed → extract claims
+                return LLMResult(parsed=AgentStep(action="answer", claims=[
+                    ClaimOut(text="the metric value was 9.8 percent", atom_id="a1",
+                             quote="the approved metric value was 9.8 percent")]), output_tokens=5)
+            # FIRST planner step: premature answer with zero evidence (the failure mode)
+            return LLMResult(parsed=AgentStep(action="answer", claims=[
+                ClaimOut(text="made up from context", atom_id="a1", quote="not in any source")]), output_tokens=5)
+    res = asyncio.run(run_react(question="Analyze this report.", llm=_LLM(),
+        embedder=FakeEmbedder(dim=8), source=src, tenant_id="A",
+        budget=BudgetState(max_calls=20),
+        attachment_context="DOCUMENT — cbc.pdf (structured digest): Hemoglobin: 9.4 g/dL LOW"))
+    assert res.grounded and len(res.verified_claims) == 1     # recovered: searched, grounded
+    assert res.composed_answer.startswith("Metric value")
+
+
 def test_rank_claims_superseded_partitioned_below_current():
     # Evidence Pulse C1 (spec A3): superseded/retracted-source claims sort BELOW current ones as a
     # hard partition — unconditionally, including the <=top early-return path that skips scoring.

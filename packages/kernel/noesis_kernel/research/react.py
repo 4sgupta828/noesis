@@ -679,6 +679,7 @@ async def run_react(
             diag["retries"]["extract_recovery"] = attempts
 
     stale_searches = 0          # consecutive searches that added NO new atoms (spinning detector)
+    premature_answers = 0       # zero-evidence answer attempts (see the guard below)
     for step_i in range(max_steps):
         if budget.exhausted:
             result.stopped_reason = "budget"
@@ -695,6 +696,24 @@ async def run_react(
         force = step_i == max_steps - 1 or (stale_searches >= 2 and bool(atoms.all()))
         await emit({"type": "step", "step": step_i + 1})
         step: AgentStep = await _ask(mode="force" if force else "step")
+
+        # ZERO-EVIDENCE ANSWER GUARD (structural): compose is span-gated, so an answer with an
+        # EMPTY atom pool can never ground — yet rich attachment context (e.g. a lab-report digest)
+        # can convince the planner it already knows enough ("Analyze this report" → immediate
+        # answer → 0 verified claims → 'No grounded answer'). Evidence is mandatory. First offense:
+        # tell the planner and let IT craft the digest-informed queries (the LLM owns query
+        # semantics); a repeat offense falls back to a structural search on the question.
+        # Only when NO search has been attempted at all — an honest abstention AFTER a failed
+        # search is legitimate and passes through.
+        if step.action == "answer" and not atoms.all() and not searched_queries and not force:
+            if not premature_answers:
+                premature_answers += 1
+                notes.append("You attempted to ANSWER without searching. Evidence is mandatory: "
+                             "SEARCH first — form queries from the question AND the attachment "
+                             "context's key findings (e.g. each abnormal result), then answer "
+                             "citing what you find.")
+                continue
+            step = AgentStep(action="search", query=step.query or question)
 
         if step.action == "search":
             q = step.query or question

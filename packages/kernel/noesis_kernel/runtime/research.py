@@ -102,12 +102,15 @@ class ResearchService:
                   if source_keys is None or k in source_keys} or self.sources
         return MultiSourceRetriever(chosen)
 
-    def _split_retriever(self, source_keys):
+    def _split_retriever(self, source_keys, extra_sources: dict | None = None):
         """Corpus (vector, multi-query) and AUX (web, single-query per step) retrievers. Web is
         split out so it's queried ONCE per step on the original query — not fanned out per
-        reformulation — which keeps web latency bounded while still adding breadth."""
+        reformulation — which keeps web latency bounded while still adding breadth.
+        `extra_sources` are PER-REQUEST additions (e.g. the user's uploaded report as a citable
+        in-memory source) — merged into the corpus leg, never into the shared service dict."""
         chosen = {k: v for k, v in self.sources.items()
                   if source_keys is None or k in source_keys} or self.sources
+        chosen = {**chosen, **(extra_sources or {})}
         aux = {k: v for k, v in chosen.items() if k in self.aux_source_keys}
         corpus = {k: v for k, v in chosen.items() if k not in self.aux_source_keys}
         if not corpus:                       # web-only selection → treat it as the primary source
@@ -303,6 +306,7 @@ class ResearchService:
             except Exception:
                 visual_obs = ""             # a failed vision read must not break research
         parts: list[str] = []
+        att_texts: list[tuple[str, str]] = []   # (name, text) → per-request CITABLE attachment source
         if visual_obs:
             parts.append("IMAGE (automated visual description):\n" + visual_obs)
         # NATIVE PDF reading: the model sees the original file (page layout intact), so report
@@ -318,27 +322,60 @@ class ResearchService:
             read_names = {r["name"] for r in reads}
             for r in reads:
                 parts.append(f"DOCUMENT — {r['name']} (structured digest, read natively from the file):\n{r['digest']}")
+                att_texts.append((r["name"], r["digest"]))
             for pdf in pdf_docs:
                 fb = (pdf.get("text_fallback") or "").strip()
                 if pdf.get("name") not in read_names and fb:
                     parts.append(f"DOCUMENT — {pdf.get('name') or 'document'} (text-layer extraction):\n{fb[:20000]}")
+                    att_texts.append((pdf.get("name") or "document", fb[:20000]))
         elif pdf_docs:
             for pdf in pdf_docs:
                 fb = (pdf.get("text_fallback") or "").strip()
                 if fb:
                     parts.append(f"DOCUMENT — {pdf.get('name') or 'document'} (text-layer extraction):\n{fb[:20000]}")
+                    att_texts.append((pdf.get("name") or "document", fb[:20000]))
         for d in documents or []:
             txt = (d.get("text") or "").strip()
             if txt:
                 name = d.get("name") or "document"
                 parts.append(f"DOCUMENT — {name} (user-provided text):\n{txt}")
+                att_texts.append((name, txt))
         attachment_context = "\n\n".join(parts) or None
 
         # Prior conversation turns → a compact context block (a follow-up can be elliptical). This
         # only frames search/interpretation; it never becomes a grounded claim (like attachments).
         history_context = build_history_context(history, answer_focus=answer_focus)
 
-        corpus_src, web_src = self._split_retriever(source_keys)
+        # THE ATTACHMENT AS A CITABLE SOURCE: for "analyze this report" questions the user's
+        # document IS the primary content — its digest/text becomes a per-request in-memory
+        # retrieval source, so claims can CITE the report with span-verified quotes (clearly
+        # labeled "(user upload)"), while the corpus supplies the interpretive evidence.
+        att_source = None
+        if att_texts:
+            import asyncio as _aio
+            from noesis_kernel.contract.dto import Locator as _Loc
+            from noesis_kernel.ingestion.storage import content_key as _ck
+            from noesis_kernel.retrieval.memory import IndexedBlock, InMemoryRetrievalSource
+            from noesis_kernel.retrieval.web import _chunk_text as _chunk
+            chunks: list[tuple[str, str]] = []
+            for _nm, _txt in att_texts:
+                for _c in _chunk(_txt, max_chars=900)[:40]:
+                    chunks.append((_nm, _c))
+            if chunks:
+                _embs = await _aio.to_thread(lambda: self.embedder.embed([c for _, c in chunks]))
+                att_source = InMemoryRetrievalSource()
+                att_source.key = "attachment"
+                for (_nm, _c), _e in zip(chunks, _embs):
+                    _bid = _ck(f"attachment:{_nm}|{_c}".encode())
+                    _did = f"attachment:{_nm}"
+                    att_source.add(IndexedBlock(
+                        block_id=_bid, document_id=_did, text=_c, tenant_id=tenant_id,
+                        embedding=tuple(_e), facets={"source_kind": "user_attachment"},
+                        locator=_Loc("block_span", _did, {"block_id": _bid}),
+                        document_title=f"{_nm} (user upload)", content_type="text/plain",
+                        source_key="attachment"))
+        corpus_src, web_src = self._split_retriever(
+            source_keys, extra_sources={"attachment": att_source} if att_source else None)
         res = await run_react(
             question=question, llm=self.llm, embedder=self.embedder,
             source=corpus_src, aux_source=web_src,

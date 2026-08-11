@@ -25,3 +25,26 @@ Rules:
 - Keep it **minimal** on mobile: fewer words, larger tap targets, one clear primary action.
 
 When in doubt, design mobile-first and let the desktop layout be the enhancement.
+
+## API-Credit Discipline (STANDING DIRECTIVE — spend very carefully)
+
+Anthropic/OpenAI API credits are a scarce, shared resource: prod user answers, evals, and
+campaigns all draw on the SAME account. An exhausted balance degrades PROD, not just the
+experiment. Rules, always:
+
+1. **Free checks first.** Structural tests, jsdom QA, retrieval-only probes (`/search`,
+   embedder-only), TestClient runs, and DB integration tests cost nothing — exhaust them
+   before ANY LLM-spending run.
+2. **Every spending run is projected + gated.** Scripts that answer questions or judge
+   outputs must print a projected call budget and refuse to run without `--confirm-spend`.
+   The ANSWER side dominates (~10–20 calls per research answer) — price it, not just grading.
+3. **Targeted before broad.** One flagship prod verification beats a 50-question sweep;
+   stage campaigns in tranches with a review between; reuse banked arms/results instead of
+   re-running (e.g. `--off-from` on the masquerade eval).
+4. **Never launch a spending run while another is in flight** against shared state, and
+   never re-run a failed batch before diagnosing WHY it failed (the tenant-id bug burned a
+   full eval run that measured nothing).
+5. **Validate the pipeline on 1–2 items before the batch.** A bug found after 20 answers
+   costs 20 answers.
+6. **Big spends need an explicit user go** with the projected number in front of them
+   (per-run, not per-session). When in doubt, ask with the number.

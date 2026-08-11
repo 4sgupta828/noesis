@@ -147,6 +147,13 @@ class VerticalManifest:
     # vocabulary (superseded_by · retracted · amended_by · clarified_by). Highest-confidence,
     # zero-LLM change source; the kernel's CurrencyStore sweeps it into approved events + stamps.
     lineage: tuple = ()
+    # Optional Grounded Relationship Graph vocabulary + curated edges (learnings/knowledgegraph.md
+    # P0): `graph_relations` is the typed-edge vocabulary the kernel validates writes against;
+    # `graph_edges` are curator-declared {subject, relation, object, context_topic?, label,
+    # confidence, note?} dicts (endpoints = canonical registry labels), born ACTIVE on sync.
+    # Empty → no graph for this vertical.
+    graph_relations: tuple = ()
+    graph_edges: tuple = ()
     # Optional extraction LENSES (domain vocabulary) for the claims-first pipeline: the aspects the
     # extractor should cover per atom (e.g. interventions, outcomes, safety). Passed as a checklist
     # in ONE extraction call (not fanned out). Empty → generic "extract every fact". Kernel-neutral.

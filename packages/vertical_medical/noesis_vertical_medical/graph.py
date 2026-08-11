@@ -1,0 +1,79 @@
+"""Medical relation vocabulary + curated edges for the Grounded Relationship Graph (spec P0).
+
+Endpoints use the EXACT covered-condition registry labels (coverage.py) so C2 propagation and
+A9 evidence legs land on canonical nodes — validated by test_graph_edges.py. Curated edges are
+clinically ESTABLISHED relationships only (textbook-tier; the curator's trust substitutes for
+per-edge evidence rows, per A4). `context_topic` carries the setting when the relationship is
+context-bound (A6). `narrower_than` rows map composite registry topics onto their broad
+subject so hierarchy traversal works from day one.
+"""
+from __future__ import annotations
+
+GRAPH_RELATIONS = (
+    "causes",              # A is an accepted etiology of B
+    "increases_risk_of",   # A is an established risk factor for B
+    "treats",              # A is an accepted treatment for B (curated only until harvester)
+    "complication_of",     # A is a recognized complication of B
+    "comorbid_with",       # established bidirectional association
+    "narrower_than",       # topic hierarchy (A6) — never surfaced as a clinical relation
+)
+
+_E = lambda s, r, o, ctx="", note="": {  # noqa: E731
+    "subject": s, "relation": r, "object": o, "context_topic": ctx,
+    "label": "established", "confidence": 1.0, "note": note}
+
+CURATED_EDGES: tuple[dict, ...] = (
+    # --- renal / metabolic core
+    _E("chronic kidney disease", "increases_risk_of", "anemia", "anemia of CKD",
+       "EPO deficiency + iron dysregulation"),
+    _E("chronic kidney disease", "increases_risk_of", "osteoporosis", "CKD mineral-bone disorder"),
+    _E("type 2 diabetes", "increases_risk_of", "chronic kidney disease", "diabetic kidney disease"),
+    _E("hypertension", "increases_risk_of", "chronic kidney disease"),
+    _E("polycystic kidney disease", "causes", "chronic kidney disease"),
+    _E("multiple myeloma", "increases_risk_of", "chronic kidney disease", "myeloma cast nephropathy"),
+    _E("multiple myeloma", "causes", "anemia"),
+    _E("systemic lupus erythematosus", "increases_risk_of", "chronic kidney disease",
+       "lupus nephritis"),
+    _E("gout", "comorbid_with", "chronic kidney disease"),
+    _E("obesity", "increases_risk_of", "type 2 diabetes"),
+    _E("obesity", "increases_risk_of", "NASH / MASH"),
+    _E("NASH / MASH", "causes", "variceal bleeding / cirrhosis", "progression to cirrhosis"),
+    _E("hepatitis B", "causes", "variceal bleeding / cirrhosis"),
+    _E("hepatitis C", "causes", "variceal bleeding / cirrhosis"),
+    # --- cardiovascular core
+    _E("atrial fibrillation", "increases_risk_of", "stroke", "cardioembolic"),
+    _E("hypertension", "increases_risk_of", "stroke"),
+    _E("hypertension", "increases_risk_of", "heart failure"),
+    _E("coronary artery disease", "causes", "heart failure", "ischemic cardiomyopathy"),
+    _E("type 2 diabetes", "increases_risk_of", "coronary artery disease"),
+    _E("hyperlipidemia", "increases_risk_of", "coronary artery disease"),
+    _E("atrial fibrillation", "comorbid_with", "heart failure"),
+    _E("rheumatoid arthritis", "increases_risk_of", "coronary artery disease",
+       "accelerated atherosclerosis"),
+    _E("preeclampsia", "increases_risk_of", "hypertension", "later chronic hypertension"),
+    _E("pulmonary hypertension", "complication_of", "COPD", "group 3 PH"),
+    # --- oncology risk
+    _E("HPV", "causes", "cervical cancer"),
+    _E("HPV", "increases_risk_of", "head and neck cancer", "oropharyngeal"),
+    _E("GERD", "increases_risk_of", "esophageal cancer", "Barrett esophagus pathway"),
+    _E("inflammatory bowel disease", "increases_risk_of", "colorectal cancer"),
+    _E("celiac disease", "increases_risk_of", "lymphoma", "enteropathy-associated T-cell"),
+    # --- infectious / immuno / neuro-psych
+    _E("HIV", "increases_risk_of", "tuberculosis"),
+    _E("HIV", "increases_risk_of", "lymphoma"),
+    _E("influenza", "increases_risk_of", "community-acquired pneumonia",
+       "secondary bacterial pneumonia"),
+    _E("sepsis", "complication_of", "community-acquired pneumonia"),
+    _E("depression", "comorbid_with", "anxiety disorder"),
+    _E("Parkinson disease", "comorbid_with", "depression"),
+    _E("Alzheimer disease", "increases_risk_of", "delirium (older adults)"),
+    # --- topic hierarchy (A6): composite registry topics → broad subject
+    _E("anemia in pregnancy", "narrower_than", "anemia"),
+    _E("TB preventive treatment", "narrower_than", "tuberculosis"),
+    _E("acute coronary syndrome", "narrower_than", "coronary artery disease"),
+    _E("giant cell arteritis", "narrower_than", "vasculitis"),
+)
+
+
+def curated_edges() -> list[dict]:
+    return [dict(e) for e in CURATED_EDGES]

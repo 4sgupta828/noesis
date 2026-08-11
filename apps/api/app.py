@@ -122,6 +122,21 @@ def pulse_enabled() -> bool:
     return os.environ.get("NOESIS_PULSE", "").lower() in ("1", "true", "yes")
 
 
+def graph_enabled() -> bool:
+    """Flag (default OFF, Rule 20): the Grounded Relationship Graph P0
+    (learnings/knowledgegraph.md) — typed curated edges between canonical topics, admin
+    sync/list surface, /graph/related read API, and A5 evidence invalidation. OFF → no
+    tables, endpoints 404, byte-identical serving."""
+    return os.environ.get("NOESIS_GRAPH", "").lower() in ("1", "true", "yes")
+
+
+def graph_pulse_enabled() -> bool:
+    """Flag (default OFF; requires NOESIS_GRAPH): consumer C2 — a change event on topic X also
+    surfaces to watchers of X's graph neighbors as a visually-distinct 'related change'."""
+    return graph_enabled() and os.environ.get(
+        "NOESIS_GRAPH_PULSE", "").lower() in ("1", "true", "yes")
+
+
 def stream_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, /research/stream serves live SSE progress events
     (searching/found/verifying/composing → final). OFF → the endpoint 404s; /research unchanged."""
@@ -441,6 +456,12 @@ class WatchIn(BaseModel):
 
 class SeenIn(BaseModel):
     event_id: str
+
+
+class GraphEdgeIn(BaseModel):
+    """Graph admin action: activate | demote one edge (the one-click reversal path)."""
+    edge_id: str
+    action: str          # activate | demote
 
 
 class TopicsIn(BaseModel):
@@ -763,6 +784,22 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 app.state.currency = None
         return app.state.currency
 
+    def _graph():
+        """Grounded Relationship Graph store (Postgres). None unless a corpus DSN is set AND the
+        graph flag is on — so OFF is a true no-op (no tables, no lookups). The store serves
+        neighbor lookups from an in-process TTL snapshot (speed contract: zero DB round trips
+        on the hot path at steady state)."""
+        if getattr(app.state, "graph", "unset") == "unset":
+            dsn = os.environ.get("NOESIS_CORPUS_DSN")
+            if dsn and graph_enabled():
+                from noesis_kernel.graph import GraphStore
+                manifest = load_active_vertical()
+                app.state.graph = GraphStore(
+                    dsn, relations=tuple(getattr(manifest, "graph_relations", ()) or ()))
+            else:
+                app.state.graph = None
+        return app.state.graph
+
     @app.on_event("startup")
     async def _start_gap_processor() -> None:
         """Launch the corpus-ingest processor in a DEDICATED daemon thread (own loop + pools), so
@@ -838,6 +875,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "refine_enabled": refine_enabled() and bool(getattr(svc, "refine_prompt", None)),
             "triage_enabled": live_triage and bool(getattr(svc, "triage_prompt", None)),
             "pulse_enabled": pulse_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
+            "graph_enabled": graph_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
             "accounts_enabled": accounts_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
             "duel_enabled": live_duel and bool(getattr(svc, "reasoned_answer_format", None)),
             "integrative_enabled": (await _flag_live("integrative_enabled")) and bool(getattr(svc, "integrative_prompt", None)),
@@ -1546,6 +1584,13 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 doc_ids = await cur.list_document_ids(prefix="europepmc:")
                 relations = await retraction_lineage(doc_ids)
                 result = await cur.sweep_declared(relations)
+                # A5: a newly retracted document may be the evidence under graph edges —
+                # demote them in the same sweep (best-effort; never fails the scan).
+                if relations and _graph() is not None:
+                    try:
+                        result = {**result, **(await _graph_invalidate(_graph()))}
+                    except Exception:   # noqa: BLE001
+                        pass
                 await cur.set_state("retraction_scan", {"status": "done",
                                     "checked": len(doc_ids),
                                     "retracted_found": len(relations), **result,
@@ -1673,6 +1718,79 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if not ok:
             raise HTTPException(status_code=404, detail="unknown event")
         return {"event_id": body.event_id, "status": status}
+
+    # ---- Grounded Relationship Graph P0 (learnings/knowledgegraph.md): sync · list · related ---
+    def _graph_admin_gate(x_admin_token: str):
+        g = _graph()
+        if g is None:
+            raise HTTPException(status_code=404, detail="graph not enabled")
+        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
+        if want and x_admin_token != want:
+            raise HTTPException(status_code=401, detail="admin token required")
+        return g
+
+    async def _graph_invalidate(g) -> dict:
+        """A5 sweep: demote/flag edges whose evidence documents were retracted/superseded.
+        Reads the approved ledger when Pulse is on; a no-op result when it isn't."""
+        cur = _currency()
+        if cur is None:
+            return {"edges_demoted": 0, "edges_flagged": 0, "note": "pulse off — no ledger"}
+        events = await cur.list_events(status="approved", limit=500)
+        return await g.invalidate_from_events(events)
+
+    @app.post("/admin/graph/sync")
+    async def admin_graph_sync(x_admin_token: str = Header(default="")) -> dict:
+        """Idempotently upsert the vertical's curated edges (born active; never resurrects a
+        manually demoted edge), then run the A5 invalidation sweep against the approved ledger."""
+        g = _graph_admin_gate(x_admin_token)
+        manifest = load_active_vertical()
+        try:
+            synced = await g.sync_curated(list(getattr(manifest, "graph_edges", ()) or ()))
+            invalidated = await _graph_invalidate(g)
+            return {**synced, **invalidated, **(await g.stats())}
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"graph sync failed: {e}") from e
+
+    @app.get("/admin/graph/edges")
+    async def admin_graph_edges(status: str | None = None, needs_review: bool | None = None,
+                                limit: int = 200,
+                                x_admin_token: str = Header(default="")) -> dict:
+        g = _graph_admin_gate(x_admin_token)
+        try:
+            return {"edges": await g.list_edges(status=status, needs_review=needs_review,
+                                                limit=limit),
+                    "stats": await g.stats()}
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"graph list failed: {e}") from e
+
+    @app.post("/admin/graph/edge")
+    async def admin_graph_edge(body: GraphEdgeIn, x_admin_token: str = Header(default="")) -> dict:
+        """activate | demote one edge — the one-click reversal path for a wrong edge."""
+        g = _graph_admin_gate(x_admin_token)
+        status = {"activate": "active", "demote": "demoted"}.get(body.action)
+        if status is None:
+            raise HTTPException(status_code=400, detail="action must be activate|demote")
+        try:
+            ok = await g.set_status(body.edge_id, status)
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"graph action failed: {e}") from e
+        if not ok:
+            raise HTTPException(status_code=404, detail="unknown edge")
+        return {"edge_id": body.edge_id, "status": status}
+
+    @app.get("/graph/related")
+    async def graph_related(topic: str, limit: int = 8) -> dict:
+        """Active graph neighbors of a topic (hierarchy-lifted, confidence-ranked) — the public
+        read surface. Served from the in-process snapshot: no DB round trip at steady state.
+        The graph steers search and Pulse; it is NEVER evidence — nothing here is citable."""
+        g = _graph()
+        if g is None:
+            raise HTTPException(status_code=404, detail="graph not enabled")
+        try:
+            return {"topic": topic,
+                    "related": await g.neighbors([topic], limit=min(max(limit, 1), 24))}
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"graph lookup failed: {e}") from e
 
     @app.post("/auth/register")
     async def auth_register(body: RegisterIn) -> dict:
@@ -1810,9 +1928,39 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         try:
             return {"watches": await cur.list_watches(user_id=user["id"]),
                     "days": min(max(days, 1), 365),
-                    "summary": await cur.inbox_summary(user_id=user["id"], days=min(max(days, 1), 365))}
+                    "summary": await _inbox_with_related(
+                        cur, user_id=user["id"], days=min(max(days, 1), 365))}
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"inbox failed: {e}") from e
+
+    async def _inbox_with_related(cur, *, user_id: str, days: int) -> list[dict]:
+        """Consumer C2 (dark behind NOESIS_GRAPH_PULSE): each watched-topic rollup gains a
+        `related` list — approved events on GRAPH-ADJACENT topics, tagged with the relation
+        they arrived through. Visually distinct + lower priority than direct hits (spec);
+        best-effort: a graph failure never breaks the inbox."""
+        summary = await cur.inbox_summary(user_id=user_id, days=days)
+        if not graph_pulse_enabled():
+            return summary
+        g = _graph()
+        if g is None:
+            return summary
+        try:
+            for row in summary:
+                related, seen_evs = [], {e["id"] for e in row.get("events", [])}
+                for nb in await g.neighbors([row["topic"]], limit=4):
+                    other = nb["object"] if nb["direction"] == "out" else nb["subject"]
+                    if other.lower().strip() == row["topic"].lower().strip():
+                        continue
+                    for e in await cur.events_for_topic(other, days=days, limit=3):
+                        if e["id"] in seen_evs:
+                            continue
+                        seen_evs.add(e["id"])
+                        related.append({**e, "related_topic": other,
+                                        "via_relation": nb["relation"]})
+                row["related"] = related[:5]
+        except Exception:   # noqa: BLE001
+            pass
+        return summary
 
     def _pulse_doc_url(document_id: str):
         """Best-effort canonical link for a pulse item (vertical URL mapper; None when no page)."""

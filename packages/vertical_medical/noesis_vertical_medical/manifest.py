@@ -29,6 +29,7 @@ from .integrative import INTEGRATIVE_DIRECTIVE, INTEGRATIVE_QUERY_HINT
 from .understanding import UNDERSTANDING_ANSWER_FORMAT, UNDERSTANDING_QUERY_HINT
 from .web_domains import TRUSTED_WEB_DOMAINS, WEB_DOMAIN_FACETS
 from .global_guidelines import declared_lineage
+from .graph import CURATED_EDGES, GRAPH_RELATIONS
 from .pulse import (CANONIZE_TOPIC_PROMPT, SUGGEST_WATCHES_PROMPT, SUPERSESSION_JUDGE_PROMPT,
                     WATCH_TOPIC_PROMPT)
 from .coverage import COVERED_CONDITIONS
@@ -98,6 +99,8 @@ def build_manifest() -> VerticalManifest:
         web_domains=TRUSTED_WEB_DOMAINS,
         web_domain_facets=WEB_DOMAIN_FACETS,
         lineage=tuple(declared_lineage()),
+        graph_relations=GRAPH_RELATIONS,
+        graph_edges=CURATED_EDGES,
         watch_topic_prompt=WATCH_TOPIC_PROMPT,
         watch_canonize_prompt=CANONIZE_TOPIC_PROMPT,
         watch_suggest_prompt=SUGGEST_WATCHES_PROMPT,

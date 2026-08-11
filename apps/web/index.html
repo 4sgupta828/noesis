@@ -299,6 +299,7 @@
   .attstrip .attlbl{font-family:var(--mono);font-size:.64rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);}
   .athumb{height:54px;width:54px;object-fit:cover;border-radius:8px;border:1px solid var(--hair);
     cursor:pointer;overflow:hidden;font-size:0;background:var(--panel);}
+  .apriv{font-style:normal;font-size:.62rem;color:var(--muted);letter-spacing:.03em;}
   .adoc{display:inline-flex;align-items:center;gap:.35rem;font-family:var(--mono);font-size:.72rem;color:var(--ink);
     background:var(--panel);border:1px solid var(--hair);border-radius:8px;padding:.32rem .55rem;overflow-wrap:anywhere;}
   /* session delete */
@@ -1709,10 +1710,12 @@ function render(data, target, opts){
   if(data.attachment_notes && data.attachment_notes.length){
     parts.push(`<div class="vobs-note" style="margin:-.9rem 0 1.2rem">${data.attachment_notes.map(esc).join(" · ")}</div>`);
   }
-  // what the user uploaded with this question (shown when reopening a saved session)
+  // what the user uploaded with this question (shown when reopening a saved session).
+  // PRIVACY: image PIXELS are never displayed in session views — uploads can be real patient
+  // photos; a labeled chip acknowledges the attachment without exposing it.
   if(data.attachments && data.attachments.length){
-    const items = data.attachments.map(a=> (a.kind==="image" && a.thumb)
-      ? `<img class="athumb" src="${esc(a.thumb)}" alt="${esc(a.name)}" title="${esc(a.name)}" />`
+    const items = data.attachments.map(a=> (a.kind==="image")
+      ? `<span class="adoc" title="Image not displayed for privacy">🖼 ${esc(a.name)} <em class="apriv">hidden for privacy</em></span>`
       : `<span class="adoc">📄 ${esc(a.name)}</span>`).join("");
     parts.push(`<div class="attstrip"><span class="attlbl">Uploaded</span>${items}</div>`);
   }

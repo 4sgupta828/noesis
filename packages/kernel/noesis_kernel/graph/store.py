@@ -92,19 +92,19 @@ def neighbors_from(adj: dict, topics: list[str], *, limit: int = 12) -> list[dic
     """Pure: topic labels → adjacent edges, deduped, confidence-desc. Each input topic is
     also lifted ONE level up the `narrower_than` hierarchy (A6) so "anemia in pregnancy"
     reaches edges written against "anemia"."""
-    norms: list[tuple[str, str]] = []               # (norm, via-topic shown to caller)
+    norms: list[tuple[str, str, int]] = []          # (norm, via-topic, input rank)
     seen_norms: set[str] = set()
-    for t in topics or []:
+    for i, t in enumerate(topics or []):
         n = _norm(t)
         if n and n not in seen_norms:
             seen_norms.add(n)
-            norms.append((n, t))
+            norms.append((n, t, i))
         parent = adj["up"].get(n)
         if parent and _norm(parent) not in seen_norms:
             seen_norms.add(_norm(parent))
-            norms.append((_norm(parent), t))
+            norms.append((_norm(parent), t, i))
     out, seen_ids = [], set()
-    for n, via in norms:
+    for n, via, rank in norms:
         for e, direction in adj["by_norm"].get(n, ()):
             if e["id"] in seen_ids:
                 continue
@@ -113,11 +113,15 @@ def neighbors_from(adj: dict, topics: list[str], *, limit: int = 12) -> list[dic
                         "object": e["object"], "context_topic": e.get("context_topic", ""),
                         "label": e["label"], "confidence": e.get("confidence", 0),
                         "provenance": e.get("provenance", ""), "direction": direction,
-                        "via": via, "id": e["id"]})
-    # Deterministic order: confidence desc, then lexical — leg selection (A9 caps at 2) must be
-    # reproducible across processes/snapshots, or A/B runs and prod behavior silently differ.
-    out.sort(key=lambda d: (-float(d.get("confidence") or 0),
-                            d["subject"], d["relation"], d["object"]))
+                        "via": via, "id": e["id"], "_rank": rank})
+    # Deterministic order that decides which edges win the A9 two-leg cap: the FIRST input
+    # topic's edges before later topics' (callers pass the primary/asked subject first),
+    # then confidence desc, then CASE-INSENSITIVE lexical (capital-letter subjects must not
+    # jump the queue — the Parkinson-before-anemia prod bug).
+    out.sort(key=lambda d: (d["_rank"], -float(d.get("confidence") or 0),
+                            d["subject"].lower(), d["relation"], d["object"].lower()))
+    for d in out:
+        d.pop("_rank", None)
     return out[:limit]
 
 

@@ -55,6 +55,20 @@ def test_neighbor_order_is_deterministic_on_confidence_ties():
     assert [x["id"] for x in a] == [x["id"] for x in b]     # insertion order must not matter
 
 
+def test_first_input_topics_edges_win_the_cap_and_case_never_jumps_queue():
+    adj = build_adjacency([
+        _e("Parkinson disease", "comorbid_with", "depression"),        # capital subject
+        _e("chronic kidney disease", "increases_risk_of", "anemia"),
+        _e("chronic kidney disease", "increases_risk_of", "osteoporosis"),
+    ])
+    # asked subject first, brief-mentioned topic second → CKD edges must fill the cap
+    hits = neighbors_from(adj, ["chronic kidney disease", "depression"], limit=2)
+    assert [h["object"] for h in hits] == ["anemia", "osteoporosis"]
+    # case-insensitive lexical: within one topic, capitals don't sort first
+    hits2 = neighbors_from(adj, ["depression"], limit=2)
+    assert hits2[0]["subject"] == "Parkinson disease"   # only edge — still reachable via rank 0
+
+
 def test_demotion_requires_all_evidence_dead():
     ev = {"e1": ["d1"], "e2": ["d1", "d2"], "e3": []}
     assert edges_fully_dead(ev, {"d1"}) == ["e1"]          # e2 survives on d2; e3 has no evidence

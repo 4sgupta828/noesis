@@ -137,6 +137,7 @@ class ResearchService:
             # works mid-thread too (the causal lens on the same question).
             kw = dict(kw)
             if self.understanding_query_hint:
+                kw["graph_question"] = kw.get("question", "")
                 kw["question"] = (kw.get("question", "") + "\n\n[" + self.understanding_query_hint + "]")
             kw["answer_format_override"] = self.understanding_answer_format
             oe = kw.get("on_event")
@@ -189,6 +190,7 @@ class ResearchService:
                 # causal-model compose contract (per-link evidence-status labels)
                 kw = dict(kw)
                 if self.understanding_query_hint:
+                    kw["graph_question"] = question
                     kw["question"] = question + "\n\n[" + self.understanding_query_hint + "]"
                 kw["answer_format_override"] = self.understanding_answer_format
                 await _emit({"type": "engine", "engine": "understanding", "why": "why/how question"})
@@ -199,6 +201,7 @@ class ResearchService:
                      + [f"- decision: {x}" for x in s.key_decisions[:6]])
             if lines:
                 kw = dict(kw)
+                kw["graph_question"] = question     # expander anchors on the ASKED subject, not brief branches
                 kw["question"] = (question + "\n\n[Coverage brief — clinical branches this answer must "
                                   "INVESTIGATE and address (these are questions to research, not facts):\n"
                                   + "\n".join(lines) + "\n]")
@@ -230,6 +233,11 @@ class ResearchService:
         clarify: bool = False,               # ask a clarifying question when a follow-up is ambiguous (flag)
         answer_format_override: str | None = None,   # per-call compose directive (alternate engine); None → default
         extra_directive: str | None = None,          # per-call ADDENDUM appended to the selected directive
+        graph_question: str | None = None,   # PRISTINE user question for the graph expander — callers
+        #                                      that augment `question` (reasoned coverage brief, engine
+        #                                      hints) MUST pass the original here, or topic matching
+        #                                      anchors on brief-mentioned branches instead of the asked
+        #                                      subject (the Parkinson-leg prod bug)
     ) -> AnswerResult:
         # ANSWER-FOCUS (flag): resolve a conversational FOLLOW-UP ("what dose?") into a self-contained
         # question carrying the subject from the conversation ("dose of TMP-SMX for PCP prophylaxis"),
@@ -390,7 +398,11 @@ class ResearchService:
         graph_legs, graph_shadow, graph_late = None, False, False
         if self.graph_expander is not None:
             try:
-                _gx = await self.graph_expander(question)
+                # anchor topic matching on the ASKED subject: explicit pristine question from the
+                # caller, else the follow-up-resolved question, else what ask() received —
+                # never the augmented `question` (brief/hints name branch topics, not the subject)
+                _gx = await self.graph_expander(
+                    graph_question or resolved_question or question_original)
                 if _gx and _gx.get("legs"):
                     graph_legs = list(_gx["legs"])
                     graph_shadow = bool(_gx.get("shadow"))

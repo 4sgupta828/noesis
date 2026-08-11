@@ -147,3 +147,24 @@ NEW_CONDITION_NODES: tuple[str, ...] = (
 
 def curated_edges() -> list[dict]:
     return [dict(e) for e in CURATED_EDGES]
+
+
+# v3 growth campaign (spec C-6/C-7): LLM-drafted masquerade candidates per cover-story
+# condition. Drafts are CANDIDATES ONLY — every one is corpus-entailment-verified (kernel
+# graph.verify) before activation, and activation is capped at label 'supported'.
+DRAFT_MASQUERADE_PROMPT = """You are drafting HIDDEN-DIAGNOSIS knowledge for a clinical evidence graph.
+
+Given a common condition (a "cover story" clinicians see every day), list the conditions that
+classically MASQUERADE behind it — hidden etiologies or mimics that a good clinician must
+actively consider, especially when the presentation is refractory or atypical.
+
+STRICT rules:
+- Only CLASSIC, clinically established masquerades (taught-in-training tier). No zebra
+  case-report trivia. Max 4; fewer is better than padding.
+- relation = "underlies_presentation_of" when the hidden condition CAUSES the presentation
+  (amyloidosis behind HFpEF); "mimics" when it merely resembles it (sarcoidosis vs TB).
+- subject = the HIDDEN condition (standard clinical name); the cover story is the given
+  condition.
+- distinguished_by = the concrete discriminating finding/test a clinician uses (short).
+- context = when this masquerade matters ("resistant", "young-onset", "non-responding"), or "".
+Return an empty list if the condition has no classic masquerades."""

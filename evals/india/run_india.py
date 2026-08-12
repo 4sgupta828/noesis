@@ -82,8 +82,28 @@ async def main(limit: int) -> None:
     svc = appmod.build_default_service()
     cases = [json.loads(ln) for ln in
              (HERE / "slice-india-dev-24-v1.jsonl").read_text().splitlines() if ln.strip()][:limit]
-    off = await _arm(svc, cases, in_on=False)
-    on = await _arm(svc, cases, in_on=True)
+
+    def _ckpt(name):
+        return HERE / f"india-arm-{name}.json"
+
+    async def _arm_banked(name, in_on):
+        # PER-ARM CHECKPOINT (credit discipline): a killed run never loses a completed arm;
+        # healthy banked rows are reused, only errored/missing ids re-answer.
+        banked = {}
+        if _ckpt(name).exists():
+            banked = {r["id"]: r for r in json.loads(_ckpt(name).read_text())
+                      if "error" not in r}
+            print(f"{name}: reusing {len(banked)} banked answers")
+        todo = [c for c in cases if c["id"] not in banked]
+        if todo:
+            fresh = await _arm(svc, todo, in_on=in_on)
+            banked.update({r["id"]: r for r in fresh})
+        rows = [banked[c["id"]] for c in cases if c["id"] in banked]
+        _ckpt(name).write_text(json.dumps(rows, indent=1, default=str))
+        return rows
+
+    off = await _arm_banked("off", False)
+    on = await _arm_banked("on", True)
 
     async def judge(rows):
         out = {}

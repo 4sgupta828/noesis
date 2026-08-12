@@ -115,7 +115,7 @@ async def _classify_failure(llm, row: dict, judged: dict) -> dict:
                    f"QUESTION: {row['question']}\n\nANSWER:\n{row['answer'][:6000]}\n\n"
                    f"MISSED GOLD FACTS:\n" + "\n".join(f"- {m}" for m in missed)
                    + f"\n\nTRACE:\n{trace}"}],
-        response_format=_Bucket, max_tokens=200)
+        response_format=_Bucket, max_tokens=500)
     return {"bucket": comp.parsed.bucket, "why": comp.parsed.why[:200]}
 
 
@@ -140,7 +140,10 @@ async def main(run_file: str, double_n: int) -> None:
                    "recall": round(j["covered"] / j["n"], 3),
                    "judge": {"model": judge_model, "prompt_sha": prompt_hash}}
             if j["covered"] < j["n"]:
-                rec["failure"] = await _classify_failure(svc.llm, r, j)
+                try:                                     # best-effort — never kills the run
+                    rec["failure"] = await _classify_failure(svc.llm, r, j)
+                except Exception as e:   # noqa: BLE001
+                    rec["failure"] = {"bucket": "unclassified", "why": str(e)[:120]}
             out.append(rec)
 
     await asyncio.gather(*(one(r) for r in rows))

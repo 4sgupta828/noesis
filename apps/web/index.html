@@ -2616,6 +2616,7 @@ async function readSSE(resp, state, onEvent){
   while(true){
     const {value, done} = await reader.read();
     if(done) break;
+    if(state.onAlive) state.onAlive();   // ANY bytes (incl. ": ping" keepalives) = stream alive
     buf += dec.decode(value, {stream:true});
     let i;
     while((i = buf.indexOf("\n\n")) >= 0){
@@ -2635,8 +2636,8 @@ async function readSSE(resp, state, onEvent){
   }
 }
 // POST a streaming run and see it through to the final event, resuming across edge cuts.
-async function streamRun(url, payload, onEvent, signal){
-  const state = {runId:null, seq:0, final:null};
+async function streamRun(url, payload, onEvent, signal, onAlive){
+  const state = {runId:null, seq:0, final:null, onAlive: onAlive || null};
   try{
     const resp = await fetch(url,{method:"POST",
       headers:{"content-type":"application/json"}, body:JSON.stringify(payload), signal});
@@ -2673,8 +2674,8 @@ async function streamRun(url, payload, onEvent, signal){
   throw new Error("stream ended without a final answer");
 }
 // Stream /research/stream, calling onEvent(ev) for each progress event; returns the final result.
-async function streamResearch(payload, onEvent, signal){
-  return streamRun("/research/stream", payload, onEvent, signal);
+async function streamResearch(payload, onEvent, signal, onAlive){
+  return streamRun("/research/stream", payload, onEvent, signal, onAlive);
 }
 
 // The one path for asking. In CONVERSATION mode it appends a turn to the running thread (carrying
@@ -3302,10 +3303,11 @@ async function runDuel(question){
   const finals = [null, null];
   const runArm = async (i) => {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 300000);
+    let timer = setTimeout(() => ctrl.abort(), 90000);   // idle-reset, like the main ask path
+    const armIdle = () => { clearTimeout(timer); timer = setTimeout(() => ctrl.abort(), 90000); };
     const tc = panes[i].querySelector(".agenttrace");
     try{
-      const r = await streamResearch({...base, engine: arms[i]}, ev => pushTrace(tc, ev), ctrl.signal);
+      const r = await streamResearch({...base, engine: arms[i]}, ev => pushTrace(tc, ev), ctrl.signal, armIdle);
       finals[i] = r;
       panes[i].innerHTML = "";
       const holder = document.createElement("div"); panes[i].appendChild(holder);
@@ -3409,8 +3411,13 @@ async function askQuestion(question, opts){
   const traceEl = () => conv ? out.querySelector(".turn:last-child .agenttrace") : out.querySelector(".agenttrace");
   const ctrl = new AbortController();
   CURRENT_ABORT = ctrl; USER_CANCELLED = false;          // enable the Stop button for this run
-  // streaming keeps the connection alive with progress → a generous safety cap; else the hard 120s.
-  const timer = setTimeout(()=>ctrl.abort(), STREAM_ENABLED ? 300000 : 120000);
+  // IDLE timeout, not a total cap: the server pings every 15s, so a healthy long answer (big
+  // multi-part questions legitimately run 5-10+ min through compose retries) keeps the stream
+  // alive and NEVER times out; 90s of true silence = dead stream → abort. Non-streaming has no
+  // liveness signal → the hard 120s stays.
+  let timer = setTimeout(()=>ctrl.abort(), STREAM_ENABLED ? 90000 : 120000);
+  const armIdle = () => { if(!STREAM_ENABLED) return;
+    clearTimeout(timer); timer = setTimeout(()=>ctrl.abort(), 90000); };
   const evidenceFallback = async (note) => {             // single-mode: ranked evidence + gap-fill
     try{
       const s = await fetch("/search",{method:"POST",headers:{"content-type":"application/json"},body});
@@ -3421,7 +3428,7 @@ async function askQuestion(question, opts){
   try{
     if(STREAM_ENABLED){                                   // live agent trace → final answer
       let engUsed = null;
-      const data = await streamResearch(payload, ev=>{ if(ev.type==="engine") engUsed = ev.engine; pushTrace(traceEl(), ev); }, ctrl.signal);
+      const data = await streamResearch(payload, ev=>{ if(ev.type==="engine") engUsed = ev.engine; pushTrace(traceEl(), ev); }, ctrl.signal, armIdle);
       clearTimeout(timer); ATTACHMENTS=[]; renderAttachments();
       data._engine = engUsed || payload.engine || "standard";
       if(conv) finishTurn(data); else render(data);
@@ -3459,10 +3466,10 @@ async function askQuestion(question, opts){
       ? `Research failed — the connection dropped mid-answer (often a server restart/deploy during a long answer). [${(err && (err.name + ": " + err.message)) || "network error"}] Retry usually works.`
       : `Research failed — ${(err && err.message) || "unknown error"}`;
     if(conv){ finishTurn(errTurn(timedOut
-        ? "The full answer timed out — try a narrower follow-up, or fill the gaps below."
+        ? "The stream went quiet and timed out — long answers often still complete and save to Past sessions; check there in a minute, or try a narrower follow-up."
         : detail)); return; }
     if(await evidenceFallback(timedOut
-        ? "The full answer timed out for this question. Showing ranked evidence — and you can queue high-quality sources below to fill the gap."
+        ? "The stream went quiet and timed out. Long answers often still complete and save to Past sessions — check there in a minute. Meanwhile: ranked evidence below."
         : detail + " Showing ranked evidence from your sources.")) return;
     out.innerHTML = `<div class="empty">${timedOut?"No evidence in the corpus answers this question yet.":esc(detail)+" Is the server running?"}</div>`;
     appendGapFallback(question);

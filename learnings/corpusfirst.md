@@ -23,8 +23,8 @@ citations · reproducible evals. Web hits get none of that durably.
 | CDC open data catalog | `cdc` connector | public domain | metadata only; MMWR covers guidance |
 | Society guideline FULL TEXT | KDIGO/docling pattern | per-society | 27+18 registries curated; full-text expansion backlog |
 | ICMR STW / NHM STG PDFs | direct PDF (verify per doc) | GoI public | summaries in; full text pending terms |
-| StatPearls (NCBI Bookshelf) | Bookshelf API | CC BY-NC-ND — CHECK commercial use | pending legal |
-| WHO IRIS PDFs | direct (URLs churned) | WHO OA | re-verify URLs |
+| StatPearls (NCBI Bookshelf) | — | CC BY-NC-ND (NON-COMMERCIAL) | **EXCLUDED** — Noesis is commercial; NC license bars ingest |
+| WHO IRIS PDFs | direct — iris.who.int verified 200 (2026-08-12) | WHO OA | connector work: needs per-guideline URL discovery (T5) |
 
 ## Web-leg-only (correctly so)
 UpToDate/Merck/Mayo (licensed/bot-walled reference) · publisher-walled journals (NEJM/JAMA
@@ -32,10 +32,10 @@ full text) · living pages (drug shortage notices, outbreak dashboards) · CDSCO
 (bot-walled; curated summaries + web) · anything license-unclear.
 
 ## Phased tranches (each = parsing+embedding only, no answer-LLM spend)
-- **T1 (queued):** MMWR ~400 + WHO Bulletin ~200.
-- **T2:** DailyMed bulk remainder (drug list from NLEM generics + top prescriptions) + FAERS widening.
-- **T3:** EPMC FULL-TEXT flag flip + re-pack the 24 deep conditions (bigger blocks, better spans).
-- **T4:** CT.gov depth (raise caps on deep conditions), StatPearls (post legal check), WHO IRIS re-verify.
+- **T1 (DONE 2026-08-12):** MMWR ~450 + WHO Bulletin ~200 queued.
+- **T2 (QUEUED 2026-08-12):** DailyMed remainder — 114 generics × 15 labels; FAERS widened +40 drugs.
+- **T3 (QUEUED 2026-08-12):** NOESIS_EPMC_FULLTEXT=1 flipped in prod; 24 deep conditions re-packed at 100 papers each (full text where OA).
+- **T4 (PARTIAL 2026-08-12):** CT.gov raised to 400/condition on the 24 deep conditions (queued with T3); StatPearls EXCLUDED (NC license); WHO IRIS verified reachable — URL-discovery connector goes to T5.
 - **T5:** society full-text expansion (per-society direct PDFs, the KDIGO pattern).
 Ordering rationale: T1-T2 are unambiguous public domain; T3 multiplies span quality on
 already-proven demand; T4-T5 need per-source checks. Coverage board + improvement-loop

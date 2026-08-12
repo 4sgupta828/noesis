@@ -58,10 +58,19 @@ class DailyMedConnector:
         s=self._by_id.get(doc.native_id, {})
         text=s.get("text")
         if not text:
-            # live: fetch the SPL's structured sections (JSON) and join their titles/text
-            import httpx
-            async with httpx.AsyncClient(timeout=30.0) as c:
-                r=await c.get(f"{V2}/spls/{doc.native_id}.json")
-                text = r.text if r.status_code==200 else ""
-        md=f"# {s.get('title','Drug label')} — DailyMed SPL\n\n{(text or 'Structured product label.').strip()[:6000]}\n"
+            # FULL label (corpus-first fix): the .xml endpoint carries the complete SPL —
+            # the old .json path returned METADATA and the 6k-char cap collapsed every
+            # label to a single retrieval block (the "1 block per label" console finding).
+            # Tag-strip the XML to readable text; the chunker does the rest.
+            import httpx, re
+            async with httpx.AsyncClient(timeout=60.0) as c:
+                r=await c.get(f"{V2}/spls/{doc.native_id}.xml")
+                if r.status_code==200 and r.text:
+                    raw=re.sub(r"<style[^>]*>.*?</style>", " ", r.text, flags=re.S)
+                    raw=re.sub(r"<[^>]+>", " ", raw)
+                    raw=re.sub(r"&[a-z]+;", " ", raw)
+                    raw=re.sub(r"[ \t]+", " ", raw)
+                    text=re.sub(r"\n\s*\n+", "\n\n", raw).strip()
+        md=(f"# {s.get('title','Drug label')} — DailyMed SPL\n\n"
+            f"{(text or 'Structured product label.').strip()[:200000]}\n")
         return md.encode("utf-8")

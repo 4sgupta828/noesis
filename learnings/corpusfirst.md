@@ -40,3 +40,14 @@ full text) · living pages (drug shortage notices, outbreak dashboards) · CDSCO
 Ordering rationale: T1-T2 are unambiguous public domain; T3 multiplies span quality on
 already-proven demand; T4-T5 need per-source checks. Coverage board + improvement-loop
 `missing_evidence` findings steer which conditions deepen first.
+
+## Aggressive-execution status (2026-08-12, evening)
+- openFDA API key SET in prod (rate caps lifted) — re-ingest widened labels/enforcement next drain.
+- **DailyMed chunking bug FIXED**: fetch_artifact now pulls the FULL SPL .xml (was metadata
+  .json truncated at 6k chars → 1 block/label); re-ingest of all ~190 drugs queued → labels
+  become genuinely searchable (~40-80 blocks each).
+- T5 journal-door guideline packs (20 jobs) + full-text wave 2 (100 jobs, 50 conditions) queued.
+- NEXT-SESSION QUEUE (in priority order): MedlinePlus topic-file connector (consumer-gap
+  killer per K-QA findings) · WHO IRIS DSpace connector · RxNorm/RxNav brand-mapping feed ·
+  full legacy-EPMC replay AFTER volume growth (+30-40GB needed vs 48.8GB cap — user decision) ·
+  web-leg raw archiving to R2.

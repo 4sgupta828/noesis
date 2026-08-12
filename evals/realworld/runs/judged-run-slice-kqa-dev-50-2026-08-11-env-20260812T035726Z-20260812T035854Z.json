@@ -1,0 +1,734 @@
+{
+  "summary": {
+    "git": "930c4e7",
+    "answers_judged": 25,
+    "must_have_recall_mean": 0.593,
+    "answers_fully_covered": 7,
+    "contradiction_answers": 1,
+    "failure_buckets": {
+      "missing_evidence": 8,
+      "wrong_evidence_selected": 2,
+      "ranking_failure": 0,
+      "reasoning_or_composition": 5,
+      "abstained_despite_evidence": 0,
+      "question_misunderstood": 0,
+      "not_a_failure": 2
+    },
+    "judge_agreement_double_grade": 0.615
+  },
+  "judgments": [
+    {
+      "id": "kqa-197",
+      "question": "is there any specific brand you recommend for the omeprazole?",
+      "must_have": [
+        "All brands and generic forms of omeprazole contain the same active ingredient and are generally considered equally effective."
+      ],
+      "verdicts": [
+        "missing"
+      ],
+      "covered": 0,
+      "missing": 1,
+      "contradicted": 0,
+      "n": 1,
+      "recall": 0.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "reasoning_or_composition",
+        "why": "The retrieved evidence (FDA labels, ANDA equivalence data, generic-vs-brand comparison study) directly supports the straightforward conclusion that all omeprazole brands/generics share the same active"
+      }
+    },
+    {
+      "id": "kqa-141",
+      "question": "Or could bactrim potentially cause a yeast infection?",
+      "must_have": [
+        "Bactrim could potentially cause a yeast infection."
+      ],
+      "verdicts": [
+        "missing"
+      ],
+      "covered": 0,
+      "missing": 1,
+      "contradicted": 0,
+      "n": 1,
+      "recall": 0.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved sources (labeling, mechanism text) never directly address antibiotic-associated candidiasis/yeast infection risk for Bactrim; no evidence chunk stating antibiotics like Bactrim can cause"
+      }
+    },
+    {
+      "id": "kqa-191",
+      "question": "do chlamdia often cure itself or does it cause permanent damage",
+      "must_have": [
+        "It is important to treat Chlamydia properly to prevent further complications and decrease the risk of transmission to others.",
+        " Chlamydia is not a self-limited infection and does not cure itself."
+      ],
+      "verdicts": [
+        "missing",
+        "contradicted"
+      ],
+      "covered": 0,
+      "missing": 1,
+      "contradicted": 1,
+      "n": 2,
+      "recall": 0.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "reasoning_or_composition",
+        "why": "The answer already presents extensive evidence that untreated chlamydia persists for months to years and causes damage, which directly implies it is not self-limiting and that treatment is necessary t"
+      }
+    },
+    {
+      "id": "kqa-83",
+      "question": "If I took trazodone when would be the best time to take it?",
+      "must_have": [
+        "Immediate release Trazodone is best taken with or shortly after a meal.",
+        " Extended release trazodone is best taken before bedtime on an empty stomach.",
+        " Taking immediate release Trazodone with or shortly after a meal can reduce gastrointestinal adverse reactions.",
+        " Extended release trazodone might cause drowsiness.",
+        " Taking immediate release Trazodone with or shortly after a meal can reduce lightheadedness and postural hypotension."
+      ],
+      "verdicts": [
+        "covered",
+        "missing",
+        "missing",
+        "missing",
+        "missing"
+      ],
+      "covered": 1,
+      "missing": 4,
+      "contradicted": 0,
+      "n": 5,
+      "recall": 0.2,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The answer never distinguishes immediate-release vs. extended-release trazodone dosing, and the retrieved evidence (DailyMed/FDA label for immediate-release tablet) apparently did not include or surfa"
+      }
+    },
+    {
+      "id": "kqa-115",
+      "question": "Is there a steroid cream that I can use for the bite on my face?",
+      "must_have": [
+        "Hydrocortisone cream (Ala-Cort, Cortizone-10, Cotacort) is a steroid cream intended to treat swelling, itching and irritation.",
+        " Hydrocortisone cream can alleviate symptoms caused by insect bites.",
+        " Hydrocortisone cream should be used for no longer than two weeks.",
+        " It is highly recommended to consult your healthcare provider before applying Hydrocortisone cream on your face."
+      ],
+      "verdicts": [
+        "missing",
+        "covered",
+        "missing",
+        "missing"
+      ],
+      "covered": 1,
+      "missing": 3,
+      "contradicted": 0,
+      "n": 4,
+      "recall": 0.25,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "wrong_evidence_selected",
+        "why": "The retrieved evidence included the DailyMed hydrocortisone label and general hydrocortisone dosage/side-effects sources, which likely contain the specific brand names (Ala-Cort, Cortizone-10, Cotacor"
+      }
+    },
+    {
+      "id": "kqa-23",
+      "question": "Can I take nyquil and benedryl at the same time?",
+      "must_have": [
+        "Taking Doxylamine and Diphenhydramine simultaneously can increase the risk of side effects",
+        "Seek immediate medical attention in case of suspicion of an antihistamine overdose.",
+        "It is possible to overdose on antihistamines.",
+        ""
+      ],
+      "verdicts": [
+        "covered",
+        "missing",
+        "missing",
+        "missing"
+      ],
+      "covered": 1,
+      "missing": 3,
+      "contradicted": 0,
+      "n": 4,
+      "recall": 0.25,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved evidence base (product labels, one FAERS case) contains no content about antihistamine overdose risk or overdose warnings/emergency guidance; the corpus/search never surfaced overdose-re"
+      }
+    },
+    {
+      "id": "kqa-184",
+      "question": "Which doctor should i go to for vertigo",
+      "must_have": [
+        "A general physician may refer a patient with vertigo to a neurologist for further testing and treatment",
+        " Immediate medical attention is required if vertigo or dizziness is constant and isn't related to head movement",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by inability to stand",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by difficulty speaking or understanding others speaking",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by slurred speech",
+        " A general physician can evaluate the type and cause of vertigo through symptoms evaluation and physical examination",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by weakness of face or extremities",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by confusion",
+        " A general physician may refer a patient with vertigo to an otolaryngologist for further testing and treatment",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by double vision",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by difficulty swallowing",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by sudden and severe headache or neck pain"
+      ],
+      "verdicts": [
+        "covered",
+        "missing",
+        "missing",
+        "missing",
+        "missing",
+        "covered",
+        "missing",
+        "missing",
+        "covered",
+        "missing",
+        "missing",
+        "missing"
+      ],
+      "covered": 3,
+      "missing": 9,
+      "contradicted": 0,
+      "n": 12,
+      "recall": 0.25,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved evidence and graph legs focus on cardiac/stroke pathophysiology and specialist referral pathways, but none of the titles cover consumer-facing \"red flag symptom checklist\" content (e.g.,"
+      }
+    },
+    {
+      "id": "kqa-45",
+      "question": "Does bronchitis turn into pneumonia?",
+      "must_have": [
+        "It's uncommon for bronchitis to turn into pneumonia, but it's possible",
+        "In cases where bronchitis does not resolve in three weeks, one should be checked by a physician for pneumonia",
+        "In cases of worsening of symptoms, one should be checked by a physician for pneumonia"
+      ],
+      "verdicts": [
+        "covered",
+        "missing",
+        "missing"
+      ],
+      "covered": 1,
+      "missing": 2,
+      "contradicted": 0,
+      "n": 3,
+      "recall": 0.333,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved evidence titles (e.g., 'Acute Bronchitis: Rapid Evidence Review', 'Bronchitis and pneumonia') do not contain specific guidance about the 3-week symptom persistence or worsening-symptoms "
+      }
+    },
+    {
+      "id": "kqa-178",
+      "question": "What would cause immunocompromise?",
+      "must_have": [
+        "Severe combined immunodeficiency is a type of primary immunodeficiency.",
+        " Hepatic or renal insufficiency can cause secondary immunodeficiencies.",
+        " Stress can weaken the immune system and increase the risk of infection.",
+        " Asplenia can weaken the immune system and increase the risk of infection.",
+        " Malnutrition can weaken the immune system and increase the risk of infection.",
+        " Environmental exposure to radiation and toxins can weaken the immune system and increase the risk of infection.",
+        " Chronic granulomatous disease is a type of primary immunodeficiency.",
+        " Selective IgA deficiency is a type of primary immunodeficiency.",
+        " Burns can weaken the immune system and increase the risk of infection.",
+        " Old age is associated with a weakened immune system and an increased risk of infection.",
+        " Common variable immunodeficiency is a type of primary immunodeficiency. Pregnancy can weaken the immune system and increase the risk of infection.",
+        " Medical treatments such as corticosteroids, some chemotherapies, treatments against rejection after organ transplantation and many biological therapies can cause secondary immunodeficiencies.",
+        " Infections such as HIV, measles and herpes group viruses as well as some bacterial, mycobacterial and parasitic infections can weaken the immune system.",
+        " Chronic diseases such as systemic lupus erythematosus and rheumatoid arthritis can cause secondary immunodeficiencies.",
+        " Diabetes mellitus can cause secondary immunodeficiencies.",
+        " Some malignancies such as leukemia and multiple myeloma can cause secondary immunodeficiencies."
+      ],
+      "verdicts": [
+        "missing",
+        "missing",
+        "missing",
+        "covered",
+        "covered",
+        "missing",
+        "missing",
+        "missing",
+        "missing",
+        "missing",
+        "missing",
+        "covered",
+        "covered",
+        "missing",
+        "covered",
+        "covered"
+      ],
+      "covered": 6,
+      "missing": 10,
+      "contradicted": 0,
+      "n": 16,
+      "recall": 0.375,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved evidence titles (e.g., MedlinePlus Immunodeficiency diseases, CDC Altered Immunocompetence, Secondary immunodeficiencies including HIV) likely contain generic categories but the trace sh"
+      }
+    },
+    {
+      "id": "kqa-134",
+      "question": "No what is vestibular nueritis?",
+      "must_have": [
+        "Patients with vestibular neuritis generally suffer from severe vestibular symptoms for one to two days and a gradual diminution of symptoms and a return of equilibrium.",
+        " Vestibular neuritis causes symptoms such as dizziness.",
+        " Vestibular neuritis causes symptoms such as sudden, severe vertigo.",
+        " Vestibular neuritis is an inner ear disorder.",
+        " Vestibular neuritis causes symptoms such as nausea and vomiting.",
+        " Vestibular neuritis causes symptoms such as balance problems."
+      ],
+      "verdicts": [
+        "missing",
+        "missing",
+        "covered",
+        "missing",
+        "covered",
+        "covered"
+      ],
+      "covered": 3,
+      "missing": 3,
+      "contradicted": 0,
+      "n": 6,
+      "recall": 0.5,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "reasoning_or_composition",
+        "why": "The retrieved evidence (StatPearls, UpToDate, NHS-style \"Labyrinthitis and vestibular neuritis\" pages) almost certainly contains the basic facts that vestibular neuritis is an inner ear disorder causi"
+      }
+    },
+    {
+      "id": "kqa-18",
+      "question": "But is testicular pain not a symptom of chlamydia?",
+      "must_have": [
+        "One clinical presentation of chlamydia which could cause testicular pain is epididymitis.",
+        "Acute testicular pain should not be ignored and should be evaluated by a physician.",
+        "Chlamydia could present as an infection in the genitourinary system.",
+        "Other causes of testicular pain could be epididymitis due to other pathogens.",
+        "Acute epididymitis usually presents with pain,tenderness, and palpable swelling in one testicle."
+      ],
+      "verdicts": [
+        "covered",
+        "missing",
+        "covered",
+        "missing",
+        "covered"
+      ],
+      "covered": 3,
+      "missing": 2,
+      "contradicted": 0,
+      "n": 5,
+      "recall": 0.6,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved evidence focused on chlamydia-specific epididymitis clinical/serologic literature and patient materials, but none of the titles address general clinical guidance on urgency of evaluating"
+      }
+    },
+    {
+      "id": "kqa-117",
+      "question": "Is there anti nausea medication that can be taken to allow fluids to stay down?",
+      "must_have": [
+        "For nausea due to dizziness or motion sickness, recommended drugs include antihistamines such as dimenhydrinate (Daramine, Drimite) and meclizine (Dramamine less drowsy).",
+        " Drugs suitable for treating nausea and vomiting are prescribed depending on the cause of the nausea.",
+        " For nausea due to cancer treatment or post operative nausea, possible drugs include metoclopramide (Gimoti Reglan), ondansetron (Zofran) granisteron (Sancuso)."
+      ],
+      "verdicts": [
+        "missing",
+        "covered",
+        "covered"
+      ],
+      "covered": 2,
+      "missing": 1,
+      "contradicted": 0,
+      "n": 3,
+      "recall": 0.667,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved evidence set focuses entirely on ondansetron, trimethobenzamide, and chemotherapy-related antiemetics (olanzapine, etc.), with no titles or content about antihistamines like dimenhydrina"
+      }
+    },
+    {
+      "id": "kqa-180",
+      "question": "Whats a cluster headache?",
+      "must_have": [
+        "Cluster headache is a type of chronic, severe, non-life-threatening headache.",
+        " Symptoms of cluster headache on the affected side may include tearing.",
+        " Cluster headache is usually one-sided, occurring in or around the eye.",
+        " Symptoms of cluster headache on the affected side may include a stuffy or runny nose.",
+        " Symptoms of cluster headache on the affected side may include a drooping eyelid.",
+        " Symptoms of cluster headache on the affected side may include redness of the eye.",
+        " There are effective treatments that can make cluster headache attacks less frequent.",
+        " There are effective treatments that can make cluster headache attacks less severe.",
+        " There are effective treatments that can make cluster headache attacks shorter.",
+        " Symptoms of cluster headache on the affected side may include sweating.",
+        " Cluster headache is characterized by bouts of frequent attacks of pain that can last from weeks to months.",
+        " A period of remission usually follows a bout of cluster headache."
+      ],
+      "verdicts": [
+        "covered",
+        "covered",
+        "covered",
+        "covered",
+        "covered",
+        "missing",
+        "missing",
+        "missing",
+        "missing",
+        "covered",
+        "covered",
+        "covered"
+      ],
+      "covered": 8,
+      "missing": 4,
+      "contradicted": 0,
+      "n": 12,
+      "recall": 0.667,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "wrong_evidence_selected",
+        "why": "The retrieved sources (Mayo Clinic, NICE CKS, Merck Manual, MedlinePlus) almost certainly contain the standard facts that cluster headache causes eye redness on the affected side and that treatments c"
+      }
+    },
+    {
+      "id": "kqa-183",
+      "question": "Whats the difference between Valtrex and Acyclovir?",
+      "must_have": [
+        "Valacyclovir (Valtrex) and acyclovir (Zovirax, Sitavig) are both antiviral drugs prescribed to treat infections caused by herpes simplex virus and varicella zoster virus.",
+        " Valacyclovir (Valtrex) and acyclovir (Zovirax, Sitavig) are used to treat cold sores, genital herpes, chicken pox and shingles.",
+        " Valacyclovir is a prodrug of acyclovir, which means it is converted into acyclovir in the body."
+      ],
+      "verdicts": [
+        "missing",
+        "covered",
+        "covered"
+      ],
+      "covered": 2,
+      "missing": 1,
+      "contradicted": 0,
+      "n": 3,
+      "recall": 0.667,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "not_a_failure",
+        "why": "The missed fact\u2014that both drugs treat HSV and VZV infections\u2014is basic background context that is implicit throughout the detailed answer (which discusses genital herpes, zoster, cold sores, chickenpox"
+      }
+    },
+    {
+      "id": "kqa-108",
+      "question": "Is poison ivy contagious between people?",
+      "must_have": [
+        "Poison ivy causes contact dermatitis through direct contact with the plant",
+        "It is rare but possible to develop contact dermatitis from poison ivy by touching objects with the plant's oil on them",
+        " the rash caused by poison ivy is not contagious and cannot be transferred between people."
+      ],
+      "verdicts": [
+        "missing",
+        "covered",
+        "covered"
+      ],
+      "covered": 2,
+      "missing": 1,
+      "contradicted": 0,
+      "n": 3,
+      "recall": 0.667,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "reasoning_or_composition",
+        "why": "The evidence retrieved (Merck Manual, dermatology source) almost certainly explains that poison ivy dermatitis results from direct skin contact with the plant's urushiol oil, since this is the basic m"
+      }
+    },
+    {
+      "id": "kqa-99",
+      "question": "Is it common to have an abscess with no pain?",
+      "must_have": [
+        "Not experiencing pain does not exclude the presence of an abscess.",
+        " If you suspect you might have an abscess, you should consult your healthcare provider for diagnosis and treatment.",
+        " A common symptom of an abscess is pain.",
+        " Less commonly, an abscess can be painless due to its location, size, patient's characteristics and other causes."
+      ],
+      "verdicts": [
+        "covered",
+        "missing",
+        "covered",
+        "covered"
+      ],
+      "covered": 3,
+      "missing": 1,
+      "contradicted": 0,
+      "n": 4,
+      "recall": 0.75,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "not_a_failure",
+        "why": "The missed fact is a generic, boilerplate safety recommendation (\"consult a healthcare provider for diagnosis and treatment\") that is not substantive clinical evidence about abscess pain presentation."
+      }
+    },
+    {
+      "id": "kqa-103",
+      "question": "Is it safe to take zyrtec / Claritin while breastfeeding?",
+      "must_have": [
+        "Second-generation antihistamines, such as Cetirizine (Zytrec) and Loratadine (Claritin), are considered the drug of choice for breastfeeding mothers compared to first-generation antihistamines.",
+        " Breastfeeding mothers taking Cetirizine (Zytrec) or Loratadine (Claritin) should monitor the infant for irritability, jitteriness, or drowsiness.",
+        " The recommendation for breastfeeding mothers taking Cetirizine (Zytrec) or Loratadine (Claritin) is to take the lowest effective dose.",
+        " Antihistamines pass on to breastmilk of women taking the drug.",
+        " If you are nursing, it is advisable to consult your healthcare provider before taking an antihistamine agent. "
+      ],
+      "verdicts": [
+        "covered",
+        "covered",
+        "missing",
+        "covered",
+        "covered"
+      ],
+      "covered": 4,
+      "missing": 1,
+      "contradicted": 0,
+      "n": 5,
+      "recall": 0.8,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "reasoning_or_composition",
+        "why": "The evidence base (LactMed, guideline reviews, dosage information) almost certainly contains the standard lactation advice to use the lowest effective dose, and the answer already discusses dose-depen"
+      }
+    },
+    {
+      "id": "kqa-199",
+      "question": "what is the difference between fissure vs hemorrhoids?",
+      "must_have": [
+        "Anal fissures are tears in the anal tissue caused by trauma",
+        "Hemorrhoids are normal vascular structures that can grow abnormally due to various factors",
+        "Both anal fissures and hemorrhoids can cause bleeding and discomfort",
+        "Hemorrhoids can lead to rectal bleeding, irritation, and can prolapse",
+        "Hemorrhoids usually don't cause pain unless there is a strangulation or blood clot present",
+        "Anal fissures are accompanied by severe pain exacerbated by defecation",
+        "Diagnosis of anal fissures and hemorrhoids can usually be made through examination based on appearance"
+      ],
+      "verdicts": [
+        "covered",
+        "covered",
+        "covered",
+        "covered",
+        "covered",
+        "covered",
+        "missing"
+      ],
+      "covered": 6,
+      "missing": 1,
+      "contradicted": 0,
+      "n": 7,
+      "recall": 0.857,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "unclassified",
+        "why": "Anthropic structured output truncated: hit max_tokens=500 before the '_Bucket' emit call completed \u2014 raise max_tokens fo"
+      }
+    },
+    {
+      "id": "kqa-186",
+      "question": "Will the keflex make me throw up if Ive had a very low food intake",
+      "must_have": [
+        "Keflex (Cephalexin) can be taken with or without food.",
+        " Nausea and vomiting are possible side effects of Cephalexin (Keflex).",
+        " Taking Keflex (Cephalexin) with food may help with its side effects."
+      ],
+      "verdicts": [
+        "covered",
+        "covered",
+        "covered"
+      ],
+      "covered": 3,
+      "missing": 0,
+      "contradicted": 0,
+      "n": 3,
+      "recall": 1.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      }
+    },
+    {
+      "id": "kqa-163",
+      "question": "What is a neurological issue",
+      "must_have": [
+        "A neurological issue is a problem that affects the nervous system.",
+        " Neurological issues are conditions where abilities such as speaking, moving, thinking are impaired."
+      ],
+      "verdicts": [
+        "covered",
+        "covered"
+      ],
+      "covered": 2,
+      "missing": 0,
+      "contradicted": 0,
+      "n": 2,
+      "recall": 1.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      }
+    },
+    {
+      "id": "kqa-147",
+      "question": "So prednisone is a cortisone type medication?",
+      "must_have": [
+        "Prednisone is a synthetic drug that derives from cortisone."
+      ],
+      "verdicts": [
+        "covered"
+      ],
+      "covered": 1,
+      "missing": 0,
+      "contradicted": 0,
+      "n": 1,
+      "recall": 1.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      }
+    },
+    {
+      "id": "kqa-157",
+      "question": "What causes genital warts?",
+      "must_have": [
+        "Condyloma acuminata, also known as anogenital warts, are manifestations of HPV infection that occur in the anogenital area."
+      ],
+      "verdicts": [
+        "covered"
+      ],
+      "covered": 1,
+      "missing": 0,
+      "contradicted": 0,
+      "n": 1,
+      "recall": 1.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      }
+    },
+    {
+      "id": "kqa-179",
+      "question": "Whats Keratosis Pilaris",
+      "must_have": [
+        "Keratosis pilaris is characterized by small bumps of excess keratin developing on your skin, usually on your arms and legs.",
+        " Keratosis pilaris is a skin condition among young adults."
+      ],
+      "verdicts": [
+        "covered",
+        "covered"
+      ],
+      "covered": 2,
+      "missing": 0,
+      "contradicted": 0,
+      "n": 2,
+      "recall": 1.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      }
+    },
+    {
+      "id": "kqa-154",
+      "question": "The yeast infection is not transferable?",
+      "must_have": [
+        "Yeast infection is not thought to be transferable and is not referred to as one",
+        "yeasts are a natural part of the body ecosystem."
+      ],
+      "verdicts": [
+        "covered",
+        "covered"
+      ],
+      "covered": 2,
+      "missing": 0,
+      "contradicted": 0,
+      "n": 2,
+      "recall": 1.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      }
+    },
+    {
+      "id": "kqa-114",
+      "question": "Is there a reason why my urine is clear",
+      "must_have": [
+        "Clear urine is usually a sign of drinking too much water."
+      ],
+      "verdicts": [
+        "covered"
+      ],
+      "covered": 1,
+      "missing": 0,
+      "contradicted": 0,
+      "n": 1,
+      "recall": 1.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      }
+    }
+  ]
+}

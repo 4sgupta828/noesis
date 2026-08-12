@@ -298,7 +298,8 @@ def _country_boost(countries: list[str] | None):
     """Selected countries → a boost set (e.g. {"IN"}) when the boost flag is on, else None (no-op)."""
     if not country_boost_enabled():
         return None
-    valid = {c for c in (countries or []) if c in set(AVAILABLE_COUNTRIES)}
+    codes = {c["code"] for c in AVAILABLE_COUNTRIES}   # list of dicts — set(...) of it raises
+    valid = {c for c in (countries or []) if c in codes}
     return valid or None
 
 

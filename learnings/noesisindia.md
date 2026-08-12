@@ -220,3 +220,28 @@ country ≠ patice jurisdiction: expose the resolved profile + a per-question
 8. India frozen slice (clinician-authored) + paired IN-on/off turn of the improvement loop.
 CUT from P0: answer parentheticals · NFI · CDSCO crawler · IDSP/Pulse · IN-flavored
 watches · drug-kind graph aliases (P1, after the alias schema exists).
+
+---
+
+# ⏸ PAUSED (2026-08-12) — resume state
+
+**Everything below is BUILT, tested, deployed DARK (`NOESIS_IN_MODE` off in prod):**
+tier-aware country boost + scope⊥boost guard · 17 Indian web domains + IN facets ·
+india_brands.py (~97 strength/FDC rows incl. FabiFlu, abstaining resolver, planner-only
+context via kernel `question_context`) · per-user prefs + /me/settings + server-authoritative
+profile on /research(+stream) · completeness-first conflict addendum (REWRITTEN after gate
+run #1) · 4 legal-gated registry entries (STW/CDSCO-FDC/NLEM/schemes — live and ranking) ·
+~25 EPMC India jobs ingested (journal packs stamped IN, condition packs unstamped) ·
+24-vignette India slice + paired gate runner with per-arm checkpointing.
+
+**Gate run #1 verdict: NOT PASSED** (OFF 0.667 → ON 0.652, paired 4↑/6↓/11=; contradictions
+4→2). Root causes fixed: the old addendum NARROWED answers (in-21 regression) — rewritten;
+FabiFlu unmapped — added. OFF arm banked at `evals/india/india-arm-off.json` (23/24 healthy);
+ON checkpoint deliberately cleared (old addendum).
+
+**TO RESUME:** (1) `evals/india/run_india.py --confirm-spend` → gate run #2 (~25 answers:
+fresh ON arm under the fixed addendum + 1 OFF gap + judging; OFF reused). (2) If paired sign
+flips positive + K-QA no-harm → set `NOESIS_IN_MODE=1` + prod-verify via a signed-in IN
+account. (3) Launch dependencies still open: Indian-clinician review of the 24 vignettes,
+the ~97 brand rows, and the 18+4 registry summaries. (4) P1 backlog: boost-crowding guard
+(in-23), IDSP→Pulse, India masquerade edges, brand growth loop, IndMED.

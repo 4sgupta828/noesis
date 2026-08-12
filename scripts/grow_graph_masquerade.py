@@ -58,7 +58,8 @@ async def main(n_conditions: int, per_condition: int, n_skip: int = 0) -> None:
     from noesis_kernel.graph import GraphStore, edge_identity
     from noesis_kernel.graph.verify import verify_edge_candidate
     from noesis_vertical_medical.coverage import COVERED_CONDITIONS
-    from noesis_vertical_medical.graph import DRAFT_MASQUERADE_PROMPT, GRAPH_RELATIONS
+    from noesis_vertical_medical.graph import (DRAFT_MASQUERADE_PROMPT, GRAPH_RELATIONS,
+                                               GRAPH_VERIFY_DIRECTIVE)
 
     svc = appmod.build_default_service()
     g = GraphStore(os.environ["NOESIS_CORPUS_DSN"], relations=GRAPH_RELATIONS)
@@ -102,7 +103,8 @@ async def main(n_conditions: int, per_condition: int, n_skip: int = 0) -> None:
                             + (f"; discriminator: {c.distinguished_by}"
                                if c.distinguished_by else ""))
                 v = await verify_edge_candidate(sentence=sentence, blocks=blocks,
-                                                llm=svc.llm, subject=c.subject)
+                                                llm=svc.llm, subject=c.subject,
+                                                domain_directive=GRAPH_VERIFY_DIRECTIVE)
                 status = "shadow"
                 if v["supported"]:
                     supported += 1

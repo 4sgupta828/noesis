@@ -48,3 +48,17 @@ experiment. Rules, always:
    costs 20 answers.
 6. **Big spends need an explicit user go** with the projected number in front of them
    (per-run, not per-session). When in doubt, ask with the number.
+
+## Kernel/Vertical Split (STANDING DIRECTIVE — nothing hardwired to the medical vertical)
+
+Noesis is a GENERAL AI-platform kernel with verticals applied on top. Every feature is built
+kernel-first: `packages/kernel/` owns MECHANICS (retrieval, grounding, graph, currency, evals
+plumbing) with ZERO domain vocabulary — no "clinical", "patient", "drug" in kernel code or
+kernel prompts. The vertical (`packages/vertical_medical/`) supplies VOCABULARY and JUDGMENT
+via the manifest: prompts/directives, relation vocabularies, curated data, authority policies,
+domain flavor for kernel-neutral judges (e.g. `domain_directive` params, `graph_map_prompt`).
+Dataset adapters (K-QA, HealthBench) are instances plugged into generic harness mechanics.
+Litmus test before landing anything: "could a legal or regulatory vertical reuse this by
+supplying its own manifest entries, with the kernel untouched?" If not, move the domain part
+into the vertical. When a kernel judge/prompt needs domain nuance, take it as a caller-supplied
+directive — never bake it in.

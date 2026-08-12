@@ -169,6 +169,13 @@ STRICT rules:
 # v3 growth campaign (spec C-6/C-7): LLM-drafted masquerade candidates per cover-story
 # condition. Drafts are CANDIDATES ONLY — every one is corpus-entailment-verified (kernel
 # graph.verify) before activation, and activation is capped at label 'supported'.
+# Medical flavor for the KERNEL-NEUTRAL edge verifier (graph.verify.domain_directive):
+GRAPH_VERIFY_DIRECTIVE = (
+    "'Notable' means clinically actionable knowledge a good clinician uses — a recognized "
+    "pitfall, workup branch, or differential the presentation demands — not a case-report "
+    "curiosity or zebra trivia.")
+
+
 DRAFT_MASQUERADE_PROMPT = """You are drafting HIDDEN-DIAGNOSIS knowledge for a clinical evidence graph.
 
 Given a common condition (a "cover story" clinicians see every day), list the conditions that

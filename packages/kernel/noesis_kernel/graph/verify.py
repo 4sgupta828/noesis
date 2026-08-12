@@ -15,17 +15,19 @@ from pydantic import BaseModel, Field
 
 from noesis_kernel.research.provenance import normalize
 
-_SYSTEM = """You verify whether retrieved evidence supports a proposed clinical relationship.
+# KERNEL-NEUTRAL judging directive (no domain vocabulary — the vertical supplies flavor via
+# `domain_directive`, e.g. what "notable" means to its practitioners).
+_SYSTEM = """You verify whether retrieved evidence supports a proposed relationship between two topics.
 
 Judge STRICTLY:
 - supported = a block EXPLICITLY states or directly demonstrates the relationship (not merely
-  mentions both topics). Negated/qualified statements ("rarely mimics", "unlike X") are NOT
-  support for the plain relationship.
-- notable = the relationship is clinically actionable knowledge a good clinician uses (a
-  recognized pitfall/workup branch), not a case-report curiosity.
+  mentions both topics). Negated/qualified statements ("rarely", "unlike X") are NOT support
+  for the plain relationship.
+- notable = the relationship is actionable knowledge a domain practitioner relies on (a
+  recognized decision branch), not an isolated-report curiosity.
 - quote = a VERBATIM span (<= 40 words) copied EXACTLY from the supporting block. The quote
-  must EXPLICITLY involve the proposed hidden condition itself (by name) in relation to the
-  presentation — a passage discussing only one side, or an unrelated case report, is NOT support.
+  must EXPLICITLY involve the proposed subject topic itself (by name) in relation to the
+  object — a passage discussing only one side, or an unrelated report, is NOT support.
 If no block supports it, verdict=unsupported and leave quote empty. Never paraphrase quotes."""
 
 
@@ -48,7 +50,8 @@ def subject_token_in(quote: str, subject: str) -> bool:
 
 
 async def verify_edge_candidate(*, sentence: str, blocks: list[tuple[str, str, str]],
-                                llm, subject: str = "", max_tokens: int = 300) -> dict:
+                                llm, subject: str = "", domain_directive: str = "",
+                                max_tokens: int = 300) -> dict:
     """blocks = [(document_id, block_id, text)]. Returns {supported, notable, document_id,
     block_id, quote} — supported ONLY if the LLM's quote passes the verbatim span check
     against the block it cited AND (when `subject` given) structurally names the subject."""
@@ -57,7 +60,8 @@ async def verify_edge_candidate(*, sentence: str, blocks: list[tuple[str, str, s
     listing = "\n\n".join(f"[{i}] {t[:1200]}" for i, (_d, _b, t) in enumerate(blocks[:8]))
     try:
         comp = await llm.complete(
-            system=_SYSTEM,
+            system=_SYSTEM + (("\n\nDOMAIN GUIDANCE:\n" + domain_directive)
+                              if domain_directive else ""),
             messages=[{"role": "user", "content":
                        f"PROPOSED RELATIONSHIP: {sentence}\n\nRETRIEVED BLOCKS:\n{listing}"}],
             response_format=EdgeVerdict, max_tokens=max_tokens)

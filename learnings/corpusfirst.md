@@ -47,6 +47,11 @@ already-proven demand; T4-T5 need per-source checks. Coverage board + improvemen
   .json truncated at 6k chars → 1 block/label); re-ingest of all ~190 drugs queued → labels
   become genuinely searchable (~40-80 blocks each).
 - T5 journal-door guideline packs (20 jobs) + full-text wave 2 (100 jobs, 50 conditions) queued.
+- **India full-text parity (QUEUED 2026-08-12 evening):** the earlier India packs were
+  abstract-era — re-queued under full text: 16 Indian journals × 100 (IN-stamped incl.
+  J Family Med & Primary Care, Indian Heart J, IJ Nephrology/Psychiatry/Dermatology/TB) +
+  26 India condition packs × 50 (unstamped per D-5; adds chikungunya, JE, leptospirosis,
+  oral cancer, sickle cell, thalassemia). ICMR STW full-PDF discovery remains with IRIS in T5.
 - NEXT-SESSION QUEUE (in priority order): MedlinePlus topic-file connector (consumer-gap
   killer per K-QA findings) · WHO IRIS DSpace connector · RxNorm/RxNav brand-mapping feed ·
   full legacy-EPMC replay AFTER volume growth (+30-40GB needed vs 48.8GB cap — user decision) ·

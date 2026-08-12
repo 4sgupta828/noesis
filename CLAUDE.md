@@ -62,3 +62,12 @@ Litmus test before landing anything: "could a legal or regulatory vertical reuse
 supplying its own manifest entries, with the kernel untouched?" If not, move the domain part
 into the vertical. When a kernel judge/prompt needs domain nuance, take it as a caller-supplied
 directive — never bake it in.
+
+## Corpus-First Sourcing (STANDING DIRECTIVE)
+
+DOWNLOAD everything downloadable (public + legal, API-accessible) into the corpus — internal
+semantic + keyword search with our own relevance/ranking/currency beats answer-time web
+retrieval. Use the WEB LEG only for content that is (a) frequently changing (news-grade,
+living pages) or (b) not legally/technically downloadable (bot-walled, licensed). When a
+source is available both ways, corpus wins: durable, tier-classified, Pulse-tracked,
+reproducible. Inventory + phased tranches: `learnings/corpusfirst.md`.

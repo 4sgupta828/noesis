@@ -1,9 +1,12 @@
 # Noesis IN — the India mode (sub-vertical launch spec)
 
-**Status:** SPEC v1 (panel review pending) · **Goal:** launch an INDIA MODE for Indian
-doctors — public-and-legal content only, brand mapping approximated by curation (no
-commercial DB license in v1). · **Companions:** `learnings/improvementloop.md` (the eval
-loop that proves it), `learnings/knowledgegraph.md` (graph), CLAUDE.md kernel/vertical split.
+**Status:** SPEC v2 — panel-reviewed (Codex + Gemini Pro + code-grounded subagent,
+2026-08-12; all returned). Where the D-series amendments at the end conflict with the v1
+body, the AMENDMENTS WIN (esp.: NFI dropped pending license · CDSCO as curated registry ·
+brand resolver strength/FDC-aware and question-side only · tier-aware boost · clinician-
+authored eval with paired IN-on/off gate). · **Goal:** launch an INDIA MODE for Indian
+doctors — public-and-legal content only. · **Companions:** `learnings/improvementloop.md`,
+`learnings/knowledgegraph.md`, CLAUDE.md kernel/vertical split.
 
 ## The product in one paragraph
 

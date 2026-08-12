@@ -1357,6 +1357,21 @@
   </div>
 </div>
 
+<!-- ingestion console (admin) -->
+<div class="idmodal" id="ingmodal" hidden>
+  <div class="idcard grcard">
+    <h2>⇪ Ingestion</h2>
+    <div id="inglock">
+      <p>Admin only — enter the settings password.</p>
+      <input id="ingpw" type="password" placeholder="Admin password" autocomplete="off" />
+      <div class="iderr" id="ingerr"></div>
+      <button type="button" class="idgo" id="inggo">Unlock</button>
+    </div>
+    <div id="ingbody" hidden></div>
+    <button type="button" class="setclose" id="ingclose">Close ✕</button>
+  </div>
+</div>
+
 <!-- camera capture (mobile + laptop webcam) -->
 <div class="cammodal" id="cammodal" hidden aria-label="Camera">
   <video id="camvideo" autoplay playsinline muted></video>
@@ -4441,9 +4456,13 @@ function renderSettingsUI(d){
   }).join("");
   body.innerHTML = rows + `<div class="sethint" style="margin-top:.6rem;">Applies to the API within ~15 s; this page picks it up on the next reload.</div>` +
     `<div class="setrow"><b>⬡ Relationship graph</b><button type="button" class="idgo" id="setgraph" style="width:auto;padding:.3rem .8rem;font-size:.78rem;">Open console</button>
-     <span class="sethint">Curated clinical edges powering retrieval expansion + the is-it-helping quality watch.</span></div>`;
+     <span class="sethint">Curated clinical edges powering retrieval expansion + the is-it-helping quality watch.</span></div>` +
+    `<div class="setrow"><b>⇪ Ingestion</b><button type="button" class="idgo" id="seting" style="width:auto;padding:.3rem .8rem;font-size:.78rem;">Open console</button>
+     <span class="sethint">All corpus sources, their live footprint, and push-ingestion controls.</span></div>`;
   const gbtn = body.querySelector("#setgraph");
   if(gbtn) gbtn.addEventListener("click", () => { $("#setmodal").hidden = true; openGraphConsole(); });
+  const ibtn = body.querySelector("#seting");
+  if(ibtn) ibtn.addEventListener("click", () => { $("#setmodal").hidden = true; openIngest(); });
   body.querySelectorAll("select[data-k]").forEach(sel => sel.addEventListener("change", async () => {
     const r = await fetch("/admin/settings", {method: "POST",
       headers: {"content-type": "application/json", "x-admin-password": sessionStorage.getItem("noesis_apw") || ""},
@@ -4538,6 +4557,78 @@ function renderGraphConsole(d){
     });
   });
 }
+// ---- ingestion console (⇪): sources + footprint + push ----
+function openIngest(){
+  $("#ingmodal").hidden = false;
+  const unlocked = sessionStorage.getItem("noesis_apw");
+  $("#inglock").hidden = !!unlocked;
+  if(unlocked) loadIngest(); else setTimeout(()=>$("#ingpw").focus(), 60);
+}
+async function loadIngest(){
+  const pw = sessionStorage.getItem("noesis_apw") || $("#ingpw").value.trim();
+  try{
+    const r = await fetch("/admin/ingest/sources", {headers: {"x-admin-password": pw}});
+    if(r.status === 401){ sessionStorage.removeItem("noesis_apw");
+      $("#inglock").hidden = false; $("#ingbody").hidden = true;
+      $("#ingerr").textContent = "Wrong password."; return; }
+    if(!r.ok) throw new Error(r.status);
+    sessionStorage.setItem("noesis_apw", pw);
+    $("#inglock").hidden = true; $("#ingerr").textContent = "";
+    renderIngest(await r.json());
+  }catch(e){ $("#ingerr").textContent = "Ingestion console unavailable — try again."; $("#inglock").hidden = false; }
+}
+function renderIngest(d){
+  const body = $("#ingbody"); body.hidden = false;
+  const q = d.queue || {};
+  const rows = (d.connectors || []).map(c => `<div class="gredge">
+      <b>${esc(c.key)}</b><span class="grtag">${(c.docs||0).toLocaleString()} docs</span>
+      <span class="grtag">${(c.blocks||0).toLocaleString()} blocks</span>
+      <span class="grtag">${c.newest ? "newest " + esc(String(c.newest).slice(0,10)) : "no dated blocks"}</span>
+      <span class="sethint">${esc(c.doc || "")}</span></div>`).join("");
+  const others = Object.entries(d.other_sources || {}).map(([k, v]) =>
+    `<div class="gredge"><b>${esc(k)}</b><span class="grtag">${(v.docs||0).toLocaleString()} docs</span>
+     <span class="grtag">${(v.blocks||0).toLocaleString()} blocks</span></div>`).join("");
+  body.innerHTML = `<div class="grstats">
+      <span class="grchip">queue pending: <b>${q.pending ?? "—"}</b></span>
+      <span class="grchip">running: <b>${q.running ?? "—"}</b></span>
+      <span class="grchip">done: <b>${q.done ?? "—"}</b></span>
+      <span class="grchip">blocks added (lifetime): <b>${(q.blocks_added||0).toLocaleString()}</b></span>
+    </div>
+    <h4 style="margin:.4rem 0 .2rem;font-size:.75rem;color:var(--muted);text-transform:uppercase;">Connectors (API-downloadable)</h4>
+    ${rows}
+    ${others ? `<h4 style="margin:1rem 0 .2rem;font-size:.75rem;color:var(--muted);text-transform:uppercase;">Other corpus sources</h4>${others}` : ""}
+    <h4 style="margin:1.1rem 0 .3rem;font-size:.75rem;color:var(--muted);text-transform:uppercase;">Push ingestion (spends + mutates — needs the ADMIN TOKEN)</h4>
+    <div class="setrow" style="gap:.4rem;">
+      <select id="ingconn">${(d.connectors||[]).map(c=>`<option>${esc(c.key)}</option>`).join("")}</select>
+      <input id="ingq" placeholder="query (connector syntax)" style="flex:1;min-width:10rem;margin:0;" />
+      <input id="inglim" type="number" value="100" min="1" max="400" style="width:5rem;margin:0;" />
+      <input id="ingcountry" placeholder="country stamp (opt)" style="width:9rem;margin:0;" />
+    </div>
+    <div class="setrow" style="gap:.4rem;">
+      <input id="ingtoken" type="password" placeholder="admin token" style="flex:1;margin:0;" />
+      <button type="button" class="idgo" id="ingpush" style="width:auto;padding:.35rem .9rem;">Queue job</button>
+      <span class="sethint" id="ingmsg"></span>
+    </div>
+    <p style="font-size:.68rem;color:var(--muted);margin-top:.5rem;">Corpus-first directive: download what's downloadable; web is for churning/undownloadable content. Plan + tranches: learnings/corpusfirst.md.</p>`;
+  $("#ingpush").addEventListener("click", async () => {
+    const job = {connector: $("#ingconn").value, query: $("#ingq").value.trim(),
+                 limit: +$("#inglim").value || 100, kind: "console", quality: "ingest-console"};
+    const bodyq = {jobs: [job]};
+    const sc = $("#ingcountry").value.trim();
+    if(sc) bodyq.source_country = sc;
+    if(!job.query){ $("#ingmsg").textContent = "query required"; return; }
+    const r = await fetch("/admin/corpus/ingest", {method:"POST",
+      headers: {"content-type":"application/json", "x-admin-token": $("#ingtoken").value.trim()},
+      body: JSON.stringify(bodyq)});
+    $("#ingmsg").textContent = r.ok ? "✓ queued" : "failed: " + (await r.json().catch(()=>({}))).detail;
+    if(r.ok) setTimeout(loadIngest, 1200);
+  });
+}
+$("#inggo").addEventListener("click", loadIngest);
+$("#ingpw").addEventListener("keydown", e => { if(e.key === "Enter") loadIngest(); });
+$("#ingclose").addEventListener("click", () => { $("#ingmodal").hidden = true; });
+$("#ingmodal").addEventListener("click", e => { if(e.target === $("#ingmodal")) $("#ingmodal").hidden = true; });
+
 $("#grgo").addEventListener("click", loadGraphConsole);
 $("#grpw").addEventListener("keydown", e => { if(e.key === "Enter") loadGraphConsole(); });
 $("#grclose").addEventListener("click", () => { $("#graphmodal").hidden = true; });
@@ -4553,6 +4644,7 @@ function routeHash(){    // #s/<id> → Q&A answer/thread · #p/<id> → panel s
   else if(location.hash === "#panel" && ASK_PANEL_ENABLED){ openPanel(""); }
   else if(location.hash === "#triage" && TRIAGE_ENABLED){ setMode("triage"); }
   else if(location.hash === "#graph"){ openGraphConsole(); }
+  else if(location.hash === "#ingest"){ openIngest(); }
 }
 // route only AFTER config loads, so CONV_ENABLED is known (shared threads render as conversations)
 loadConfig().then(routeHash);

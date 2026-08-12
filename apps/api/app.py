@@ -1974,6 +1974,49 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="unknown edge")
         return {"edge_id": body.edge_id, "status": status}
 
+    @app.get("/admin/ingest/sources")
+    async def admin_ingest_sources(x_admin_password: str = Header(default="")) -> dict:
+        """Ingestion console payload (panel-password gate, READ-ONLY): every connector, live
+        per-source corpus footprint (docs/blocks/newest), and the queue summary. PUSHING
+        ingestion stays on POST /admin/corpus/ingest (admin TOKEN — it spends + mutates)."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        dsn = os.environ.get("NOESIS_CORPUS_DSN")
+        stats: dict[str, dict] = {}
+        if dsn:
+            import asyncpg
+            conn = await asyncpg.connect(dsn)
+            try:
+                rows = await conn.fetch(
+                    """SELECT COALESCE(NULLIF(source_key,''),'(corpus)') AS sk, count(*) AS blocks,
+                              count(DISTINCT document_id) AS docs, max(created_at) AS newest
+                       FROM rs_block GROUP BY 1 ORDER BY 2 DESC""")
+                stats = {r["sk"]: {"blocks": r["blocks"], "docs": r["docs"],
+                                   "newest": r["newest"].isoformat() if r["newest"] else None}
+                         for r in rows}
+            finally:
+                await conn.close()
+        qsum = {}
+        q = _gap_queue()
+        if q is not None:
+            try:
+                qsum = await q.summary()
+            except Exception:   # noqa: BLE001
+                qsum = {}
+        return {"connectors": [
+                    {"key": k, "class": type(c).__name__,
+                     "doc": (type(c).__doc__ or "").strip().split("\n")[0][:140],
+                     **stats.get(k, {"blocks": 0, "docs": 0, "newest": None})}
+                    for k, c in sorted(svc.connectors.items())],
+                "other_sources": {k: v for k, v in stats.items() if k not in svc.connectors},
+                "queue": qsum,
+                "job_shape": {"connector": "one of the keys above", "query": "connector query",
+                              "limit": "cap (<=400)", "kind": "label", "quality": "tag",
+                              "source_country": "optional facet stamp (e.g. IN)"}}
+
     @app.get("/admin/graph/view")
     async def admin_graph_view(days: int = 30,
                                x_admin_password: str = Header(default="")) -> dict:

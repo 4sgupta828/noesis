@@ -118,6 +118,9 @@ BRANDS: dict[str, tuple] = {
     "vertin": _B("Vertin (family)", ["betahistine"], ""),
     "stugeron": _B("Stugeron (family)", ["cinnarizine"], ""),
     "naxdom": _B("Naxdom (family)", ["naproxen", "domperidone"], ""),
+    # --- antivirals (in-16 gate finding: Fabiflu was unmapped)
+    "fabiflu": _B("FabiFlu", ["favipiravir"], "", "tablet"),
+    "molnunat": _B("Molnunat", ["molnupiravir"], "200 mg", "capsule"),
     # --- steroids / others
     "wysolone": _B("Wysolone (family)", ["prednisolone"], ""),
     "omnacortil": _B("Omnacortil (family)", ["prednisolone"], ""),
@@ -178,10 +181,11 @@ def brand_context(text: str) -> str:
 # Noesis IN compose ADDENDUM (D-7 conflict protocol) — additive extra_directive; the validated
 # base directive is untouched. Governs how India-specific vs global guidance is PRESENTED.
 INDIA_CONFLICT_DIRECTIVE = (
-    "PRACTICE CONTEXT: INDIA. Where Indian national guidance (ICMR, national programmes such as "
-    "NTEP/NVBDCP, MoHFW standard treatment guidelines) is among the findings and governs the "
-    "question, lead with it and label it as the guidance that applies for practice in India. "
-    "When Indian and international guidance DISAGREE, present BOTH positions explicitly, label "
-    "which applies where, and never suppress either. Regulatory status differs by country: an "
-    "approval, combination, or ban may be India-specific — say so when the findings show it. "
-    "Do not state Indian brand names unless they appear in the findings themselves.")
+    "PRACTICE CONTEXT: INDIA. FIRST answer the question COMPLETELY on the full evidence — the "
+    "India context must never NARROW coverage or drop findings you would otherwise state. THEN, "
+    "where Indian national guidance (ICMR, national programmes such as NTEP/NVBDCP, MoHFW "
+    "standard treatment guidelines) addresses the question, present it ALONGSIDE the "
+    "international standard and label which applies for practice in India. When they DISAGREE, "
+    "state BOTH positions explicitly — never suppress either side. Regulatory status differs by "
+    "country: an approval, combination, or ban may be India-specific — say so when the findings "
+    "show it. Do not state Indian brand names unless they appear in the findings themselves.")

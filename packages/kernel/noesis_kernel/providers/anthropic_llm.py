@@ -77,8 +77,14 @@ class AnthropicLLM:
     def _ensure(self) -> None:
         if self._client is None:
             import anthropic
-            self._client = anthropic.Anthropic(api_key=self._api_key) if self._api_key \
-                else anthropic.Anthropic()
+            # max_retries=5 (SDK default is 2): 529 overloaded bursts routinely outlast two
+            # quick retries and then surface RAW to users ("Plain language: provider error
+            # 529"). The SDK backs off exponentially per retry, so this trades a few seconds
+            # of latency for riding out bursts — every call site (compose, layman, judges)
+            # benefits. Real outages still fail after ~5 attempts and surface honestly.
+            kw = {"max_retries": 5}
+            self._client = anthropic.Anthropic(api_key=self._api_key, **kw) if self._api_key \
+                else anthropic.Anthropic(**kw)
 
     async def complete(
         self,

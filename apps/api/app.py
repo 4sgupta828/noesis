@@ -827,6 +827,29 @@ async def _gap_processor_loop(dsn: str, vertical: str) -> None:
                         await currency.sweep_declared(await retraction_lineage(doc_ids))
                 except Exception:   # noqa: BLE001 — the admin scan remains the manual backstop
                     pass
+                # DAILY recreatability backup → R2 (same replica-safe idle-path pattern):
+                # every irreplaceable table + corpus text, so a total DB loss restores
+                # from the bucket alone (scripts/restore_from_backup.py).
+                try:
+                    import datetime as _dt
+                    import os as _os
+                    if _os.environ.get("R2_BUCKET"):
+                        bst = await currency.get_state("last_backup") or {}
+                        blast = bst.get("at", "")
+                        bdue = (not blast or (_dt.datetime.now(_dt.timezone.utc)
+                                - _dt.datetime.fromisoformat(blast)).days >= 1)
+                        if bdue:
+                            await currency.set_state("last_backup",
+                                {"at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+                                 "status": "running"})
+                            from api.backup import R2Named, run_backup
+                            m = await run_backup(dsn, R2Named())
+                            await currency.set_state("last_backup",
+                                {"at": m["finished_at"],
+                                 "manifest": {k: m[k] for k in ("date", "tables",
+                                                                "corpus_parts", "errors")}})
+                except Exception:   # noqa: BLE001 — the admin endpoint is the manual backstop
+                    pass
             await asyncio.sleep(8); continue
         conn = connectors.get(job["connector"])
         if conn is None:
@@ -1973,6 +1996,41 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if not ok:
             raise HTTPException(status_code=404, detail="unknown edge")
         return {"edge_id": body.edge_id, "status": status}
+
+    @app.post("/admin/backup/run")
+    async def admin_backup_run(x_admin_token: str = Header(default="")) -> dict:
+        """Recreatability backup NOW (admin token): dumps every irreplaceable table + the
+        corpus text/facets to R2 under backups/<date>/ (background; poll GET)."""
+        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
+        if want and x_admin_token != want:
+            raise HTTPException(status_code=401, detail="admin token required")
+        dsn = os.environ.get("NOESIS_CORPUS_DSN")
+        if not (dsn and os.environ.get("R2_BUCKET")):
+            raise HTTPException(status_code=503, detail="needs NOESIS_CORPUS_DSN + R2_* env")
+        from api.backup import R2Named, run_backup
+
+        async def _run():
+            cur = _currency()
+            try:
+                m = await run_backup(dsn, R2Named())
+                if cur:
+                    await cur.set_state("last_backup", {"at": m["finished_at"],
+                                                        "manifest": {k: m[k] for k in
+                                                                     ("date", "tables",
+                                                                      "corpus_parts", "errors")}})
+            except Exception as e:   # noqa: BLE001
+                if cur:
+                    await cur.set_state("last_backup", {"error": str(e)[:300]})
+        app.state.backup_task = asyncio.create_task(_run())
+        return {"status": "started"}
+
+    @app.get("/admin/backup/run")
+    async def admin_backup_status(x_admin_token: str = Header(default="")) -> dict:
+        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
+        if want and x_admin_token != want:
+            raise HTTPException(status_code=401, detail="admin token required")
+        cur = _currency()
+        return (await cur.get_state("last_backup")) if cur else {"note": "no state store"}
 
     @app.get("/admin/ingest/sources")
     async def admin_ingest_sources(x_admin_password: str = Header(default="")) -> dict:

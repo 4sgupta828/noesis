@@ -199,7 +199,7 @@ async def _map_question_topics(question: str, g) -> list[str]:
         comp = await _graph_map_llm().complete(
             system=prompt + "\n\nTOPIC LIST:\n" + "\n".join(f"- {t}" for t in vocab),
             messages=[{"role": "user", "content": question[:2000]}],
-            response_format=_Mapped, max_tokens=150)
+            response_format=_Mapped, max_tokens=250)
         allowed = set(vocab)
         return [t for t in comp.parsed.topics if t in allowed][:2]   # verbatim members only
     except Exception:   # noqa: BLE001
@@ -1837,7 +1837,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                                    f"subjects: {', '.join(old['conditions'][:8])})\n"
                                    f"NEWER: {new['title']} (issuer {new['issuer']}, {new['year']}; "
                                    f"subjects: {', '.join(new['conditions'][:8])})"}],
-                        response_format=_Verdict, max_tokens=200)
+                        response_format=_Verdict, max_tokens=500)
                     v = comp.parsed
                     if v.supersedes:
                         subs = await cur.ensure_topics([s for s in (v.subjects or []) if s][:5])
@@ -2118,7 +2118,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     comp = await app.state.service.llm.complete(
                         system=canon_prompt + _registry_block(registry),
                         messages=[{"role": "user", "content": topic[:200]}],
-                        response_format=_Canon, max_tokens=60)
+                        response_format=_Canon, max_tokens=200)
                     canon = (comp.parsed.topic or "").strip()
                     if canon:
                         topic = (await cur.ensure_topics([canon]))[0]
@@ -2268,7 +2268,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 system=prompt + _registry_block(registry),
                 messages=[{"role": "user", "content":
                            f"QUESTION:\n{(body.question or '')[:2000]}\n\nANSWER:\n{(body.answer or '')[:4000]}"}],
-                response_format=_Topics, max_tokens=300)
+                response_format=_Topics, max_tokens=450)
             raw = [t.strip() for t in (comp.parsed.topics or []) if t and t.strip()][:5]
             return {"topics": await cur.ensure_topics(raw)}   # registry canonical form wins
         except Exception as e:   # noqa: BLE001 — picker degrades to free-text
@@ -2385,7 +2385,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             comp = await app.state.service.llm.complete(
                 system=prompt + _registry_block(registry),
                 messages=[{"role": "user", "content": body_txt}],
-                response_format=_Sug, max_tokens=300)
+                response_format=_Sug, max_tokens=450)
             raw = [t.strip() for t in (comp.parsed.topics or []) if t and t.strip()][:5]
             watched_lc = {w.lower() for w in watched}
             canon = await cur.ensure_topics(raw)

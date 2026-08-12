@@ -179,7 +179,7 @@ class ResearchService:
             comp = await self.llm.complete(
                 system=self.reasoned_scaffold_prompt,
                 messages=[{"role": "user", "content": question}],
-                response_format=_Scaffold, max_tokens=700)
+                response_format=_Scaffold, max_tokens=1200)
             s = comp.parsed
             if route and s.kind == "lookup":
                 # pure evidence lookup → the standard adaptive engine fits better; say so in the trace
@@ -605,7 +605,7 @@ class ResearchService:
         planner = self.planner_llm or self.llm
         try:
             res = await planner.complete(system=sys, messages=[{"role": "user", "content": user}],
-                                         response_format=_Resolution, max_tokens=320)
+                                         response_format=_Resolution, max_tokens=800)
             r = res.parsed
             cq = (r.core_query or "").strip()
         except Exception:
@@ -634,7 +634,8 @@ class ResearchService:
                 "shown with the previous answer).")
         try:
             comp = await self.llm.complete(system=sys, messages=[{"role": "user", "content": user}],
-                                           response_format=_PlainAnswer, max_tokens=2000)
+                                           response_format=_PlainAnswer,
+                                           max_tokens=min(8000, max(2000, len(prior_answer) // 2)))
             return (comp.parsed.text or "").strip()
         except Exception:
             return ""

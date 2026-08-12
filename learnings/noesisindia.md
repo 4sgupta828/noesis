@@ -110,3 +110,110 @@ standard loop (~40 answers + judging per turn — same as a K-QA turn). All spen
   is for RELEVANCE, not authority).
 - Legal review of NDSAP applicability per source is assumed, not verified — flag any
   source whose terms are unclear rather than ingesting by default.
+
+---
+
+# Panel Amendments (v2, D-series) — these override the v1 body above
+
+Panel per Rule 17 (Codex GPT-5.5 + Gemini Pro + code-grounded subagent, all returned,
+2026-08-12). Convergence was near-total on legality, brand safety, and ranking math.
+
+## D-0 — Live bug found and FIXED during review
+
+`_country_boost()` crashed (TypeError: set over a list of dicts) whenever countries were
+passed with `NOESIS_COUNTRY_BOOST` on — IN mode's core mechanism was broken before it began.
+Fixed + committed same day.
+
+## D-1 — Legal re-scope: verify per artifact; NFI likely OUT (all three)
+
+NDSAP covers open-data portals, NOT ministry PDFs by default. CDSCO gazette-type FDC-ban
+notifications are firmer public-record ground; the **National Formulary of India is IPC
+copyright — verify or DROP from P0**. Substitute the explicitly-open sources the spec
+missed: **MoHFW/NHM Standard Treatment Guidelines and ICMR Standard Treatment Workflows**
+(+ FOGSI/IAP society guidance where terms allow). HARD INGEST GATE: a per-artifact legal
+manifest (exact URL, license basis, allowed use, attribution, reviewed-by, date) — nothing
+ingests on an assumed license. EPMC packs are legally fine but will be abstract-heavy for
+Indian society journals (honesty note, not a blocker).
+
+## D-2 — CDSCO connector re-scoped (subagent: "same pattern" was false)
+
+`india_guidelines` is a static curated registry — it cannot discover documents. CDSCO's
+ASP.NET portal + scanned-image PDFs break both discovery and parsing. **P0 = curated
+registry ENTRIES** (consolidated FDC-ban list + current approved list, hand-registered,
+legal-checked); live crawling + OCR hardening is P1 with a named maintenance owner.
+
+## D-3 — Brand mapping: strength/FDC-aware, question-side only, abstaining (all three)
+
+India's market is FDC-dominated (>100k brands); 300–500 singles will feel broken and —
+worse — mapping "Augmentin 625" to bare "amoxicillin/clavulanate" and letting the LLM
+infer strength is a CLINICAL HAZARD. Redesign: table rows are
+`{brand, generic(s), strength, form, combination components}` including top FDCs; the
+resolver returns `{generic, strength, form, ambiguity}` and ABSTAINS on unknowns/ambiguity
+(never an LLM guess of strength or ingredient). **Answer-side parentheticals are CUT from
+P0** — brand mapping ships as question understanding only. Feasibility correction
+(subagent): the existing LLM topic-mapping feeds GRAPH LEGS only; brand→generic needs a
+NEW pre-retrieval rewrite seam, and no alias table exists yet (new schema) — priced as
+build, not config. De-circularize the launch bar: hit rate is measured on HELD-OUT
+brand-phrased questions the curators never saw.
+
+## D-4 — Ranking safety: the boost must be tier-aware (all three; verified math)
+
+As built, `country_boost` is a flat +0.12 at compose-cap claim selection while the whole
+evidence-tier range is worth ≤0.15 — an IN-stamped case report can displace a global
+systematic review. Fixes: (a) tier-gate or tier-scale the country boost (apply only at/
+above a rank floor, or × rank/6); (b) held-out eval case: a global guideline MUST beat an
+IN case report; (c) code-guard that the HARD `country_scope` filter can never combine with
+the IN default (accidental evidence-blinding); (d) spec language corrected: the boost acts
+at final claim selection, NOT retrieval — if IN evidence doesn't survive retrieval+
+extraction, the boost lifts nothing (which is why D-6 matters).
+
+## D-5 — IN-stamping precision (subagent)
+
+Blanket-stamping every block of a `"<condition> India"` EPMC job as `source_country=IN`
+poisons the boost signal (such queries return plenty of non-India papers). Stamp by
+journal allowlist or LLM affiliation judgment; fail-safe = UNSTAMPED.
+
+## D-6 — Indian web domains (cheap P0 the spec missed entirely — subagent)
+
+`TRUSTED_WEB_DOMAINS` contains ZERO Indian domains — in IN mode the web leg structurally
+cannot surface icmr.nic.in / mohfw.gov.in / tbcindia.gov.in / cdsco.gov.in / society sites.
+Add them + their `WEB_DOMAIN_FACETS` tiers in P0.
+
+## D-7 — Profile plumbing priced honestly + the conflict protocol (Codex + subagent)
+
+`/research` has no token auth and no per-user settings store — "server-authoritative IN
+profile" is REAL BUILD (auth on research, account resolution, per-user preference storage),
+not config; the v1 "content+config layer" framing under-priced it. The compose-addendum
+seam DOES exist as claimed (`extra_directive`). The addendum gets an explicit DISAGREEMENT
+PROTOCOL: when Indian programme guidance conflicts with global guidance, PRESENT BOTH and
+label which governs for practice in India — never silently suppress either. Account
+country ≠ patice jurisdiction: expose the resolved profile + a per-question
+"practice context: India/global" override.
+
+## D-8 — Eval gate redesign (all three)
+
+- NO NEET-PG-derived questions (copyright + pretraining contamination + exam-trivia
+  distribution): clinician-authored vignettes built from public guidelines.
+- Launch bar replaced: paired **IN-mode ON vs OFF on the SAME India slice** (sign test,
+  not means — n≈40 with known nondeterminism) + the K-QA global no-harm gate. Strict
+  superiority on India-governed questions, not cross-slice non-inferiority.
+- Adversarial cases required: an India-vs-global CONFLICT question; a banned-FDC question;
+  an unknown-brand question that must degrade gracefully (abstain, not hallucinate).
+- **Launch dependency**: Indian-clinician review of the 18 existing `india_guidelines`
+  curated summaries (their own docstring says review is pending) before they serve as
+  launch evidence.
+
+## D-9 — Revised P0 (the launchable core)
+
+1. Legal-manifest gate + per-artifact verification (D-1).
+2. MoHFW/NHM STG + ICMR STW registry entries · CDSCO ban/approved lists as curated
+   entries (D-2) · NLEM (single public PDF).
+3. EPMC India query packs with PRECISION stamping (D-5).
+4. Indian web domains + facets (D-6).
+5. Tier-aware country boost + scope/boost mutual exclusion (D-4).
+6. Brand resolver v1: strength/FDC-aware table, question-side only, abstaining (D-3).
+7. Profile plumbing: /research auth + per-user IN toggle, server-authoritative echo (D-7)
+   + conflict-protocol compose addendum (dark until eval passes).
+8. India frozen slice (clinician-authored) + paired IN-on/off turn of the improvement loop.
+CUT from P0: answer parentheticals · NFI · CDSCO crawler · IDSP/Pulse · IN-flavored
+watches · drug-kind graph aliases (P1, after the alias schema exists).

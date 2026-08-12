@@ -23,6 +23,62 @@ def _summary(body: str, issuer: str) -> str:
 # Curated starter registry. `conditions` drives discovery matching; `url` is the authoritative source
 # (verify before a live fetch); `text` is the curated summary used until the full document is ingested.
 INDIA_GUIDELINES: tuple[dict, ...] = (
+    # ---- Noesis IN P0 (spec D-1/D-2): inline curated summaries ONLY (no live fetch — CDSCO is
+    # bot-walled and MoHFW terms unverified); `legal` records the basis per the manifest gate.
+    {"id": "icmr-stw", "issuer": "ICMR / DHR, MoHFW",
+     "title": "ICMR Standard Treatment Workflows (STW) — condition-wise practice pathways (India)",
+     "conditions": ["standard treatment", "treatment workflow", "primary care india"],
+     "url": "https://stw.icmr.org.in/", "year": 2022,
+     "legal": "Government of India publication, freely published portal (verified reachable 2026-08-12)",
+     "text": _summary(
+         "- The ICMR **Standard Treatment Workflows (STWs)** are freely published, condition-wise "
+         "one-page treatment pathways for Indian practice across specialties (primary to tertiary).\n"
+         "- STWs are the reference for INDIA-APPROPRIATE first-line choices, referral criteria and "
+         "level-of-care decisions, and complement national programme guidelines (NTEP, NVBDCP).\n"
+         "- Where an STW exists for a condition, it represents current Indian expert consensus "
+         "aligned to national programmes.", "ICMR STW")},
+    {"id": "cdsco-banned-fdc", "issuer": "CDSCO / MoHFW (Section 26A, Drugs & Cosmetics Act)",
+     "title": "Banned fixed-dose combinations in India — CDSCO prohibitions (regulatory status)",
+     "conditions": ["fixed dose combination", "fdc", "banned drugs", "drug regulation india",
+                    "nimesulide"],
+     "url": "https://cdsco.gov.in/", "year": 2023,
+     "legal": "Gazette notifications = public record; summary curated (site bot-walled, no scraping)",
+     "text": _summary(
+         "- India PROHIBITS numerous irrational **fixed-dose combinations (FDCs)** by gazette "
+         "notification under **Section 26A** of the Drugs & Cosmetics Act: ~344 FDCs banned in "
+         "March 2016, 328 more in September 2018, and 14 further FDCs in June 2023 — the 2023 "
+         "list includes **nimesulide + paracetamol dispersible tablets**.\n"
+         "- Regulatory status of a combination is INDIA-SPECIFIC — a brand marketed abroad may be "
+         "banned in India and vice versa; prescribers must check the current CDSCO prohibited list.\n"
+         "- Banned-FDC status concerns marketing approval, NOT evidence about the individual "
+         "components' efficacy.", "CDSCO gazette notifications")},
+    {"id": "nlem-2022", "issuer": "MoHFW (Standing National Committee on Medicines)",
+     "title": "National List of Essential Medicines (NLEM 2022) + DPCO price control (India)",
+     "conditions": ["essential medicines", "nlem", "drug pricing", "generic medicines"],
+     "url": "https://main.mohfw.gov.in/", "year": 2022,
+     "legal": "Government of India publication (public record); summary curated pending terms check",
+     "text": _summary(
+         "- **NLEM 2022** lists 384 essential medicines selected for efficacy, safety and "
+         "cost-effectiveness at Indian population level; NLEM medicines fall under **DPCO price "
+         "control** (ceiling prices).\n"
+         "- **Jan Aushadhi** kendras dispense quality-assured generics at a fraction of branded "
+         "prices — relevant to adherence and therapy choice for cost-sensitive patients.\n"
+         "- Essential-medicine status supports availability at public facilities; it is not a "
+         "clinical-superiority claim over non-NLEM alternatives.", "NLEM 2022 / DPCO")},
+    {"id": "india-health-schemes", "issuer": "MoHFW / NHA",
+     "title": "Public financing for care in India — PM-JAY, PMNDP dialysis, Jan Aushadhi",
+     "conditions": ["dialysis", "chronic kidney disease", "health scheme", "cost of care",
+                    "ayushman bharat"],
+     "url": "https://nhm.gov.in/", "year": 2024,
+     "legal": "Government scheme facts (public record); summary curated",
+     "text": _summary(
+         "- The **Pradhan Mantri National Dialysis Programme (PMNDP)** provides free/subsidised "
+         "haemodialysis at district hospitals under NHM.\n"
+         "- **Ayushman Bharat PM-JAY** covers eligible families up to ₹5 lakh/year for "
+         "hospitalisation, including dialysis and many surgical/medical packages.\n"
+         "- **Jan Aushadhi** provides low-cost generic medicines; combining scheme awareness with "
+         "prescribing materially changes affordability and adherence for chronic-disease care.",
+         "NHM / NHA scheme documents")},
     {"id": "ntep-tb", "issuer": "NTEP / Central TB Division, MoHFW",
      "title": "NTEP Guidelines — Programmatic Management of TB (India)",
      "conditions": ["tuberculosis", "tb", "pulmonary tuberculosis", "mdr-tb", "drug-resistant tb"],

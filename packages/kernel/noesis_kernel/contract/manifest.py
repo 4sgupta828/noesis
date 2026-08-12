@@ -157,6 +157,10 @@ class VerticalManifest:
     # Optional LLM question→graph-topic mapping directive (v3-P1): shown the closed edge-topic
     # vocabulary; used ONLY when structural containment matches nothing. None → containment-only.
     graph_map_prompt: str | None = None
+    # Optional COUNTRY PROFILES (kernel-neutral; e.g. Noesis IN): {code: {"context_fn":
+    # callable(question)->planner-only context str, "directive": compose addendum str}}.
+    # The app resolves the active profile per user; the kernel just threads the strings.
+    country_profiles: dict = field(default_factory=dict)
     # Optional extraction LENSES (domain vocabulary) for the claims-first pipeline: the aspects the
     # extractor should cover per atom (e.g. interventions, outcomes, safety). Passed as a checklist
     # in ONE extraction call (not fanned out). Empty → generic "extract every fact". Kernel-neutral.

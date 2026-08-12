@@ -67,6 +67,13 @@ CREATE TABLE IF NOT EXISTS noesis_user_token (
     last_seen   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_nut_user ON noesis_user_token (user_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS noesis_user_pref (
+    user_id     TEXT NOT NULL,
+    key         TEXT NOT NULL,
+    value       TEXT NOT NULL DEFAULT '',
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, key)
+);
 """
 
 _MAX_TOKENS_PER_USER = 10   # prune oldest beyond this (a lost device's token eventually ages out)
@@ -242,3 +249,20 @@ class AccountStore:
         return {"total": total, "by_verdict": by_verdict, "by_mode": by_mode,
                 "by_day": by_day, "recent": recent,
                 "users": {"registered": n_users, "npi_verified": n_verified}}
+
+    # ---- per-user preferences (Noesis IN D-7: the server-authoritative profile substrate) ----
+
+    async def get_pref(self, user_id: str, key: str) -> str:
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            v = await conn.fetchval(
+                "SELECT value FROM noesis_user_pref WHERE user_id=$1 AND key=$2", user_id, key)
+        return v or ""
+
+    async def set_pref(self, user_id: str, key: str, value: str) -> None:
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            await conn.execute(
+                """INSERT INTO noesis_user_pref (user_id, key, value) VALUES ($1,$2,$3)
+                   ON CONFLICT (user_id, key) DO UPDATE SET value=EXCLUDED.value,
+                   updated_at=now()""", user_id, key[:64], (value or "")[:200])

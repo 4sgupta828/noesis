@@ -152,6 +152,14 @@ def graph_expand_mode() -> str:
     return "on" if v in ("1", "true", "yes", "on") else ""
 
 
+def in_mode_enabled() -> bool:
+    """Flag (default OFF, Rule 20): Noesis IN — the India practice profile (spec D-7/D-9).
+    ON: a signed-in user with account country IN (or the per-user toggle / per-question
+    practice_context override) gets IN-boosted ranking, the structural brand-mapping planner
+    context, and the India conflict-protocol compose addendum. OFF → byte-identical."""
+    return os.environ.get("NOESIS_IN_MODE", "").lower() in ("1", "true", "yes")
+
+
 def graph_map_mode() -> str:
     """v3-P1 (default OFF): "llm" → when structural containment finds NO graph topic in the
     question, ONE small vocabulary-aware mapping call resolves synonyms/abbreviations
@@ -457,8 +465,11 @@ AVAILABLE_COUNTRIES = [{"code": "US", "label": "United States"}, {"code": "IN", 
 def _country_facets(countries: list[str] | None) -> dict:
     """Map a selected-country list → the hard retrieval facet, ALWAYS including 'global' so shared
     literature/trials are searched alongside the country's own sources. Off-flag or empty → {} (no
-    filter, byte-identical). Only known country codes are honored (unknown → ignored)."""
-    if not country_scope_enabled():
+    filter, byte-identical). Only known country codes are honored (unknown → ignored).
+    MUTUAL EXCLUSION (IN-spec D-4): when the country BOOST is on, the hard scope FILTER is
+    disabled — boost-and-filter together silently blinds retrieval to the global evidence base
+    (the boost already surfaces region evidence without excluding anything)."""
+    if not country_scope_enabled() or country_boost_enabled():
         return {}
     valid = {c["code"] for c in AVAILABLE_COUNTRIES}
     picked = tuple(c for c in (countries or []) if c in valid)
@@ -493,6 +504,7 @@ class ResearchIn(BaseModel):
     history: list[dict] | None = None     # prior turns [{question, answer}] → follow-up context
     session_id: str | None = None         # thread to append this turn to (conversation)
     countries: list[str] | None = None    # source-country scope (e.g. ["IN"]); None/[]=all (see flag)
+    practice_context: str = ""            # per-question profile override: "IN" | "global" | "" (account default)
     effort: float = Field(default=1.0, ge=1.0, le=2.5)   # effort multiplier; ignored unless flag on
     audience: str = "clinician"           # "clinician" (default) | "patient"; ignored unless flag on
 
@@ -638,6 +650,7 @@ class ResearchOut(BaseModel):
     resolved_question: str | None = None  # condensed follow-up question, if it differed (flag on only)
     clarification: str | None = None      # a clarifying question when the follow-up was ambiguous
     derived_from_prior: bool = False      # answer is a reshape of the previous answer (no new evidence)
+    profile: str = ""                     # resolved practice profile ("IN" | "") — server-authoritative echo
     charts: list = []                     # validated grounded bar charts (empty unless the flag is on)
     interpretation: list = []             # validated reasoning-read factors (empty unless the flag is on)
     confidence: dict | None = None        # 3-dimension confidence read (None unless the flag is on)
@@ -1004,6 +1017,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "pulse_enabled": pulse_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
             "graph_enabled": graph_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
             "graph_expand": graph_expand_mode(),
+            "in_mode_enabled": in_mode_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
             "accounts_enabled": accounts_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN")),
             "duel_enabled": live_duel and bool(getattr(svc, "reasoned_answer_format", None)),
             "integrative_enabled": (await _flag_live("integrative_enabled")) and bool(getattr(svc, "integrative_prompt", None)),
@@ -1086,9 +1100,37 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                             headers={"Cache-Control": "public, max-age=604800"})
 
     @app.post("/research", response_model=ResearchOut)
-    async def research(body: ResearchIn) -> ResearchOut:
+    async def _resolve_profile(token: str, body: ResearchIn) -> str:
+        """Server-authoritative practice profile (IN-spec D-7). Precedence: per-question
+        override > per-user preference > account country. Fail-safe: flag off / no token /
+        store off / any error → "" (global). Never raises."""
+        if not in_mode_enabled():
+            return ""
+        pc = (body.practice_context or "").strip().lower()
+        if pc == "global":
+            return ""
+        if pc in ("in", "india"):
+            return "IN"
+        store = _accounts()
+        if store is None or not token:
+            return ""
         try:
-            return await _do_research(body)
+            user = await store.user_by_token(token)
+            if not user:
+                return ""
+            pref = await store.get_pref(user["id"], "in_mode")
+            if pref == "on":
+                return "IN"
+            if pref == "off":
+                return ""
+            return "IN" if (user.get("country") or "").strip().upper() in ("IN", "INDIA") else ""
+        except Exception:   # noqa: BLE001
+            return ""
+
+    async def research(body: ResearchIn,
+                       x_noesis_token: str = Header(default="")) -> ResearchOut:
+        try:
+            return await _do_research(body, token=x_noesis_token)
         except CassetteMiss as e:
             raise HTTPException(status_code=503, detail=(
                 "No model available in replay mode. Set NOESIS_PROVIDER_MODE=live "
@@ -1248,7 +1290,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         return StreamingResponse(gen(), media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
 
-    async def _do_research(body: ResearchIn, on_event=None) -> ResearchOut:
+    async def _do_research(body: ResearchIn, on_event=None, token: str = "") -> ResearchOut:
         """Shared research core: attachments → ask (optional live on_event) → persist → ResearchOut.
         Raises CassetteMiss / provider errors for the caller to handle."""
         if app.state.service is None:
@@ -1297,17 +1339,33 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             hint = getattr(svc_, "integrative_query_hint", None)
             if hint:
                 _q = body.question + "\n\n[" + hint + "]"
+        # Noesis IN (D-7/D-9, dark behind NOESIS_IN_MODE): resolved profile flips —
+        # IN ranking boost · structural brand-mapping planner context · conflict addendum.
+        profile = await _resolve_profile(token, body)
+        _countries, _qctx = body.countries, None
+        if profile == "IN":
+            _countries = sorted(set(body.countries or []) | {"IN"})
+            prof = (getattr(load_active_vertical(), "country_profiles", {}) or {}).get("IN") or {}
+            try:
+                _qctx = (prof.get("context_fn") or (lambda q: ""))(body.question) or None
+            except Exception:   # noqa: BLE001 — brand mapping is best-effort framing
+                _qctx = None
+            _dir = prof.get("directive")
+            if _dir:
+                _extra = (_extra + "\n\n" + _dir) if _extra else _dir
         res = await _ask(
             question=_q, tenant_id=body.tenant_id,
             workspace_id=body.workspace_id, source_keys=body.sources,
             images=images, documents=docs, pdf_docs=pdfs, history=history, on_event=on_event,
-            facets=_country_facets(body.countries), country_boost=_country_boost(body.countries),
-            effort=effort, audience=audience,
+            facets=({} if profile == "IN" else _country_facets(_countries)),   # D-4: never hard-filter in IN mode
+            country_boost=(({"IN"} | (_country_boost(_countries) or set()))
+                           if profile == "IN" else _country_boost(_countries)),
+            effort=effort, audience=audience, question_context=_qctx,
             answer_focus=focus, clarify=followup_clarify_enabled(), extra_directive=_extra)
         # Ambiguous follow-up → return the clarifying question; no research ran, nothing to persist.
         if getattr(res, "clarification", ""):
             return ResearchOut(grounded=False, answer="", claims=[], coverage_gaps=[], rejected=0,
-                               clarification=res.clarification)
+                               clarification=res.clarification, profile=profile)
         ui = getattr(app.state.service, "ui", None)
         def _url(c):
             fn = getattr(ui, "source_url", None)
@@ -1387,10 +1445,11 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             reasoning_purpose=(getattr(res, "reasoning_purpose", "") if reasoning_read_enabled() else ""),
             reasoning_conclusion=(getattr(res, "reasoning_conclusion", "") if reasoning_read_enabled() else ""),
             diagnostics=(getattr(res, "diagnostics", None) if diag_trace_enabled() else None),
+            profile=profile,
         )
 
     @app.post("/research/stream")
-    async def research_stream(body: ResearchIn):
+    async def research_stream(body: ResearchIn, x_noesis_token: str = Header(default="")):
         """Live SSE progress for a research request: emits step/search/found/verifying/composing
         events as the ReAct loop runs, then a `final` event carrying the full ResearchOut. Progress
         events are read-only (never unverified claims); persistence + the final payload happen once
@@ -1407,7 +1466,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             # Runs to completion regardless of client connections — the session PERSISTS server-side,
             # and every event lands in the run buffer for any number of (re)connecting readers.
             try:
-                out = await _do_research(body, on_event=on_event)
+                out = await _do_research(body, on_event=on_event, token=x_noesis_token)
                 _sse_push(run, {"type": "final", "result": out.model_dump()})
             except CassetteMiss:
                 _sse_push(run, {"type": "error", "detail": "No model available in replay mode."})
@@ -2334,6 +2393,38 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception as e:   # noqa: BLE001
             __import__("logging").getLogger("api.pulse").warning("watch suggestions failed: %r", e)
             return {"suggestions": []}
+
+    @app.get("/me/settings")
+    async def me_settings_get(x_noesis_token: str = Header(default="")) -> dict:
+        """Per-user settings (Noesis IN D-7): the in_mode preference + the account country the
+        default derives from. Token-gated; 404 when accounts are off."""
+        store = _accounts()
+        if store is None:
+            raise HTTPException(status_code=404, detail="accounts not enabled")
+        user = await store.user_by_token(x_noesis_token)
+        if not user:
+            raise HTTPException(status_code=401, detail="sign in required")
+        pref = await store.get_pref(user["id"], "in_mode")
+        return {"country": user.get("country") or "", "in_mode": pref,
+                "in_mode_available": in_mode_enabled(),
+                "resolved_profile": ("IN" if in_mode_enabled() and (
+                    pref == "on" or (pref != "off" and
+                                     (user.get("country") or "").strip().upper() in ("IN", "INDIA")))
+                    else "")}
+
+    @app.post("/me/settings")
+    async def me_settings_set(body: dict, x_noesis_token: str = Header(default="")) -> dict:
+        store = _accounts()
+        if store is None:
+            raise HTTPException(status_code=404, detail="accounts not enabled")
+        user = await store.user_by_token(x_noesis_token)
+        if not user:
+            raise HTTPException(status_code=401, detail="sign in required")
+        val = str(body.get("in_mode", "")).lower()
+        if val not in ("on", "off", ""):
+            raise HTTPException(status_code=400, detail="in_mode must be 'on', 'off', or ''")
+        await store.set_pref(user["id"], "in_mode", val)
+        return await me_settings_get(x_noesis_token)   # echo the resolved state
 
     @app.post("/pulse/seen")
     async def pulse_seen(body: SeenIn, x_noesis_token: str = Header(default="")) -> dict:

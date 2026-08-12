@@ -408,7 +408,21 @@ async def _rank_claims_by_relevance(question, claims, embedder, top, *,
         if cb:
             try:
                 if (getattr(claims[i], "facets", None) or {}).get("source_country") in cb:
-                    b += _COUNTRY_BOOST_WEIGHT
+                    # TIER-AWARE country boost (IN-spec D-4): a flat boost let a region-stamped
+                    # case report displace a global systematic review (flat 0.12 vs the whole
+                    # tier range 0.15). Scale by tier so region preference NEVER outweighs
+                    # evidence quality: guideline gets the full weight, a case report ~1/6,
+                    # unknown tier gets nothing (when the ranker is available) or a
+                    # conservative half-weight (when tiering is off entirely).
+                    if evidence_ranker is not None:
+                        try:
+                            r = max(0, int(evidence_ranker(
+                                getattr(claims[i], "evidence_kind", "") or "")))
+                        except Exception:   # noqa: BLE001
+                            r = 0
+                        b += _COUNTRY_BOOST_WEIGHT * (min(r, _EVIDENCE_MAX_RANK) / _EVIDENCE_MAX_RANK)
+                    else:
+                        b += _COUNTRY_BOOST_WEIGHT * 0.5
             except Exception:   # noqa: BLE001
                 pass
         return b

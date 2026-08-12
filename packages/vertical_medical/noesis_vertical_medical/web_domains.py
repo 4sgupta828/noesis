@@ -50,6 +50,12 @@ TRUSTED_WEB_DOMAINS: tuple[str, ...] = (
     "aafp.org", "acponline.org", "ashp.org", "acr.org",
     # Professional-grade clinical reference
     "mayoclinic.org", "clevelandclinic.org", "merckmanuals.com", "radiopaedia.org",
+    # India — government / regulators / programmes / societies (Noesis IN, spec D-6: without
+    # these the web leg is structurally blind to Indian guidance in IN mode)
+    "icmr.gov.in", "main.icmr.nic.in", "stw.icmr.org.in", "mohfw.gov.in", "nhm.gov.in",
+    "cdsco.gov.in", "tbcindia.gov.in", "nvbdcp.gov.in", "ncdc.gov.in", "janaushadhi.gov.in",
+    "apiindia.org", "iapindia.org", "fogsi.org", "csi.org.in",
+    "ijmr.org.in", "indianpediatrics.net", "japi.org",
 )
 
 # Domain → facets stamped on every web block from that domain, so the SAME structural evidence
@@ -87,4 +93,23 @@ WEB_DOMAIN_FACETS: dict[str, dict] = {
     "mayoclinic.org": {"source_kind": "reference"}, "clevelandclinic.org": {"source_kind": "reference"},
     "medlineplus.gov": {"source_kind": "reference"}, "merckmanuals.com": {"source_kind": "reference"},
     "radiopaedia.org": {"source_kind": "reference"},
+    # India (D-6): government guidance/programme bodies = normative; source_country stamped so
+    # the tier-aware IN boost sees them; journals get venue label only (tier self-declared)
+    "icmr.gov.in": {"pub_type": "practice guideline", "source_country": "IN"},
+    "main.icmr.nic.in": {"pub_type": "practice guideline", "source_country": "IN"},
+    "stw.icmr.org.in": {"pub_type": "practice guideline", "source_country": "IN"},
+    "mohfw.gov.in": {"pub_type": "practice guideline", "source_country": "IN"},
+    "nhm.gov.in": {"pub_type": "practice guideline", "source_country": "IN"},
+    "cdsco.gov.in": {"pub_type": "practice guideline", "source_country": "IN"},  # regulatory = normative
+    "tbcindia.gov.in": {"pub_type": "practice guideline", "source_country": "IN"},
+    "nvbdcp.gov.in": {"pub_type": "practice guideline", "source_country": "IN"},
+    "ncdc.gov.in": {"pub_type": "practice guideline", "source_country": "IN"},
+    "janaushadhi.gov.in": {"source_kind": "reference", "source_country": "IN"},
+    "apiindia.org": {"source_kind": "journal", "source_country": "IN"},
+    "iapindia.org": {"source_kind": "journal", "source_country": "IN"},
+    "fogsi.org": {"source_kind": "journal", "source_country": "IN"},
+    "csi.org.in": {"source_kind": "journal", "source_country": "IN"},
+    "ijmr.org.in": {"source_kind": "journal", "source_country": "IN"},
+    "indianpediatrics.net": {"source_kind": "journal", "source_country": "IN"},
+    "japi.org": {"source_kind": "journal", "source_country": "IN"},
 }

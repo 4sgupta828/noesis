@@ -2640,7 +2640,9 @@ async function streamRun(url, payload, onEvent, signal, onAlive){
   const state = {runId:null, seq:0, final:null, onAlive: onAlive || null};
   try{
     const resp = await fetch(url,{method:"POST",
-      headers:{"content-type":"application/json"}, body:JSON.stringify(payload), signal});
+      headers:{"content-type":"application/json",
+               "x-noesis-token":(typeof USER!=="undefined"&&USER&&USER.token)||""},
+      body:JSON.stringify(payload), signal});
     if(!resp.ok || !resp.body) throw new Error("HTTP "+resp.status);
     await readSSE(resp, state, onEvent);
     if(state.final) return state.final;
@@ -3434,7 +3436,7 @@ async function askQuestion(question, opts){
       if(conv) finishTurn(data); else render(data);
       return;
     }
-    const resp = await fetch("/research",{method:"POST",headers:{"content-type":"application/json"},body,signal:ctrl.signal});
+    const resp = await fetch("/research",{method:"POST",headers:{"content-type":"application/json","x-noesis-token":(typeof USER!=="undefined"&&USER&&USER.token)||""},body,signal:ctrl.signal});
     clearTimeout(timer);
     if(resp.ok){ const data = await resp.json(); ATTACHMENTS=[]; renderAttachments();
       if(conv) finishTurn(data); else render(data); return; }

@@ -238,6 +238,10 @@ class ResearchService:
         #                                      hints) MUST pass the original here, or topic matching
         #                                      anchors on brief-mentioned branches instead of the asked
         #                                      subject (the Parkinson-leg prod bug)
+        question_context: str | None = None, # caller-supplied PLANNER-ONLY framing (e.g. a vertical's
+        #                                      structural brand→generic mapping, Noesis IN D-3) — rides
+        #                                      the attachment-context channel, so it frames search and
+        #                                      NEVER reaches compose or becomes citable
     ) -> AnswerResult:
         # ANSWER-FOCUS (flag): resolve a conversational FOLLOW-UP ("what dose?") into a self-contained
         # question carrying the subject from the conversation ("dose of TMP-SMX for PCP prophylaxis"),
@@ -350,6 +354,8 @@ class ResearchService:
                 name = d.get("name") or "document"
                 parts.append(f"DOCUMENT — {name} (user-provided text):\n{txt}")
                 att_texts.append((name, txt))
+        if question_context:
+            parts.append(question_context.strip())
         attachment_context = "\n\n".join(parts) or None
 
         # Prior conversation turns → a compact context block (a follow-up can be elliptical). This

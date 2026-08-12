@@ -42,7 +42,8 @@ def _prod_env() -> None:
     os.environ["NOESIS_DIAG_TRACE"] = "1"          # graph-leg + trace telemetry in results
 
 
-async def _run(slice_path: pathlib.Path, limit: int, expand: str, conc: int) -> pathlib.Path:
+async def _run(slice_path: pathlib.Path, limit: int, expand: str, conc: int,
+               patch: str = "") -> pathlib.Path:
     if expand != "env":
         os.environ["NOESIS_GRAPH_EXPAND"] = "1" if expand == "on" else ""
     import api.app as appmod
@@ -50,6 +51,17 @@ async def _run(slice_path: pathlib.Path, limit: int, expand: str, conc: int) -> 
     sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
                          text=True, cwd=ROOT).stdout.strip()
     recs = [json.loads(ln) for ln in slice_path.read_text().splitlines() if ln.strip()][:limit]
+    banked: dict[str, dict] = {}
+    if patch:
+        # PATCH MODE (credit-wise): keep a prior run's HEALTHY rows; re-answer only rows that
+        # errored or produced a stub (<300 chars — the brownout signature). Structural criteria
+        # only — never cherry-pick by score.
+        prior_path = pathlib.Path(patch) if patch.startswith("/") else HERE / patch
+        for r in (json.loads(ln) for ln in prior_path.read_text().splitlines() if ln.strip()):
+            if "error" not in r and len((r.get("answer") or "").strip()) >= 300:
+                banked[r["id"]] = r
+        recs = [r for r in recs if r["id"] not in banked]
+        print(f"patch mode: {len(banked)} healthy rows banked, re-running {len(recs)}")
     sem = asyncio.Semaphore(conc)
 
     async def one(r: dict) -> dict:
@@ -76,7 +88,7 @@ async def _run(slice_path: pathlib.Path, limit: int, expand: str, conc: int) -> 
                                "ran_at": t0.isoformat()},
             }
 
-    results = await asyncio.gather(*(one(r) for r in recs))
+    results = list(await asyncio.gather(*(one(r) for r in recs))) + list(banked.values())
     RUNS.mkdir(parents=True, exist_ok=True)
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     dest = RUNS / f"run-{slice_path.stem}-{expand}-{stamp}.jsonl"
@@ -92,6 +104,7 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=1000)
     ap.add_argument("--expand", choices=("on", "off", "env"), default="env")
     ap.add_argument("--concurrency", type=int, default=3)
+    ap.add_argument("--patch", default="", help="prior run file: keep healthy rows, re-run the rest")
     ap.add_argument("--confirm-spend", action="store_true")
     a = ap.parse_args()
     sp = pathlib.Path(a.slice) if a.slice.startswith("/") else HERE / a.slice
@@ -102,7 +115,7 @@ def main() -> None:
     if not a.confirm_spend:
         raise SystemExit("refusing to run without --confirm-spend (amendment B2)")
     _prod_env()
-    asyncio.run(_run(sp, a.limit, a.expand, a.concurrency))
+    asyncio.run(_run(sp, a.limit, a.expand, a.concurrency, a.patch))
 
 
 if __name__ == "__main__":

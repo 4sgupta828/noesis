@@ -1,0 +1,444 @@
+{
+  "summary": {
+    "git": "2c780e8",
+    "answers_judged": 15,
+    "must_have_recall_mean": 0.511,
+    "answers_fully_covered": 5,
+    "contradiction_answers": 1,
+    "failure_buckets": {
+      "missing_evidence": 7,
+      "wrong_evidence_selected": 0,
+      "ranking_failure": 0,
+      "reasoning_or_composition": 3,
+      "abstained_despite_evidence": 0,
+      "question_misunderstood": 0,
+      "not_a_failure": 0
+    },
+    "judge_agreement_double_grade": 0.667
+  },
+  "judgments": [
+    {
+      "id": "kqa-141",
+      "question": "Or could bactrim potentially cause a yeast infection?",
+      "must_have": [
+        "Bactrim could potentially cause a yeast infection."
+      ],
+      "verdicts": [
+        "missing"
+      ],
+      "covered": 0,
+      "missing": 1,
+      "contradicted": 0,
+      "n": 1,
+      "recall": 0.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved sources (FDA labels, mechanism text) never mention yeast infection/candidiasis as a Bactrim side effect; no source (e.g., drug interaction/side-effect database like Drugs.com or Mayo Cli"
+      }
+    },
+    {
+      "id": "kqa-191",
+      "question": "do chlamdia often cure itself or does it cause permanent damage",
+      "must_have": [
+        "It is important to treat Chlamydia properly to prevent further complications and decrease the risk of transmission to others.",
+        " Chlamydia is not a self-limited infection and does not cure itself."
+      ],
+      "verdicts": [
+        "missing",
+        "contradicted"
+      ],
+      "covered": 0,
+      "missing": 1,
+      "contradicted": 1,
+      "n": 2,
+      "recall": 0.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "reasoning_or_composition",
+        "why": "The retrieved evidence already supports a direct statement that chlamydia does not self-cure and requires proper treatment to prevent complications/transmission\u2014this is essentially the synthesis of fa"
+      }
+    },
+    {
+      "id": "kqa-117",
+      "question": "Is there anti nausea medication that can be taken to allow fluids to stay down?",
+      "must_have": [
+        "For nausea due to dizziness or motion sickness, recommended drugs include antihistamines such as dimenhydrinate (Daramine, Drimite) and meclizine (Dramamine less drowsy).",
+        " Drugs suitable for treating nausea and vomiting are prescribed depending on the cause of the nausea.",
+        " For nausea due to cancer treatment or post operative nausea, possible drugs include metoclopramide (Gimoti Reglan), ondansetron (Zofran) granisteron (Sancuso)."
+      ],
+      "verdicts": [
+        "missing",
+        "missing",
+        "missing"
+      ],
+      "covered": 0,
+      "missing": 3,
+      "contradicted": 0,
+      "n": 3,
+      "recall": 0.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "reasoning_or_composition",
+        "why": "The answer generation failed entirely (no written answer was produced), despite relevant evidence being retrieved\u2014titles like 'ondansetron hydrochloride' and various antiemetic guideline documents dir"
+      }
+    },
+    {
+      "id": "kqa-184",
+      "question": "Which doctor should i go to for vertigo",
+      "must_have": [
+        "A general physician may refer a patient with vertigo to a neurologist for further testing and treatment",
+        " Immediate medical attention is required if vertigo or dizziness is constant and isn't related to head movement",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by inability to stand",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by difficulty speaking or understanding others speaking",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by slurred speech",
+        " A general physician can evaluate the type and cause of vertigo through symptoms evaluation and physical examination",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by weakness of face or extremities",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by confusion",
+        " A general physician may refer a patient with vertigo to an otolaryngologist for further testing and treatment",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by double vision",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by difficulty swallowing",
+        " Immediate medical attention is required if vertigo or dizziness is accompanied by sudden and severe headache or neck pain"
+      ],
+      "verdicts": [
+        "missing",
+        "missing",
+        "missing",
+        "missing",
+        "missing",
+        "covered",
+        "missing",
+        "missing",
+        "missing",
+        "missing",
+        "missing",
+        "missing"
+      ],
+      "covered": 1,
+      "missing": 11,
+      "contradicted": 0,
+      "n": 12,
+      "recall": 0.083,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved evidence and graph legs focus on cardiac/stroke etiologies and guideline-audience framing, but never include material specifying the concrete red-flag symptom list (slurred speech, confu"
+      }
+    },
+    {
+      "id": "kqa-83",
+      "question": "If I took trazodone when would be the best time to take it?",
+      "must_have": [
+        "Immediate release Trazodone is best taken with or shortly after a meal.",
+        " Extended release trazodone is best taken before bedtime on an empty stomach.",
+        " Taking immediate release Trazodone with or shortly after a meal can reduce gastrointestinal adverse reactions.",
+        " Extended release trazodone might cause drowsiness.",
+        " Taking immediate release Trazodone with or shortly after a meal can reduce lightheadedness and postural hypotension."
+      ],
+      "verdicts": [
+        "covered",
+        "missing",
+        "missing",
+        "missing",
+        "missing"
+      ],
+      "covered": 1,
+      "missing": 4,
+      "contradicted": 0,
+      "n": 5,
+      "recall": 0.2,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The answer never distinguishes immediate-release vs extended-release trazodone dosing instructions. The gold facts about ER trazodone being taken on an empty stomach before bedtime, and the specific G"
+      }
+    },
+    {
+      "id": "kqa-23",
+      "question": "Can I take nyquil and benedryl at the same time?",
+      "must_have": [
+        "Taking Doxylamine and Diphenhydramine simultaneously can increase the risk of side effects",
+        "Seek immediate medical attention in case of suspicion of an antihistamine overdose.",
+        "It is possible to overdose on antihistamines.",
+        ""
+      ],
+      "verdicts": [
+        "covered",
+        "missing",
+        "missing",
+        "missing"
+      ],
+      "covered": 1,
+      "missing": 3,
+      "contradicted": 0,
+      "n": 4,
+      "recall": 0.25,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved evidence (product labels, adverse event report) contains no information about antihistamine overdose risk or guidance to seek medical attention for suspected overdose. This is a distinct"
+      }
+    },
+    {
+      "id": "kqa-45",
+      "question": "Does bronchitis turn into pneumonia?",
+      "must_have": [
+        "It's uncommon for bronchitis to turn into pneumonia, but it's possible",
+        "In cases where bronchitis does not resolve in three weeks, one should be checked by a physician for pneumonia",
+        "In cases of worsening of symptoms, one should be checked by a physician for pneumonia"
+      ],
+      "verdicts": [
+        "covered",
+        "missing",
+        "missing"
+      ],
+      "covered": 1,
+      "missing": 2,
+      "contradicted": 0,
+      "n": 3,
+      "recall": 0.333,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved sources (rapid evidence review, CKS chest infection background) plausibly contain guidance on when to seek medical review (e.g., symptoms not resolving in 3 weeks or worsening), but no q"
+      }
+    },
+    {
+      "id": "kqa-178",
+      "question": "What would cause immunocompromise?",
+      "must_have": [
+        "Severe combined immunodeficiency is a type of primary immunodeficiency.",
+        " Hepatic or renal insufficiency can cause secondary immunodeficiencies.",
+        " Stress can weaken the immune system and increase the risk of infection.",
+        " Asplenia can weaken the immune system and increase the risk of infection.",
+        " Malnutrition can weaken the immune system and increase the risk of infection.",
+        " Environmental exposure to radiation and toxins can weaken the immune system and increase the risk of infection.",
+        " Chronic granulomatous disease is a type of primary immunodeficiency.",
+        " Selective IgA deficiency is a type of primary immunodeficiency.",
+        " Burns can weaken the immune system and increase the risk of infection.",
+        " Old age is associated with a weakened immune system and an increased risk of infection.",
+        " Common variable immunodeficiency is a type of primary immunodeficiency. Pregnancy can weaken the immune system and increase the risk of infection.",
+        " Medical treatments such as corticosteroids, some chemotherapies, treatments against rejection after organ transplantation and many biological therapies can cause secondary immunodeficiencies.",
+        " Infections such as HIV, measles and herpes group viruses as well as some bacterial, mycobacterial and parasitic infections can weaken the immune system.",
+        " Chronic diseases such as systemic lupus erythematosus and rheumatoid arthritis can cause secondary immunodeficiencies.",
+        " Diabetes mellitus can cause secondary immunodeficiencies.",
+        " Some malignancies such as leukemia and multiple myeloma can cause secondary immunodeficiencies."
+      ],
+      "verdicts": [
+        "covered",
+        "missing",
+        "missing",
+        "covered",
+        "covered",
+        "missing",
+        "covered",
+        "missing",
+        "missing",
+        "missing",
+        "missing",
+        "covered",
+        "covered",
+        "missing",
+        "covered",
+        "missing"
+      ],
+      "covered": 7,
+      "missing": 9,
+      "contradicted": 0,
+      "n": 16,
+      "recall": 0.438,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved evidence set lacks specific coverage of many gold facts (selective IgA deficiency, CVID, stress, pregnancy, old age, burns, environmental toxins/radiation, lupus/RA, leukemia/multiple my"
+      }
+    },
+    {
+      "id": "kqa-99",
+      "question": "Is it common to have an abscess with no pain?",
+      "must_have": [
+        "Not experiencing pain does not exclude the presence of an abscess.",
+        " If you suspect you might have an abscess, you should consult your healthcare provider for diagnosis and treatment.",
+        " A common symptom of an abscess is pain.",
+        " Less commonly, an abscess can be painless due to its location, size, patient's characteristics and other causes."
+      ],
+      "verdicts": [
+        "missing",
+        "missing",
+        "covered",
+        "covered"
+      ],
+      "covered": 2,
+      "missing": 2,
+      "contradicted": 0,
+      "n": 4,
+      "recall": 0.5,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "reasoning_or_composition",
+        "why": "The retrieved evidence (Merck Manual, MedlinePlus, etc.) fully supports both missed facts: sources describe pain as typical but also note exceptions (painless appendicitis, painless masses, low-grade "
+      }
+    },
+    {
+      "id": "kqa-199",
+      "question": "what is the difference between fissure vs hemorrhoids?",
+      "must_have": [
+        "Anal fissures are tears in the anal tissue caused by trauma",
+        "Hemorrhoids are normal vascular structures that can grow abnormally due to various factors",
+        "Both anal fissures and hemorrhoids can cause bleeding and discomfort",
+        "Hemorrhoids can lead to rectal bleeding, irritation, and can prolapse",
+        "Hemorrhoids usually don't cause pain unless there is a strangulation or blood clot present",
+        "Anal fissures are accompanied by severe pain exacerbated by defecation",
+        "Diagnosis of anal fissures and hemorrhoids can usually be made through examination based on appearance"
+      ],
+      "verdicts": [
+        "covered",
+        "covered",
+        "covered",
+        "covered",
+        "covered",
+        "covered",
+        "missing"
+      ],
+      "covered": 6,
+      "missing": 1,
+      "contradicted": 0,
+      "n": 7,
+      "recall": 0.857,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved evidence and answer focus on pathophysiology, symptoms, and treatment differences but never address the diagnostic process (visual/physical exam) for either condition. None of the cited "
+      }
+    },
+    {
+      "id": "kqa-147",
+      "question": "So prednisone is a cortisone type medication?",
+      "must_have": [
+        "Prednisone is a synthetic drug that derives from cortisone."
+      ],
+      "verdicts": [
+        "covered"
+      ],
+      "covered": 1,
+      "missing": 0,
+      "contradicted": 0,
+      "n": 1,
+      "recall": 1.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      }
+    },
+    {
+      "id": "kqa-157",
+      "question": "What causes genital warts?",
+      "must_have": [
+        "Condyloma acuminata, also known as anogenital warts, are manifestations of HPV infection that occur in the anogenital area."
+      ],
+      "verdicts": [
+        "covered"
+      ],
+      "covered": 1,
+      "missing": 0,
+      "contradicted": 0,
+      "n": 1,
+      "recall": 1.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      }
+    },
+    {
+      "id": "kqa-179",
+      "question": "Whats Keratosis Pilaris",
+      "must_have": [
+        "Keratosis pilaris is characterized by small bumps of excess keratin developing on your skin, usually on your arms and legs.",
+        " Keratosis pilaris is a skin condition among young adults."
+      ],
+      "verdicts": [
+        "covered",
+        "covered"
+      ],
+      "covered": 2,
+      "missing": 0,
+      "contradicted": 0,
+      "n": 2,
+      "recall": 1.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      }
+    },
+    {
+      "id": "kqa-154",
+      "question": "The yeast infection is not transferable?",
+      "must_have": [
+        "Yeast infection is not thought to be transferable and is not referred to as one",
+        "yeasts are a natural part of the body ecosystem."
+      ],
+      "verdicts": [
+        "covered",
+        "covered"
+      ],
+      "covered": 2,
+      "missing": 0,
+      "contradicted": 0,
+      "n": 2,
+      "recall": 1.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      }
+    },
+    {
+      "id": "kqa-114",
+      "question": "Is there a reason why my urine is clear",
+      "must_have": [
+        "Clear urine is usually a sign of drinking too much water."
+      ],
+      "verdicts": [
+        "covered"
+      ],
+      "covered": 1,
+      "missing": 0,
+      "contradicted": 0,
+      "n": 1,
+      "recall": 1.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      }
+    }
+  ]
+}

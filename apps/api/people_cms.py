@@ -134,7 +134,8 @@ async def load_dac(dsn: str, progress=None) -> dict:
                 continue
             eid = f"npi:{npi}"
             pac = (row.get("org_pac_id") or "").strip()
-            org = (row.get("org_nm") or "").strip()[:120]
+            # org legal name: "org_nm" in older DAC releases, "facility name" in current
+            org = (row.get("org_nm") or row.get("facility name") or "").strip()[:120]
             if pac:
                 affs.append([eid, pac, org])
                 if org and eid not in orgs:

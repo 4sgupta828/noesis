@@ -2420,10 +2420,12 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             kw = dict(specialty=intent["specialty"], state=intent["state"],
                       city=intent["city"], name=intent["name"])
             bd = await ps.breakdown(**kw)
-            # fetch candidates when small — or when the clarify budget is spent, so
-            # phase B can ALWAYS present instead of circling
+            # ALWAYS fetch candidates when anything matches — phase B can only present
+            # from rows it was shown, and "show me options" must never be answerable with
+            # another question just because the set is large (with a sort metric the
+            # top-30 slice is the meaningful one; unsorted it's presented as still-broad)
             cands = (await ps.search(**kw, sort_metric=intent["sort_metric"], limit=30)
-                     if 0 < bd["total"] and (bd["total"] <= 30 or n_asked >= 2) else [])
+                     if bd["total"] > 0 else [])
             turn = await _people_converse_turn(convo, intent, bd, cands, n_asked=n_asked)
             return {**turn, "facets": {**intent, "parser": parser},
                     "total": bd["total"], "breakdown": bd,

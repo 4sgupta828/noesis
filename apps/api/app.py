@@ -206,6 +206,78 @@ async def _map_question_topics(question: str, g) -> list[str]:
         return []
 
 
+async def _parse_people_intent(q: str, facets: dict, llm=None) -> tuple[dict, str]:
+    """People NL front door (Rule 18: the model owns 'kidney doctor'→nephrology; code owns
+    the search). ONE small LLM call maps the user's words onto the CLOSED facet vocabulary
+    read from the inventory itself; every field is then validated by vocabulary MEMBERSHIP,
+    so nothing the model invents can reach SQL. E-3 holds inside the parse: quality words
+    (best/top/expert) NEVER map to a sort metric. Fail-safe on LLM failure: structural
+    containment over the closed specialty labels only — no heuristic state/city/name guess."""
+    empty = {"specialty": "", "state": "", "city": "", "name": "", "sort_metric": "", "note": ""}
+    specs = facets.get("specialties") or []
+    states = set(facets.get("states") or [])
+    metrics = {m["key"]: m.get("label") or m["key"] for m in (facets.get("metrics") or [])}
+    from pydantic import BaseModel
+
+    class _Intent(BaseModel):
+        specialty: str = ""
+        state: str = ""
+        city: str = ""
+        name: str = ""
+        sort_metric: str = ""
+        note: str = ""
+
+    system = (
+        "You parse ONE natural-language people-directory search into facets. Fields:\n"
+        '- specialty: exactly one label from SPECIALTY LIST, verbatim, or "". Map lay or '
+        "clinical phrasings to the closest listed label (e.g. a lay word for a specialist "
+        "maps to its listed specialty); prefer a listed sub-specialty when the query names "
+        "one.\n"
+        '- state: the 2-letter US state code the query refers to, or "". A well-known city '
+        "may imply its state.\n"
+        '- city: the city named in the query, or "".\n'
+        "- name: a person's name (or fragment) ONLY when the user wants a specific person, "
+        'else "".\n'
+        "- sort_metric: one key from METRIC LIST, verbatim, ONLY when the user explicitly "
+        "asks to order by that measured volume/utilization. Quality words (best, top, "
+        'greatest, leading, expert) are NOT metrics — leave sort_metric "" and explain in '
+        "note that no quality ranking exists.\n"
+        '- note: one short sentence when part of the request could not be honored or was '
+        'ambiguous, else "".\n'
+        'Leave any field "" when unsure — never guess.\n\n'
+        "SPECIALTY LIST:\n" + "\n".join(f"- {s}" for s in specs) +
+        "\n\nMETRIC LIST:\n"
+        + ("\n".join(f"- {k} ({v})" for k, v in metrics.items()) or "- (none available)"))
+    try:
+        comp = await (llm or _graph_map_llm()).complete(
+            system=system, messages=[{"role": "user", "content": q[:400]}],
+            response_format=_Intent, max_tokens=300)
+        p = comp.parsed
+        by_lower = {s.lower(): s for s in specs}
+        out = dict(empty)
+        out["specialty"] = by_lower.get((p.specialty or "").strip().lower(), "")
+        st = (p.state or "").strip().upper()
+        out["state"] = st if (len(st) == 2 and st.isalpha()
+                              and (not states or st in states)) else ""
+        out["city"] = (p.city or "").strip()[:80]
+        out["name"] = (p.name or "").strip()[:80]
+        out["sort_metric"] = p.sort_metric if p.sort_metric in metrics else ""
+        out["note"] = (p.note or "").strip()[:200]
+        if p.sort_metric and p.sort_metric not in metrics:
+            out["note"] = ((out["note"] + " ") if out["note"] else "") + \
+                "Requested ordering has no loaded metric yet."
+        return out, "llm"
+    except Exception:   # noqa: BLE001
+        ql = q.lower()
+        hit = next((s for s in specs if s.lower() in ql), "")
+        out = dict(empty)
+        out["specialty"] = hit
+        out["note"] = ("Intent model unavailable — matched listed specialty labels only."
+                       if hit else
+                       "Intent model unavailable — could not interpret; use the facet fields.")
+        return out, "fallback"
+
+
 def _graph_store():
     """Module-level lazy GraphStore singleton (one pool + one adjacency snapshot per process),
     shared by the API endpoints and the answer-path expander. None when off/unconfigured."""
@@ -2071,6 +2143,9 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 res = await people_load.load_from_zip(
                     "/tmp/nppes.zip", dsn,
                     _dt.date.today().replace(day=1).isoformat(), progress=_prog)
+                ps = _people()
+                if ps:
+                    ps.invalidate_facets()   # new labels must reach the NL parser's vocab
                 if cur:
                     await cur.set_state("nppes_load", {"status": "done", **res})
             except Exception as e:   # noqa: BLE001
@@ -2089,9 +2164,9 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         return (await cur.get_state("nppes_load")) if cur else {"note": "no state store"}
 
     @app.get("/admin/people/search")
-    async def admin_people_search(specialty: str = "", state: str = "", name: str = "",
-                                  sort_metric: str = "", metric_period: str = "",
-                                  limit: int = 50,
+    async def admin_people_search(specialty: str = "", state: str = "", city: str = "",
+                                  name: str = "", sort_metric: str = "",
+                                  metric_period: str = "", limit: int = 50,
                                   x_admin_password: str = Header(default="")) -> dict:
         """People search (ADMIN-ONLY per E-1 until discipline data lands). E-3: results are
         name-ordered unless the CALLER explicitly picks sort_metric — the UI forces that
@@ -2102,13 +2177,42 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if ps is None:
             raise HTTPException(status_code=404, detail="people not enabled (NOESIS_PEOPLE)")
         try:
-            rows = await ps.search(specialty=specialty, state=state, name=name,
+            rows = await ps.search(specialty=specialty, state=state, city=city, name=name,
                                    sort_metric=sort_metric, metric_period=metric_period,
                                    limit=limit)
             return {"results": rows, "stats": await ps.stats(),
                     "sorted_by": sort_metric or "name (neutral — no ranking)"}
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"people search failed: {e}") from e
+
+    @app.post("/admin/people/ask")
+    async def admin_people_ask(body: dict, x_admin_password: str = Header(default="")) -> dict:
+        """NL front door for People: one small LLM call parses the user's words into the
+        closed facet vocabulary (_parse_people_intent), then the SAME indexed facet search
+        runs. The interpretation is echoed back so the UI shows exactly how the question was
+        read (editable chips). E-3 holds: sort only when the user explicitly named a loaded
+        volume metric; 'best/top' never ranks. Fallback parses with NO usable facet return
+        an empty result set rather than an arbitrary unfaceted page."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        ps = _people()
+        if ps is None:
+            raise HTTPException(status_code=404, detail="people not enabled (NOESIS_PEOPLE)")
+        q = (str(body.get("q") or "")).strip()[:400]
+        if not q:
+            raise HTTPException(status_code=400, detail="missing q")
+        try:
+            intent, parser = await _parse_people_intent(q, await ps.facet_values())
+            faceted = any(intent[k] for k in ("specialty", "state", "city", "name"))
+            rows = [] if (parser == "fallback" and not faceted) else await ps.search(
+                specialty=intent["specialty"], state=intent["state"], city=intent["city"],
+                name=intent["name"], sort_metric=intent["sort_metric"],
+                limit=min(int(body.get("limit") or 50), 200))
+            return {"interpretation": {**intent, "parser": parser},
+                    "results": rows, "stats": await ps.stats(),
+                    "sorted_by": intent["sort_metric"] or "name (neutral — no ranking)"}
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"people ask failed: {e}") from e
 
     @app.get("/admin/people/entity")
     async def admin_people_entity(id: str, x_admin_password: str = Header(default="")) -> dict:

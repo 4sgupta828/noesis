@@ -794,6 +794,23 @@
   .ppcov-more{margin-top:.5rem;}
   .ppcov-more>summary{font-family:var(--mono);font-size:.66rem;color:var(--muted);cursor:pointer;padding:.3rem 0;}
   @media (max-width: 880px){ .ppbody{grid-template-columns:1fr;} .pprail{order:2;} }
+  /* People full page (shares the pulsepage frame) */
+  .pulsepage .sback{font-family:var(--mono);font-size:.66rem;letter-spacing:.05em;text-transform:uppercase;
+    cursor:pointer;background:transparent;border:1px solid var(--hair);border-radius:999px;color:var(--muted);padding:.3rem .8rem;}
+  .pulsepage .sback:hover{border-color:var(--gold);color:var(--gold);}
+  .pplask{display:flex;gap:.5rem;margin:1rem 0 .55rem;max-width:56rem;}
+  .pplask input{flex:1;min-width:0;font-size:.92rem;padding:.6rem .85rem;border:1px solid var(--hair);
+    border-radius:12px;background:var(--panel2);color:var(--ink);}
+  .pplask input:focus{outline:none;border-color:var(--gold);}
+  .pplchips{display:flex;gap:.4rem;flex-wrap:wrap;margin:.35rem 0 .2rem;min-height:1.1rem;}
+  .pplchip{display:inline-flex;align-items:center;gap:.35rem;font-size:.72rem;padding:.2rem .3rem .2rem .6rem;
+    border:1px solid var(--gold);border-radius:999px;color:var(--ink);}
+  .pplchip .k{font-family:var(--mono);font-size:.58rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);}
+  .pplchip button{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:.72rem;padding:0 .25rem;}
+  .pplchip button:hover{color:var(--gap);}
+  .pplcols{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:1.4rem;align-items:start;padding-top:.5rem;}
+  @media (max-width: 880px){ .pplcols{grid-template-columns:1fr;} }
+  .pplprof{border:1px solid var(--hair);border-radius:14px;background:var(--panel2);padding:1rem;position:sticky;top:.5rem;}
   .ppcard{border:1px solid var(--hair);border-radius:14px;background:var(--panel2);margin-bottom:.8rem;overflow:hidden;}
   .ppcard-h{display:flex;align-items:center;gap:.6rem;padding:.8rem 1rem;cursor:pointer;}
   .ppcard-h:hover{background:var(--panel);}
@@ -1372,20 +1389,22 @@
   </div>
 </div>
 
-<!-- People (specialist inventory, admin-only) -->
-<div class="idmodal" id="pplmodal" hidden>
-  <div class="idcard grcard">
-    <h2>⧉ People</h2>
-    <div id="ppllock">
-      <p>Admin only — enter the settings password.</p>
-      <input id="pplpw" type="password" placeholder="Admin password" autocomplete="off" />
-      <div class="iderr" id="pplerr"></div>
-      <button type="button" class="idgo" id="pplgo">Unlock</button>
-    </div>
-    <div id="pplbody" hidden></div>
-    <button type="button" class="setclose" id="pplclose">Close ✕</button>
+<!-- People: FULL-PAGE specialist inventory + referral network (admin-only) -->
+<section class="pulsepage" id="pplpage" hidden aria-label="People">
+  <div class="pphead">
+    <button type="button" class="sback" id="pplback">← Back</button>
+    <span class="pptitle">⧉ People</span>
+    <span class="ppsub">specialist inventory &amp; referral network — public-record facts, no quality ranking</span>
   </div>
-</div>
+  <div id="ppllock" hidden style="max-width:22rem;padding-top:1rem;">
+    <p style="font-size:.85rem;">Admin only — enter the settings password.</p>
+    <input id="pplpw" type="password" placeholder="Admin password" autocomplete="off"
+      style="width:100%;padding:.5rem .7rem;border:1px solid var(--hair);border-radius:10px;background:var(--panel2);color:var(--ink);" />
+    <div class="iderr" id="pplerr"></div>
+    <button type="button" class="idgo" id="pplgo" style="width:auto;padding:.4rem 1.1rem;margin-top:.5rem;">Unlock</button>
+  </div>
+  <div id="pplbody" hidden></div>
+</section>
 
 <!-- camera capture (mobile + laptop webcam) -->
 <div class="cammodal" id="cammodal" hidden aria-label="Camera">
@@ -4643,63 +4662,108 @@ function renderIngest(d){
     if(r.ok) setTimeout(loadIngest, 1200);
   });
 }
-// ---- People (⧉): specialist search + referral network (admin-only, E-3: user picks the sort) ----
+// ---- People (⧉): FULL-PAGE specialist search + referral network (admin-only).
+// NL-first: POST /admin/people/ask does ONE LLM intent parse → closed-vocab facets, echoed
+// back and rendered as EDITABLE CHIPS (remove a chip → the same indexed facet search
+// re-runs). E-3: no default ranking; ordering only when the user picks/asks a metric.
+let PPL = {specialty:"", state:"", city:"", name:"", sort_metric:""};
 function openPeople(){
-  $("#pplmodal").hidden = false;
+  $("#pplpage").hidden = false; document.body.style.overflow = "hidden";
   const unlocked = sessionStorage.getItem("noesis_apw");
   $("#ppllock").hidden = !!unlocked;
   if(unlocked) renderPeopleShell(); else setTimeout(()=>$("#pplpw").focus(), 60);
 }
+function closePeople(){ $("#pplpage").hidden = true; document.body.style.overflow = ""; }
 function pplPW(){ return sessionStorage.getItem("noesis_apw") || $("#pplpw").value.trim(); }
 function renderPeopleShell(){
   $("#ppllock").hidden = true; $("#pplbody").hidden = false;
+  if($("#pplq")){ $("#pplq").focus(); return; }   // shell already rendered — keep state
   $("#pplbody").innerHTML = `
-    <div class="setrow" style="gap:.4rem;">
-      <input id="pplspec" placeholder="specialty (e.g. cardiology)" style="flex:1;min-width:9rem;margin:0;" />
-      <input id="pplstate" placeholder="state" style="width:4.5rem;margin:0;" maxlength="2" />
-      <input id="pplname" placeholder="name contains" style="flex:1;min-width:8rem;margin:0;" />
+    <div class="pplask">
+      <input id="pplq" maxlength="400" placeholder='Describe who you need — e.g. "interventional cardiologists in Houston" or "Dr Chen, orthopedic spine, NY"' />
+      <button type="button" class="idgo" id="pplgobtn" style="width:auto;padding:.45rem 1.2rem;">Search</button>
     </div>
-    <div class="setrow" style="gap:.4rem;">
+    <div class="pplchips" id="pplchips"></div>
+    <div class="setrow" style="gap:.4rem;align-items:center;">
       <select id="pplsort">
         <option value="">No ranking (name order)</option>
         <option value="medicare_partb_services">Sort by: Medicare Part B services (user-selected)</option>
         <option value="medicare_beneficiaries">Sort by: Medicare beneficiaries (user-selected)</option>
       </select>
-      <button type="button" class="idgo" id="pplsearch" style="width:auto;padding:.35rem .9rem;">Search</button>
       <span class="sethint" id="pplmsg"></span>
     </div>
-    <div id="pplres"></div><div id="pplprof"></div>
-    <p style="font-size:.66rem;color:var(--muted);margin-top:.6rem;">Public-record facts with per-field
+    <div class="pplcols">
+      <div id="pplres"></div>
+      <aside id="pplprof" class="pplprof" hidden></aside>
+    </div>
+    <p style="font-size:.66rem;color:var(--muted);margin-top:.8rem;">Public-record facts with per-field
     provenance. Noesis does not evaluate quality or suitability; ordering reflects only the metric you
     select. Admin-only until license/discipline data lands (E-1).</p>`;
-  $("#pplsearch").addEventListener("click", pplSearch);
+  $("#pplgobtn").addEventListener("click", pplAsk);
+  $("#pplq").addEventListener("keydown", e => { if(e.key === "Enter") pplAsk(); });
+  $("#pplsort").addEventListener("change", () => { PPL.sort_metric = $("#pplsort").value; pplFacetSearch(); });
+  setTimeout(()=>$("#pplq").focus(), 60);
 }
-async function pplSearch(){
-  const q = new URLSearchParams({specialty: $("#pplspec").value.trim(), state: $("#pplstate").value.trim(),
-    name: $("#pplname").value.trim(), sort_metric: $("#pplsort").value, limit: "50"});
-  const r = await fetch("/admin/people/search?" + q, {headers: {"x-admin-password": pplPW()}});
-  if(r.status === 401){ sessionStorage.removeItem("noesis_apw"); $("#ppllock").hidden = false; return; }
-  if(r.status === 404){ $("#pplmsg").textContent = "People is not enabled (NOESIS_PEOPLE) or no data loaded yet."; return; }
-  if(!r.ok){ $("#pplmsg").textContent = "Search failed."; return; }
-  const d = await r.json();
-  sessionStorage.setItem("noesis_apw", pplPW());
-  $("#pplmsg").textContent = `${(d.stats||{}).entities ?? 0} in inventory · sorted by ${esc(d.sorted_by)}`;
-  $("#pplprof").innerHTML = "";
+function pplChips(note){
+  const label = {specialty:"specialty", state:"state", city:"city", name:"name", sort_metric:"sort"};
+  $("#pplchips").innerHTML = Object.keys(label).filter(k => PPL[k]).map(k =>
+    `<span class="pplchip"><span class="k">${label[k]}</span> ${esc(PPL[k])}
+       <button type="button" data-k="${k}" title="remove">✕</button></span>`).join("")
+    + (note ? `<span class="pplchip" style="border-color:var(--hair);color:var(--muted);">${esc(note)}</span>` : "");
+  document.querySelectorAll("#pplchips .pplchip button[data-k]").forEach(b =>
+    b.addEventListener("click", () => {
+      PPL[b.dataset.k] = "";
+      if(b.dataset.k === "sort_metric") $("#pplsort").value = "";
+      pplFacetSearch();
+    }));
+}
+function pplRenderResults(d){
+  $("#pplmsg").textContent = `${(d.results||[]).length} shown · ${(d.stats||{}).entities ?? 0} in inventory · sorted by ${d.sorted_by}`;
   $("#pplres").innerHTML = (d.results||[]).map(e => `<div class="gredge" style="cursor:pointer;" data-id="${esc(e.entity_id)}">
       <b>${esc(e.name)}</b><span class="grtag">${esc(e.specialty)}</span>
       <span class="grtag">${esc(e.city)}, ${esc(e.state)}</span>
       ${e.sort_value != null ? `<span class="grtag">${(+e.sort_value).toLocaleString()}</span>` : ""}
       <span class="grtag">${esc(e.board_certified)}</span></div>`).join("")
-    || `<p style="color:var(--muted);font-size:.8rem;">No matches — inventory may be empty until the NPPES load runs.</p>`;
+    || `<p style="color:var(--muted);font-size:.8rem;">No matches for this reading of the question — edit the chips above or rephrase.</p>`;
   document.querySelectorAll("#pplres .gredge").forEach(el =>
     el.addEventListener("click", () => pplProfile(el.dataset.id)));
+}
+async function pplAsk(){
+  const q = $("#pplq").value.trim(); if(!q) return;
+  $("#pplmsg").textContent = "Reading your question…";
+  let r;
+  try{ r = await fetch("/admin/people/ask", {method:"POST",
+    headers: {"content-type":"application/json", "x-admin-password": pplPW()},
+    body: JSON.stringify({q, limit: 50})}); }
+  catch(e){ $("#pplmsg").textContent = "Network error."; return; }
+  if(r.status === 401){ sessionStorage.removeItem("noesis_apw"); $("#ppllock").hidden = false; return; }
+  if(r.status === 404){ $("#pplmsg").textContent = "People is not enabled (NOESIS_PEOPLE) or no data loaded yet."; return; }
+  if(!r.ok){ $("#pplmsg").textContent = "Search failed."; return; }
+  const d = await r.json();
+  sessionStorage.setItem("noesis_apw", pplPW());
+  const it = d.interpretation || {};
+  PPL = {specialty: it.specialty||"", state: it.state||"", city: it.city||"", name: it.name||"", sort_metric: it.sort_metric||""};
+  $("#pplsort").value = ["medicare_partb_services","medicare_beneficiaries"].includes(PPL.sort_metric) ? PPL.sort_metric : "";
+  $("#pplprof").hidden = true;
+  pplChips(it.note); pplRenderResults(d);
+}
+async function pplFacetSearch(){
+  const qs = new URLSearchParams({specialty: PPL.specialty, state: PPL.state, city: PPL.city,
+    name: PPL.name, sort_metric: PPL.sort_metric, limit: "50"});
+  const r = await fetch("/admin/people/search?" + qs, {headers: {"x-admin-password": pplPW()}});
+  if(r.status === 401){ sessionStorage.removeItem("noesis_apw"); $("#ppllock").hidden = false; return; }
+  if(!r.ok){ $("#pplmsg").textContent = "Search failed."; return; }
+  const d = await r.json();
+  $("#pplprof").hidden = true;
+  pplChips(""); pplRenderResults(d);
 }
 async function pplProfile(id){
   const r = await fetch("/admin/people/entity?id=" + encodeURIComponent(id),
                         {headers: {"x-admin-password": pplPW()}});
   if(!r.ok) return;
   const e = await r.json();
-  $("#pplprof").innerHTML = `<h4 style="margin:1rem 0 .3rem;">${esc(e.name)} — ${esc(e.specialty)} (${esc(e.city)}, ${esc(e.state)})</h4>
+  $("#pplprof").hidden = false;
+  $("#pplprof").innerHTML = `<h4 style="margin:0 0 .3rem;">${esc(e.name)} — ${esc(e.specialty)} (${esc(e.city)}, ${esc(e.state)})</h4>
     <div class="grstats">
       <span class="grchip">license: <b>${esc(e.license_status)}</b></span>
       <span class="grchip">board: <b>${esc(e.board_certified)}</b></span>
@@ -4719,10 +4783,9 @@ async function pplProfile(id){
   document.querySelectorAll("#pplprof .gredge[data-id]").forEach(el =>
     el.addEventListener("click", () => pplProfile(el.dataset.id)));
 }
-$("#pplgo").addEventListener("click", () => { renderPeopleShell(); pplSearch(); });
+$("#pplgo").addEventListener("click", renderPeopleShell);
 $("#pplpw").addEventListener("keydown", e => { if(e.key === "Enter"){ renderPeopleShell(); } });
-$("#pplclose").addEventListener("click", () => { $("#pplmodal").hidden = true; });
-$("#pplmodal").addEventListener("click", e => { if(e.target === $("#pplmodal")) $("#pplmodal").hidden = true; });
+$("#pplback").addEventListener("click", closePeople);
 
 $("#inggo").addEventListener("click", loadIngest);
 $("#ingpw").addEventListener("keydown", e => { if(e.key === "Enter") loadIngest(); });

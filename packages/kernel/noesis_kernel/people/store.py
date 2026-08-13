@@ -81,6 +81,7 @@ class PeopleStore:
     def __init__(self, dsn: str):
         self._dsn = dsn
         self._pool = None
+        self._facets = None
 
     async def _get_pool(self):
         if self._pool is None:
@@ -107,7 +108,7 @@ class PeopleStore:
         return res == "UPDATE 1"
 
     async def search(self, *, specialty: str = "", taxonomy: str = "", state: str = "",
-                     country: str = "", name: str = "", metric_key: str = "",
+                     country: str = "", name: str = "", city: str = "", metric_key: str = "",
                      metric_period: str = "", sort_metric: str = "",
                      limit: int = 50) -> list[dict]:
         """INDEXED SQL facet search (E-5). NO default ranking (E-3): rows come back in
@@ -129,6 +130,8 @@ class PeopleStore:
             _p("e.country = ${n}", country.upper())
         if name:
             _p("lower(e.name) LIKE ${n}", f"%{name.lower()}%")
+        if city:
+            _p("e.city ILIKE ${n}", f"%{city}%")
         join, order = "", "ORDER BY e.name"
         if sort_metric:
             args.append(sort_metric)
@@ -255,3 +258,30 @@ class PeopleStore:
             m = await conn.fetchval("SELECT count(*) FROM noesis_entity_metric")
             c = await conn.fetchval("SELECT count(*) FROM noesis_entity_contact")
         return {**dict(n), "metrics": m, "contacts": c}
+
+    async def facet_values(self) -> dict:
+        """The CLOSED facet vocabularies, read from the data itself (the kernel stays
+        domain-free — labels come from whatever the loaders wrote): distinct specialty
+        labels, states, countries, and metric keys actually present. Cached per process;
+        loaders should call invalidate_facets() after a bulk write."""
+        if self._facets is not None:
+            return self._facets
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            sp = await conn.fetch("SELECT DISTINCT specialty FROM noesis_entity "
+                                  "WHERE specialty != '' ORDER BY specialty")
+            st = await conn.fetch("SELECT DISTINCT state FROM noesis_entity "
+                                  "WHERE state != '' ORDER BY state")
+            co = await conn.fetch("SELECT DISTINCT country FROM noesis_entity "
+                                  "WHERE country != '' ORDER BY country")
+            mk = await conn.fetch("SELECT DISTINCT metric_key, metric_label "
+                                  "FROM noesis_entity_metric ORDER BY metric_key")
+        self._facets = {"specialties": [r["specialty"] for r in sp],
+                        "states": [r["state"] for r in st],
+                        "countries": [r["country"] for r in co],
+                        "metrics": [{"key": r["metric_key"], "label": r["metric_label"]}
+                                    for r in mk]}
+        return self._facets
+
+    def invalidate_facets(self) -> None:
+        self._facets = None

@@ -1352,7 +1352,6 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         return FileResponse(str(f), media_type="image/png",
                             headers={"Cache-Control": "public, max-age=604800"})
 
-    @app.post("/research", response_model=ResearchOut)
     async def _resolve_profile(token: str, body: ResearchIn) -> str:
         """Server-authoritative practice profile (IN-spec D-7). Precedence: per-question
         override > per-user preference > account country. Fail-safe: flag off / no token /
@@ -1380,6 +1379,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception:   # noqa: BLE001
             return ""
 
+    @app.post("/research", response_model=ResearchOut)
     async def research(body: ResearchIn,
                        x_noesis_token: str = Header(default="")) -> ResearchOut:
         try:

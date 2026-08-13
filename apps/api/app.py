@@ -617,6 +617,17 @@ def evidence_identity_enabled() -> bool:
     return os.environ.get("NOESIS_EVIDENCE_IDENTITY", "").lower() in ("1", "true", "yes")
 
 
+def claim_congruence_enabled() -> bool:
+    """Flag (default OFF, Rule 20 — Evidence Contract stage 2): when ON, ONE unified batched BINDING
+    judge covers all three claim paths (loop-emitted, claims-first, fallback-grounder — closing the
+    entailment bypass the sitagliptin failure rode). Each claim is judged {entailed, on_subject,
+    kind_ok} against its source's identity tag + structural evidence kind: off-subject or unentailed
+    → dropped; kind-mismatch → kept but demoted + annotated; judge unavailable → kept + "unjudged"
+    (never dropped on judge failure, never a keyword fallback). Cost: 0–1 extra batched call. OFF →
+    stage-1-only prompts and enforcement, byte-identical."""
+    return os.environ.get("NOESIS_CLAIM_CONGRUENCE", "").lower() in ("1", "true", "yes")
+
+
 def diag_trace_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, each research run captures a troubleshooting trace
     (per-turn steps, tool-call breakdown, the grounding funnel, retries, failures, budget, timing)
@@ -955,6 +966,7 @@ def build_default_service() -> ResearchService:
         evidence_fitness=evidence_fitness_enabled(),
         evidence_ranker=getattr(getattr(manifest, "authority_policy", None), "rank", None),
         evidence_identity=evidence_identity_enabled(),
+        claim_congruence=claim_congruence_enabled(),
         panel_specialists=getattr(manifest, "panel_specialists", ()),
         panel_default_ids=getattr(manifest, "panel_default_ids", ()),
         panel_synthesis_directive=getattr(manifest, "panel_synthesis_directive", None),

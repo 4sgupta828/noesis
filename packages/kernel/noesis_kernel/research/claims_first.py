@@ -60,6 +60,26 @@ _ENTAIL_SYSTEM = (
     "does not state what the claim asserts, ok=false."
 )
 
+# Evidence Contract stage 2 (claim-congruence flag): the entailment judge extended into a BINDING
+# judge. Deliberately domain-free ("document", "subject", "kind of finding" — kernel litmus): the
+# vertical's kind labels arrive as DATA on each item's SOURCE line, never as prompt vocabulary.
+_BIND_SYSTEM = (
+    "You are a strict evidence-binding judge. For each item you are given a CLAIM, the SOURCE "
+    "document the claim cites (its title, and when known the kind of finding that document "
+    "provides), and the QUOTE cited from it. Return THREE verdicts per item:\n"
+    '- "entailed": the quote DIRECTLY SUPPORTS the specific claim (not merely the same topic). Be '
+    "conservative: if the quote does not state what the claim asserts, entailed=false.\n"
+    '- "on_subject": the claim attributes its content to the subject the SOURCE document is '
+    "actually about (judge from the document title and the quote). A claim that presents the "
+    "document's content as being about a DIFFERENT subject, or generalizes it to a broader class, "
+    "is off-subject. An item with no SOURCE line → on_subject=true.\n"
+    '- "kind_ok": the KIND of assertion the claim makes matches the kind of evidence the quote and '
+    "source provide — a claim asserting one type of finding backed by evidence of a different type "
+    "of finding is a mismatch. Unknown or compatible kind → kind_ok=true.\n"
+    'Output STRICT JSON: {"verdicts":[{"i":<index>,"entailed":true|false,"on_subject":true|false,'
+    '"kind_ok":true|false}]}. Mark on_subject/kind_ok false ONLY when the mismatch is clear.'
+)
+
 
 async def _json(client, model, system, user):
     return await client.complete_json(model=model, system=system, user=user)
@@ -122,39 +142,69 @@ async def extract_claims(
 async def entail_claims(
     *, claims: list[dict], client=None, model: str | None = None,
     tags: list[str] | None = None,
-) -> list[bool]:
+    congruence: bool = False, kinds: list[str] | None = None,
+) -> list:
     """Batched entailment: returns a parallel list of bool (does the quote SUPPORT the claim?).
     Tri-state fail-safe: an errored batch → False for its items (drop, never launder). No key → all
     True is NOT used; caller must treat no-client as 'entailment unavailable' (see run_react).
     `tags` (stage-1 evidence-identity flag) is a list parallel to `claims` of document-identity tags
-    (⟨title — source⟩); a non-empty tag adds a SOURCE line to its item. None/off → byte-identical."""
+    (⟨title — source⟩); a non-empty tag adds a SOURCE line to its item. None/off → byte-identical.
+
+    `congruence` (Evidence Contract stage 2, claim-congruence flag) switches the judge into BINDING
+    mode: each item carries CLAIM / SOURCE (identity tag + the claim's structural evidence kind,
+    both caller-supplied DATA — `kinds` is parallel to `claims`) / QUOTE, and the return value is a
+    parallel list of {"entailed","on_subject","kind_ok"} dicts. None per item = the judge did NOT
+    rule on it (chunk error / missing verdict); all-None = no client available. The CALLER owns the
+    fail-safe policy for None (annotate-vs-drop) — this module never guesses and never falls back
+    to a keyword heuristic (Rule 18). congruence=False → byte-identical stage-1 behavior."""
     import asyncio
     if not claims:
         return []
     cl = _client(client)
     if cl is None:
+        if congruence:
+            return [None] * len(claims)  # judge unavailable — the caller annotates ("unjudged")
         return [False] * len(claims)     # fail closed: without a judge, don't ship extractor claims
     mdl = model or ENTAIL_MODEL
-    verdicts = [False] * len(claims)
+    verdicts: list = [None] * len(claims) if congruence else [False] * len(claims)
     chunks = [(i, claims[i:i + _ENTAIL_CHUNK]) for i in range(0, len(claims), _ENTAIL_CHUNK)]
 
     def _item(start: int, j: int, c: dict) -> str:
         tag = (tags[start + j] if tags and start + j < len(tags) else "") or ""
-        src = f"\nSOURCE: {tag}" if tag else ""
+        if congruence:
+            # SOURCE = identity tag + the structural evidence kind riding along as DATA (the
+            # vertical's label verbatim — never kernel prompt vocabulary; kernel litmus).
+            kind = (kinds[start + j] if kinds and start + j < len(kinds) else "") or ""
+            src_txt = (tag + (f" [kind of finding: {kind}]" if kind else "")).strip()
+            src = f"\nSOURCE: {src_txt}" if src_txt else ""
+        else:
+            src = f"\nSOURCE: {tag}" if tag else ""
         return f"ITEM {j}\nCLAIM: {c['text']}{src}\nQUOTE: {c['quote']}"
 
     async def _one(start, chunk):
         items = "\n\n".join(_item(start, j, c) for j, c in enumerate(chunk))
         user = items + "\n\nReturn ONLY the JSON verdicts."
         try:
-            raw = await _json(cl, mdl, _ENTAIL_SYSTEM, user)
+            raw = await _json(cl, mdl, _BIND_SYSTEM if congruence else _ENTAIL_SYSTEM, user)
         except Exception:   # noqa: BLE001
-            return                        # leave this chunk False (fail closed)
+            return       # chunk unruled: congruence → None (caller policy); else False (fail closed)
         for v in (raw.get("verdicts") if isinstance(raw, dict) else None) or []:
-            if isinstance(v, dict) and v.get("ok") is True:
-                j = v.get("i")
-                if isinstance(j, int) and 0 <= j < len(chunk):
-                    verdicts[start + j] = True
+            if not isinstance(v, dict):
+                continue
+            j = v.get("i")
+            if not (isinstance(j, int) and 0 <= j < len(chunk)):
+                continue
+            if congruence:
+                # entailed: conservative (missing → False → drop, as today). on_subject/kind_ok:
+                # conservative the OTHER way (missing → True) — drop/demote only on an affirmative
+                # mismatch judgment, never on the judge's silence.
+                verdicts[start + j] = {
+                    "entailed": v.get("entailed") is True,
+                    "on_subject": v.get("on_subject") is not False,
+                    "kind_ok": v.get("kind_ok") is not False,
+                }
+            elif v.get("ok") is True:
+                verdicts[start + j] = True
 
     await asyncio.gather(*(_one(s, c) for s, c in chunks), return_exceptions=True)
     return verdicts

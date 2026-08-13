@@ -23,16 +23,20 @@ from dataclasses import dataclass
 EFFORT_MIN, EFFORT_MAX = 1.0, 2.5
 
 # base → hard cap for each structural knob. Bases match run_react's defaults; caps chosen
-# conservatively for the credit budget (k and max_steps kept modest because the claims-first
-# extractor + fallback grounder make LLM calls that BudgetState does not yet count, and their
-# volume grows with k * max_steps).
+# conservatively for the credit budget (k and max_steps kept modest — their volume drives the
+# claims-first extractor + fallback grounder call counts, which BudgetState now charges).
 _ITERS_CAP = 16            # max_steps ceiling (base 8)
 _K_CAP = 20               # retrieval top-k ceiling (base 10)
 _PLANNER_WINDOW_CAP = 120  # planner atom window ceiling (base 60)
 _ATOM_CAP_CEIL = 6000      # per-atom char window ceiling (base is caller-supplied: 1600, or 6000 under evidence-select)
 _COMPOSE_CAP_CEIL = 60     # compose claim cap ceiling (base 30)
 _EXTRACT_COLLECT_CEIL = 160  # candidate pool ceiling (base 80)
-_MAX_CALLS_CEIL = 60       # LLM-call budget ceiling (base 40) — the hard cost ceiling
+# LLM-call budget ceiling — the hard cost ceiling. Raised 60 → 120 in lockstep with the default
+# base's 40 → 80 (Evidence Contract stage 2 re-plan, see budget.py DEFAULT_MAX_LLM_CALLS): the
+# budget now meters calls that previously ran UNcounted (claims-first extract/entail batches, the
+# binding judge, fallback grounder, frame repair — worst case ≈29 at default knobs), so the 2×
+# raise preserves the same TRUE spend envelope as before — it does not authorize new spend.
+_MAX_CALLS_CEIL = 120      # (base 80)
 
 
 def clamp_effort(effort: float | None) -> float:
@@ -73,7 +77,7 @@ def scale_research_effort(
     base_atom_cap: int = 1600,
     base_compose_claim_cap: int = 30,
     base_extract_collect: int = 80,
-    base_max_calls: int = 40,
+    base_max_calls: int = 80,      # 40 → 80: stage-2 charging re-plan (see _MAX_CALLS_CEIL note)
 ) -> ScaledEffort:
     """Return the scaled structural knobs for `effort`. At effort<=1.0 returns the bases
     EXACTLY (byte-identical no-op); above 1.0 scales each knob half-up and clamps to its cap.

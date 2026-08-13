@@ -4,22 +4,24 @@ from noesis_kernel.research.effort import clamp_effort, scale_research_effort
 STOPS = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
 
 # The default bases used by run_react / ResearchService (kept in sync with the docstring table).
+# base_max_calls 40 → 80: stage-2 BudgetState-honesty re-plan (claims-first/binding/fallback/
+# frame-repair calls are now charged; see budget.py DEFAULT_MAX_LLM_CALLS).
 BASES = dict(base_max_steps=8, base_k=10, base_planner_atom_window=60,
-             base_atom_cap=1600, base_compose_claim_cap=30, base_extract_collect=80, base_max_calls=40)
+             base_atom_cap=1600, base_compose_claim_cap=30, base_extract_collect=80, base_max_calls=80)
 
 
 def test_effort_1_0_is_byte_identical_noop():
     sc = scale_research_effort(1.0, **BASES)
     assert sc.effort == 1.0
     assert (sc.max_steps, sc.k, sc.planner_atom_window, sc.atom_cap,
-            sc.compose_claim_cap, sc.extract_collect, sc.max_calls) == (8, 10, 60, 1600, 30, 80, 40)
+            sc.compose_claim_cap, sc.extract_collect, sc.max_calls) == (8, 10, 60, 1600, 30, 80, 80)
 
 
 def test_none_and_garbage_are_noop():
     for bad in (None, "nope", float("nan"), float("inf"), 0.0, -5.0, 0.5):
         sc = scale_research_effort(bad, **BASES)
         assert sc.effort == 1.0
-        assert (sc.max_steps, sc.k, sc.atom_cap, sc.max_calls) == (8, 10, 1600, 40), bad
+        assert (sc.max_steps, sc.k, sc.atom_cap, sc.max_calls) == (8, 10, 1600, 80), bad
 
 
 def test_effort_2_5_hits_the_capped_table():
@@ -31,7 +33,7 @@ def test_effort_2_5_hits_the_capped_table():
     assert sc.atom_cap == 4000         # 1600*2.5=4000 (< 6000 ceil)
     assert sc.compose_claim_cap == 60  # 30*2.5=75 → cap 60
     assert sc.extract_collect == 160   # 80*2.5=200 → cap 160
-    assert sc.max_calls == 60          # 40*2.5=100 → cap 60 (hard cost ceiling)
+    assert sc.max_calls == 120         # 80*2.5=200 → cap 120 (hard cost ceiling, 2× the old 60)
 
 
 def test_half_up_rounding_at_1_25():
@@ -39,7 +41,7 @@ def test_half_up_rounding_at_1_25():
     assert sc.max_steps == 10          # floor(8*1.25+0.5)=floor(10.5)=10
     assert sc.k == 13                  # floor(10*1.25+0.5)=floor(13.0)=13
     assert sc.planner_atom_window == 75  # floor(60*1.25+0.5)=floor(75.5)=75
-    assert sc.max_calls == 50          # floor(40*1.25+0.5)=50
+    assert sc.max_calls == 100         # floor(80*1.25+0.5)=100
 
 
 def test_every_knob_is_monotonic_non_decreasing():

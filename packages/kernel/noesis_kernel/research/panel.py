@@ -71,7 +71,11 @@ async def plan_panel(*, question, roster, llm) -> list[dict]:
 
 _REF_RE = re.compile(r"\[\d+\]")   # strip a specialist's OWN local [n] refs when feeding its prose to the chair
 _SPECIALIST_MAX_STEPS = 4       # narrower than a full answer (each lens is scoped)
-_SPECIALIST_MAX_CALLS = 12      # per-specialist budget ceiling (panel = N × this, hard-capped)
+# Per-specialist budget ceiling (panel = N × this, hard-capped). Raised 12 → 16 (Evidence Contract
+# stage 2 re-plan): the fallback grounder (+1) and, under the claim-congruence flag, the binding
+# batches (+1–2) are now CHARGED — previously-unmetered spend a worst-case specialist run (4 steps
+# + 3 extract-recoveries + 3 compose attempts = 10) could newly trip at 12. Same true spend.
+_SPECIALIST_MAX_CALLS = 16
 _PANEL_CONCURRENCY = 3
 _SYNTH_MAX_TOKENS = 8000
 
@@ -125,7 +129,7 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
                     rationales=None,
                     chair_system_prompt="You are an evidence-grounded clinical research panel chair.",
                     classify_evidence=None, evidence_ranker=None, evidence_fitness=False,
-                    evidence_identity=False, on_event=None) -> PanelResult:
+                    evidence_identity=False, claim_congruence=False, on_event=None) -> PanelResult:
     """`make_retrievers(source_keys) -> (corpus_source, aux_source)` lets each specialist scope its
     sources without this module knowing the source registry (domain-free seam). `history_context` is the
     prior conversation (context ONLY, never citable) so a follow-up turn reasons in context — same
@@ -154,7 +158,7 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
                     system_prompt=spec.lens, answer_format=_SPECIALIST_ANSWER_FORMAT, reasoning_read=False,
                     max_steps=_SPECIALIST_MAX_STEPS, classify_evidence=classify_evidence,
                     evidence_ranker=evidence_ranker, evidence_fitness=evidence_fitness,
-                    evidence_identity=evidence_identity,
+                    evidence_identity=evidence_identity, claim_congruence=claim_congruence,
                     on_event=_spec_emit)
                 await _emit(on_event, {"type": "specialist_done", "id": spec.id,
                                        "verified": len(res.verified_claims)})
@@ -197,8 +201,17 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
         tag = identity_tag(vc)
         return f"{vc.source_key} {tag}" if tag else vc.source_key
 
+    def _finding_note(vc) -> str:
+        """Stage-2 annotation (claim-congruence flag): a non-empty congruence_note from a
+        specialist's binding judge renders as a short bracketed marker (generic wording — kernel
+        litmus). OFF → "" (byte-identical findings line)."""
+        if not claim_congruence:
+            return ""
+        note = getattr(vc, "congruence_note", "")
+        return f" [{note.replace('_', '-')}]" if note else ""
+
     findings = "\n".join(
-        f"[{i}] ({spec}) {vc.text}  (quote: \"{vc.quote}\" — {_finding_source(vc)})"
+        f"[{i}] ({spec}) {vc.text}  (quote: \"{vc.quote}\" — {_finding_source(vc)}){_finding_note(vc)}"
         for i, (spec, vc) in enumerate(pooled, 1))
 
     # 3) Grounded synthesis: ONE compose over the pooled findings. The panel's reasoning lives in the

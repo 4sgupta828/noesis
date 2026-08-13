@@ -77,7 +77,9 @@ class ResearchService:
     integrative_query_hint: str | None = None    # retrieval-steering hint appended when the user opts in
     understanding_answer_format: str | None = None  # UNDERSTANDING engine: causal-model compose contract
     understanding_query_hint: str | None = None     # UNDERSTANDING engine: mechanism-steering hint
-    max_calls: int = 40
+    max_calls: int = 80                     # 40 → 80: stage-2 BudgetState-honesty re-plan — the
+    #                                         claims-first/binding/fallback/frame-repair calls are
+    #                                         now charged (see budget.py DEFAULT_MAX_LLM_CALLS)
     vertical_name: str = ""
     ui: object | None = None                # the vertical's UIContract (for /config)
     connectors: dict[str, Connector] = field(default_factory=dict)  # for /ingest
@@ -94,6 +96,9 @@ class ResearchService:
     evidence_ranker: object | None = None   # vertical authority pyramid: evidence_kind -> int rank
     evidence_identity: bool = False         # render each atom's document identity ⟨title — source⟩ on
     #                                         every LLM-visible surface (Evidence Contract stage 1, flag)
+    claim_congruence: bool = False          # unified batched BINDING judge over loop/claims-first/
+    #                                         fallback claims: {entailed, on_subject, kind_ok} per
+    #                                         claim (Evidence Contract stage 2, flag)
     graph_expander: object | None = None    # A9: async (question) -> {"legs":[{query,note}],"shadow":bool}|None
     #                                         — app-injected relationship-graph hook; None → byte-identical
     panel_specialists: tuple = ()           # Ask-Panel roster (vertical-supplied specialist configs)
@@ -434,7 +439,7 @@ class ResearchService:
             collect_diagnostics=self.collect_diagnostics,
             classify_evidence=self.classify_evidence,
             evidence_fitness=self.evidence_fitness, evidence_ranker=self.evidence_ranker,
-            evidence_identity=self.evidence_identity,
+            evidence_identity=self.evidence_identity, claim_congruence=self.claim_congruence,
             graph_legs=graph_legs, graph_shadow=graph_shadow, graph_late=graph_late,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)
@@ -548,6 +553,7 @@ class ResearchService:
             attachment_context=attachment_context, rationales=rationales, chair_system_prompt=self.persona_prompt,
             classify_evidence=self.classify_evidence, evidence_ranker=self.evidence_ranker,
             evidence_fitness=self.evidence_fitness, evidence_identity=self.evidence_identity,
+            claim_congruence=self.claim_congruence,
             on_event=on_event)
 
     async def _resolve_followup(self, question: str, history: list[dict],

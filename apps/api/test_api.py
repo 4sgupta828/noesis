@@ -81,3 +81,14 @@ def test_evidence_identity_flag_reads_env(monkeypatch) -> None:
     assert evidence_identity_enabled() is True
     monkeypatch.setenv("NOESIS_EVIDENCE_IDENTITY", "false")
     assert evidence_identity_enabled() is False
+
+
+def test_claim_congruence_flag_reads_env(monkeypatch) -> None:
+    # Evidence Contract stage 2: the flag is wired from NOESIS_CLAIM_CONGRUENCE (default OFF).
+    from api.app import claim_congruence_enabled
+    monkeypatch.delenv("NOESIS_CLAIM_CONGRUENCE", raising=False)
+    assert claim_congruence_enabled() is False
+    monkeypatch.setenv("NOESIS_CLAIM_CONGRUENCE", "1")
+    assert claim_congruence_enabled() is True
+    monkeypatch.setenv("NOESIS_CLAIM_CONGRUENCE", "false")
+    assert claim_congruence_enabled() is False

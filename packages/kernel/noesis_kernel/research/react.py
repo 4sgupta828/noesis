@@ -12,6 +12,7 @@ in P3; here the mechanics are proven offline with a scripted FakeLLM.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -453,6 +454,12 @@ class VerifiedClaim:
     # it (evidence_floor). Domain-free: `evidence_kind` is filled by a vertical-supplied classifier.
     facets: dict = field(default_factory=dict)
     evidence_kind: str = ""
+    # Evidence Contract stage 2 (claim-congruence flag): the binding judge's soft annotation.
+    # "" = clean (or flag off); "kind_mismatch" = kept but demoted (the claim's kind of assertion
+    # doesn't match its evidence's kind); "unjudged" = the binding judge couldn't rule (no key /
+    # error / budget) — annotate, never drop (Rule 18 fail-safe). Hard verdicts (off-subject /
+    # not-entailed) DROP the claim instead of annotating it.
+    congruence_note: str = ""
 
 
 @dataclass
@@ -549,6 +556,14 @@ async def run_react(
     #                                           (planner obs, extractor, entailment, compose, fallback
     #                                           grounder) + require subject-faithful attribution. OFF →
     #                                           every prompt string byte-identical to today.
+    claim_congruence: bool = False,           # Evidence Contract stage 2: ONE unified batched BINDING
+    #                                           judge over ALL THREE claim paths (loop-emitted,
+    #                                           claims-first, fallback-grounder). Per claim it judges
+    #                                           {entailed, on_subject, kind_ok}: off-subject or
+    #                                           unentailed → DROP; kind-mismatch → keep + demote +
+    #                                           annotate; judge unavailable → keep + "unjudged" (never
+    #                                           drop on judge failure, never a keyword fallback). OFF →
+    #                                           stage-1 prompts/enforcement, byte-identical.
     country_boost=None,                       # set of country codes to boost (surface region evidence, no filter)
     graph_legs: list[dict] | None = None,     # A9 graph-guided evidence legs: [{query, note}] from the
     #                                           relationship graph (caller-computed). Run ONCE before the
@@ -624,17 +639,36 @@ async def run_react(
         if conv else ""
     )
 
+    def _classify_atom(atom) -> str:
+        """The cited atom's structural evidence tier (best-effort; classification is a structural
+        vertical hook — a bad/absent classifier never breaks the answer). Also feeds the stage-2
+        binding judge's SOURCE line (the kind label rides along as data, never prompt vocabulary)."""
+        if classify_evidence is None:
+            return ""
+        try:
+            return classify_evidence(atom.source_key, atom.facets, atom.document_title, atom.text) or ""
+        except Exception:   # noqa: BLE001 — classification must never break grounding
+            return ""
+
     def _mk_verified(text: str, atom_id: str, quote: str, atom) -> VerifiedClaim:
-        """Build a VerifiedClaim, stamping the cited atom's facets + evidence tier (best-effort;
-        classification is a structural vertical hook — a bad/absent classifier never breaks the answer)."""
-        kind = ""
-        if classify_evidence is not None:
-            try:
-                kind = classify_evidence(atom.source_key, atom.facets, atom.document_title, atom.text) or ""
-            except Exception:   # noqa: BLE001 — classification must never break grounding
-                kind = ""
+        """Build a VerifiedClaim, stamping the cited atom's facets + evidence tier."""
         return VerifiedClaim(text, atom_id, quote, atom.source_key, atom.document_title,
-                             atom.document_id, facets=dict(atom.facets or {}), evidence_kind=kind)
+                             atom.document_id, facets=dict(atom.facets or {}),
+                             evidence_kind=_classify_atom(atom))
+
+    # Evidence Contract stage 2: shared enforcement bookkeeping for the binding judge. Counts live
+    # in diag["congruence"] (only when the trace is already enabled); off-subject drops are also
+    # logged to the trace with reason "off_subject" so a wrong answer is debuggable without a rerun.
+    def _congruence_count(key: str) -> None:
+        if diag is not None:
+            diag.setdefault("congruence", {"judged": 0, "off_subject": 0, "not_entailed": 0,
+                                           "kind_mismatch": 0, "unjudged": 0})[key] += 1
+
+    def _log_off_subject(origin: str, text: str, title: str) -> None:
+        _log.info("congruence: off-subject claim dropped (%s): %r ⟨%s⟩", origin, text[:120], title[:80])
+        if diag is not None:
+            diag["trace"].append({"action": "congruence_drop", "reason": "off_subject",
+                                  "origin": origin, "claim": text[:160], "title": (title or "")[:80]})
 
     def _apply_answer(step: AgentStep) -> None:
         for c in step.claims:
@@ -938,6 +972,13 @@ async def run_react(
         await emit({"type": "grounding"})
         try:
             from noesis_kernel.research.fallback_grounder import ground_claimless
+            # BudgetState honesty (stage-2 panel amendment): the grounder is ONE real LLM call when
+            # a key is present (no key → it returns [] without calling → nothing to charge).
+            # reserve() first so an exhausted budget skips the rescue (BudgetExceeded lands in this
+            # block's except → the original abstention stands, exactly the existing degrade).
+            if os.environ.get("OPENAI_API_KEY"):
+                budget.reserve()
+                budget.charge(calls=1)
             fb = await ground_claimless(
                 question=question, atoms=[(a.atom_id, _atom_render(a)) for a in atoms.all()])
             if fb:
@@ -969,6 +1010,53 @@ async def run_react(
         result.atoms_gathered = len(atoms.all())
         _log.info("graph legs late-merged %d atoms post-loop", _late_added)
 
+    # EVIDENCE CONTRACT stage 2 (claim-congruence flag): loop-emitted and fallback-grounder claims
+    # passed only the verbatim span gate — they have NEVER been entailment-judged (the bypass behind
+    # the prod misattribution failure: a real quote from the wrong document's subject shipped as fact).
+    # Route every such claim through the SAME batched binding judge the claims-first candidates use
+    # — ONE extra batched entail_claims invocation, only when such claims exist — and enforce:
+    # off-subject → DROP (hard), not-entailed → DROP, kind-mismatch → KEEP + annotate (demoted
+    # below clean claims before ranking, see the partition further down). Fail-safe (Rule 18):
+    # judge unavailable (no key) / errored / over budget → KEEP + annotate "unjudged" — never drop
+    # on judge failure, never a keyword fallback.
+    if claim_congruence and result.verified_claims:
+        _pre = result.verified_claims
+        _verdicts: list = [None] * len(_pre)
+        if os.environ.get("OPENAI_API_KEY"):
+            try:
+                from noesis_kernel.research.claims_first import _ENTAIL_CHUNK, entail_claims
+                _n_bind = -(-len(_pre) // _ENTAIL_CHUNK)     # ceil — mirrors the judge's chunking
+                budget.reserve(calls=_n_bind)                # BudgetExceeded → degrade to "unjudged"
+                budget.charge(calls=_n_bind)
+                _verdicts = await entail_claims(
+                    claims=[{"text": vc.text, "atom_id": vc.atom_id, "quote": vc.quote}
+                            for vc in _pre],
+                    tags=[identity_tag(vc) for vc in _pre],
+                    congruence=True, kinds=[vc.evidence_kind for vc in _pre])
+            except Exception as _be:   # noqa: BLE001 — incl. BudgetExceeded: annotate, never drop
+                _log.warning("binding judge unavailable for loop/fallback claims: %r", _be)
+                _verdicts = [None] * len(_pre)
+        _kept: list[VerifiedClaim] = []
+        for vc, v in zip(_pre, _verdicts):
+            if v is None:                                    # judge didn't rule → keep, annotated
+                vc.congruence_note = "unjudged"
+                _congruence_count("unjudged")
+                _kept.append(vc)
+                continue
+            _congruence_count("judged")
+            if not v.get("on_subject", True):                # the misattribution fix: hard drop
+                _congruence_count("off_subject")
+                _log_off_subject("loop", vc.text, vc.document_title)
+                continue
+            if not v.get("entailed", False):                 # quote doesn't support the claim
+                _congruence_count("not_entailed")
+                continue
+            if not v.get("kind_ok", True):                   # recall-safe: keep, demote + annotate
+                vc.congruence_note = "kind_mismatch"
+                _congruence_count("kind_mismatch")
+            _kept.append(vc)
+        result.verified_claims = _kept
+
     # CLAIMS-FIRST comprehensive extraction (flag): the terse loop cites only a few atoms, so most
     # retrieved evidence goes unused (e.g. 2 grounded from 18). Mine EVERY atom with a cheap batched
     # model, then ADD any claim that passes BOTH the unchanged verbatim span gate AND an independent
@@ -977,10 +1065,23 @@ async def run_react(
     if claims_first and atoms.all() and not budget.exhausted:
         await emit({"type": "extracting"})
         try:
-            from noesis_kernel.research.claims_first import entail_claims, extract_claims
+            from noesis_kernel.research.claims_first import (
+                _ATOMS_PER_CALL, _ENTAIL_CHUNK, entail_claims, extract_claims,
+            )
             from noesis_kernel.research.provenance import normalize
+            # BudgetState honesty (stage-2 panel amendment): the extraction batches are real LLM
+            # calls — charge ceil(atoms / batch-size), but only when a key is present (no key →
+            # claims_first makes zero calls). reserve() first: an exhausted budget raises
+            # BudgetExceeded into this block's existing except → extraction skipped, the answer
+            # proceeds on the loop's claims (the same degrade the loop uses — never crashes compose).
+            _cf_atoms = [(a.atom_id, _atom_render(a)) for a in atoms.all()]
+            _has_judge = bool(os.environ.get("OPENAI_API_KEY"))
+            if _has_judge:
+                _n_extract = -(-len(_cf_atoms) // _ATOMS_PER_CALL)     # ceil
+                budget.reserve(calls=_n_extract)
+                budget.charge(calls=_n_extract)
             cands = await extract_claims(
-                question=question, atoms=[(a.atom_id, _atom_render(a)) for a in atoms.all()],
+                question=question, atoms=_cf_atoms,
                 lenses=list(extraction_lenses), atom_cap=atom_cap,
                 evidence_identity=evidence_identity)
             span_ok = []                                   # candidates whose quote verbatim-verifies
@@ -989,20 +1090,56 @@ async def run_react(
                 if atom is not None and atom.locator is not None \
                         and verifier.verify(c["quote"], atom.locator):
                     span_ok.append((c, atom))
-            verdicts = await entail_claims(
-                claims=[c for c, _ in span_ok],
-                tags=([identity_tag(atom) for _, atom in span_ok]
-                      if evidence_identity else None)) if span_ok else []
+            if span_ok and _has_judge:                     # charge the entail/binding batches too
+                _n_entail = -(-len(span_ok) // _ENTAIL_CHUNK)          # ceil
+                budget.reserve(calls=_n_entail)
+                budget.charge(calls=_n_entail)
+            if claim_congruence:
+                # Stage 2: the SAME judge call becomes the BINDING judge — each item carries its
+                # ⟨title — source⟩ tag + structural evidence kind (SOURCE is required for the
+                # on_subject judgment, so tags are passed regardless of the stage-1 flag).
+                verdicts = await entail_claims(
+                    claims=[c for c, _ in span_ok],
+                    tags=[identity_tag(atom) for _, atom in span_ok],
+                    congruence=True,
+                    kinds=[_classify_atom(atom) for _, atom in span_ok]) if span_ok else []
+            else:
+                verdicts = await entail_claims(
+                    claims=[c for c, _ in span_ok],
+                    tags=([identity_tag(atom) for _, atom in span_ok]
+                          if evidence_identity else None)) if span_ok else []
             seen = {(vc.atom_id, normalize(vc.quote)) for vc in result.verified_claims}
             added = 0
             for (c, atom), ok in zip(span_ok, verdicts):
-                if not ok:                                 # entailment gate (support, not just quote)
+                note = ""
+                if claim_congruence:
+                    # Binding enforcement (extractor candidates fail CLOSED, as today): no verdict
+                    # (judge error) → drop, exactly like today's errored-chunk False; off-subject →
+                    # drop (+ trace); entailed=False → drop (as today); kind-mismatch → keep +
+                    # annotate (demoted below clean claims before ranking).
+                    if ok is None:
+                        _congruence_count("unjudged")      # dropped (fail closed), counted for diag
+                        continue
+                    _congruence_count("judged")
+                    if not ok.get("on_subject", True):
+                        _congruence_count("off_subject")
+                        _log_off_subject("claims_first", c["text"], atom.document_title)
+                        continue
+                    if not ok.get("entailed", False):
+                        _congruence_count("not_entailed")
+                        continue
+                    if not ok.get("kind_ok", True):
+                        note = "kind_mismatch"
+                        _congruence_count("kind_mismatch")
+                elif not ok:                               # entailment gate (support, not just quote)
                     continue
                 key = (c["atom_id"], normalize(c["quote"]))
                 if key in seen:                            # dedup vs existing + each other
                     continue
                 seen.add(key)
-                result.verified_claims.append(_mk_verified(c["text"], c["atom_id"], c["quote"], atom))
+                vc = _mk_verified(c["text"], c["atom_id"], c["quote"], atom)
+                vc.congruence_note = note
+                result.verified_claims.append(vc)
                 added += 1
                 # OFF: cap first-come at the compose limit (unchanged). ON: collect a bigger pool so
                 # the relevance ranking below has real choices before it trims to the compose cap.
@@ -1015,6 +1152,14 @@ async def run_react(
         except Exception as _ex:   # noqa: BLE001 — extraction is best-effort; never break the answer
             if diag is not None:
                 diag["failures"].append({"stage": "extraction", "detail": repr(_ex)[:200]})
+
+    # Stage-2 demotion: kind-mismatch claims are KEPT (recall-safe per the panel ruling) but pushed
+    # to the BACK of the ordering BEFORE any ranking/cap, so under the first-come compose cap they
+    # can only fill remaining slots, never displace a congruent claim. Stable partition (sort on a
+    # bool key) — relative order within each group is preserved. "unjudged" does NOT demote: judge
+    # failure must never penalize a claim.
+    if claim_congruence and result.verified_claims:
+        result.verified_claims.sort(key=lambda vc: vc.congruence_note == "kind_mismatch")
 
     # Evidence SELECTION (flags): compose is capped for cost/scannability, so WHICH verified findings
     # survive the cap matters. Default = first-come. Under evidence-select, keep the findings most
@@ -1045,8 +1190,19 @@ async def run_react(
             tag = identity_tag(vc)
             return f"{vc.source_key} {tag}" if tag else vc.source_key
 
+        def _finding_note(vc) -> str:
+            """Stage-2 annotation (claim-congruence flag): a non-empty congruence_note renders as a
+            short bracketed marker — generic wording only ("kind-mismatch"/"unjudged", kernel
+            litmus) — so compose can weigh the demoted/unjudged finding honestly. OFF → "" and the
+            findings line is byte-identical to stage 1."""
+            if not claim_congruence:
+                return ""
+            note = getattr(vc, "congruence_note", "")
+            return f" [{note.replace('_', '-')}]" if note else ""
+
         findings = "\n".join(
             f"[{i}] {vc.text}  (quote: \"{vc.quote}\" — source: {_finding_source(vc)})"
+            f"{_finding_note(vc)}"
             for i, vc in enumerate(result.verified_claims, 1))
 
         async def _compose(directive: str | None) -> ComposedAnswer:
@@ -1215,6 +1371,10 @@ async def run_react(
                                        + "\n\nreasoning_conclusion: "
                                        + (getattr(parsed, "reasoning_conclusion", "") or "")}],
                             response_format=_FrameFix, max_tokens=400)
+                        # BudgetState honesty (stage-2 panel amendment): the frame-repair call was
+                        # a real, previously-unmetered LLM call — charge it (charge-after, like
+                        # compose: the block is already gated on `not budget.exhausted`).
+                        budget.charge(calls=1, tokens=fix.output_tokens)
                         fp = fix.parsed
                         if "reasoning_purpose" in _blank:
                             result.reasoning_purpose = _frame_grounded(

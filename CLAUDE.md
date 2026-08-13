@@ -71,3 +71,53 @@ retrieval. Use the WEB LEG only for content that is (a) frequently changing (new
 living pages) or (b) not legally/technically downloadable (bot-walled, licensed). When a
 source is available both ways, corpus wins: durable, tier-classified, Pulse-tracked,
 reproducible. Inventory + phased tranches: `learnings/corpusfirst.md`.
+
+## Evidence Is Typed, Not Text (STANDING DIRECTIVE — earned 2026-08-13, the sitagliptin failure)
+
+A prod answer attributed renal-dosing quotes from sitagliptin/gabapentin labels to
+"antibiotic labels." Every check passed, because every check verified STRINGS: the quote was
+verbatim-real (span-check), the quote supported the claim sentence (entailment) — and the
+one fact that made the claim false (whose label it was) was stripped at the atom boundary
+and shown to no model and no judge. The system was maximally rigorous about text and blind
+to meaning. These rules exist so that class of failure cannot be rebuilt:
+
+1. **Never strip identity from evidence.** Anywhere a model or judge sees evidence text, it
+   sees the evidence's identity with it — source document, subject/entity, evidence kind
+   (label-dosing / trial-efficacy / resistance-surveillance / guideline / ...), population
+   when known. De-contextualized snippets are forbidden as LLM inputs. If a surface (planner
+   obs, extractor batch, entailment item, compose finding, panel synthesis) renders evidence
+   without its identity, that is a bug, not a style choice.
+
+2. **Provenance is never correctness.** "The quote exists" and "the quote supports the
+   sentence" are string-level facts. A claim additionally requires CONGRUENCE: the evidence's
+   subject is the claim's subject, and the evidence's kind matches what the claim asserts
+   (safety claims need safety/dosing evidence — resistance or efficacy data can never back a
+   safety statement). A claim that cannot bind congruent evidence is not demoted — it does
+   not exist. Fail-safe is abstain/gap, never "close enough."
+
+3. **Checks and evals must not share assumptions.** For every gate we run, the eval suite
+   must contain at least one held-out case DESIGNED to pass the gate while being wrong
+   (off-subject boilerplate, outcome-type crossover, wrong-population match). If all our
+   checks would bless an answer, at least one eval case must exist that proves that's not
+   sufficient. An eval that only measures what the checks enforce confirms blind spots
+   instead of exposing them.
+
+4. **A recognized gap is work, not a footnote.** If the system itself produces a
+   coverage-gap that names a retrievable deficiency (wrong-shaped evidence, unnamed
+   entities, missing axis) while budget remains, it must spend budget on targeted
+   re-retrieval before composing — never write the answer around evidence it has already
+   diagnosed as wrong. Publishing a self-diagnosed-broken answer with an honest footnote is
+   still publishing a broken answer.
+
+5. **Red-team the standing system, not just new features.** Panel reviews of new specs do
+   not cover old assumptions. On a recurring basis (and after every externally-reported
+   quality failure): have an independent model review real prod answers end-to-end against
+   primary sources, and re-derive "what could pass all our checks and still be wrong?" for
+   the core pipeline. Correlated blind spots are never found from inside the system that
+   shares them.
+
+6. **Working well on average proves nothing about structure.** The sitagliptin failure had
+   a low base rate — most questions retrieve on-subject evidence, so aggregate eval scores
+   hid the flaw. Boundary-shaped questions (generic boilerplate vocabulary shared across
+   thousands of documents, enumerable practical asks, cross-population traps) must be
+   first-class in every eval slice, weighted by harm, not by frequency.

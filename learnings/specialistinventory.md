@@ -1,6 +1,6 @@
 # Specialist Inventory — searchable, stats-backed medical specialists (US + IN first)
 
-**Status:** SPEC v1 (panel review pending) · **Goal:** a searchable inventory of medical
+**Status:** SPEC v2 — panel-reviewed (E-series amendments at the end WIN over the v1 body) · **Goal:** a searchable inventory of medical
 SPECIALISTS with objective public performance stats, per-specialty × geography, so a case
 situation can surface "who has the deepest public track record for THIS" — eventually with
 a compliant reach-out path. · **Companions:** CLAUDE.md (kernel/vertical, corpus-first,

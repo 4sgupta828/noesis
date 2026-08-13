@@ -92,6 +92,8 @@ class ResearchService:
     classify_evidence: object | None = None # vertical structural evidence-tier classifier (source_key, facets) -> kind
     evidence_fitness: bool = False          # boost stronger evidence tiers into the compose cap (flag)
     evidence_ranker: object | None = None   # vertical authority pyramid: evidence_kind -> int rank
+    evidence_identity: bool = False         # render each atom's document identity ⟨title — source⟩ on
+    #                                         every LLM-visible surface (Evidence Contract stage 1, flag)
     graph_expander: object | None = None    # A9: async (question) -> {"legs":[{query,note}],"shadow":bool}|None
     #                                         — app-injected relationship-graph hook; None → byte-identical
     panel_specialists: tuple = ()           # Ask-Panel roster (vertical-supplied specialist configs)
@@ -432,6 +434,7 @@ class ResearchService:
             collect_diagnostics=self.collect_diagnostics,
             classify_evidence=self.classify_evidence,
             evidence_fitness=self.evidence_fitness, evidence_ranker=self.evidence_ranker,
+            evidence_identity=self.evidence_identity,
             graph_legs=graph_legs, graph_shadow=graph_shadow, graph_late=graph_late,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)
@@ -544,7 +547,8 @@ class ResearchService:
             synthesis_directive=self.panel_synthesis_directive or "", history_context=history_context,
             attachment_context=attachment_context, rationales=rationales, chair_system_prompt=self.persona_prompt,
             classify_evidence=self.classify_evidence, evidence_ranker=self.evidence_ranker,
-            evidence_fitness=self.evidence_fitness, on_event=on_event)
+            evidence_fitness=self.evidence_fitness, evidence_identity=self.evidence_identity,
+            on_event=on_event)
 
     async def _resolve_followup(self, question: str, history: list[dict],
                                 *, allow_clarify: bool) -> "FollowupResolution":

@@ -52,7 +52,7 @@ from noesis_kernel.contract.dto import RetrievalRequest
 from noesis_kernel.contract.protocols import GatingPolicy, RetrievalSource
 from noesis_kernel.providers.embeddings import Embedder
 from noesis_kernel.providers.llm import LLMClient
-from noesis_kernel.research.atoms import AtomStore
+from noesis_kernel.research.atoms import IDENTITY_INSTRUCTION, AtomStore, identity_tag
 from noesis_kernel.research.budget import BudgetExceeded, BudgetState
 from noesis_kernel.research.provenance import BlockSpanVerifier
 from noesis_kernel.retrieval.dispatch import multi_query_retrieve
@@ -544,6 +544,11 @@ async def run_react(
     classify_evidence=None,                   # vertical hook (source_key, facets) -> evidence_kind str (Rule 18: structural)
     evidence_fitness: bool = False,           # boost stronger evidence tiers into the compose cap (flag)
     evidence_ranker=None,                     # vertical hook: evidence_kind -> int rank (the authority pyramid)
+    evidence_identity: bool = False,          # Evidence Contract stage 1: render each atom's document
+    #                                           identity ⟨title — source⟩ on every LLM-visible surface
+    #                                           (planner obs, extractor, entailment, compose, fallback
+    #                                           grounder) + require subject-faithful attribution. OFF →
+    #                                           every prompt string byte-identical to today.
     country_boost=None,                       # set of country codes to boost (surface region evidence, no filter)
     graph_legs: list[dict] | None = None,     # A9 graph-guided evidence legs: [{query, note}] from the
     #                                           relationship graph (caller-computed). Run ONCE before the
@@ -559,6 +564,16 @@ async def run_react(
     import asyncio
     atoms = AtomStore()
     result = AnswerResult()
+
+    def _atom_render(a) -> str:
+        """Atom text as handed to claim-writing LLM surfaces (claims-first extractor, fallback
+        grounder): identity-tag-prefixed under the evidence-identity flag. OFF (or no title) →
+        the raw text, byte-identical to today."""
+        if not evidence_identity:
+            return a.text
+        tag = identity_tag(a)
+        return f"{tag} {a.text}" if tag else a.text
+
     notes: list[str] = []          # running coverage-gap / step notes for the agent
     # Troubleshooting trace (flag): built ONLY when requested, purely from data already flowing through
     # the loop (no extra LLM calls). None → byte-identical OFF path.
@@ -639,7 +654,16 @@ async def run_react(
         # verification) — keeps late-step prompts from snowballing. Claims can cite only shown atoms.
         _all = atoms.all()
         _shown = _all[-planner_atom_window:] if len(_all) > planner_atom_window else _all
-        obs = "\n".join(f"{a.atom_id}: {a.text}" for a in _shown) or "(no evidence yet)"
+        if evidence_identity:
+            # Evidence Contract stage 1: each atom carries its document identity ⟨title — source⟩ so
+            # the planner attributes claims to the source's actual subject. Tagless atoms (no title)
+            # render exactly as today.
+            def _obs_line(a) -> str:
+                tag = identity_tag(a)
+                return f"{a.atom_id} {tag}: {a.text}" if tag else f"{a.atom_id}: {a.text}"
+            obs = "\n".join(_obs_line(a) for a in _shown) or "(no evidence yet)"
+        else:
+            obs = "\n".join(f"{a.atom_id}: {a.text}" for a in _shown) or "(no evidence yet)"
         if mode == "extract":
             # DEDICATED extraction recovery: the agent answered with NO claims even though relevant
             # evidence exists. This prompt does NOT reuse the permissive discipline below — when
@@ -678,6 +702,10 @@ async def run_react(
             "character-for-character, from that atom — do NOT paraphrase, summarize, or reformat "
             "numbers/units. Return an empty claims list ONLY if NONE of the gathered evidence is "
             "relevant to the question.")
+        # Evidence-identity flag (stage 1): ONE added sentence — claims must be attributed to their
+        # source's actual subject (the atoms above carry ⟨title — source⟩ tags). OFF → byte-identical.
+        if evidence_identity:
+            discipline = discipline + " " + IDENTITY_INSTRUCTION
         # extract mode is self-contained + forceful — do NOT append the permissive discipline (its
         # "empty ONLY if NONE relevant" clause is the loophole the recovery must override).
         if mode != "extract":
@@ -911,7 +939,7 @@ async def run_react(
         try:
             from noesis_kernel.research.fallback_grounder import ground_claimless
             fb = await ground_claimless(
-                question=question, atoms=[(a.atom_id, a.text) for a in atoms.all()])
+                question=question, atoms=[(a.atom_id, _atom_render(a)) for a in atoms.all()])
             if fb:
                 result.retried_empty = True
                 _apply_answer(AgentStep(action="answer", claims=[
@@ -952,15 +980,19 @@ async def run_react(
             from noesis_kernel.research.claims_first import entail_claims, extract_claims
             from noesis_kernel.research.provenance import normalize
             cands = await extract_claims(
-                question=question, atoms=[(a.atom_id, a.text) for a in atoms.all()],
-                lenses=list(extraction_lenses), atom_cap=atom_cap)
+                question=question, atoms=[(a.atom_id, _atom_render(a)) for a in atoms.all()],
+                lenses=list(extraction_lenses), atom_cap=atom_cap,
+                evidence_identity=evidence_identity)
             span_ok = []                                   # candidates whose quote verbatim-verifies
             for c in cands:
                 atom = atoms.get(c["atom_id"])
                 if atom is not None and atom.locator is not None \
                         and verifier.verify(c["quote"], atom.locator):
                     span_ok.append((c, atom))
-            verdicts = await entail_claims(claims=[c for c, _ in span_ok]) if span_ok else []
+            verdicts = await entail_claims(
+                claims=[c for c, _ in span_ok],
+                tags=([identity_tag(atom) for _, atom in span_ok]
+                      if evidence_identity else None)) if span_ok else []
             seen = {(vc.atom_id, normalize(vc.quote)) for vc in result.verified_claims}
             added = 0
             for (c, atom), ok in zip(span_ok, verdicts):
@@ -1004,8 +1036,17 @@ async def run_react(
     if result.verified_claims:          # compose is the DELIVERABLE — always attempt it when we have
         await emit({"type": "composing", "findings": len(result.verified_claims)})  # findings (not
         n_findings = len(result.verified_claims)
+
+        def _finding_source(vc) -> str:
+            """Compose's source field — the document-identity tag appended alongside source_key
+            under the evidence-identity flag. OFF (or no title) → source_key, byte-identical."""
+            if not evidence_identity:
+                return vc.source_key
+            tag = identity_tag(vc)
+            return f"{vc.source_key} {tag}" if tag else vc.source_key
+
         findings = "\n".join(
-            f"[{i}] {vc.text}  (quote: \"{vc.quote}\" — source: {vc.source_key})"
+            f"[{i}] {vc.text}  (quote: \"{vc.quote}\" — source: {_finding_source(vc)})"
             for i, vc in enumerate(result.verified_claims, 1))
 
         async def _compose(directive: str | None) -> ComposedAnswer:

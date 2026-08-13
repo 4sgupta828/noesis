@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import os
 
+from noesis_kernel.research.atoms import IDENTITY_INSTRUCTION
+
 # Extraction is bulk + span-gate-protected → cheap gpt-4o-mini. The ENTAILMENT judge is the
 # correctness safety gate (Rule 6: catches a real quote stapled to an unsupported claim), so it runs
 # on the STRONGER gpt-4o — it's one batched call, so the cost bump is small. Both env-overridable.
@@ -31,7 +33,7 @@ _ATOM_CAP = 1600              # DEFAULT chars/atom shown to the extractor. Full-
 # bigger window only lets MORE real evidence be found — never weakens provenance.
 
 
-def _extract_system(lenses: list[str]) -> str:
+def _extract_system(lenses: list[str], evidence_identity: bool = False) -> str:
     lens_line = ("Cover EVERY relevant aspect — " + " · ".join(lenses) + " — a separate claim each. "
                  if lenses else "")
     return (
@@ -45,6 +47,9 @@ def _extract_system(lenses: list[str]) -> str:
         "atom's text. Never paraphrase, summarize, translate, or reformat numbers/units.\n"
         "- Cite ONLY atom ids present in the list; never invent one. Prefer specific facts (drugs, "
         "doses, outcomes, populations) over vague synthesis. Return [] only if NOTHING is relevant."
+        # Evidence-identity flag (stage 1): the caller prefixed each atom with its ⟨title — source⟩
+        # tag; the extractor must attribute claims to that identity. OFF → byte-identical system.
+        + ("\n- " + IDENTITY_INSTRUCTION if evidence_identity else "")
     )
 
 
@@ -72,10 +77,13 @@ def _client(explicit=None):
 async def extract_claims(
     *, question: str, atoms: list[tuple[str, str]], lenses: list[str] | None = None,
     client=None, model: str | None = None, atom_cap: int | None = None,
+    evidence_identity: bool = False,
 ) -> list[dict]:
     """Batched, comprehensive extraction over `atoms` (list of (atom_id, text)). Returns candidate
     claim dicts {text, atom_id, quote}. Caller still span-verifies AND entails each. Fail-safe → [].
-    `atom_cap` overrides the per-atom char window shown to the extractor (default `_ATOM_CAP`)."""
+    `atom_cap` overrides the per-atom char window shown to the extractor (default `_ATOM_CAP`).
+    `evidence_identity` (stage-1 flag) adds the attribute-to-the-source's-subject instruction — the
+    caller renders each atom's ⟨title — source⟩ tag into the text itself. OFF → byte-identical."""
     import asyncio
     cap = atom_cap if atom_cap else _ATOM_CAP
     eligible = [(aid, (t or "").strip()[:cap]) for aid, t in atoms if (t or "").strip()]
@@ -85,7 +93,7 @@ async def extract_claims(
     if cl is None:
         return []
     mdl = model or EXTRACT_MODEL
-    sys = _extract_system(list(lenses or []))
+    sys = _extract_system(list(lenses or []), evidence_identity=evidence_identity)
     batches = [eligible[i:i + _ATOMS_PER_CALL] for i in range(0, len(eligible), _ATOMS_PER_CALL)]
 
     async def _one(batch):
@@ -113,10 +121,13 @@ async def extract_claims(
 
 async def entail_claims(
     *, claims: list[dict], client=None, model: str | None = None,
+    tags: list[str] | None = None,
 ) -> list[bool]:
     """Batched entailment: returns a parallel list of bool (does the quote SUPPORT the claim?).
     Tri-state fail-safe: an errored batch → False for its items (drop, never launder). No key → all
-    True is NOT used; caller must treat no-client as 'entailment unavailable' (see run_react)."""
+    True is NOT used; caller must treat no-client as 'entailment unavailable' (see run_react).
+    `tags` (stage-1 evidence-identity flag) is a list parallel to `claims` of document-identity tags
+    (⟨title — source⟩); a non-empty tag adds a SOURCE line to its item. None/off → byte-identical."""
     import asyncio
     if not claims:
         return []
@@ -127,9 +138,13 @@ async def entail_claims(
     verdicts = [False] * len(claims)
     chunks = [(i, claims[i:i + _ENTAIL_CHUNK]) for i in range(0, len(claims), _ENTAIL_CHUNK)]
 
+    def _item(start: int, j: int, c: dict) -> str:
+        tag = (tags[start + j] if tags and start + j < len(tags) else "") or ""
+        src = f"\nSOURCE: {tag}" if tag else ""
+        return f"ITEM {j}\nCLAIM: {c['text']}{src}\nQUOTE: {c['quote']}"
+
     async def _one(start, chunk):
-        items = "\n\n".join(f"ITEM {j}\nCLAIM: {c['text']}\nQUOTE: {c['quote']}"
-                            for j, c in enumerate(chunk))
+        items = "\n\n".join(_item(start, j, c) for j, c in enumerate(chunk))
         user = items + "\n\nReturn ONLY the JSON verdicts."
         try:
             raw = await _json(cl, mdl, _ENTAIL_SYSTEM, user)

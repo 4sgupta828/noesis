@@ -70,3 +70,14 @@ def test_tenant_isolation_via_api() -> None:
         "tenant_id": "intruder", "sources": ["corpus"]})
     assert resp.status_code == 200
     assert resp.json()["grounded"] is False
+
+
+def test_evidence_identity_flag_reads_env(monkeypatch) -> None:
+    # Evidence Contract stage 1: the flag is wired from NOESIS_EVIDENCE_IDENTITY (default OFF).
+    from api.app import evidence_identity_enabled
+    monkeypatch.delenv("NOESIS_EVIDENCE_IDENTITY", raising=False)
+    assert evidence_identity_enabled() is False
+    monkeypatch.setenv("NOESIS_EVIDENCE_IDENTITY", "1")
+    assert evidence_identity_enabled() is True
+    monkeypatch.setenv("NOESIS_EVIDENCE_IDENTITY", "false")
+    assert evidence_identity_enabled() is False

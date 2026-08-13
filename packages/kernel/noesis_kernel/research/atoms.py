@@ -9,6 +9,33 @@ from dataclasses import dataclass, field
 
 from noesis_kernel.contract.dto import BlockHit, Facets, Locator
 
+# Evidence Contract stage 1 (evidence-identity flag): the tag's title window. Long enough to keep a
+# document's identity readable, short enough to stay ~10 tokens per atom on every surface.
+_IDENTITY_TITLE_CAP = 80
+
+# The ONE flag-gated claim-writing instruction shared by every surface that asks an LLM to write
+# claims (planner answering discipline, claims-first extraction). Kernel-generic by construction:
+# "document identity" / "subject" only — no domain vocabulary.
+IDENTITY_INSTRUCTION = (
+    "Each source is labeled with its document identity in ⟨⟩; when writing a claim, attribute it "
+    "to that source's actual subject — never generalize a source to a different subject or class.")
+
+
+def identity_tag(evidence) -> str:
+    """Render a document-identity tag — e.g. ⟨SOME DOCUMENT TITLE — source⟩ — for any evidence
+    carrier exposing `document_title` / `source_key` (Atom, VerifiedClaim, BlockHit).
+
+    The title is VERBATIM (never parsed/regexed — Rule 18): only whitespace runs/newlines are
+    collapsed and the length is capped. An empty title returns "" so an identity-less atom renders
+    exactly as it does today (the caller must treat "" as "no tag")."""
+    title = " ".join((getattr(evidence, "document_title", "") or "").split())
+    if not title:
+        return ""
+    if len(title) > _IDENTITY_TITLE_CAP:
+        title = title[:_IDENTITY_TITLE_CAP].rstrip() + "…"
+    source = (getattr(evidence, "source_key", "") or "").strip()
+    return f"⟨{title} — {source}⟩" if source else f"⟨{title}⟩"
+
 
 @dataclass(frozen=True)
 class Atom:

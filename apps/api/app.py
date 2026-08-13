@@ -607,6 +607,16 @@ def evidence_fitness_enabled() -> bool:
     return os.environ.get("NOESIS_EVIDENCE_FITNESS", "").lower() in ("1", "true", "yes")
 
 
+def evidence_identity_enabled() -> bool:
+    """Flag (default OFF, Rule 20 — Evidence Contract stage 1): when ON, every LLM-visible evidence
+    surface (planner observations, claims-first extractor + entailment items, compose findings, panel
+    synthesis, fallback grounder) renders each atom's DOCUMENT IDENTITY — ⟨title — source⟩ — and the
+    claim-writing instructions require attributing each claim to its source's actual subject (never
+    generalizing a source to a different subject or class). Zero extra LLM calls, ~10 tokens/atom.
+    OFF → every prompt string is byte-identical to today."""
+    return os.environ.get("NOESIS_EVIDENCE_IDENTITY", "").lower() in ("1", "true", "yes")
+
+
 def diag_trace_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, each research run captures a troubleshooting trace
     (per-turn steps, tool-call breakdown, the grounding funnel, retries, failures, budget, timing)
@@ -944,6 +954,7 @@ def build_default_service() -> ResearchService:
         classify_evidence=getattr(manifest, "evidence_classifier", None),
         evidence_fitness=evidence_fitness_enabled(),
         evidence_ranker=getattr(getattr(manifest, "authority_policy", None), "rank", None),
+        evidence_identity=evidence_identity_enabled(),
         panel_specialists=getattr(manifest, "panel_specialists", ()),
         panel_default_ids=getattr(manifest, "panel_default_ids", ()),
         panel_synthesis_directive=getattr(manifest, "panel_synthesis_directive", None),

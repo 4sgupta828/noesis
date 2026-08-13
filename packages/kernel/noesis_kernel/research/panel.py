@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
+from noesis_kernel.research.atoms import identity_tag
 from noesis_kernel.research.budget import BudgetState
 from noesis_kernel.research.react import (
     ComposedAnswer, _refs_valid, _unsupported_prose_tokens, run_react, strip_control_tags,
@@ -124,7 +125,7 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
                     rationales=None,
                     chair_system_prompt="You are an evidence-grounded clinical research panel chair.",
                     classify_evidence=None, evidence_ranker=None, evidence_fitness=False,
-                    on_event=None) -> PanelResult:
+                    evidence_identity=False, on_event=None) -> PanelResult:
     """`make_retrievers(source_keys) -> (corpus_source, aux_source)` lets each specialist scope its
     sources without this module knowing the source registry (domain-free seam). `history_context` is the
     prior conversation (context ONLY, never citable) so a follow-up turn reasons in context — same
@@ -153,6 +154,7 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
                     system_prompt=spec.lens, answer_format=_SPECIALIST_ANSWER_FORMAT, reasoning_read=False,
                     max_steps=_SPECIALIST_MAX_STEPS, classify_evidence=classify_evidence,
                     evidence_ranker=evidence_ranker, evidence_fitness=evidence_fitness,
+                    evidence_identity=evidence_identity,
                     on_event=_spec_emit)
                 await _emit(on_event, {"type": "specialist_done", "id": spec.id,
                                        "verified": len(res.verified_claims)})
@@ -186,8 +188,17 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
         return result
 
     verified = [vc for _, vc in pooled]
+
+    def _finding_source(vc) -> str:
+        """Synthesis's source field — the document-identity tag appended alongside source_key under
+        the evidence-identity flag (Evidence Contract stage 1). OFF (or no title) → byte-identical."""
+        if not evidence_identity:
+            return vc.source_key
+        tag = identity_tag(vc)
+        return f"{vc.source_key} {tag}" if tag else vc.source_key
+
     findings = "\n".join(
-        f"[{i}] ({spec}) {vc.text}  (quote: \"{vc.quote}\" — {vc.source_key})"
+        f"[{i}] ({spec}) {vc.text}  (quote: \"{vc.quote}\" — {_finding_source(vc)})"
         for i, (spec, vc) in enumerate(pooled, 1))
 
     # 3) Grounded synthesis: ONE compose over the pooled findings. The panel's reasoning lives in the

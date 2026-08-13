@@ -219,6 +219,24 @@ class CurrencyStore:
                     WHERE document_id LIKE $1 LIMIT $2""", prefix + "%", limit)
         return [r["document_id"] for r in rows]
 
+    async def blocks_for_documents(self, document_ids: list[str], *, limit: int = 80) -> list[dict]:
+        """Fetch {document_id, block_id, text} rows for the given documents — the raw material the
+        change-brief composer feeds the LLM (and the verifier re-checks quotes against). Keyed by
+        document_id only (tenant-agnostic, exactly like the stamps); ordered for stable prompts and
+        capped so a large document can't blow the prompt. NOTE: `limit` is a blunt cap fine for the
+        small retraction/label notices P1 targets; guideline supersessions (large docs) will want
+        relevance-selected blocks instead of the first N."""
+        ids = [d for d in (document_ids or []) if d]
+        if not ids:
+            return []
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"""SELECT document_id, block_id, text FROM {self._block_table}
+                    WHERE document_id = ANY($1::text[])
+                    ORDER BY document_id, block_id LIMIT $2""", ids, limit)
+        return [dict(r) for r in rows]
+
     # ---- canonical topic registry (P1) ---------------------------------------------------------
     # STABILITY CONTRACT: LLM runs never mint variants of an existing topic — suggesters/
     # canonicalizers are shown this registry and must prefer exact reuse; a genuinely novel topic

@@ -1489,6 +1489,38 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=401, detail="admin token required")
         return cur
 
+    async def _compose_brief_for_event(cur, event_id: str) -> bool:
+        """Compose + span-verify a change brief for an APPROVED event and store it (best-effort,
+        Evidence Pulse 3.1). One LLM call; every quote re-checked against its source block; stored
+        only if ALL verify (never an unverified brief). Returns True iff a brief was stored. No-op
+        (False) when: brief prompt unset, event missing / not approved / already briefed, no source
+        blocks, or verification fails — the brief stays empty so a later scan retries."""
+        prompt = getattr(load_active_vertical(), "pulse_brief_prompt", None)
+        if not prompt:
+            return False
+        ev = await cur.get_event(event_id)
+        if not ev or ev.get("status") != "approved" or (ev.get("brief_md") or "").strip():
+            return False
+        # Both docs feed the brief: retraction → the retracted (old) doc; supersession/amendment →
+        # new + old (so "what it replaced" can be narrated). Empty ids are dropped.
+        doc_ids = [d for d in (ev.get("new_document_id"), ev.get("old_document_id")) if d]
+        blocks = await cur.blocks_for_documents(doc_ids)
+        if not blocks:
+            return False
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        from noesis_kernel.currency import compose_change_brief
+        from noesis_kernel.research.provenance import BlockSpanVerifier
+        _bt = {(b["document_id"], b["block_id"]): b["text"] for b in blocks}
+        verifier = BlockSpanVerifier(lambda d, b: _bt.get((d, b)))   # loads only the fetched blocks
+        comp = await compose_change_brief(
+            prompt=prompt, llm=app.state.service.llm, blocks=blocks, verifier=verifier,
+            relation=ev.get("relation", ""), subjects=ev.get("subjects") or [])
+        if comp.ok:
+            await cur.set_brief(event_id, comp.brief_md, comp.claims)
+            return True
+        return False
+
     @app.post("/admin/pulse/scan")
     async def admin_pulse_scan(x_admin_token: str = Header(default="")) -> dict:
         """Sweep curator-declared lineage into the ledger (declared = high-confidence → approved,
@@ -1497,9 +1529,22 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         cur = _pulse_admin_gate(x_admin_token)
         manifest = load_active_vertical()
         try:
-            return await cur.sweep_declared(list(getattr(manifest, "lineage", ()) or ()))
+            result = await cur.sweep_declared(list(getattr(manifest, "lineage", ()) or ()))
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"pulse scan failed: {e}") from e
+        # Backfill change briefs (3.1) onto approved events that still lack one — this is how the
+        # events already in the ledger (e.g. the prod retractions) light up. Bounded + best-effort;
+        # _compose_brief_for_event skips anything already briefed, so re-running is safe.
+        briefed = 0
+        try:
+            for ev in await cur.list_events(status="approved", limit=200):
+                if not (ev.get("brief_md") or "").strip():
+                    if await _compose_brief_for_event(cur, ev["id"]):
+                        briefed += 1
+        except Exception:   # noqa: BLE001 — backfill is best-effort; the sweep result still stands
+            pass
+        result["briefs_composed"] = briefed
+        return result
 
     @app.post("/admin/pulse/retraction-scan")
     async def admin_pulse_retraction_scan(x_admin_token: str = Header(default="")) -> dict:
@@ -1578,7 +1623,15 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=502, detail=f"pulse action failed: {e}") from e
         if not ok:
             raise HTTPException(status_code=404, detail="unknown event")
-        return {"event_id": body.event_id, "status": status}
+        # On approval, compose the change brief (3.1). Best-effort: a failed/empty brief never
+        # undoes the approval — the event stands, the brief just stays empty until a later scan.
+        composed = False
+        if status == "approved":
+            try:
+                composed = await _compose_brief_for_event(cur, body.event_id)
+            except Exception:   # noqa: BLE001
+                composed = False
+        return {"event_id": body.event_id, "status": status, "brief_composed": composed}
 
     @app.post("/auth/register")
     async def auth_register(body: RegisterIn) -> dict:

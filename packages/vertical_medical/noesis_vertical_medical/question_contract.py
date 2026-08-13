@@ -16,6 +16,10 @@ Decide `mode`:
 
 For an enumerative question, fill `entities` with the CONCRETE candidate items a practicing clinician would actually consider — specific drug or intervention names, not classes alone. INCLUDE the reasonable standard-of-care defaults the asker did not name: e.g. for empiric antibiotic choice, the specific first-line agents commonly used in that clinical setting (such as a beta-lactam, a fluoroquinolone, trimethoprim-sulfamethoxazole, nitrofurantoin — whichever fit the scenario); for antihypertensive choice, the specific first-line classes' representative agents. Use generic (INN) names. Give 4–8 entities, each a short name.
 
+MANDATORY inclusions for enumerative contracts — these are not optional considerations:
+- If the population has compromised organ function (renal, hepatic, cardiac), INCLUDE as entities the commonly-considered agents NOTABLE FOR RISK to that organ (e.g. aminoglycosides such as gentamicin/amikacin for renal compromise) — the answer must be able to warn against them, which requires their evidence.
+- If the population implies STANDING TREATMENTS (transplant → immunosuppressants such as tacrolimus/cyclosporine; anticoagulated → anticoagulants; HIV → antiretrovirals), one axis MUST name the interaction with those specific standing treatments.
+
 Fill `axes` with the evidence dimensions the answer MUST cover for EACH candidate, as short retrieval-friendly phrases (2–4 axes). Always consider:
 - the dimension the question explicitly asks about (e.g. "dosing in renal impairment", "efficacy for prophylaxis");
 - SAFETY/RISK axes for this population — organ toxicity relevant to the case (nephrotoxicity, hepatotoxicity, QT prolongation), contraindications, boxed warnings;

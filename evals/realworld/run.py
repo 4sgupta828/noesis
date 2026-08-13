@@ -72,6 +72,7 @@ async def _run(slice_path: pathlib.Path, limit: int, expand: str, conc: int,
             except Exception as e:               # noqa: BLE001
                 return {"id": r["id"], "error": f"{type(e).__name__}: {e}"[:300]}
             gl = (getattr(res, "diagnostics", None) or {}).get("graph_legs")
+            qc = (getattr(res, "diagnostics", None) or {}).get("question_contract")
             return {
                 "id": r["id"], "set": r["set"], "stratum": r["stratum"],
                 "question": r["question"], "gold": r.get("gold"),
@@ -81,7 +82,7 @@ async def _run(slice_path: pathlib.Path, limit: int, expand: str, conc: int,
                             "evidence_kind": getattr(c, "evidence_kind", "")}
                            for c in res.verified_claims],
                 "atoms": res.atoms_gathered, "stopped": res.stopped_reason,
-                "coverage_gaps": res.coverage_gaps, "graph_legs": gl,
+                "coverage_gaps": res.coverage_gaps, "graph_legs": gl, "question_contract": qc,
                 "seconds": (dt.datetime.now(dt.timezone.utc) - t0).total_seconds(),
                 "provenance": {"git_sha": sha, "expand": os.environ.get("NOESIS_GRAPH_EXPAND", ""),
                                "model": os.environ.get("NOESIS_LLM_MODEL", "(default)"),

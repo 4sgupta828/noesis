@@ -44,9 +44,13 @@ async def derive_contract(question: str, llm: LLMClient, derivation_prompt: str 
     if llm is None or not (derivation_prompt or "").strip() or not (question or "").strip():
         return None
     try:
+        # temperature=0: the contract STEERS retrieval — two runs of the same question must not
+        # disagree about which entities/axes the answer requires (observed: risk entities and the
+        # standing-treatment interaction axis appearing in one run and not the next).
         res = await llm.complete(system=derivation_prompt,
                                  messages=[{"role": "user", "content": question}],
-                                 response_format=_ContractOut, max_tokens=max_tokens)
+                                 response_format=_ContractOut, max_tokens=max_tokens,
+                                 temperature=0.0)
         p = res.parsed
     except Exception:   # noqa: BLE001 — fail-safe: derivation must never break the answer path
         return None

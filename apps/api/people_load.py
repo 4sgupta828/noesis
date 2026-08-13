@@ -13,22 +13,12 @@ import io
 import re
 import zipfile
 
-# Pilot taxonomy map + CSV columns — the single owner (scripts/load_nppes.py imports these).
-PILOT_TAXONOMIES: dict[str, str] = {
-    "207RC0000X": "cardiology", "207RC0001X": "cardiology (interventional)",
-    "207RI0011X": "cardiology (electrophysiology)",
-    "207RH0003X": "hematology-oncology", "207RX0202X": "medical oncology",
-    "2085R0001X": "radiation oncology", "208600000X": "surgical oncology (gen surg)",
-    "207RN0300X": "nephrology", "2084N0400X": "neurology",
-    "207X00000X": "orthopedic surgery", "207XS0114X": "orthopedic (adult recon)",
-    "207XX0004X": "orthopedic (foot/ankle)", "207XS0106X": "orthopedic (hand)",
-    "207XS0117X": "orthopedic (spine)", "207XX0801X": "orthopedic (trauma)",
-    "207V00000X": "obstetrics & gynecology",
-    "207RP1001X": "pulmonary disease", "207RC0200X": "critical care",
-    "207RE0101X": "endocrinology",
-    "208G00000X": "thoracic surgery", "2086S0122X": "plastic surgery",
-    "207T00000X": "neurological surgery",
-}
+# Coverage = ALL physician taxonomies (NUCC Allopathic & Osteopathic grouping, 238 codes;
+# was a 23-code pilot until 2026-08-12). PILOT_TAXONOMIES kept as the working alias — the
+# loader and scripts/load_nppes.py both key off it.
+from api.people_taxonomies import TAXONOMY_LABELS
+
+PILOT_TAXONOMIES: dict[str, str] = TAXONOMY_LABELS
 COLS = {
     "npi": "NPI", "type": "Entity Type Code",
     "last": "Provider Last Name (Legal Name)", "first": "Provider First Name",

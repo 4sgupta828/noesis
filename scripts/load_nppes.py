@@ -20,26 +20,13 @@ import argparse
 import asyncio
 import csv
 import datetime as dt
+import pathlib
 import sys
 
-# NUCC taxonomy prefixes → pilot specialty labels (E-7: 10 pilot specialties).
-# 207R* internal medicine subspecialties are matched by FULL code where needed.
-PILOT_TAXONOMIES: dict[str, str] = {
-    "207RC0000X": "cardiology", "207RC0001X": "cardiology (interventional)",
-    "207RI0011X": "cardiology (electrophysiology)",
-    "207RH0003X": "hematology-oncology", "207RX0202X": "medical oncology",
-    "2085R0001X": "radiation oncology", "208600000X": "surgical oncology(gen surg)",
-    "207RN0300X": "nephrology",
-    "2084N0400X": "neurology",
-    "207X00000X": "orthopedic surgery", "207XS0114X": "orthopedic surgery (adult recon)",
-    "207XX0004X": "orthopedic surgery (foot/ankle)", "207XS0106X": "orthopedic (hand)",
-    "207XS0117X": "orthopedic (spine)", "207XX0801X": "orthopedic (trauma)",
-    "207V00000X": "obstetrics & gynecology",
-    "207RP1001X": "pulmonary disease", "207RC0200X": "critical care",
-    "207RE0101X": "endocrinology",
-    "208G00000X": "thoracic surgery", "2086S0122X": "plastic surgery",
-    "207T00000X": "neurological surgery",
-}
+# Single source of truth for coverage: ALL physician taxonomies (NUCC grouping), owned by
+# apps/api/people_taxonomies.py — the offline path must never drift from the server loader.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "apps"))
+from api.people_taxonomies import TAXONOMY_LABELS as PILOT_TAXONOMIES  # noqa: E402
 
 # npidata_pfile column names (header-driven — robust to column order)
 COLS = {

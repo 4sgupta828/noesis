@@ -82,6 +82,7 @@ class PeopleStore:
         self._dsn = dsn
         self._pool = None
         self._facets = None
+        self._facets_at = 0.0
 
     async def _get_pool(self):
         if self._pool is None:
@@ -290,9 +291,12 @@ class PeopleStore:
     async def facet_values(self) -> dict:
         """The CLOSED facet vocabularies, read from the data itself (the kernel stays
         domain-free — labels come from whatever the loaders wrote): distinct specialty
-        labels, states, countries, and metric keys actually present. Cached per process;
-        loaders should call invalidate_facets() after a bulk write."""
-        if self._facets is not None:
+        labels, states, countries, and metric keys actually present. Cached per process
+        with a 10-minute TTL — a bulk load runs on ONE replica, and the others must pick
+        up the new vocabulary without a restart; loaders on the same process also call
+        invalidate_facets() for immediacy."""
+        import time
+        if self._facets is not None and time.monotonic() - self._facets_at < 600:
             return self._facets
         pool = await self._get_pool()
         async with pool.acquire() as conn:
@@ -309,6 +313,7 @@ class PeopleStore:
                         "countries": [r["country"] for r in co],
                         "metrics": [{"key": r["metric_key"], "label": r["metric_label"]}
                                     for r in mk]}
+        self._facets_at = time.monotonic()
         return self._facets
 
     def invalidate_facets(self) -> None:

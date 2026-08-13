@@ -7,6 +7,7 @@ layers consume. All JUDGMENT (what supersedes what, materiality, subjects) is
 supplied by the vertical — in P0 exclusively via curator-declared lineage
 (highest confidence, zero LLM).
 """
+from .brief import ComposedBrief, compose_change_brief
 from .store import RELATIONS, CurrencyStore
 
-__all__ = ["CurrencyStore", "RELATIONS"]
+__all__ = ["CurrencyStore", "RELATIONS", "ComposedBrief", "compose_change_brief"]

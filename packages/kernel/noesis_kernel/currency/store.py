@@ -147,6 +147,32 @@ class CurrencyStore:
             await self._unstamp(row["relation"], row["old_document_id"])
         return True
 
+    async def get_event(self, event_id: str) -> dict | None:
+        """Fetch ONE event as a dict (relation, old/new doc ids, subjects, brief, status) — the
+        brief-composer's approval path needs it. None if the id is unknown."""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            r = await conn.fetchrow(
+                "SELECT id, relation, old_document_id, new_document_id, subjects, materiality, "
+                "confidence, brief_md, status FROM noesis_change_event WHERE id=$1", event_id)
+        if r is None:
+            return None
+        d = dict(r)
+        d["subjects"] = json.loads(d["subjects"]) if isinstance(d["subjects"], str) else d["subjects"]
+        return d
+
+    async def set_brief(self, event_id: str, brief_md: str, brief_claims: list[dict]) -> bool:
+        """Store a composed, span-verified change brief on an event (brief_md/brief_claims columns
+        exist by DDL). A FAILED compose leaves the brief empty (''/[]) so a later scan retries —
+        never persist an unverified brief. Returns True if the event exists."""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            res = await conn.execute(
+                "UPDATE noesis_change_event SET brief_md=$2, brief_claims=$3::jsonb, "
+                "updated_at=now() WHERE id=$1", event_id, brief_md or "",
+                json.dumps(brief_claims or []))
+        return res.split()[-1] != "0"
+
     # ---- derived stamps (re-derivable cache on the block table) --------------------------------
 
     async def apply_stamps(self) -> int:

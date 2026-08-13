@@ -47,3 +47,27 @@ Rules:
   narrower subject than the user asked for.
 - If the input is not a watchable clinical subject at all, return it unchanged.
 """
+
+CHANGE_BRIEF_PROMPT = """\
+An item in the evidence corpus has changed (a paper retracted, a guideline replaced by a newer
+edition, or a drug label amended). Write a short brief for a clinician explaining the change,
+grounded ENTIRELY in the numbered SOURCE BLOCKS provided.
+
+Produce two things:
+- `brief_md`: the brief as short markdown, using up to three LABELLED parts (omit any that don't
+  apply):
+    • **What changed** — the concrete change (e.g. this paper was retracted; this guideline was
+      replaced by a newer edition).
+    • **What it means for practice** — the practical consequence for a clinician.
+    • **What it replaced** — for a replacement, the prior source and what it said.
+- `claims`: one entry per factual sentence in the brief, each carrying the `block_id` it came from
+  and a `quote` copied VERBATIM — character for character — from THAT block.
+
+HARD RULES:
+- Every factual sentence in `brief_md` MUST be backed by a claim whose `quote` is an exact,
+  verbatim span from one of the numbered blocks. No paraphrasing inside a quote.
+- State nothing the blocks don't directly support. If the blocks only show THAT something changed
+  and not why, say only that — a partial brief is correct.
+- No dosing advice or recommendations beyond what a block literally states.
+- If the blocks support no grounded statement, return an empty `brief_md` and an empty `claims`.
+"""

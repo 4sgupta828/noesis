@@ -134,6 +134,11 @@ class VerticalManifest:
     watch_topic_prompt: str | None = None
     watch_canonize_prompt: str | None = None
     watch_suggest_prompt: str | None = None    # cross-session watch suggestions (recurring subjects)
+    # Optional Evidence Pulse change-brief composer prompt (LLM-owned judgment, Rule 18): given a
+    # changed document's blocks, write "what changed / what it means / what it replaced" with every
+    # claim carrying a verbatim quote + block id (span-verified by the kernel before it is stored).
+    # None → approved events keep an empty brief (the inbox shows THAT something changed, not what).
+    pulse_brief_prompt: str | None = None
     # Optional seed vocabulary for the canonical topic registry (e.g. the vertical's covered-
     # condition names) — loaded once into the registry on first Pulse topic use.
     watch_topic_seed: tuple = ()

@@ -49,25 +49,30 @@ Rules:
 """
 
 CHANGE_BRIEF_PROMPT = """\
-An item in the evidence corpus has changed (a paper retracted, a guideline replaced by a newer
-edition, or a drug label amended). Write a short brief for a clinician explaining the change,
-grounded ENTIRELY in the numbered SOURCE BLOCKS provided.
+An item in the evidence corpus has changed. The CHANGE line in the user message states the
+AUTHORITATIVE fact of what changed — a paper was RETRACTED, a guideline was SUPERSEDED by a newer
+edition, or a drug label was AMENDED. You MAY state that fact plainly in the brief; it is given and
+needs no quote. Your job: explain to a clinician what it means, GROUNDING THE SUBSTANCE (what the
+affected document actually says) in the numbered SOURCE BLOCKS.
 
 Produce two things:
-- `brief_md`: the brief as short markdown, using up to three LABELLED parts (omit any that don't
-  apply):
-    • **What changed** — the concrete change (e.g. this paper was retracted; this guideline was
-      replaced by a newer edition).
-    • **What it means for practice** — the practical consequence for a clinician.
+- `brief_md`: short markdown, up to three LABELLED parts (omit any that don't apply):
+    • **What changed** — state the given change and identify WHAT it affects using the blocks
+      (e.g. "This study, which reported <finding>, has been retracted").
+    • **What it means for practice** — the practical consequence (e.g. that finding should no
+      longer be relied upon; revert to the prior standard).
     • **What it replaced** — for a replacement, the prior source and what it said.
-- `claims`: one entry per factual sentence in the brief, each carrying the `block_id` it came from
-  and a `quote` copied VERBATIM — character for character — from THAT block.
+- `claims`: one entry per SUBSTANTIVE statement you draw from the blocks (what the document reports,
+  recommends, or claims), each with the `block_id` it came from and a `quote` copied VERBATIM —
+  character for character — from THAT block.
 
 HARD RULES:
-- Every factual sentence in `brief_md` MUST be backed by a claim whose `quote` is an exact,
-  verbatim span from one of the numbered blocks. No paraphrasing inside a quote.
-- State nothing the blocks don't directly support. If the blocks only show THAT something changed
-  and not why, say only that — a partial brief is correct.
+- The bare fact of the change itself (retracted / superseded / amended) is GIVEN and needs no claim.
+  Every OTHER factual detail you state about the document's content MUST have a verbatim-quote claim.
+- Quote VERBATIM from a numbered block — no paraphrasing inside a quote.
+- Describe only what the blocks actually contain. If the blocks are thin, a one-line brief that
+  states the change and quotes a single identifying detail (the topic, finding, or drug) is fine.
 - No dosing advice or recommendations beyond what a block literally states.
-- If the blocks support no grounded statement, return an empty `brief_md` and an empty `claims`.
+- ONLY if the blocks contain nothing you can quote to identify or describe the affected document,
+  return an empty `brief_md` and an empty `claims`.
 """

@@ -14,9 +14,21 @@ Design (spec v2, amendments A2/A4):
 from __future__ import annotations
 
 import hashlib
+import html
 import json
+import re
 
 RELATIONS = ("superseded_by", "retracted", "amended_by", "clarified_by")
+
+_HTML_TAG = re.compile(r"<[^>]+>")
+
+
+def _strip_markup(text: str) -> str:
+    """Corpus blocks can carry inline HTML (`<h4>`, `<i>`, entities). The change-brief LLM naturally
+    quotes the CLEAN human-readable text, so the span-verifier must check against clean text too —
+    otherwise a quote straddling a tag (e.g. `(all <i>p</i> < 0.05)`) fails though the model was
+    faithful. Strip tags → space, unescape entities; the verifier's normalize() collapses the rest."""
+    return html.unescape(_HTML_TAG.sub(" ", text or ""))
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS noesis_change_event (
@@ -235,7 +247,8 @@ class CurrencyStore:
                 f"""SELECT document_id, block_id, text FROM {self._block_table}
                     WHERE document_id = ANY($1::text[])
                     ORDER BY document_id, block_id LIMIT $2""", ids, limit)
-        return [dict(r) for r in rows]
+        return [{"document_id": r["document_id"], "block_id": r["block_id"],
+                 "text": _strip_markup(r["text"])} for r in rows]
 
     # ---- canonical topic registry (P1) ---------------------------------------------------------
     # STABILITY CONTRACT: LLM runs never mint variants of an existing topic — suggesters/

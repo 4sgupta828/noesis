@@ -44,13 +44,13 @@ async def derive_contract(question: str, llm: LLMClient, derivation_prompt: str 
     if llm is None or not (derivation_prompt or "").strip() or not (question or "").strip():
         return None
     try:
-        # temperature=0: the contract STEERS retrieval — two runs of the same question must not
-        # disagree about which entities/axes the answer requires (observed: risk entities and the
-        # standing-treatment interaction axis appearing in one run and not the next).
+        # NO temperature override: the planner model runs with extended thinking, and the API
+        # rejects temperature≠1 there — the bare except then silently killed EVERY derivation
+        # (contract None → exploratory fallback; caught via the run-artifact diag). Derivation
+        # consistency is carried by the vertical prompt's MANDATORY-inclusion rules instead.
         res = await llm.complete(system=derivation_prompt,
                                  messages=[{"role": "user", "content": question}],
-                                 response_format=_ContractOut, max_tokens=max_tokens,
-                                 temperature=0.0)
+                                 response_format=_ContractOut, max_tokens=max_tokens)
         p = res.parsed
     except Exception:   # noqa: BLE001 — fail-safe: derivation must never break the answer path
         return None

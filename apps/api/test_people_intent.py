@@ -74,6 +74,22 @@ def test_sort_only_from_loaded_metrics():
     assert out["sort_metric"] == "medicare_partb_services"
 
 
+def test_unmatched_specialty_surfaces_the_gap():
+    llm = _LLM(specialty="", unmatched_specialty="dermatology", state="CA",
+               city="Santa Clara")
+    out, _ = _run(_parse_people_intent("dermatology specialist near santa clara, ca",
+                                       FACETS, llm=llm))
+    assert out["specialty"] == "" and out["unmatched_specialty"] == "dermatology"
+    assert out["state"] == "" or out["state"] == "CA"   # CA not in FACETS states → dropped
+    assert "unmatched_specialty" in out
+
+
+def test_unmatched_specialty_cleared_when_specialty_matched():
+    llm = _LLM(specialty="cardiology", unmatched_specialty="heart doctor")
+    out, _ = _run(_parse_people_intent("heart doctor", FACETS, llm=llm))
+    assert out["specialty"] == "cardiology" and out["unmatched_specialty"] == ""
+
+
 def test_fallback_is_containment_only():
     out, how = _run(_parse_people_intent("cardiology in houston texas", FACETS,
                                          llm=_BrokenLLM()))

@@ -213,7 +213,8 @@ async def _parse_people_intent(q: str, facets: dict, llm=None) -> tuple[dict, st
     so nothing the model invents can reach SQL. E-3 holds inside the parse: quality words
     (best/top/expert) NEVER map to a sort metric. Fail-safe on LLM failure: structural
     containment over the closed specialty labels only — no heuristic state/city/name guess."""
-    empty = {"specialty": "", "state": "", "city": "", "name": "", "sort_metric": "", "note": ""}
+    empty = {"specialty": "", "state": "", "city": "", "name": "", "sort_metric": "",
+             "unmatched_specialty": "", "note": ""}
     specs = facets.get("specialties") or []
     states = set(facets.get("states") or [])
     metrics = {m["key"]: m.get("label") or m["key"] for m in (facets.get("metrics") or [])}
@@ -225,6 +226,7 @@ async def _parse_people_intent(q: str, facets: dict, llm=None) -> tuple[dict, st
         city: str = ""
         name: str = ""
         sort_metric: str = ""
+        unmatched_specialty: str = ""
         note: str = ""
 
     system = (
@@ -236,6 +238,10 @@ async def _parse_people_intent(q: str, facets: dict, llm=None) -> tuple[dict, st
         "clinical phrasings to the closest listed label (e.g. a lay word for a specialist "
         "maps to its listed specialty); prefer a listed sub-specialty when the query names "
         "one.\n"
+        "- unmatched_specialty: when the user wants a KIND of specialist that maps to NO "
+        "label on SPECIALTY LIST (a different field of practice, not just different "
+        'wording), put their word for it here and leave specialty "". Never force a wrong '
+        "list label.\n"
         '- state: the 2-letter US state code the query refers to, or "". A well-known city '
         "may imply its state.\n"
         '- city: the city named in the query, or "".\n'
@@ -265,6 +271,8 @@ async def _parse_people_intent(q: str, facets: dict, llm=None) -> tuple[dict, st
         out["city"] = (p.city or "").strip()[:80]
         out["name"] = (p.name or "").strip()[:80]
         out["sort_metric"] = p.sort_metric if p.sort_metric in metrics else ""
+        if not out["specialty"]:
+            out["unmatched_specialty"] = (p.unmatched_specialty or "").strip()[:60]
         out["note"] = (p.note or "").strip()[:200]
         if p.sort_metric and p.sort_metric not in metrics:
             out["note"] = ((out["note"] + " ") if out["note"] else "") + \
@@ -282,7 +290,8 @@ async def _parse_people_intent(q: str, facets: dict, llm=None) -> tuple[dict, st
 
 
 async def _people_converse_turn(convo: str, intent: dict, breakdown: dict,
-                                candidates: list[dict], llm=None) -> dict:
+                                candidates: list[dict], n_asked: int = 0,
+                                llm=None) -> dict:
     """Phase B of the People concierge: given the conversation, the current facet state,
     the live match breakdown, and (when few enough) the actual candidate rows, decide ONE
     move — ask the single question that best splits the remaining set (broadening when 0
@@ -311,34 +320,48 @@ async def _people_converse_turn(convo: str, intent: dict, breakdown: dict,
         for c in candidates) or "(not fetched — too many matches to list)"
     system = (
         "You are the concierge of a professional-specialist directory. Converge on the "
-        "RIGHT specialist(s) for the user's situation in as few turns as possible — "
-        "narrowing OR broadening the filters as the situation demands. You see the "
-        "conversation, the CURRENT FILTERS, the live MATCH BREAKDOWN, and (when few enough "
-        "match) the CANDIDATES with their recorded facts.\n\n"
+        "RIGHT specialist(s) for the user's situation in as FEW turns as possible — "
+        "narrowing OR broadening as the situation demands. You see the conversation, the "
+        "CURRENT FILTERS, the live MATCH BREAKDOWN, and (when fetched) CANDIDATES with "
+        "their recorded facts.\n\n"
+        "THE ONLY FILTERS THAT EXIST: specialty (the labels in the breakdown), state, "
+        "exact city, person name. There is NO distance/radius, insurance, availability, "
+        "hospital-affiliation, language, or outcomes filter. NEVER ask a question whose "
+        "answer you cannot filter by — e.g. never ask about travel radius, a 'center "
+        "point', insurance, or which health system. For geography offer exactly: a "
+        "specific city, or the whole state.\n\n"
         "Choose ONE action:\n"
-        "- clarify: when matches are too many (>8) or the situation is too vague to choose "
-        "well. Ask ONE focused question that best splits the remaining set — use the "
-        "breakdown (city, sub-specialty distribution), and where useful ask about the "
-        "SITUATION (what procedure/condition, how far they can travel) rather than raw "
-        "filters. If 0 match, say so plainly and propose which constraint to relax.\n"
-        "- present: when candidates are listed and few match (≤8). Pick up to 5 "
-        "candidate_ids whose RECORDED facts fit the stated situation, and in message "
-        "introduce each briefly using ONLY those facts (sub-specialty, location, "
-        "credential, listed metrics).\n"
-        "- If the user asks to SEE OPTIONS and CANDIDATES are listed, you MUST present "
-        "(up to 5) — do not ask another question, even if more than 8 match.\n\n"
+        "- present: whenever CANDIDATES are listed and EITHER ≤8 match, OR the user asked "
+        "to see options, OR you have already asked 2 clarifying questions. Pick up to 5 "
+        "candidate_ids whose RECORDED facts fit the situation; introduce each in a few "
+        "words using ONLY those facts (sub-specialty, location, credential, listed "
+        "metrics). If the filters are still broad, say so in one clause and present "
+        "anyway.\n"
+        "- clarify: only when presenting is not yet possible or useful. Ask ONE question, "
+        "chosen to best split the remaining set using the breakdown. If 0 match, say "
+        "PLAINLY what the directory lacks (e.g. the requested specialty or city has no "
+        "listings) and offer the nearest real alternative from the breakdown — never "
+        "loop back to a question you already asked.\n\n"
         "Hard rules:\n"
+        "- You get at most 2 clarifying questions per conversation. After that, present "
+        "from candidates or state the limitation — never a third question.\n"
+        "- Be terse. Clarify replies: under 40 words, no 'Thanks!', no restating the "
+        "user's words, no repeating counts already shown. Present replies: under 100 "
+        "words.\n"
         "- NEVER use quality words: best, top, expert, leading, recommended, greatest, "
         "renowned. The directory records public facts; it does not rank quality.\n"
         "- NEVER state anything about a person that is not in their candidate row, and "
-        "never name specific organizations, practices, or health systems unless they "
-        "appear in the data given to you.\n"
+        "never name organizations, practices, or health systems unless they appear in "
+        "the data given to you.\n"
         "- candidate_ids must be ids from CANDIDATES; leave empty when clarifying.\n"
-        "- message: plain conversational text, no markdown headers, under 120 words.")
+        "- message: plain conversational text, no markdown headers.")
     user = (f"{convo}\n\nCURRENT FILTERS: "
             + (", ".join(f"{k}={v}" for k, v in intent.items()
-                         if v and k != "note") or "(none)")
-            + f"\n\nMATCH BREAKDOWN:\n{bd_txt}\n\nCANDIDATES:\n{cand_txt}")
+                         if v and k not in ("note", "unmatched_specialty")) or "(none)")
+            + f"\n\nMATCH BREAKDOWN:\n{bd_txt}\n\nCANDIDATES:\n{cand_txt}"
+            + f"\n\nClarifying questions you have already asked: {n_asked}."
+            + (" LIMIT REACHED — you MUST present from candidates or state the "
+               "limitation; do NOT ask another question." if n_asked >= 2 else ""))
     try:
         comp = await (llm or _graph_map_llm()).complete(
             system=system, messages=[{"role": "user", "content": user[:12000]}],
@@ -2317,13 +2340,32 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             f"{'Agent' if m.get('role') == 'assistant' else 'User'}: "
             f"{str(m['content']).strip()[:400]}" for m in msgs)
         try:
-            intent, parser = await _parse_people_intent(convo, await ps.facet_values())
+            vocab = await ps.facet_values()
+            intent, parser = await _parse_people_intent(convo, vocab)
+            # Not-covered short-circuit: the user wants a KIND of specialist the directory
+            # simply doesn't have. Say so immediately and list what IS covered — the worst
+            # answer is a clarifying loop that never admits the gap (2026-08-12 dermatology
+            # transcript). Deterministic, no phase-B call.
+            if intent.get("unmatched_specialty") and not intent["specialty"]:
+                covered = ", ".join(vocab.get("specialties") or [])
+                return {"action": "clarify", "candidates": [],
+                        "message": (f"Our directory doesn't currently include "
+                                    f"{intent['unmatched_specialty']} specialists. It "
+                                    f"covers: {covered}. If one of these fits, tell me "
+                                    "which — and a city or state."),
+                        "facets": {**intent, "parser": parser}, "total": 0,
+                        "breakdown": {"total": 0, "by_specialty": [], "by_city": [],
+                                      "by_state": []},
+                        "sorted_by": "name (neutral — no ranking)"}
+            n_asked = sum(1 for m in msgs if m.get("role") == "assistant")
             kw = dict(specialty=intent["specialty"], state=intent["state"],
                       city=intent["city"], name=intent["name"])
             bd = await ps.breakdown(**kw)
+            # fetch candidates when small — or when the clarify budget is spent, so
+            # phase B can ALWAYS present instead of circling
             cands = (await ps.search(**kw, sort_metric=intent["sort_metric"], limit=30)
-                     if 0 < bd["total"] <= 30 else [])
-            turn = await _people_converse_turn(convo, intent, bd, cands)
+                     if 0 < bd["total"] and (bd["total"] <= 30 or n_asked >= 2) else [])
+            turn = await _people_converse_turn(convo, intent, bd, cands, n_asked=n_asked)
             return {**turn, "facets": {**intent, "parser": parser},
                     "total": bd["total"], "breakdown": bd,
                     "sorted_by": intent["sort_metric"] or "name (neutral — no ranking)"}

@@ -77,6 +77,23 @@ def test_clarify_passthrough_and_cap():
     assert out["candidates"] == []
 
 
+def test_clarify_budget_reaches_the_model():
+    llm = _LLM(action="present", message="Options.", candidate_ids=["npi:1000000001"])
+    _run(_people_converse_turn("User: x", INTENT, BREAKDOWN, CANDS, n_asked=2, llm=llm))
+    assert "Clarifying questions you have already asked: 2." in llm.user
+    assert "LIMIT REACHED" in llm.user
+    llm2 = _LLM(action="clarify", message="Which city?")
+    _run(_people_converse_turn("User: x", INTENT, BREAKDOWN, CANDS, n_asked=1, llm=llm2))
+    assert "already asked: 1." in llm2.user and "LIMIT REACHED" not in llm2.user
+
+
+def test_only_real_filters_named_in_prompt():
+    llm = _LLM(action="clarify", message="Which city?")
+    _run(_people_converse_turn("User: x", INTENT, BREAKDOWN, CANDS, llm=llm))
+    assert "NO distance/radius" in llm.system
+    assert "at most 2 clarifying questions" in llm.system
+
+
 def test_llm_failure_falls_back_to_counts():
     out = _run(_people_converse_turn("User: kidney doctor", INTENT, BREAKDOWN, CANDS,
                                      llm=_BrokenLLM()))

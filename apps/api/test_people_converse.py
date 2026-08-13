@@ -68,6 +68,16 @@ def test_present_without_valid_ids_downgrades_to_clarify():
     assert out["action"] == "clarify" and out["candidates"] == []
 
 
+def test_valid_ids_force_present_even_if_model_says_clarify():
+    llm = _LLM(action="clarify", message="Here are adult nephrologists: A One; B Two.",
+               candidate_ids=["npi:1000000001", "npi:1000000002"])
+    out = _run(_people_converse_turn("User: show me options", INTENT, BREAKDOWN, CANDS,
+                                     llm=llm))
+    assert out["action"] == "present"
+    assert [c["entity_id"] for c in out["candidates"]] == ["npi:1000000001",
+                                                           "npi:1000000002"]
+
+
 def test_clarify_passthrough_and_cap():
     llm = _LLM(action="clarify", message="Which city — New York or Buffalo?")
     out = _run(_people_converse_turn("User: kidney doctor in NY", INTENT, BREAKDOWN,

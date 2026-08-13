@@ -354,6 +354,9 @@ async def _people_converse_turn(convo: str, intent: dict, breakdown: dict,
         "never name organizations, practices, or health systems unless they appear in "
         "the data given to you.\n"
         "- candidate_ids must be ids from CANDIDATES; leave empty when clarifying.\n"
+        "- NEVER name a specific person in message without action=present and their id in "
+        "candidate_ids — profiles, contacts, and the referral network only open through "
+        "candidate_ids, so names in prose alone are dead ends for the user.\n"
         "- message: plain conversational text, no markdown headers.")
     user = (f"{convo}\n\nCURRENT FILTERS: "
             + (", ".join(f"{k}={v}" for k, v in intent.items()
@@ -368,9 +371,9 @@ async def _people_converse_turn(convo: str, intent: dict, breakdown: dict,
             response_format=_Turn, max_tokens=700)
         t = comp.parsed
         ids = [i for i in (t.candidate_ids or []) if i in by_id][:5]
-        action = t.action if t.action in ("clarify", "present") else "clarify"
-        if action == "present" and not ids:
-            action = "clarify"
+        # ids are authoritative: returning valid ids IS presenting (a model that names
+        # people but declares clarify would leave the user with unclickable prose)
+        action = "present" if ids else "clarify"
         return {"action": action, "message": (t.message or "").strip()[:1500],
                 "candidates": [by_id[i] for i in ids]}
     except Exception:   # noqa: BLE001

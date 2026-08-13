@@ -2032,6 +2032,54 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         cur = _currency()
         return (await cur.get_state("last_backup")) if cur else {"note": "no state store"}
 
+    def _people():
+        """PeopleStore (Frontier People / 'People' in UI). None unless DSN + flag."""
+        if getattr(app.state, "people", "unset") == "unset":
+            dsn = os.environ.get("NOESIS_CORPUS_DSN")
+            if dsn and os.environ.get("NOESIS_PEOPLE", "").lower() in ("1", "true", "yes"):
+                from noesis_kernel.people import PeopleStore
+                app.state.people = PeopleStore(dsn)
+            else:
+                app.state.people = None
+        return app.state.people
+
+    @app.get("/admin/people/search")
+    async def admin_people_search(specialty: str = "", state: str = "", name: str = "",
+                                  sort_metric: str = "", metric_period: str = "",
+                                  limit: int = 50,
+                                  x_admin_password: str = Header(default="")) -> dict:
+        """People search (ADMIN-ONLY per E-1 until discipline data lands). E-3: results are
+        name-ordered unless the CALLER explicitly picks sort_metric — the UI forces that
+        choice; no default ranking, no composite scores, banned-vocabulary-free."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        ps = _people()
+        if ps is None:
+            raise HTTPException(status_code=404, detail="people not enabled (NOESIS_PEOPLE)")
+        try:
+            rows = await ps.search(specialty=specialty, state=state, name=name,
+                                   sort_metric=sort_metric, metric_period=metric_period,
+                                   limit=limit)
+            return {"results": rows, "stats": await ps.stats(),
+                    "sorted_by": sort_metric or "name (neutral — no ranking)"}
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"people search failed: {e}") from e
+
+    @app.get("/admin/people/entity")
+    async def admin_people_entity(id: str, x_admin_password: str = Header(default="")) -> dict:
+        """Full profile + the referral network: metrics (honest labels + provenance),
+        published contacts, and evidence-keyed connections (same group/facility)."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        ps = _people()
+        if ps is None:
+            raise HTTPException(status_code=404, detail="people not enabled")
+        e = await ps.entity(id)
+        if not e:
+            raise HTTPException(status_code=404, detail="unknown entity")
+        e["connections"] = await ps.connections(id)
+        return e
+
     @app.get("/admin/ingest/sources")
     async def admin_ingest_sources(x_admin_password: str = Header(default="")) -> dict:
         """Ingestion console payload (panel-password gate, READ-ONLY): every connector, live

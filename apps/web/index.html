@@ -1372,6 +1372,21 @@
   </div>
 </div>
 
+<!-- People (specialist inventory, admin-only) -->
+<div class="idmodal" id="pplmodal" hidden>
+  <div class="idcard grcard">
+    <h2>⧉ People</h2>
+    <div id="ppllock">
+      <p>Admin only — enter the settings password.</p>
+      <input id="pplpw" type="password" placeholder="Admin password" autocomplete="off" />
+      <div class="iderr" id="pplerr"></div>
+      <button type="button" class="idgo" id="pplgo">Unlock</button>
+    </div>
+    <div id="pplbody" hidden></div>
+    <button type="button" class="setclose" id="pplclose">Close ✕</button>
+  </div>
+</div>
+
 <!-- camera capture (mobile + laptop webcam) -->
 <div class="cammodal" id="cammodal" hidden aria-label="Camera">
   <video id="camvideo" autoplay playsinline muted></video>
@@ -4458,11 +4473,15 @@ function renderSettingsUI(d){
     `<div class="setrow"><b>⬡ Relationship graph</b><button type="button" class="idgo" id="setgraph" style="width:auto;padding:.3rem .8rem;font-size:.78rem;">Open console</button>
      <span class="sethint">Curated clinical edges powering retrieval expansion + the is-it-helping quality watch.</span></div>` +
     `<div class="setrow"><b>⇪ Ingestion</b><button type="button" class="idgo" id="seting" style="width:auto;padding:.3rem .8rem;font-size:.78rem;">Open console</button>
-     <span class="sethint">All corpus sources, their live footprint, and push-ingestion controls.</span></div>`;
+     <span class="sethint">All corpus sources, their live footprint, and push-ingestion controls.</span></div>` +
+    `<div class="setrow"><b>⧉ People</b><button type="button" class="idgo" id="setppl" style="width:auto;padding:.3rem .8rem;font-size:.78rem;">Open console</button>
+     <span class="sethint">Specialist inventory + evidence-keyed referral network (public records; no ranking by default).</span></div>`;
   const gbtn = body.querySelector("#setgraph");
   if(gbtn) gbtn.addEventListener("click", () => { $("#setmodal").hidden = true; openGraphConsole(); });
   const ibtn = body.querySelector("#seting");
   if(ibtn) ibtn.addEventListener("click", () => { $("#setmodal").hidden = true; openIngest(); });
+  const pbtn = body.querySelector("#setppl");
+  if(pbtn) pbtn.addEventListener("click", () => { $("#setmodal").hidden = true; openPeople(); });
   body.querySelectorAll("select[data-k]").forEach(sel => sel.addEventListener("change", async () => {
     const r = await fetch("/admin/settings", {method: "POST",
       headers: {"content-type": "application/json", "x-admin-password": sessionStorage.getItem("noesis_apw") || ""},
@@ -4624,6 +4643,87 @@ function renderIngest(d){
     if(r.ok) setTimeout(loadIngest, 1200);
   });
 }
+// ---- People (⧉): specialist search + referral network (admin-only, E-3: user picks the sort) ----
+function openPeople(){
+  $("#pplmodal").hidden = false;
+  const unlocked = sessionStorage.getItem("noesis_apw");
+  $("#ppllock").hidden = !!unlocked;
+  if(unlocked) renderPeopleShell(); else setTimeout(()=>$("#pplpw").focus(), 60);
+}
+function pplPW(){ return sessionStorage.getItem("noesis_apw") || $("#pplpw").value.trim(); }
+function renderPeopleShell(){
+  $("#ppllock").hidden = true; $("#pplbody").hidden = false;
+  $("#pplbody").innerHTML = `
+    <div class="setrow" style="gap:.4rem;">
+      <input id="pplspec" placeholder="specialty (e.g. cardiology)" style="flex:1;min-width:9rem;margin:0;" />
+      <input id="pplstate" placeholder="state" style="width:4.5rem;margin:0;" maxlength="2" />
+      <input id="pplname" placeholder="name contains" style="flex:1;min-width:8rem;margin:0;" />
+    </div>
+    <div class="setrow" style="gap:.4rem;">
+      <select id="pplsort">
+        <option value="">No ranking (name order)</option>
+        <option value="medicare_partb_services">Sort by: Medicare Part B services (user-selected)</option>
+        <option value="medicare_beneficiaries">Sort by: Medicare beneficiaries (user-selected)</option>
+      </select>
+      <button type="button" class="idgo" id="pplsearch" style="width:auto;padding:.35rem .9rem;">Search</button>
+      <span class="sethint" id="pplmsg"></span>
+    </div>
+    <div id="pplres"></div><div id="pplprof"></div>
+    <p style="font-size:.66rem;color:var(--muted);margin-top:.6rem;">Public-record facts with per-field
+    provenance. Noesis does not evaluate quality or suitability; ordering reflects only the metric you
+    select. Admin-only until license/discipline data lands (E-1).</p>`;
+  $("#pplsearch").addEventListener("click", pplSearch);
+}
+async function pplSearch(){
+  const q = new URLSearchParams({specialty: $("#pplspec").value.trim(), state: $("#pplstate").value.trim(),
+    name: $("#pplname").value.trim(), sort_metric: $("#pplsort").value, limit: "50"});
+  const r = await fetch("/admin/people/search?" + q, {headers: {"x-admin-password": pplPW()}});
+  if(r.status === 401){ sessionStorage.removeItem("noesis_apw"); $("#ppllock").hidden = false; return; }
+  if(r.status === 404){ $("#pplmsg").textContent = "People is not enabled (NOESIS_PEOPLE) or no data loaded yet."; return; }
+  if(!r.ok){ $("#pplmsg").textContent = "Search failed."; return; }
+  const d = await r.json();
+  sessionStorage.setItem("noesis_apw", pplPW());
+  $("#pplmsg").textContent = `${(d.stats||{}).entities ?? 0} in inventory · sorted by ${esc(d.sorted_by)}`;
+  $("#pplprof").innerHTML = "";
+  $("#pplres").innerHTML = (d.results||[]).map(e => `<div class="gredge" style="cursor:pointer;" data-id="${esc(e.entity_id)}">
+      <b>${esc(e.name)}</b><span class="grtag">${esc(e.specialty)}</span>
+      <span class="grtag">${esc(e.city)}, ${esc(e.state)}</span>
+      ${e.sort_value != null ? `<span class="grtag">${(+e.sort_value).toLocaleString()}</span>` : ""}
+      <span class="grtag">${esc(e.board_certified)}</span></div>`).join("")
+    || `<p style="color:var(--muted);font-size:.8rem;">No matches — inventory may be empty until the NPPES load runs.</p>`;
+  document.querySelectorAll("#pplres .gredge").forEach(el =>
+    el.addEventListener("click", () => pplProfile(el.dataset.id)));
+}
+async function pplProfile(id){
+  const r = await fetch("/admin/people/entity?id=" + encodeURIComponent(id),
+                        {headers: {"x-admin-password": pplPW()}});
+  if(!r.ok) return;
+  const e = await r.json();
+  $("#pplprof").innerHTML = `<h4 style="margin:1rem 0 .3rem;">${esc(e.name)} — ${esc(e.specialty)} (${esc(e.city)}, ${esc(e.state)})</h4>
+    <div class="grstats">
+      <span class="grchip">license: <b>${esc(e.license_status)}</b></span>
+      <span class="grchip">board: <b>${esc(e.board_certified)}</b></span>
+      <span class="grchip">discipline: <b>${esc(e.discipline_status)}</b></span>
+      <span class="grchip">as of: <b>${esc(e.valid_as_of || "—")}</b></span></div>
+    ${(e.metrics||[]).map(m => `<div class="gredge"><span>${esc(m.metric_label || m.metric_key)}</span>
+      <span class="grtag">${(+m.value).toLocaleString()} ${esc(m.unit)}</span>
+      <span class="grtag">${esc(m.period)}</span><span class="grtag">src: ${esc(m.source)}</span></div>`).join("")}
+    ${(e.contacts||[]).map(c => `<div class="gredge"><span class="grtag">${esc(c.kind)}</span>
+      <span>${esc(c.value)}</span><span class="grtag">src: ${esc(c.source)}</span></div>`).join("")}
+    <h4 style="margin:.8rem 0 .2rem;font-size:.75rem;color:var(--muted);text-transform:uppercase;">Network (evidence-keyed referral connections)</h4>
+    ${(e.connections||[]).map(c => `<div class="gredge" style="cursor:pointer;" data-id="${esc(c.peer)}">
+      <b>${esc(c.name)}</b><span class="grtag">${esc(c.specialty)}</span>
+      <span class="grtag">${esc(c.relation)} @ ${esc(c.evidence_key)}</span>
+      <span class="grtag">${esc(c.city)}, ${esc(c.state)}</span></div>`).join("")
+      || '<p style="color:var(--muted);font-size:.78rem;">No connections yet (edges derive from CMS group/facility data).</p>'}`;
+  document.querySelectorAll("#pplprof .gredge[data-id]").forEach(el =>
+    el.addEventListener("click", () => pplProfile(el.dataset.id)));
+}
+$("#pplgo").addEventListener("click", () => { renderPeopleShell(); pplSearch(); });
+$("#pplpw").addEventListener("keydown", e => { if(e.key === "Enter"){ renderPeopleShell(); } });
+$("#pplclose").addEventListener("click", () => { $("#pplmodal").hidden = true; });
+$("#pplmodal").addEventListener("click", e => { if(e.target === $("#pplmodal")) $("#pplmodal").hidden = true; });
+
 $("#inggo").addEventListener("click", loadIngest);
 $("#ingpw").addEventListener("keydown", e => { if(e.key === "Enter") loadIngest(); });
 $("#ingclose").addEventListener("click", () => { $("#ingmodal").hidden = true; });
@@ -4645,6 +4745,7 @@ function routeHash(){    // #s/<id> → Q&A answer/thread · #p/<id> → panel s
   else if(location.hash === "#triage" && TRIAGE_ENABLED){ setMode("triage"); }
   else if(location.hash === "#graph"){ openGraphConsole(); }
   else if(location.hash === "#ingest"){ openIngest(); }
+  else if(location.hash === "#people"){ openPeople(); }
 }
 // route only AFTER config loads, so CONV_ENABLED is known (shared threads render as conversations)
 loadConfig().then(routeHash);

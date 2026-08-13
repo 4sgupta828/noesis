@@ -1,0 +1,50 @@
+{
+  "summary": {
+    "git": "16c0f00",
+    "answers_judged": 1,
+    "must_have_recall_mean": 0.25,
+    "answers_fully_covered": 0,
+    "contradiction_answers": 0,
+    "failure_buckets": {
+      "missing_evidence": 1,
+      "wrong_evidence_selected": 0,
+      "ranking_failure": 0,
+      "reasoning_or_composition": 0,
+      "abstained_despite_evidence": 0,
+      "question_misunderstood": 0,
+      "not_a_failure": 0
+    },
+    "judge_agreement_double_grade": null
+  },
+  "judgments": [
+    {
+      "id": "act-001-transplant-abx",
+      "question": "Which antibiotics are safe to use in kidney transplant patients with impaired graft function (reduced eGFR) requiring do",
+      "must_have": [
+        "Names specific commonly used antibiotics with their renal handling (e.g. ceftriaxone usually needs no renal dose adjustment; cefepime requires dose reduction at reduced CrCl with neurotoxicity risk if unadjusted; amoxicillin/amoxicillin-clavulanate need adjustment in severe impairment; TMP-SMX needs dose reduction and potassium monitoring)",
+        "Flags aminoglycosides (gentamicin/amikacin/tobramycin) as nephrotoxic and NOT a renal-safe default for a vulnerable graft even where resistance data favor their coverage",
+        "Surfaces the immunosuppressant interaction axis: macrolides such as clarithromycin/erythromycin raise tacrolimus/cyclosporine levels (CYP3A) requiring trough monitoring",
+        "Every drug-specific claim is supported by evidence about THAT drug or class \u2014 no citations from unrelated (non-antibiotic) drug labels presented as antibiotic evidence"
+      ],
+      "verdicts": [
+        "missing",
+        "missing",
+        "missing",
+        "covered"
+      ],
+      "covered": 1,
+      "missing": 3,
+      "contradicted": 0,
+      "n": 4,
+      "recall": 0.25,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The trace shows no evidence retrieved on cefepime, amoxicillin/amoxicillin-clavulanate, TMP-SMX, aminoglycosides, or macrolide-immunosuppressant interactions. The evidence titles list confirms only ce"
+      }
+    }
+  ]
+}

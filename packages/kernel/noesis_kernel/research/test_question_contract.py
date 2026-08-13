@@ -131,25 +131,33 @@ def test_derive_contract_enumerative_without_entities_degrades_to_exploratory():
     assert c is not None and c.mode == "exploratory" and c.entities == []
 
 
-# ---- build_legs: entity × axis, round-robin, cap, dedupe --------------------------------------
+# ---- build_legs: axis-only coverage first, then entity × axis round-robin, cap, dedupe --------
 
-def test_build_legs_round_robin_axis_major():
+def test_build_legs_axis_only_first_then_round_robin_axis_major():
     c = Contract(mode="enumerative", entities=["e1", "e2", "e3"], axes=["x", "y"])
-    assert build_legs(c) == ["e1 x", "e2 x", "e3 x", "e1 y", "e2 y", "e3 y"]
+    assert build_legs(c) == ["x", "y",                       # every axis covered first
+                             "e1 x", "e2 x", "e3 x", "e1 y", "e2 y", "e3 y"]
 
 
-def test_build_legs_cap_8_every_entity_before_any_second():
+def test_build_legs_cap_axes_covered_before_entity_breadth():
+    # the act-001 starvation regression: with a small cap, later axes must STILL get a leg
     c = Contract(mode="enumerative",
                  entities=["e1", "e2", "e3", "e4", "e5"], axes=["x", "y", "z"])
     legs = build_legs(c, cap=8)
     assert len(legs) == 8
-    assert legs[:5] == ["e1 x", "e2 x", "e3 x", "e4 x", "e5 x"]   # every entity gets ≥1 first
-    assert legs[5:] == ["e1 y", "e2 y", "e3 y"]
+    assert legs[:3] == ["x", "y", "z"]                       # all axes covered first
+    assert legs[3:] == ["e1 x", "e2 x", "e3 x", "e4 x", "e5 x"]
+
+
+def test_build_legs_default_cap_12():
+    c = Contract(mode="enumerative",
+                 entities=["e1", "e2", "e3", "e4", "e5"], axes=["x", "y", "z"])
+    assert len(build_legs(c)) == 12
 
 
 def test_build_legs_excludes_graph_queries_case_insensitive():
     c = Contract(mode="enumerative", entities=["e1", "e2"], axes=["x"])
-    assert build_legs(c, exclude={"E1 X"}) == ["e2 x"]
+    assert build_legs(c, exclude={"E1 X"}) == ["x", "e2 x"]
 
 
 def test_build_legs_exploratory_or_none_is_empty():
@@ -195,6 +203,7 @@ def test_shadow_no_leg_retrieval_and_diag_logs_contract_and_legs():
                               "entities": ["alphaline", "betaline"],
                               "axes": ["axis one", "axis two"]}
     assert [d["query"] for d in qc["legs"]] == [
+        "axis one", "axis two",
         "alphaline axis one", "betaline axis one", "alphaline axis two", "betaline axis two"]
     assert all("hits" not in d and "merged" not in d for d in qc["legs"])   # never retrieved
     assert "slot_grid" in qc                     # logged at the end (grid over final claims)
@@ -247,12 +256,12 @@ def test_steer_executes_capped_legs_concurrently_k4():
     leg_searches = [(q, k) for q, k in src.searches if k == 4]
     # concurrent execution → the recorded ARRIVAL order is nondeterministic; the leg SET and
     # the computed (diag) order are exact: cap 8, round-robin (every entity's first axis first)
-    assert sorted(q for q, _ in leg_searches) == sorted([
+    expected = [
+        "axone", "axtwo",
         "entone axone", "enttwo axone", "entthree axone", "entfour axone", "entfive axone",
-        "entone axtwo", "enttwo axtwo", "entthree axtwo"])
-    assert [d["query"] for d in res.diagnostics["question_contract"]["legs"]] == [
-        "entone axone", "enttwo axone", "entthree axone", "entfour axone", "entfive axone",
-        "entone axtwo", "enttwo axtwo", "entthree axtwo"]
+        "entone axtwo", "enttwo axtwo", "entthree axtwo", "entfour axtwo", "entfive axtwo"]
+    assert sorted(q for q, _ in leg_searches) == sorted(expected)   # cap 12: axes + all 10
+    assert [d["query"] for d in res.diagnostics["question_contract"]["legs"]] == expected
     assert src.max_in_flight >= 2                              # asyncio.gather — concurrent
     # baseline retrieval unchanged and mandatory
     assert ("baseline metric reading cohort", 10) in src.searches
@@ -270,7 +279,10 @@ def test_steer_legs_late_merge_planner_window_unaffected():
     assert f"a1: {_BASE_TEXT}" in answer_step_prompt
     # ...but post-loop the leg evidence joined the pool
     qc = res.diagnostics["question_contract"]
-    assert qc["legs"][0] == {"query": "alphaline axis one", "hits": 1, "merged": 1}
+    # the axis-only leg retrieves the block first and owns the merge; the entity leg's
+    # identical hit then dedupes (merged 0) — the atom still lands exactly once
+    assert {"query": "axis one", "hits": 1, "merged": 1} in qc["legs"]
+    assert {"query": "alphaline axis one", "hits": 1, "merged": 0} in qc["legs"]
     assert res.atoms_gathered == 2
 
 
@@ -283,7 +295,7 @@ def test_steer_legs_dedupe_against_graph_legs():
                graph_late=True)
     qc = res.diagnostics["question_contract"]
     # the graph leg already owns "alphaline axis one" → the contract leg set excludes it
-    assert [d["query"] for d in qc["legs"]] == ["betaline axis one"]
+    assert [d["query"] for d in qc["legs"]] == ["axis one", "betaline axis one"]
 
 
 # ---- steer: slot-aware compose selection (panel amendment A1) ----------------------------------

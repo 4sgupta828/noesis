@@ -63,27 +63,40 @@ async def derive_contract(question: str, llm: LLMClient, derivation_prompt: str 
     return Contract(mode=mode, entities=entities, axes=axes)
 
 
-def build_legs(contract: Contract | None, *, cap: int = 8,
+def build_legs(contract: Contract | None, *, cap: int = 12,
                exclude: set[str] | frozenset[str] = frozenset()) -> list[str]:
-    """Retrieval-leg queries "<entity> <axis>" for an ENUMERATIVE contract, ROUND-ROBIN across
-    entities (axis-major: EVERY entity gets its first-axis leg before ANY entity gets a second),
-    capped at `cap` total, deduped case-insensitively against themselves and `exclude` (the
-    graph-leg queries — the unified leg budget's other members). Structural expansion only —
-    the meaning lives in the contract. Exploratory/None → [] (today's behavior)."""
+    """Retrieval-leg queries for an ENUMERATIVE contract, capped at `cap` total, deduped
+    case-insensitively against themselves and `exclude` (the graph-leg queries — the unified
+    leg budget's other members). Structural expansion only — the meaning lives in the
+    contract. Exploratory/None → [] (today's behavior).
+
+    Allocation (the act-001 starvation fix): FIRST one AXIS-ONLY leg per axis — evidence for
+    a relationship axis often lives on the OTHER side's document (the interaction section of
+    the standing treatment's label, not each candidate's), which no "<entity> <axis>" query
+    reaches; the axis is itself a retrieval-friendly phrase. THEN "<entity> <axis>" legs,
+    axis-major round-robin — with the old allocation and a small cap, axes beyond the first
+    never got a single leg (the tacrolimus-interaction axis starved in the index case)."""
     if contract is None or contract.mode != "enumerative" or not contract.entities:
         return []
     axes = contract.axes or [""]
     seen = {q.strip().lower() for q in exclude if q and q.strip()}
     out: list[str] = []
-    for axis in axes:
-        for entity in contract.entities:
-            q = f"{entity} {axis}".strip()
-            key = q.lower()
-            if not q or key in seen:
-                continue
+
+    def _add(q: str) -> bool:
+        """Append q if novel; return False once the cap is reached."""
+        q = q.strip()
+        key = q.lower()
+        if q and key not in seen:
             seen.add(key)
             out.append(q)
-            if len(out) >= cap:
+        return len(out) < cap
+
+    for axis in axes:                      # axis-only legs: cover every REQUIRED dimension first
+        if axis.strip() and not _add(axis):
+            return out
+    for axis in axes:                      # then per-entity legs, axis-major round-robin
+        for entity in contract.entities:
+            if not _add(f"{entity} {axis}"):
                 return out
     return out
 

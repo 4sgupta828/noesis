@@ -878,7 +878,7 @@ async def run_react(
         except BudgetExceeded:
             _contract = None                    # over budget → no contract → today's behavior
         _c_graph_qs = {(_l.get("query") or "").strip() for _l in (graph_legs or [])[:2]}
-        _c_queries = build_legs(_contract, cap=8, exclude=_c_graph_qs)
+        _c_queries = build_legs(_contract, cap=12, exclude=_c_graph_qs)
         _c_diag: dict = {"mode": question_contract,
                          "contract": (None if _contract is None else
                                       {"mode": _contract.mode,

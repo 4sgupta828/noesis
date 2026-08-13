@@ -107,14 +107,10 @@ class PeopleStore:
                 entity_id, status)
         return res == "UPDATE 1"
 
-    async def search(self, *, specialty: str = "", taxonomy: str = "", state: str = "",
-                     country: str = "", name: str = "", city: str = "", metric_key: str = "",
-                     metric_period: str = "", sort_metric: str = "",
-                     limit: int = 50) -> list[dict]:
-        """INDEXED SQL facet search (E-5). NO default ranking (E-3): rows come back in
-        NEUTRAL name order unless the CALLER explicitly passes sort_metric — the user must
-        actively choose the sort key; suppressed/retired/deceased are always excluded."""
-        pool = await self._get_pool()
+    @staticmethod
+    def _facet_preds(*, specialty: str = "", taxonomy: str = "", state: str = "",
+                     country: str = "", name: str = "", city: str = ""):
+        """Shared WHERE builder for search/breakdown — active rows only, always."""
         preds, args = ["e.status = 'active'"], []
 
         def _p(clause, val):
@@ -132,6 +128,18 @@ class PeopleStore:
             _p("lower(e.name) LIKE ${n}", f"%{name.lower()}%")
         if city:
             _p("e.city ILIKE ${n}", f"%{city}%")
+        return preds, args
+
+    async def search(self, *, specialty: str = "", taxonomy: str = "", state: str = "",
+                     country: str = "", name: str = "", city: str = "", metric_key: str = "",
+                     metric_period: str = "", sort_metric: str = "",
+                     limit: int = 50) -> list[dict]:
+        """INDEXED SQL facet search (E-5). NO default ranking (E-3): rows come back in
+        NEUTRAL name order unless the CALLER explicitly passes sort_metric — the user must
+        actively choose the sort key; suppressed/retired/deceased are always excluded."""
+        pool = await self._get_pool()
+        preds, args = self._facet_preds(specialty=specialty, taxonomy=taxonomy, state=state,
+                                        country=country, name=name, city=city)
         join, order = "", "ORDER BY e.name"
         if sort_metric:
             args.append(sort_metric)
@@ -157,6 +165,26 @@ class PeopleStore:
                 d[k] = d[k].isoformat()
             d["valid_as_of"] = d["valid_as_of"].isoformat() if d["valid_as_of"] else None
             out.append(d)
+        return out
+
+    async def breakdown(self, *, specialty: str = "", taxonomy: str = "", state: str = "",
+                        country: str = "", name: str = "", city: str = "") -> dict:
+        """The narrowing agent's situational awareness: how many match the current facets,
+        and how the matches DISTRIBUTE over the other facets (top values) — so a clarifying
+        question can split the remaining set instead of guessing. Counts only; indexed."""
+        pool = await self._get_pool()
+        preds, args = self._facet_preds(specialty=specialty, taxonomy=taxonomy, state=state,
+                                        country=country, name=name, city=city)
+        where = " AND ".join(preds)
+        out = {}
+        async with pool.acquire() as conn:
+            out["total"] = await conn.fetchval(
+                f"SELECT count(*) FROM noesis_entity e WHERE {where}", *args)
+            for col in ("specialty", "state", "city"):
+                rows = await conn.fetch(
+                    f"SELECT e.{col} AS v, count(*) AS c FROM noesis_entity e WHERE {where} "
+                    f"AND e.{col} != '' GROUP BY 1 ORDER BY c DESC LIMIT 8", *args)
+                out[f"by_{col}"] = [{"value": r["v"], "count": r["c"]} for r in rows]
         return out
 
     async def entity(self, entity_id: str) -> dict | None:

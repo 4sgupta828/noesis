@@ -228,7 +228,10 @@ async def _parse_people_intent(q: str, facets: dict, llm=None) -> tuple[dict, st
         note: str = ""
 
     system = (
-        "You parse ONE natural-language people-directory search into facets. Fields:\n"
+        "You parse a natural-language people-directory search into facets. The input may "
+        "be a single query or a CONVERSATION TRANSCRIPT — output the CURRENT constraint "
+        "state, honoring the newest statements (the user may relax or change earlier "
+        "constraints; a dropped constraint means that field is \"\"). Fields:\n"
         '- specialty: exactly one label from SPECIALTY LIST, verbatim, or "". Map lay or '
         "clinical phrasings to the closest listed label (e.g. a lay word for a specialist "
         "maps to its listed specialty); prefer a listed sub-specialty when the query names "
@@ -250,7 +253,7 @@ async def _parse_people_intent(q: str, facets: dict, llm=None) -> tuple[dict, st
         + ("\n".join(f"- {k} ({v})" for k, v in metrics.items()) or "- (none available)"))
     try:
         comp = await (llm or _graph_map_llm()).complete(
-            system=system, messages=[{"role": "user", "content": q[:400]}],
+            system=system, messages=[{"role": "user", "content": q[:2000]}],
             response_format=_Intent, max_tokens=300)
         p = comp.parsed
         by_lower = {s.lower(): s for s in specs}
@@ -276,6 +279,82 @@ async def _parse_people_intent(q: str, facets: dict, llm=None) -> tuple[dict, st
                        if hit else
                        "Intent model unavailable — could not interpret; use the facet fields.")
         return out, "fallback"
+
+
+async def _people_converse_turn(convo: str, intent: dict, breakdown: dict,
+                                candidates: list[dict], llm=None) -> dict:
+    """Phase B of the People concierge: given the conversation, the current facet state,
+    the live match breakdown, and (when few enough) the actual candidate rows, decide ONE
+    move — ask the single question that best splits the remaining set (broadening when 0
+    match), or present up to 5 candidates described ONLY by their recorded facts. E-3 in
+    the prompt AND in code: candidate ids are membership-validated against the fetched
+    rows, so the model can only choose among real matches, never invent or import one.
+    Fail-safe on LLM failure: a counts-based clarify built from the breakdown (structural,
+    no guessing)."""
+    from pydantic import BaseModel
+
+    class _Turn(BaseModel):
+        action: str = "clarify"          # clarify | present
+        message: str = ""
+        candidate_ids: list[str] = []
+
+    by_id = {c["entity_id"]: c for c in candidates}
+    bd_txt = f"total matches: {breakdown['total']}"
+    for k in ("by_specialty", "by_city", "by_state"):
+        vals = breakdown.get(k) or []
+        if vals:
+            bd_txt += f"\n{k}: " + ", ".join(f"{v['value']} ({v['count']})" for v in vals)
+    cand_txt = "\n".join(
+        f"- {c['entity_id']} | {c['name']} | {c['specialty']} | {c['city']}, {c['state']} | "
+        f"{c.get('credential') or 'credential n/a'}"
+        + (f" | metrics: {c['sort_value']:,.0f}" if c.get("sort_value") is not None else "")
+        for c in candidates) or "(not fetched — too many matches to list)"
+    system = (
+        "You are the concierge of a professional-specialist directory. Converge on the "
+        "RIGHT specialist(s) for the user's situation in as few turns as possible — "
+        "narrowing OR broadening the filters as the situation demands. You see the "
+        "conversation, the CURRENT FILTERS, the live MATCH BREAKDOWN, and (when few enough "
+        "match) the CANDIDATES with their recorded facts.\n\n"
+        "Choose ONE action:\n"
+        "- clarify: when matches are too many (>8) or the situation is too vague to choose "
+        "well. Ask ONE focused question that best splits the remaining set — use the "
+        "breakdown (city, sub-specialty distribution), and where useful ask about the "
+        "SITUATION (what procedure/condition, how far they can travel) rather than raw "
+        "filters. If 0 match, say so plainly and propose which constraint to relax.\n"
+        "- present: when candidates are listed and few match (≤8), or the user asked to "
+        "see options. Pick up to 5 candidate_ids whose RECORDED facts fit the stated "
+        "situation, and in message introduce each briefly using ONLY those facts "
+        "(sub-specialty, location, credential, listed metrics).\n\n"
+        "Hard rules:\n"
+        "- NEVER use quality words: best, top, expert, leading, recommended, greatest, "
+        "renowned. The directory records public facts; it does not rank quality.\n"
+        "- NEVER state anything about a person that is not in their candidate row.\n"
+        "- candidate_ids must be ids from CANDIDATES; leave empty when clarifying.\n"
+        "- message: plain conversational text, no markdown headers, under 120 words.")
+    user = (f"{convo}\n\nCURRENT FILTERS: "
+            + (", ".join(f"{k}={v}" for k, v in intent.items()
+                         if v and k != "note") or "(none)")
+            + f"\n\nMATCH BREAKDOWN:\n{bd_txt}\n\nCANDIDATES:\n{cand_txt}")
+    try:
+        comp = await (llm or _graph_map_llm()).complete(
+            system=system, messages=[{"role": "user", "content": user[:12000]}],
+            response_format=_Turn, max_tokens=700)
+        t = comp.parsed
+        ids = [i for i in (t.candidate_ids or []) if i in by_id][:5]
+        action = t.action if t.action in ("clarify", "present") else "clarify"
+        if action == "present" and not ids:
+            action = "clarify"
+        return {"action": action, "message": (t.message or "").strip()[:1500],
+                "candidates": [by_id[i] for i in ids]}
+    except Exception:   # noqa: BLE001
+        n = breakdown["total"]
+        top = ", ".join(v["value"] for v in (breakdown.get("by_city") or [])[:3])
+        msg = ("No one matches the current filters — try relaxing the city or "
+               "sub-specialty." if n == 0 else
+               f"{n} specialists match the current filters"
+               + (f" (most in {top})" if top else "")
+               + ". Add a city or describe the situation to narrow down.")
+        return {"action": "clarify", "message": msg, "candidates": []}
 
 
 def _graph_store():
@@ -2213,6 +2292,55 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     "sorted_by": intent["sort_metric"] or "name (neutral — no ranking)"}
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"people ask failed: {e}") from e
+
+    @app.post("/people/converse")
+    async def people_converse(body: dict) -> dict:
+        """PUBLIC People concierge (product owner opened the inventory to all users,
+        2026-08-12 — superseding E-1's admin-only default; the no-quality-ranking and
+        honest-provenance rules stand). Conversational narrowing: phase A re-parses the
+        WHOLE transcript into the current facet state (so 'actually anywhere in Texas'
+        broadens), the server computes the live match breakdown, and phase B either asks
+        the one question that best splits the set or presents ≤5 membership-validated
+        candidates described only by recorded facts."""
+        ps = _people()
+        if ps is None:
+            raise HTTPException(status_code=404, detail="people not enabled (NOESIS_PEOPLE)")
+        msgs = [m for m in (body.get("messages") or []) if isinstance(m, dict)
+                and str(m.get("content") or "").strip()][-12:]
+        if not msgs:
+            raise HTTPException(status_code=400, detail="missing messages")
+        convo = "\n".join(
+            f"{'Agent' if m.get('role') == 'assistant' else 'User'}: "
+            f"{str(m['content']).strip()[:400]}" for m in msgs)
+        try:
+            intent, parser = await _parse_people_intent(convo, await ps.facet_values())
+            kw = dict(specialty=intent["specialty"], state=intent["state"],
+                      city=intent["city"], name=intent["name"])
+            bd = await ps.breakdown(**kw)
+            cands = (await ps.search(**kw, sort_metric=intent["sort_metric"], limit=30)
+                     if 0 < bd["total"] <= 30 else [])
+            turn = await _people_converse_turn(convo, intent, bd, cands)
+            return {**turn, "facets": {**intent, "parser": parser},
+                    "total": bd["total"], "breakdown": bd,
+                    "sorted_by": intent["sort_metric"] or "name (neutral — no ranking)"}
+        except HTTPException:
+            raise
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"people converse failed: {e}") from e
+
+    @app.get("/people/entity")
+    async def people_entity(id: str) -> dict:
+        """PUBLIC profile + referral network (same open-to-all decision as /people/converse):
+        recorded facts with per-field provenance, honest metric labels, evidence-keyed
+        connections. Suppressed entities stay invisible (store filters them)."""
+        ps = _people()
+        if ps is None:
+            raise HTTPException(status_code=404, detail="people not enabled")
+        e = await ps.entity(id)
+        if not e or e.get("status") != "active":
+            raise HTTPException(status_code=404, detail="unknown entity")
+        e["connections"] = await ps.connections(id)
+        return e
 
     @app.get("/admin/people/entity")
     async def admin_people_entity(id: str, x_admin_password: str = Header(default="")) -> dict:

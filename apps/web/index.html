@@ -808,6 +808,14 @@
   .pplchip .k{font-family:var(--mono);font-size:.58rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);}
   .pplchip button{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:.72rem;padding:0 .25rem;}
   .pplchip button:hover{color:var(--gap);}
+  .pplthread{display:flex;flex-direction:column;gap:.6rem;margin:.9rem 0 .8rem;max-width:46rem;}
+  .pplmsg{max-width:90%;padding:.55rem .85rem;border-radius:12px;font-size:.88rem;line-height:1.45;}
+  .pplmsg.user{align-self:flex-end;background:var(--gold);color:var(--on-accent);border-bottom-right-radius:4px;}
+  .pplmsg.agent{align-self:flex-start;background:var(--panel2);border:1px solid var(--hair);color:var(--ink);border-bottom-left-radius:4px;}
+  .pplcands{display:flex;flex-direction:column;gap:.45rem;margin-top:.55rem;}
+  .pplcand{border:1px solid var(--hair);border-radius:10px;padding:.5rem .7rem;background:var(--bg);cursor:pointer;}
+  .pplcand:hover{border-color:var(--gold);}
+  .pplcand .why{display:block;font-size:.7rem;color:var(--muted);margin-top:.2rem;}
   .pplcols{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,380px);gap:1.4rem;align-items:start;padding-top:.5rem;}
   @media (max-width: 880px){ .pplcols{grid-template-columns:1fr;} }
   .pplprof{border:1px solid var(--hair);border-radius:14px;background:var(--panel2);padding:1rem;position:sticky;top:.5rem;}
@@ -1169,6 +1177,8 @@
     <button type="button" class="histbtn setbtn" id="setbtn" style="margin-left:0;" title="Product settings (admin)" aria-label="Product settings">⚙</button>
     <button type="button" class="histbtn pulsebtn" id="pulsebell" style="margin-left:0;" hidden
             title="Evidence changes on your watched topics" aria-label="Pulse inbox">◉ Pulse<span class="pbadge" id="pbadge" hidden></span></button>
+    <button type="button" class="histbtn" id="pplbtn" style="margin-left:0;"
+            title="Find the right specialist for a situation" aria-label="People">⧉ People</button>
   </header>
 
   <h1 id="heading">What does the evidence show?</h1>
@@ -1389,21 +1399,14 @@
   </div>
 </div>
 
-<!-- People: FULL-PAGE specialist inventory + referral network (admin-only) -->
+<!-- People: FULL-PAGE conversational specialist concierge (open to all) -->
 <section class="pulsepage" id="pplpage" hidden aria-label="People">
   <div class="pphead">
     <button type="button" class="sback" id="pplback">← Back</button>
     <span class="pptitle">⧉ People</span>
-    <span class="ppsub">specialist inventory &amp; referral network — public-record facts, no quality ranking</span>
+    <span class="ppsub">find the right specialist for the situation — public-record facts, no quality ranking</span>
   </div>
-  <div id="ppllock" hidden style="max-width:22rem;padding-top:1rem;">
-    <p style="font-size:.85rem;">Admin only — enter the settings password.</p>
-    <input id="pplpw" type="password" placeholder="Admin password" autocomplete="off"
-      style="width:100%;padding:.5rem .7rem;border:1px solid var(--hair);border-radius:10px;background:var(--panel2);color:var(--ink);" />
-    <div class="iderr" id="pplerr"></div>
-    <button type="button" class="idgo" id="pplgo" style="width:auto;padding:.4rem 1.1rem;margin-top:.5rem;">Unlock</button>
-  </div>
-  <div id="pplbody" hidden></div>
+  <div id="pplbody"></div>
 </section>
 
 <!-- camera capture (mobile + laptop webcam) -->
@@ -4492,15 +4495,11 @@ function renderSettingsUI(d){
     `<div class="setrow"><b>⬡ Relationship graph</b><button type="button" class="idgo" id="setgraph" style="width:auto;padding:.3rem .8rem;font-size:.78rem;">Open console</button>
      <span class="sethint">Curated clinical edges powering retrieval expansion + the is-it-helping quality watch.</span></div>` +
     `<div class="setrow"><b>⇪ Ingestion</b><button type="button" class="idgo" id="seting" style="width:auto;padding:.3rem .8rem;font-size:.78rem;">Open console</button>
-     <span class="sethint">All corpus sources, their live footprint, and push-ingestion controls.</span></div>` +
-    `<div class="setrow"><b>⧉ People</b><button type="button" class="idgo" id="setppl" style="width:auto;padding:.3rem .8rem;font-size:.78rem;">Open console</button>
-     <span class="sethint">Specialist inventory + evidence-keyed referral network (public records; no ranking by default).</span></div>`;
+     <span class="sethint">All corpus sources, their live footprint, and push-ingestion controls.</span></div>`;
   const gbtn = body.querySelector("#setgraph");
   if(gbtn) gbtn.addEventListener("click", () => { $("#setmodal").hidden = true; openGraphConsole(); });
   const ibtn = body.querySelector("#seting");
   if(ibtn) ibtn.addEventListener("click", () => { $("#setmodal").hidden = true; openIngest(); });
-  const pbtn = body.querySelector("#setppl");
-  if(pbtn) pbtn.addEventListener("click", () => { $("#setmodal").hidden = true; openPeople(); });
   body.querySelectorAll("select[data-k]").forEach(sel => sel.addEventListener("change", async () => {
     const r = await fetch("/admin/settings", {method: "POST",
       headers: {"content-type": "application/json", "x-admin-password": sessionStorage.getItem("noesis_apw") || ""},
@@ -4662,104 +4661,93 @@ function renderIngest(d){
     if(r.ok) setTimeout(loadIngest, 1200);
   });
 }
-// ---- People (⧉): FULL-PAGE specialist search + referral network (admin-only).
-// NL-first: POST /admin/people/ask does ONE LLM intent parse → closed-vocab facets, echoed
-// back and rendered as EDITABLE CHIPS (remove a chip → the same indexed facet search
-// re-runs). E-3: no default ranking; ordering only when the user picks/asks a metric.
-let PPL = {specialty:"", state:"", city:"", name:"", sort_metric:""};
+// ---- People (⧉): PUBLIC full-page conversational concierge. The agent converges on the
+// right specialist for the situation — asks the ONE question that best splits the live
+// match set (server sends total + distributions), broadens when the user relaxes a
+// constraint, and presents ≤5 focused candidates (membership-validated server-side)
+// instead of dumping lists. Chips show the current facet reading for transparency.
+let PPLC = {messages: [], busy: false};
 function openPeople(){
   $("#pplpage").hidden = false; document.body.style.overflow = "hidden";
-  const unlocked = sessionStorage.getItem("noesis_apw");
-  $("#ppllock").hidden = !!unlocked;
-  if(unlocked) renderPeopleShell(); else setTimeout(()=>$("#pplpw").focus(), 60);
+  renderPeopleShell();
 }
 function closePeople(){ $("#pplpage").hidden = true; document.body.style.overflow = ""; }
-function pplPW(){ return sessionStorage.getItem("noesis_apw") || $("#pplpw").value.trim(); }
 function renderPeopleShell(){
-  $("#ppllock").hidden = true; $("#pplbody").hidden = false;
-  if($("#pplq")){ $("#pplq").focus(); return; }   // shell already rendered — keep state
+  if($("#pplq")){ setTimeout(()=>$("#pplq").focus(), 60); return; }   // keep the thread
   $("#pplbody").innerHTML = `
-    <div class="pplask">
-      <input id="pplq" maxlength="400" placeholder='Describe who you need — e.g. "interventional cardiologists in Houston" or "Dr Chen, orthopedic spine, NY"' />
-      <button type="button" class="idgo" id="pplgobtn" style="width:auto;padding:.45rem 1.2rem;">Search</button>
-    </div>
-    <div class="pplchips" id="pplchips"></div>
-    <div class="setrow" style="gap:.4rem;align-items:center;">
-      <select id="pplsort">
-        <option value="">No ranking (name order)</option>
-        <option value="medicare_partb_services">Sort by: Medicare Part B services (user-selected)</option>
-        <option value="medicare_beneficiaries">Sort by: Medicare beneficiaries (user-selected)</option>
-      </select>
-      <span class="sethint" id="pplmsg"></span>
-    </div>
     <div class="pplcols">
-      <div id="pplres"></div>
+      <div>
+        <div class="pplchips" id="pplchips"></div>
+        <div class="pplthread" id="pplthread">
+          <div class="pplmsg agent">Describe the situation and I'll help find the right specialist —
+          the condition or procedure, and roughly where. For example: "I need someone for a complex
+          spine revision near Columbus" or "interventional cardiologist for my father in Houston".</div>
+        </div>
+        <div class="pplask" style="margin-top:.2rem;">
+          <input id="pplq" maxlength="400" placeholder="Describe the situation, answer, or adjust — in your own words" />
+          <button type="button" class="idgo" id="pplgobtn" style="width:auto;padding:.45rem 1.2rem;">Send</button>
+        </div>
+      </div>
       <aside id="pplprof" class="pplprof" hidden></aside>
     </div>
     <p style="font-size:.66rem;color:var(--muted);margin-top:.8rem;">Public-record facts with per-field
-    provenance. Noesis does not evaluate quality or suitability; ordering reflects only the metric you
-    select. Admin-only until license/discipline data lands (E-1).</p>`;
-  $("#pplgobtn").addEventListener("click", pplAsk);
-  $("#pplq").addEventListener("keydown", e => { if(e.key === "Enter") pplAsk(); });
-  $("#pplsort").addEventListener("change", () => { PPL.sort_metric = $("#pplsort").value; pplFacetSearch(); });
+    provenance. Noesis does not evaluate quality or suitability — suggestions reflect only recorded
+    facts (specialty, location, credentials, listed metrics), never a quality ranking.</p>`;
+  $("#pplgobtn").addEventListener("click", pplSend);
+  $("#pplq").addEventListener("keydown", e => { if(e.key === "Enter") pplSend(); });
   setTimeout(()=>$("#pplq").focus(), 60);
 }
-function pplChips(note){
+function pplChips(facets, total){
   const label = {specialty:"specialty", state:"state", city:"city", name:"name", sort_metric:"sort"};
-  $("#pplchips").innerHTML = Object.keys(label).filter(k => PPL[k]).map(k =>
-    `<span class="pplchip"><span class="k">${label[k]}</span> ${esc(PPL[k])}
-       <button type="button" data-k="${k}" title="remove">✕</button></span>`).join("")
-    + (note ? `<span class="pplchip" style="border-color:var(--hair);color:var(--muted);">${esc(note)}</span>` : "");
-  document.querySelectorAll("#pplchips .pplchip button[data-k]").forEach(b =>
-    b.addEventListener("click", () => {
-      PPL[b.dataset.k] = "";
-      if(b.dataset.k === "sort_metric") $("#pplsort").value = "";
-      pplFacetSearch();
-    }));
+  const chips = Object.keys(label).filter(k => facets && facets[k]).map(k =>
+    `<span class="pplchip"><span class="k">${label[k]}</span> ${esc(facets[k])}</span>`);
+  if(total != null) chips.push(`<span class="pplchip" style="border-color:var(--hair);color:var(--muted);">${(+total).toLocaleString()} match</span>`);
+  $("#pplchips").innerHTML = chips.join("");
 }
-function pplRenderResults(d){
-  $("#pplmsg").textContent = `${(d.results||[]).length} shown · ${(d.stats||{}).entities ?? 0} in inventory · sorted by ${d.sorted_by}`;
-  $("#pplres").innerHTML = (d.results||[]).map(e => `<div class="gredge" style="cursor:pointer;" data-id="${esc(e.entity_id)}">
-      <b>${esc(e.name)}</b><span class="grtag">${esc(e.specialty)}</span>
-      <span class="grtag">${esc(e.city)}, ${esc(e.state)}</span>
-      ${e.sort_value != null ? `<span class="grtag">${(+e.sort_value).toLocaleString()}</span>` : ""}
-      <span class="grtag">${esc(e.board_certified)}</span></div>`).join("")
-    || `<p style="color:var(--muted);font-size:.8rem;">No matches for this reading of the question — edit the chips above or rephrase.</p>`;
-  document.querySelectorAll("#pplres .gredge").forEach(el =>
-    el.addEventListener("click", () => pplProfile(el.dataset.id)));
+function pplAddMsg(role, html){
+  const div = document.createElement("div");
+  div.className = "pplmsg " + role;
+  div.innerHTML = html;
+  $("#pplthread").appendChild(div);
+  div.scrollIntoView({block: "end", behavior: "smooth"});
+  return div;
 }
-async function pplAsk(){
+async function pplSend(){
+  if(PPLC.busy) return;
   const q = $("#pplq").value.trim(); if(!q) return;
-  $("#pplmsg").textContent = "Reading your question…";
-  let r;
-  try{ r = await fetch("/admin/people/ask", {method:"POST",
-    headers: {"content-type":"application/json", "x-admin-password": pplPW()},
-    body: JSON.stringify({q, limit: 50})}); }
-  catch(e){ $("#pplmsg").textContent = "Network error."; return; }
-  if(r.status === 401){ sessionStorage.removeItem("noesis_apw"); $("#ppllock").hidden = false; return; }
-  if(r.status === 404){ $("#pplmsg").textContent = "People is not enabled (NOESIS_PEOPLE) or no data loaded yet."; return; }
-  if(!r.ok){ $("#pplmsg").textContent = "Search failed."; return; }
-  const d = await r.json();
-  sessionStorage.setItem("noesis_apw", pplPW());
-  const it = d.interpretation || {};
-  PPL = {specialty: it.specialty||"", state: it.state||"", city: it.city||"", name: it.name||"", sort_metric: it.sort_metric||""};
-  $("#pplsort").value = ["medicare_partb_services","medicare_beneficiaries"].includes(PPL.sort_metric) ? PPL.sort_metric : "";
-  $("#pplprof").hidden = true;
-  pplChips(it.note); pplRenderResults(d);
-}
-async function pplFacetSearch(){
-  const qs = new URLSearchParams({specialty: PPL.specialty, state: PPL.state, city: PPL.city,
-    name: PPL.name, sort_metric: PPL.sort_metric, limit: "50"});
-  const r = await fetch("/admin/people/search?" + qs, {headers: {"x-admin-password": pplPW()}});
-  if(r.status === 401){ sessionStorage.removeItem("noesis_apw"); $("#ppllock").hidden = false; return; }
-  if(!r.ok){ $("#pplmsg").textContent = "Search failed."; return; }
-  const d = await r.json();
-  $("#pplprof").hidden = true;
-  pplChips(""); pplRenderResults(d);
+  $("#pplq").value = "";
+  PPLC.messages.push({role: "user", content: q});
+  pplAddMsg("user", esc(q));
+  const turn = pplAddMsg("agent", "…");
+  PPLC.busy = true;
+  let r = null, d = null;
+  try{
+    r = await fetch("/people/converse", {method: "POST",
+      headers: {"content-type": "application/json"},
+      body: JSON.stringify({messages: PPLC.messages})});
+    if(r.ok) d = await r.json();
+  }catch(e){ /* handled below */ }
+  PPLC.busy = false;
+  if(!d){
+    turn.textContent = (r && r.status === 404) ? "People is not available right now."
+      : "Something went wrong — please try again.";
+    return;
+  }
+  PPLC.messages.push({role: "assistant", content: d.message});
+  pplChips(d.facets, d.total);
+  turn.innerHTML = esc(d.message) + ((d.candidates || []).length ? `<div class="pplcands">`
+    + d.candidates.map(c => `<div class="pplcand" data-id="${esc(c.entity_id)}">
+        <b>${esc(c.name)}</b> <span class="grtag">${esc(c.specialty)}</span>
+        <span class="grtag">${esc(c.city)}, ${esc(c.state)}</span>
+        ${c.credential ? `<span class="grtag">${esc(c.credential)}</span>` : ""}
+        <span class="why">tap for profile, contacts &amp; referral network</span></div>`).join("")
+    + `</div>` : "");
+  turn.querySelectorAll(".pplcand").forEach(el =>
+    el.addEventListener("click", () => pplProfile(el.dataset.id)));
+  turn.scrollIntoView({block: "end", behavior: "smooth"});
 }
 async function pplProfile(id){
-  const r = await fetch("/admin/people/entity?id=" + encodeURIComponent(id),
-                        {headers: {"x-admin-password": pplPW()}});
+  const r = await fetch("/people/entity?id=" + encodeURIComponent(id));
   if(!r.ok) return;
   const e = await r.json();
   $("#pplprof").hidden = false;
@@ -4783,9 +4771,8 @@ async function pplProfile(id){
   document.querySelectorAll("#pplprof .gredge[data-id]").forEach(el =>
     el.addEventListener("click", () => pplProfile(el.dataset.id)));
 }
-$("#pplgo").addEventListener("click", renderPeopleShell);
-$("#pplpw").addEventListener("keydown", e => { if(e.key === "Enter"){ renderPeopleShell(); } });
 $("#pplback").addEventListener("click", closePeople);
+$("#pplbtn").addEventListener("click", openPeople);
 
 $("#inggo").addEventListener("click", loadIngest);
 $("#ingpw").addEventListener("keydown", e => { if(e.key === "Enter") loadIngest(); });

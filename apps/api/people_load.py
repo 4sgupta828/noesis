@@ -46,16 +46,37 @@ _UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKi
 
 
 async def find_zip_url() -> str:
+    """Find the monthly dissemination zip. Format-agnostic: ANY .zip href on the listing,
+    excluding weekly/deactivated files; falls back to probing guessed month-name URLs
+    (the page markup has changed before — the 'no monthly zip link' failure)."""
     import httpx
     async with httpx.AsyncClient(timeout=60, headers=_UA, follow_redirects=True) as c:
         r = await c.get(LISTING)
         r.raise_for_status()
-        m = re.findall(r'href="([^"]*NPPES_Data_Dissemination[^"]*\.zip)"', r.text)
-        full = [u for u in m if "Weekly" not in u and "Deactivated" not in u]
-        if not full:
-            raise RuntimeError(f"no monthly zip link found (status {r.status_code})")
-        u = full[0]
-        return u if u.startswith("http") else f"https://download.cms.gov/nppes/{u.lstrip('./')}"
+        m = re.findall(r"""href=["']([^"']+\.zip)["']""", r.text, flags=re.I)
+        full = [u for u in m if "weekly" not in u.lower() and "deactiv" not in u.lower()
+                and "dissemination" in u.lower()]
+        if full:
+            u = full[0]
+            if u.startswith("http"):
+                return u
+            return f"https://download.cms.gov/nppes/{u.lstrip('./')}"
+        # fallback: probe guessed filenames for this + last month, V2/V1/plain
+        today = dt.date.today()
+        months = [today.replace(day=1)]
+        months.append((months[0] - dt.timedelta(days=1)).replace(day=1))
+        for mo in months:
+            base = f"NPPES_Data_Dissemination_{mo.strftime('%B')}_{mo.year}"
+            for suffix in ("", "_V2", "_V.2"):
+                url = f"https://download.cms.gov/nppes/{base}{suffix}.zip"
+                try:
+                    h = await c.head(url)
+                    if h.status_code == 200:
+                        return url
+                except Exception:   # noqa: BLE001
+                    continue
+        snippet = re.sub(r"\s+", " ", r.text)[:300]
+        raise RuntimeError(f"no monthly zip link found; page starts: {snippet!r}")
 
 
 async def download_zip(url: str, dest: str, progress=None) -> None:

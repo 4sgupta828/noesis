@@ -51,6 +51,20 @@ CREATE TABLE IF NOT EXISTS noesis_entity_metric (
     PRIMARY KEY (entity_id, metric_key, period, detail)
 );
 CREATE INDEX IF NOT EXISTS nem_metric ON noesis_entity_metric (metric_key, period, value DESC);
+CREATE TABLE IF NOT EXISTS noesis_entity_edge (
+    entity_a     text NOT NULL,               -- canonical order: entity_a < entity_b
+    entity_b     text NOT NULL,
+    relation     text NOT NULL,               -- same_group | same_facility | coauthor | referral_pattern
+    evidence_key text NOT NULL DEFAULT '',    -- the SHARED FACT: group PAC id / facility CCN /
+    --                                           paper id / CMS shared-patient file row — never inference
+    period       text NOT NULL DEFAULT '',
+    source       text NOT NULL,
+    retrieved_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (entity_a, entity_b, relation, evidence_key)
+);
+CREATE INDEX IF NOT EXISTS nee_a ON noesis_entity_edge (entity_a, relation);
+CREATE INDEX IF NOT EXISTS nee_b ON noesis_entity_edge (entity_b, relation);
+CREATE INDEX IF NOT EXISTS nee_ev ON noesis_entity_edge (relation, evidence_key);
 CREATE TABLE IF NOT EXISTS noesis_entity_contact (
     entity_id    text NOT NULL,
     kind         text NOT NULL,               -- phone | website | email
@@ -163,6 +177,74 @@ class PeopleStore:
         d["metrics"] = [{**dict(m), "retrieved_at": m["retrieved_at"].isoformat()} for m in ms]
         d["contacts"] = [dict(c) for c in cs]
         return d
+
+    async def add_edges(self, edges: list[dict]) -> int:
+        """Append co-affiliation/co-author edges. STRUCTURAL FACTS ONLY (Rule 18): every edge
+        carries the shared evidence_key (group PAC id, facility CCN, paper id, CMS
+        shared-patient row) — the referral network is derived from public records, never
+        guessed. Pairs are stored in canonical order so A-B and B-A dedupe."""
+        pool = await self._get_pool()
+        rows = []
+        for e in edges:
+            a, b = sorted((e["entity_a"], e["entity_b"]))
+            if a == b:
+                continue
+            rows.append([a, b, e["relation"], str(e.get("evidence_key", ""))[:120],
+                         str(e.get("period", ""))[:16], e["source"]])
+        if rows:
+            async with pool.acquire() as conn:
+                await conn.executemany(
+                    """INSERT INTO noesis_entity_edge (entity_a, entity_b, relation,
+                         evidence_key, period, source)
+                       VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING""", rows)
+        return len(rows)
+
+    async def derive_shared_key_edges(self, *, relation: str, metric_key: str,
+                                      source: str) -> int:
+        """Derive edges from a SHARED-KEY metric already loaded (e.g. metric_key
+        'group_pac_id' or 'facility_ccn' with `detail` = the shared id): all ACTIVE entities
+        sharing a detail value become pairwise-connected, evidence_key = that value. Pure
+        SQL, self-joins capped per shared key (a 500-physician hospital is a hub, not 125k
+        edges — cap pairs per key at 2k by smallest-entity order)."""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            res = await conn.execute(
+                f"""INSERT INTO noesis_entity_edge (entity_a, entity_b, relation,
+                      evidence_key, period, source)
+                    SELECT LEAST(m1.entity_id, m2.entity_id), GREATEST(m1.entity_id, m2.entity_id),
+                           $1, m1.detail, m1.period, $2
+                    FROM noesis_entity_metric m1
+                    JOIN noesis_entity_metric m2
+                      ON m1.metric_key = m2.metric_key AND m1.detail = m2.detail
+                     AND m1.period = m2.period AND m1.entity_id < m2.entity_id
+                    JOIN noesis_entity e1 ON e1.entity_id = m1.entity_id AND e1.status='active'
+                    JOIN noesis_entity e2 ON e2.entity_id = m2.entity_id AND e2.status='active'
+                    WHERE m1.metric_key = $3 AND m1.detail != ''
+                    ON CONFLICT DO NOTHING""",
+                relation, source, metric_key)
+        try:
+            return int((res or "INSERT 0 0").split()[-1])
+        except ValueError:
+            return 0
+
+    async def connections(self, entity_id: str, *, relation: str = "",
+                          limit: int = 50) -> list[dict]:
+        """An entity's network: connected colleagues with the shared fact + their profile
+        basics — the referral-network read ('who can Dr X hand this case to, in-network')."""
+        pool = await self._get_pool()
+        preds = "AND ee.relation = $3" if relation else ""
+        args = [entity_id, min(limit, 200)] + ([relation] if relation else [])
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"""SELECT CASE WHEN ee.entity_a = $1 THEN ee.entity_b ELSE ee.entity_a END AS peer,
+                           ee.relation, ee.evidence_key, ee.source,
+                           e.name, e.specialty, e.city, e.state, e.org
+                    FROM noesis_entity_edge ee
+                    JOIN noesis_entity e ON e.entity_id =
+                         CASE WHEN ee.entity_a = $1 THEN ee.entity_b ELSE ee.entity_a END
+                    WHERE (ee.entity_a = $1 OR ee.entity_b = $1) AND e.status = 'active' {preds}
+                    ORDER BY e.name LIMIT $2""", *args)
+        return [dict(r) for r in rows]
 
     async def stats(self) -> dict:
         pool = await self._get_pool()

@@ -2279,6 +2279,55 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         cur = _currency()
         return (await cur.get_state("nppes_load")) if cur else {"note": "no state store"}
 
+    @app.post("/admin/people/load-cms")
+    async def admin_people_load_cms(body: dict,
+                                    x_admin_token: str = Header(default="")) -> dict:
+        """SERVER-SIDE CMS load (admin token; CMS geo-blocks non-US clients like NPPES).
+        body {"part": "dac"|"facility"|"utilization"} — group-practice affiliations +
+        telehealth, hospital affiliations by CCN with Care Compare names, and Medicare
+        by-provider volume metrics. Background; poll GET ?part=... (pulse-state
+        'cms_load_<part>')."""
+        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
+        if want and x_admin_token != want:
+            raise HTTPException(status_code=401, detail="admin token required")
+        dsn = os.environ.get("NOESIS_CORPUS_DSN")
+        if not dsn or _people() is None:
+            raise HTTPException(status_code=503, detail="needs NOESIS_CORPUS_DSN + NOESIS_PEOPLE")
+        from api import people_cms
+        part = str(body.get("part") or "")
+        if part not in people_cms.LOADERS:
+            raise HTTPException(status_code=400,
+                                detail=f"part must be one of {sorted(people_cms.LOADERS)}")
+        cur = _currency()
+        key = f"cms_load_{part}"
+
+        async def _prog(msg: str) -> None:
+            if cur:
+                await cur.set_state(key, {"status": "running", "note": msg})
+
+        async def _run() -> None:
+            try:
+                res = await people_cms.LOADERS[part](dsn, progress=_prog)
+                ps = _people()
+                if ps:
+                    ps.invalidate_facets()   # metric keys must reach the NL parser's vocab
+                if cur:
+                    await cur.set_state(key, {"status": "done", **res})
+            except Exception as e:   # noqa: BLE001
+                if cur:
+                    await cur.set_state(key, {"status": "failed", "error": str(e)[:300]})
+        app.state.cms_task = asyncio.create_task(_run())
+        return {"status": "started", "part": part}
+
+    @app.get("/admin/people/load-cms")
+    async def admin_people_load_cms_status(part: str = "dac",
+                                           x_admin_token: str = Header(default="")) -> dict:
+        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
+        if want and x_admin_token != want:
+            raise HTTPException(status_code=401, detail="admin token required")
+        cur = _currency()
+        return (await cur.get_state(f"cms_load_{part}")) if cur else {"note": "no state store"}
+
     @app.get("/admin/people/search")
     async def admin_people_search(specialty: str = "", state: str = "", city: str = "",
                                   name: str = "", sort_metric: str = "",

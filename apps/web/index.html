@@ -4757,6 +4757,8 @@ async function pplProfile(id){
       <span class="grchip">board: <b>${esc(e.board_certified)}</b></span>
       <span class="grchip">discipline: <b>${esc(e.discipline_status)}</b></span>
       <span class="grchip">as of: <b>${esc(e.valid_as_of || "—")}</b></span></div>
+    ${(e.affiliations||[]).map(a => `<div class="gredge"><span class="grtag">${esc(a.kind.replace(/_/g," "))}</span>
+      <span>${esc(a.name || a.affil_key)}</span><span class="grtag">src: ${esc(a.source)}</span></div>`).join("")}
     ${(e.metrics||[]).map(m => `<div class="gredge"><span>${esc(m.metric_label || m.metric_key)}</span>
       <span class="grtag">${(+m.value).toLocaleString()} ${esc(m.unit)}</span>
       <span class="grtag">${esc(m.period)}</span><span class="grtag">src: ${esc(m.source)}</span></div>`).join("")}

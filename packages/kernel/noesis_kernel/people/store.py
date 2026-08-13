@@ -65,6 +65,16 @@ CREATE TABLE IF NOT EXISTS noesis_entity_edge (
 CREATE INDEX IF NOT EXISTS nee_a ON noesis_entity_edge (entity_a, relation);
 CREATE INDEX IF NOT EXISTS nee_b ON noesis_entity_edge (entity_b, relation);
 CREATE INDEX IF NOT EXISTS nee_ev ON noesis_entity_edge (relation, evidence_key);
+CREATE TABLE IF NOT EXISTS noesis_entity_affiliation (
+    entity_id    text NOT NULL,               -- who
+    kind         text NOT NULL,               -- group_practice | hospital | dialysis facility | ...
+    affil_key    text NOT NULL,               -- the SHARED FACT key: org PAC id / facility CCN
+    name         text NOT NULL DEFAULT '',    -- display name when the source publishes one
+    source       text NOT NULL,
+    retrieved_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (entity_id, kind, affil_key)
+);
+CREATE INDEX IF NOT EXISTS nea_key ON noesis_entity_affiliation (kind, affil_key);
 CREATE TABLE IF NOT EXISTS noesis_entity_contact (
     entity_id    text NOT NULL,
     kind         text NOT NULL,               -- phone | website | email
@@ -208,7 +218,29 @@ class PeopleStore:
         d["valid_as_of"] = d["valid_as_of"].isoformat() if d["valid_as_of"] else None
         d["metrics"] = [{**dict(m), "retrieved_at": m["retrieved_at"].isoformat()} for m in ms]
         d["contacts"] = [dict(c) for c in cs]
+        async with pool.acquire() as conn:
+            afs = await conn.fetch(
+                "SELECT kind, affil_key, name, source FROM noesis_entity_affiliation "
+                "WHERE entity_id=$1 ORDER BY kind, name", entity_id)
+        d["affiliations"] = [dict(a) for a in afs]
         return d
+
+    async def add_affiliations(self, rows: list[dict]) -> int:
+        """Bulk-upsert structural affiliations (entity ↔ group practice / facility). Like
+        edges, these are SHARED FACTS keyed by a registry id (org PAC id, facility CCN) —
+        never inference — and they power the live referral-network join in connections()."""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            await conn.executemany(
+                """INSERT INTO noesis_entity_affiliation (entity_id, kind, affil_key, name,
+                     source) VALUES ($1,$2,$3,$4,$5)
+                   ON CONFLICT (entity_id, kind, affil_key) DO UPDATE SET
+                     name = CASE WHEN EXCLUDED.name != '' THEN EXCLUDED.name
+                                 ELSE noesis_entity_affiliation.name END,
+                     retrieved_at = now()""",
+                [[r["entity_id"], r["kind"], r["affil_key"], r.get("name", ""),
+                  r["source"]] for r in rows])
+        return len(rows)
 
     async def add_edges(self, edges: list[dict]) -> int:
         """Append co-affiliation/co-author edges. STRUCTURAL FACTS ONLY (Rule 18): every edge
@@ -262,19 +294,35 @@ class PeopleStore:
     async def connections(self, entity_id: str, *, relation: str = "",
                           limit: int = 50) -> list[dict]:
         """An entity's network: connected colleagues with the shared fact + their profile
-        basics — the referral-network read ('who can Dr X hand this case to, in-network')."""
+        basics — the referral-network read ('who can Dr X hand this case to, in-network').
+        Two sources UNIONed: stored edges, and LIVE shared-affiliation neighbors (same
+        group practice / same hospital, joined on the registry key at read time — at 1.27M
+        entities a large hospital would explode a materialized pairwise edge table, so
+        pairs are never stored; E-5 indexed reads only)."""
         pool = await self._get_pool()
-        preds = "AND ee.relation = $3" if relation else ""
+        preds = "AND c.relation = $3" if relation else ""
         args = [entity_id, min(limit, 200)] + ([relation] if relation else [])
         async with pool.acquire() as conn:
             rows = await conn.fetch(
-                f"""SELECT CASE WHEN ee.entity_a = $1 THEN ee.entity_b ELSE ee.entity_a END AS peer,
-                           ee.relation, ee.evidence_key, ee.source,
+                f"""SELECT c.peer, c.relation, c.evidence_key, c.source,
                            e.name, e.specialty, e.city, e.state, e.org
-                    FROM noesis_entity_edge ee
-                    JOIN noesis_entity e ON e.entity_id =
-                         CASE WHEN ee.entity_a = $1 THEN ee.entity_b ELSE ee.entity_a END
-                    WHERE (ee.entity_a = $1 OR ee.entity_b = $1) AND e.status = 'active' {preds}
+                    FROM (
+                      SELECT CASE WHEN ee.entity_a = $1 THEN ee.entity_b
+                                  ELSE ee.entity_a END AS peer,
+                             ee.relation, ee.evidence_key, ee.source
+                        FROM noesis_entity_edge ee
+                       WHERE ee.entity_a = $1 OR ee.entity_b = $1
+                      UNION
+                      SELECT a2.entity_id, 'same_' || replace(a1.kind, ' ', '_'),
+                             COALESCE(NULLIF(a1.name, ''), a1.affil_key), a1.source
+                        FROM noesis_entity_affiliation a1
+                        JOIN noesis_entity_affiliation a2
+                          ON a2.kind = a1.kind AND a2.affil_key = a1.affil_key
+                         AND a2.entity_id != $1
+                       WHERE a1.entity_id = $1
+                    ) c
+                    JOIN noesis_entity e ON e.entity_id = c.peer AND e.status = 'active'
+                    WHERE true {preds}
                     ORDER BY e.name LIMIT $2""", *args)
         return [dict(r) for r in rows]
 

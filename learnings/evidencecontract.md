@@ -132,3 +132,69 @@ unbatched verification calls.
 4. Legs budget: 12-leg cap × embeddings — right ceiling? Interaction with graph legs?
 5. Does stage 2 need the question in the entailment batch, or is identity alone enough
    (cost/precision tradeoff)?
+
+---
+
+# v2 — PANEL AMENDMENTS (2026-08-13; codex + gemini 3 pro + code-grounded seat, adversarial protocol)
+
+All 11 checkable premises verified by all three seats (several understated in the spec's
+favor: the fallback grounder and frame-repair calls ALSO bypass entailment/budget;
+evidence_fitness only fires when verified > compose cap). The spec's diagnosis stands; its
+design needed surgery. Binding rulings:
+
+**A1 (code seat's killer objection): "off-subject evidence is non-bindable" is FALSE as
+written.** A correctly-attributed off-subject claim ("Sitagliptin requires dose adjustment
+at eGFR<45", citing the sitagliptin label) is self-congruent — it binds, fills no slot, and
+can even EVICT slot-filling claims from the 30-claim compose cap via question-global cosine
+ranking (react.py:992-997). Fix: slot-aware selection into the compose cap (slot-filling
+claims reserved first), and enumerative-mode policy for off-contract bound claims (demote
+below all slot-fillers; never evict one).
+
+**A2 (all seats): CUT the LLM doc-identity judgments + noesis_doc_identity cache +
+subject_hint from v1.** Doc-level subject on multi-subject documents (reviews, comparative
+trials, combo labels) poisons recall permanently; cold-cache cost (30-120 judgments/run)
+bankrupts BudgetState (ceiling 40-60). v1 identity = document_title + source_key + the
+EXISTING structural evidence-kind classifier (authority.py vocabulary, evidence_kind.py:81,
+already wired onto VerifiedClaim — the spec wrongly introduced a second incompatible kind
+vocabulary). Add LLM identity later ONLY if the slice shows title-based congruence missing,
+and then versioned (judge/prompt/vocab) with a re-stamp path, block-level for multi-subject
+docs.
+
+**A3 (all seats): stages 1+2 ship modified; stage 3 does NOT ship as specced.**
+- Stage 1: render title (length-capped) + source_key + structural evidence_kind on ALL
+  surfaces INCLUDING the fallback grounder and panel synthesis. No new semantics.
+- Stage 2: ONE unified batched binding judge covering loop + claims-first + fallback-grounder
+  claims (closing all three bypasses). Verdicts: subject mismatch → hard drop (the
+  sitagliptin fix); kind + population mismatch → demote + annotate (recall-safe start;
+  tighten only on eval evidence). Population wording comes from the vertical-supplied
+  contract param — never kernel prompt (litmus). Judge-didn't-run (budget/flag/keys) →
+  annotate-not-drop. All calls charged to BudgetState with an explicit ceiling re-plan
+  (also charge the fallback grounder + frame-repair calls the spec missed).
+- Stage 3 rebuilt as "slot grid + shadow first": contract derived (scaffold piggyback where
+  it runs; NOTE the scaffold is SKIPPED on follow-ups — research.py:153-158 — so the
+  standalone call is the common path, price it as such). Contract legs run in SHADOW
+  (logged, not steering) with baseline retrieval mandatory; a confident-wrong contract must
+  be observable before it may steer (a missing slot is never created — coverage can lie).
+  Slot grid + honest loop-produced gaps ship; the re-query round is funded only after
+  shadow data shows unfilled slots persist post-1+2 (its true cost = re-extract +
+  re-entail, not "+N retrievals"). Legs: unified cap WITH graph legs, global k_total spread
+  across legs (not 12×k=10 → 120 atoms, which blows planner_atom_window=60 /
+  claims_first atom_cap / compose cap), executed concurrently, SSE progress events.
+- Stage 4: unchanged (A/B via compose_ab.py, last, never bundled with retrieval changes);
+  re-derive mode from BOUND CLAIMS at compose time rather than trusting the pre-retrieval
+  contract.
+
+**A4 (codex): the transplant contract example needs an explicit safety/nephrotoxicity
+axis** — renal-dosing + interactions alone can still pass the aminoglycoside trap.
+Axis vocabularies and kind-compatibility live ENTIRELY in the manifest-driven derivation
+(the axes' acceptable_kinds ARE the compatibility rule); the kernel judge takes them as
+caller-supplied data.
+
+**A5 (codex): genuine same-subject contradictions remain out of scope** — stage 1
+dissolves the OBSERVED contradiction (different-subject claims misread as one subject),
+but no cross-claim contradiction check exists or is added here; noted as future work.
+
+**Sequencing ruling (code seat's null hypothesis, adopted):** 4 of the 5 original failures
+fall to stages 1+2 alone. Order: baseline slice run (fails today) → stage 1 → stage 2 →
+re-run slice + K-QA/HealthBench no-harm (bar: must-have recall drop ≤2pt absolute,
+contradiction rate not worse) → fund stage-3 pieces only if the data demands them.

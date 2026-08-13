@@ -2043,6 +2043,51 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 app.state.people = None
         return app.state.people
 
+    @app.post("/admin/people/load-nppes")
+    async def admin_people_load_nppes(x_admin_token: str = Header(default="")) -> dict:
+        """SERVER-SIDE NPPES fetch+load (admin token): CMS's edge denies non-US clients, so
+        the US-region container downloads the monthly zip and stream-loads the pilot
+        specialties. Background; poll GET (state in noesis_pulse_state 'nppes_load')."""
+        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
+        if want and x_admin_token != want:
+            raise HTTPException(status_code=401, detail="admin token required")
+        dsn = os.environ.get("NOESIS_CORPUS_DSN")
+        if not dsn or _people() is None:
+            raise HTTPException(status_code=503, detail="needs NOESIS_CORPUS_DSN + NOESIS_PEOPLE")
+        from api import people_load
+        cur = _currency()
+
+        async def _prog(msg: str) -> None:
+            if cur:
+                await cur.set_state("nppes_load", {"status": "running", "note": msg})
+
+        async def _run() -> None:
+            import datetime as _dt
+            try:
+                url = await people_load.find_zip_url()
+                await _prog(f"downloading {url.rsplit('/', 1)[-1]}")
+                await people_load.download_zip(url, "/tmp/nppes.zip", progress=_prog)
+                await _prog("download done — streaming load")
+                res = await people_load.load_from_zip(
+                    "/tmp/nppes.zip", dsn,
+                    _dt.date.today().replace(day=1).isoformat(), progress=_prog)
+                if cur:
+                    await cur.set_state("nppes_load", {"status": "done", **res})
+            except Exception as e:   # noqa: BLE001
+                if cur:
+                    await cur.set_state("nppes_load", {"status": "failed",
+                                                       "error": str(e)[:300]})
+        app.state.nppes_task = asyncio.create_task(_run())
+        return {"status": "started"}
+
+    @app.get("/admin/people/load-nppes")
+    async def admin_people_load_status(x_admin_token: str = Header(default="")) -> dict:
+        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
+        if want and x_admin_token != want:
+            raise HTTPException(status_code=401, detail="admin token required")
+        cur = _currency()
+        return (await cur.get_state("nppes_load")) if cur else {"note": "no state store"}
+
     @app.get("/admin/people/search")
     async def admin_people_search(specialty: str = "", state: str = "", name: str = "",
                                   sort_metric: str = "", metric_period: str = "",

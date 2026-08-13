@@ -121,3 +121,14 @@ to meaning. These rules exist so that class of failure cannot be rebuilt:
    hid the flaw. Boundary-shaped questions (generic boilerplate vocabulary shared across
    thousands of documents, enumerable practical asks, cross-population traps) must be
    first-class in every eval slice, weighted by harm, not by frequency.
+
+## Never Normalize a Failing Test (earned 2026-08-13, the hijacked /research route)
+
+POST /research served the wrong function in prod for days (a helper was inserted between the
+route decorator and its handler). Two API tests failed with 422 the whole time — and were
+repeatedly dismissed as "pre-existing failures, unrelated" by every session that saw them,
+including during work that touched the same file. A persistently failing test is a CLAIM
+about the system; "pre-existing" describes when it broke, not whether it matters. Rule:
+before dismissing any failing test as known/unrelated, spend the five minutes to find WHAT
+it is actually asserting and why it fails — or file it as a tracked bug with an owner. A
+test suite with tolerated red is a test suite that cannot catch the next regression.

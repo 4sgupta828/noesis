@@ -87,6 +87,17 @@ def test_clarify_passthrough_and_cap():
     assert out["candidates"] == []
 
 
+def test_names_in_prose_recovered_to_clickable_candidates():
+    # the observed prod failure: names listed in message, candidate_ids empty
+    llm = _LLM(action="clarify", candidate_ids=[],
+               message="Here are adult nephrologists in Akron: A One, MD; C Three, DO.")
+    out = _run(_people_converse_turn("User: show me options", INTENT, BREAKDOWN, CANDS,
+                                     llm=llm))
+    assert out["action"] == "present"
+    assert [c["entity_id"] for c in out["candidates"]] == ["npi:1000000001",
+                                                           "npi:1000000003"]
+
+
 def test_clarify_budget_reaches_the_model():
     llm = _LLM(action="present", message="Options.", candidate_ids=["npi:1000000001"])
     _run(_people_converse_turn("User: x", INTENT, BREAKDOWN, CANDS, n_asked=2, llm=llm))

@@ -371,6 +371,13 @@ async def _people_converse_turn(convo: str, intent: dict, breakdown: dict,
             response_format=_Turn, max_tokens=700)
         t = comp.parsed
         ids = [i for i in (t.candidate_ids or []) if i in by_id][:5]
+        if not ids and candidates:
+            # The model reliably names people in prose while leaving candidate_ids empty
+            # (two prod runs). Names come from OUR closed candidate list, so recover them
+            # structurally — exact containment, not interpretation (Rule 18 structural
+            # carve-out) — and the ids-are-authoritative rule below flips this to present.
+            ml = (t.message or "").lower()
+            ids = [c["entity_id"] for c in candidates if c["name"].lower() in ml][:5]
         # ids are authoritative: returning valid ids IS presenting (a model that names
         # people but declares clarify would leave the user with unclickable prose)
         action = "present" if ids else "clarify"

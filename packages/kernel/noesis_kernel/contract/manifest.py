@@ -173,6 +173,14 @@ class VerticalManifest:
     panel_synthesis_directive: str | None = None
     panel_examples: tuple = ()             # sample multi-specialty cases seeded into the panel intake
 
+    # Optional QUESTION-CONTRACT derivation directive (Evidence Contract stage 3, flag
+    # NOESIS_QUESTION_CONTRACT): instructs ONE small LLM call to decide whether a question demands
+    # ENUMERATING candidate items, and if so to name the concrete candidate entities a practitioner
+    # would consider (including reasonable defaults the asker didn't name) plus the REQUIRED
+    # evidence axes (safety/risk and interaction axes where applicable). ALL domain vocabulary
+    # lives HERE; the kernel derives, expands to retrieval legs, and slot-matches generically.
+    # None → no contract is ever derived (the flag is a safe no-op for this vertical).
+    contract_prompt: str | None = None
     # Optional STRUCTURAL evidence-tier classifier: (source_key, facets) -> evidence_kind str (Rule 18 —
     # maps computable per-source metadata onto the authority pyramid, no semantic judgment). Used to
     # stamp each verified claim's evidence tier (for evidence-fitness ranking + the eval's evidence_floor).

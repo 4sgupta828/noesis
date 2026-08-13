@@ -1,0 +1,24 @@
+"""Medical QuestionContract derivation directive (Evidence Contract stage 3).
+
+The VERTICAL half of the question-contract split: this prompt owns ALL the clinical
+vocabulary — what counts as an enumerable candidate set, which standard-of-care defaults a
+practitioner would consider even when the asker didn't name them, and which safety/interaction
+axes the evidence must cover. The kernel (noesis_kernel.research.contract) supplies only the
+mechanics: it makes one small structured call with this prompt, expands the result into
+per-entity retrieval legs, and slot-matches claims — all with generic code.
+"""
+
+MEDICAL_CONTRACT_PROMPT = """You derive a QUESTION CONTRACT for a clinical research question: the SHAPE of evidence a complete, safe answer requires. You never answer the question itself.
+
+Decide `mode`:
+- "enumerative" — the question demands ENUMERATING and weighing concrete candidate items: choosing among drugs or interventions ("which antibiotics are safest for…", "options for treating X in Y", "what can be used instead of Z"), a best/safest/preferred-agent question over a therapeutic class, or a comparison across named alternatives.
+- "exploratory" — everything else: a single-subject lookup (one drug's dose, one trial's result), a mechanism/why question, a diagnosis/workup question, or an open overview. For exploratory questions leave `entities` and `axes` empty.
+
+For an enumerative question, fill `entities` with the CONCRETE candidate items a practicing clinician would actually consider — specific drug or intervention names, not classes alone. INCLUDE the reasonable standard-of-care defaults the asker did not name: e.g. for empiric antibiotic choice, the specific first-line agents commonly used in that clinical setting (such as a beta-lactam, a fluoroquinolone, trimethoprim-sulfamethoxazole, nitrofurantoin — whichever fit the scenario); for antihypertensive choice, the specific first-line classes' representative agents. Use generic (INN) names. Give 4–8 entities, each a short name.
+
+Fill `axes` with the evidence dimensions the answer MUST cover for EACH candidate, as short retrieval-friendly phrases (2–4 axes). Always consider:
+- the dimension the question explicitly asks about (e.g. "dosing in renal impairment", "efficacy for prophylaxis");
+- SAFETY/RISK axes for this population — organ toxicity relevant to the case (nephrotoxicity, hepatotoxicity, QT prolongation), contraindications, boxed warnings;
+- INTERACTION axes with the population's STANDING TREATMENTS where applicable — e.g. for transplant recipients, interactions with immunosuppressants (tacrolimus, cyclosporine, mycophenolate); for anticoagulated patients, bleeding-relevant interactions; for patients on antiretrovirals, CYP-mediated interactions.
+
+Keep each entity and axis SHORT — they are combined verbatim into search queries. Do not answer the question, recommend an agent, or add prose; derive only the contract."""

@@ -628,6 +628,20 @@ def claim_congruence_enabled() -> bool:
     return os.environ.get("NOESIS_CLAIM_CONGRUENCE", "").lower() in ("1", "true", "yes")
 
 
+def question_contract_mode() -> str:
+    """Evidence Contract stage 3 (Rule 20, default OFF) via NOESIS_QUESTION_CONTRACT:
+    "" (default) → off, byte-identical; "shadow" → derive the QuestionContract (mode/entities/
+    axes, ONE small charged LLM call on the vertical's contract_prompt) + compute the per-entity
+    retrieval legs + log contract/legs/slot-grid to the diag trace — NO leg retrieval, NO
+    selection change; "steer" → enumerative contracts additionally EXECUTE the legs (cap 8,
+    round-robin across entities, k=4 each, concurrent, late-merged post-loop like graph legs —
+    baseline retrieval unchanged), compose selection reserves cap seats for slot-filling claims
+    (an off-slot claim can never evict a slot-filler), and entities left with zero claims become
+    honest loop-produced coverage gaps. Any other value → off."""
+    v = os.environ.get("NOESIS_QUESTION_CONTRACT", "").lower()
+    return v if v in ("shadow", "steer") else ""
+
+
 def diag_trace_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, each research run captures a troubleshooting trace
     (per-turn steps, tool-call breakdown, the grounding funnel, retries, failures, budget, timing)
@@ -967,6 +981,8 @@ def build_default_service() -> ResearchService:
         evidence_ranker=getattr(getattr(manifest, "authority_policy", None), "rank", None),
         evidence_identity=evidence_identity_enabled(),
         claim_congruence=claim_congruence_enabled(),
+        question_contract=question_contract_mode(),
+        contract_prompt=getattr(manifest, "contract_prompt", None),
         panel_specialists=getattr(manifest, "panel_specialists", ()),
         panel_default_ids=getattr(manifest, "panel_default_ids", ()),
         panel_synthesis_directive=getattr(manifest, "panel_synthesis_directive", None),

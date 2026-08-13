@@ -92,3 +92,17 @@ def test_claim_congruence_flag_reads_env(monkeypatch) -> None:
     assert claim_congruence_enabled() is True
     monkeypatch.setenv("NOESIS_CLAIM_CONGRUENCE", "false")
     assert claim_congruence_enabled() is False
+
+
+def test_question_contract_mode_reads_env(monkeypatch) -> None:
+    # Evidence Contract stage 3: NOESIS_QUESTION_CONTRACT is a MODE string (mirrors
+    # NOESIS_GRAPH_EXPAND): "" off (default), "shadow", "steer"; anything else → off.
+    from api.app import question_contract_mode
+    monkeypatch.delenv("NOESIS_QUESTION_CONTRACT", raising=False)
+    assert question_contract_mode() == ""
+    monkeypatch.setenv("NOESIS_QUESTION_CONTRACT", "shadow")
+    assert question_contract_mode() == "shadow"
+    monkeypatch.setenv("NOESIS_QUESTION_CONTRACT", "STEER")
+    assert question_contract_mode() == "steer"
+    monkeypatch.setenv("NOESIS_QUESTION_CONTRACT", "1")     # bare truthy is NOT a mode
+    assert question_contract_mode() == ""

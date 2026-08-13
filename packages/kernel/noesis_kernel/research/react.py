@@ -358,7 +358,7 @@ _LOW_YIELD_ATOMS = 2           # a search adding fewer than this many NEW atoms 
 
 
 async def _rank_claims_by_relevance(question, claims, embedder, top, *,
-                                    evidence_ranker=None, country_boost=None):
+                                    evidence_ranker=None, country_boost=None, rank_all=False):
     """Keep the `top` verified claims most RELEVANT to the question, by dense cosine similarity of
     claim↔question embeddings (Rule 18 — a computable relevance signal, not a keyword heuristic). When
     `evidence_ranker` is supplied (evidence-fitness on), a SMALL bounded evidence-tier boost is added so
@@ -379,7 +379,10 @@ async def _rank_claims_by_relevance(question, claims, embedder, top, *,
         return bool(f.get("superseded_by") or f.get("retracted"))
     claims = sorted(claims, key=_stale)                 # stable: preserves order within partitions
 
-    if len(claims) <= top:
+    # `rank_all` (stage-3 slot-aware selection): score EVERY claim even when the pool fits under
+    # `top`, so the caller gets a FULL ranked ordering to allocate seats from (default False →
+    # the early return below is byte-identical to today).
+    if len(claims) <= top and not rank_all:
         return list(claims)
     try:
         vecs = await asyncio.to_thread(lambda: embedder.embed([question] + [c.text for c in claims]))
@@ -575,6 +578,20 @@ async def run_react(
     #                                           runs byte-identical to graph-off — no early-stop
     #                                           possible), merge them post-loop just before the
     #                                           claims-first extraction. Purely additive evidence.
+    question_contract: str = "",              # Evidence Contract stage 3 (flag mode): "" off
+    #                                           (byte-identical); "shadow" → derive the question's
+    #                                           evidence contract + compute the per-entity legs +
+    #                                           log them (diag/SSE) — NO leg retrieval, NO
+    #                                           selection change (zero behavior change beyond +1
+    #                                           small charged LLM call); "steer" → enumerative
+    #                                           contracts execute the legs (cap 8, k=4 each,
+    #                                           concurrent, LATE-merged like graph legs), compose
+    #                                           selection reserves seats for slot-filling claims,
+    #                                           and entities left with zero claims become honest
+    #                                           loop-produced coverage gaps.
+    contract_prompt: str | None = None,       # vertical-supplied contract-derivation directive
+    #                                           (ALL domain vocabulary lives there — kernel litmus);
+    #                                           None → no contract derived (flag effectively off)
 ) -> AnswerResult:
     import asyncio
     atoms = AtomStore()
@@ -839,6 +856,61 @@ async def run_react(
                              "(see atoms above). It supplements the question — still SEARCH the "
                              "question itself before answering.")
 
+    # EVIDENCE CONTRACT stage 3 (question-contract flag): derive the question's evidence CONTRACT
+    # (ONE small charged LLM call on the vertical-supplied prompt; fail-safe None → today's
+    # behavior) and expand an ENUMERATIVE contract into per-entity retrieval legs — round-robin
+    # across entities, capped at 8, deduped against the graph legs' [:2] (one unified leg budget
+    # of 10). SHADOW: log the contract + computed legs (diag/SSE), retrieve NOTHING, alter
+    # NOTHING — the confident-wrong contract must be observable before it may steer. STEER:
+    # execute the legs CONCURRENTLY as separate RetrievalRequests (k=4 each — NEVER through
+    # multi_query_retrieve's single fused pool, which would truncate all entities to one k-pool
+    # and silently starve most of them) and STASH the hits for the same post-loop late-merge seam
+    # as graph legs, so the planner window is unaffected and claims-first mines them. Baseline
+    # retrieval (the planner's own searching) is unchanged and mandatory in every mode.
+    _contract = None
+    _c_stash: list[tuple[str, list]] = []       # steer: (query, hits) held back until post-loop
+    if question_contract in ("shadow", "steer") and (contract_prompt or "").strip():
+        from noesis_kernel.research.contract import build_legs, derive_contract
+        try:
+            budget.reserve()
+            budget.charge(calls=1)              # the derivation call (BudgetState honesty)
+            _contract = await derive_contract(question, planner, contract_prompt)
+        except BudgetExceeded:
+            _contract = None                    # over budget → no contract → today's behavior
+        _c_graph_qs = {(_l.get("query") or "").strip() for _l in (graph_legs or [])[:2]}
+        _c_queries = build_legs(_contract, cap=8, exclude=_c_graph_qs)
+        _c_diag: dict = {"mode": question_contract,
+                         "contract": (None if _contract is None else
+                                      {"mode": _contract.mode,
+                                       "entities": list(_contract.entities),
+                                       "axes": list(_contract.axes)}),
+                         "legs": [{"query": q} for q in _c_queries]}
+        if question_contract == "steer" and _c_queries:
+            async def _c_fetch(q: str) -> list:
+                try:
+                    _cv = await asyncio.to_thread(lambda _q=q: list(embedder.embed([_q])[0]))
+                    return await source.search(RetrievalRequest(
+                        query=q, tenant_id=tenant_id, workspace_id=workspace_id,
+                        query_embedding=_cv, k=4, facets=dict(facets or {})))
+                except Exception as _ce:   # noqa: BLE001 — a dead leg never breaks the answer
+                    _log.warning("contract leg failed on %r: %s", q, _ce)
+                    return []
+            _c_results = await asyncio.gather(*(_c_fetch(q) for q in _c_queries))
+            for _cd, _cq, _c_hits in zip(_c_diag["legs"], _c_queries, _c_results):
+                _cd["hits"] = len(_c_hits)
+                if _c_hits:
+                    _c_stash.append((_cq, _c_hits))   # planner never sees these — loop runs
+                    #                                   byte-identical to contract-off
+        if diag is not None:
+            diag["question_contract"] = _c_diag
+        if _contract is not None:
+            _log.info("question contract (%s): mode=%s entities=%d axes=%d legs=%d",
+                      question_contract, _contract.mode, len(_contract.entities),
+                      len(_contract.axes), len(_c_queries))
+            await emit({"type": "contract", "mode": question_contract,
+                        "contract_mode": _contract.mode,
+                        "entities": list(_contract.entities), "legs": list(_c_queries)})
+
     stale_searches = 0          # consecutive searches that added NO new atoms (spinning detector)
     premature_answers = 0       # zero-evidence answer attempts (see the guard below)
     for step_i in range(max_steps):
@@ -1010,6 +1082,25 @@ async def run_react(
         result.atoms_gathered = len(atoms.all())
         _log.info("graph legs late-merged %d atoms post-loop", _late_added)
 
+    # EVIDENCE CONTRACT stage 3 late merge (steer): contract-leg evidence joins the atom pool at
+    # the SAME seam as graph legs — after the planner finished its own (contract-blind) searching
+    # and after the fallback grounder — so the loop ran byte-identical to contract-off and the
+    # legs are purely additive. The claims-first extraction below mines them through the same
+    # span + entailment gates as every other atom.
+    if _c_stash:
+        _c_added = 0
+        for _cq, _c_hits in _c_stash:
+            _before = len(atoms.all())
+            atoms.add_hits(_c_hits)
+            _n = len(atoms.all()) - _before
+            _c_added += _n
+            if diag is not None:
+                for _cd in diag.get("question_contract", {}).get("legs", []):
+                    if _cd["query"] == _cq:
+                        _cd["merged"] = _n
+        result.atoms_gathered = len(atoms.all())
+        _log.info("contract legs late-merged %d atoms post-loop", _c_added)
+
     # EVIDENCE CONTRACT stage 2 (claim-congruence flag): loop-emitted and fallback-grounder claims
     # passed only the verbatim span gate — they have NEVER been entailment-judged (the bypass behind
     # the prod misattribution failure: a real quote from the wrong document's subject shipped as fact).
@@ -1161,6 +1252,58 @@ async def run_react(
     if claim_congruence and result.verified_claims:
         result.verified_claims.sort(key=lambda vc: vc.congruence_note == "kind_mismatch")
 
+    # EVIDENCE CONTRACT stage 3 — SLOT-AWARE compose selection (steer, enumerative; panel
+    # amendment A1, the loophole fix): a self-congruent OFF-SLOT claim (true facts about the
+    # wrong entity, honestly attributed) must never EVICT a slot-filling claim from the compose
+    # cap. Selection into the cap: rank the pool exactly as the existing flags would (relevance
+    # ranking when a ranking flag is on, first-come otherwise), then reserve seats for
+    # slot-filling claims ROUND-ROBIN across covered entities (every covered entity gets
+    # representation before any gets a second seat), then fill the remaining seats with the
+    # existing ranking over the leftovers. Membership-only: the final list keeps the base
+    # ordering, so relative order matches what the existing path would show compose. Entity↔claim
+    # matching is structural containment against the contract's OWN closed entity list (Rule 18:
+    # computable set membership, not semantic judgment). OFF / shadow / exploratory → this block
+    # never runs and selection is byte-identical.
+    _c_enum = (question_contract == "steer" and _contract is not None
+               and _contract.mode == "enumerative" and bool(_contract.entities))
+    if _c_enum and len(result.verified_claims) > compose_claim_cap:
+        from noesis_kernel.research.contract import match_entities
+        if evidence_select or evidence_fitness or country_boost:
+            base = await _rank_claims_by_relevance(
+                question, result.verified_claims, embedder, len(result.verified_claims),
+                evidence_ranker=(evidence_ranker if evidence_fitness else None),
+                country_boost=country_boost, rank_all=True)
+        else:
+            base = list(result.verified_claims)     # first-come — today's default ordering
+        _queues: dict[str, list] = {}               # entity → its claims, best-ranked first
+        for vc in base:
+            for _e in match_entities(list(_contract.entities), vc.text, vc.document_title):
+                _queues.setdefault(_e, []).append(vc)
+        _picked: set[int] = set()                   # id()-keyed (VerifiedClaim is unhashable)
+        _idx = {e: 0 for e in _queues}
+        _active = [e for e in _contract.entities if e in _queues]
+        while _active and len(_picked) < compose_claim_cap:
+            for _e in list(_active):                # one seat per still-active entity per pass
+                _q = _queues[_e]
+                _i = _idx[_e]
+                while _i < len(_q) and id(_q[_i]) in _picked:
+                    _i += 1                         # already seated via another entity's slot
+                if _i >= len(_q):
+                    _idx[_e] = _i
+                    _active.remove(_e)
+                    continue
+                _picked.add(id(_q[_i]))
+                _idx[_e] = _i + 1
+                if len(_picked) >= compose_claim_cap:
+                    break
+        for vc in base:                             # leftover seats: existing ranking order
+            if len(_picked) >= compose_claim_cap:
+                break
+            if id(vc) not in _picked:
+                _picked.add(id(vc))
+        result.verified_claims = [vc for vc in base if id(vc) in _picked]
+        await emit({"type": "selecting", "from": len(base), "to": len(result.verified_claims)})
+
     # Evidence SELECTION (flags): compose is capped for cost/scannability, so WHICH verified findings
     # survive the cap matters. Default = first-come. Under evidence-select, keep the findings most
     # RELEVANT to the question; under evidence-fitness, additionally boost stronger evidence TIERS into
@@ -1172,6 +1315,28 @@ async def run_react(
             question, result.verified_claims, embedder, compose_claim_cap,
             evidence_ranker=(evidence_ranker if evidence_fitness else None),
             country_boost=country_boost)
+
+    # EVIDENCE CONTRACT stage 3 — the SLOT GRID (observability, both modes) + honest coverage
+    # gaps (steer only). The grid counts, per contract entity, the FINAL selected claims that
+    # fill its slot — logged to the diag trace so a confident-wrong contract or an empty slot is
+    # debuggable without a rerun (Rule 13). In STEER mode an entity left with ZERO matching
+    # claims becomes a coverage gap PRODUCED BY THE LOOP (where it is actionable), not by compose
+    # (where it is a footnote). Shadow logs the grid and changes nothing else.
+    if _contract is not None and _contract.mode == "enumerative" and _contract.entities:
+        from noesis_kernel.research.contract import match_entities
+        _grid = {e: 0 for e in _contract.entities}
+        for vc in result.verified_claims:
+            for _e in match_entities(list(_contract.entities), vc.text, vc.document_title):
+                _grid[_e] += 1
+        if diag is not None and "question_contract" in diag:
+            diag["question_contract"]["slot_grid"] = _grid
+        if question_contract == "steer":
+            _axes_note = ", ".join(_contract.axes)
+            for _e, _n in _grid.items():
+                if _n == 0:
+                    result.coverage_gaps.append(
+                        f"No evidence retrieved for {_e}"
+                        + (f" ({_axes_note})" if _axes_note else ""))
 
     # Compose a synthesized answer FROM the verified findings only (factra "living
     # answer" model). Grounded by construction: the composer sees only the verified

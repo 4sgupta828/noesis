@@ -99,6 +99,12 @@ class ResearchService:
     claim_congruence: bool = False          # unified batched BINDING judge over loop/claims-first/
     #                                         fallback claims: {entailed, on_subject, kind_ok} per
     #                                         claim (Evidence Contract stage 2, flag)
+    question_contract: str = ""             # Evidence Contract stage 3 (flag MODE): "" off;
+    #                                         "shadow" → derive + log the QuestionContract/legs,
+    #                                         change nothing; "steer" → per-entity legs late-merged
+    #                                         + slot-aware compose selection + loop coverage gaps
+    contract_prompt: str | None = None      # vertical QuestionContract derivation directive
+    #                                         (opaque — ALL domain vocabulary lives in the vertical)
     graph_expander: object | None = None    # A9: async (question) -> {"legs":[{query,note}],"shadow":bool}|None
     #                                         — app-injected relationship-graph hook; None → byte-identical
     panel_specialists: tuple = ()           # Ask-Panel roster (vertical-supplied specialist configs)
@@ -440,6 +446,7 @@ class ResearchService:
             classify_evidence=self.classify_evidence,
             evidence_fitness=self.evidence_fitness, evidence_ranker=self.evidence_ranker,
             evidence_identity=self.evidence_identity, claim_congruence=self.claim_congruence,
+            question_contract=self.question_contract, contract_prompt=self.contract_prompt,
             graph_legs=graph_legs, graph_shadow=graph_shadow, graph_late=graph_late,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)

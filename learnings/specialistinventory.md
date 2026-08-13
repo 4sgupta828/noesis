@@ -80,3 +80,71 @@ specialists; embeddings only for pilot-specialty profile cards). Risks: name dis
 skew, teaching-hospital billing under attendings), stale contacts, IN legal gray zones,
 "ranking doctors" press risk — mitigated by objective-stats-only contract + provenance +
 correction path.
+
+---
+
+# Panel Amendments (v2, E-series) — these override the v1 body
+
+Panel per Rule 17 (Codex GPT-5.5 + Gemini Pro + code-grounded subagent, all returned
+2026-08-12/13). One architecture disagreement adjudicated on code evidence (E-5).
+
+## E-0 — People-data legal gate (all three)
+A PER-SOURCE PEOPLE-DATA MANIFEST is a hard ingest gate: legal basis, ToS, allowed fields,
+update cadence, suppression policy, contact policy. **NMC stays blocked**: DPDP's
+publicly-available exemption applies to data the DOCTOR made public — a government registry
+publishing it does NOT transfer the exemption to our secondary use (Gemini). Clinician
+NOTICE + right-of-reply moves from P2 to BEFORE any public launch (Codex).
+
+## E-1 — Credential/discipline data is first-class, not optional
+ABMS/AOA board certification + ACTIVE LICENSE STATUS join the P0 schema ("more relevant to
+specialist trust than publications" — Codex). Disciplinary actions: Gemini says launch-
+blocking, Codex says include-only-if-perfect — adjudicated: P0 carries
+`discipline_status='not_collected'` and the inventory stays ADMIN-ONLY until P1 adds final
+public board actions verbatim (action category/date/source link, no summaries). Deceased/
+retired detection required.
+
+## E-2 — Identity (unanimous)
+Natural keys (NPI; NMC reg no) as entity_id — content-hash IDs only where no registry number
+exists (relocation must not orphan metrics). Publication merges: **ORCID-verified only**;
+name+city produces flagged CANDIDATES, never auto-merges.
+
+## E-3 — Ranking is an implied verdict — design it away (unanimous)
+NO default ranking: the user actively selects the sort metric; sortable tables, not opaque
+lists; banned vocabulary: best/top/expert/quality/score/recommended; NO composite score in
+P0/P1 ("a verdict wearing a trench coat" — Codex); the case matcher is deferred, flag-gated,
+and its output must state: "public-record matches sorted by [metric]; Noesis has not
+evaluated quality or suitability."
+
+## E-4 — Metric honesty as fields, not footnotes
+Label volumes as "Original Medicare Part B claims, year X" — never "patients seen/operated";
+teaching-hospital attribution caveat carried as a field; measurement taxonomy separates
+volume / experience / academic activity / COI / credential / availability.
+
+## E-5 — Architecture (adjudicated: dedicated tables WIN)
+Gemini's reuse-the-graph-tables proposal is REJECTED on code evidence: the graph read path
+is an in-process full snapshot capped ~20k rows — unusable at 1-2M entities. Keep the
+dedicated `noesis_entity/_metric/_contact` tables with the graph's WRITE ethos (status
+lifecycle, per-field provenance, append-only, never-resurrect) but INDEXED SQL reads only.
+Add a `registry_row` CitationVerifier (the protocol already anticipates it) + a staleness
+model (`valid_as_of` vs `retrieved_at`, Pulse-style field supersession).
+
+## E-6 — Bulk loading (subagent; unpriced bottleneck found)
+No bulk path exists: NPPES (~1GB zip → ~9GB CSV) through the connector protocol would OOM
+the API container. P0 adds an OFFLINE streaming CSV→COPY loader run outside the serving
+containers (one-off Railway job or local→prod-DB — an explicit, documented exception to the
+prod-direct-ingest directive). PRICE the per-procedure CMS table in-spec: ~10M rows/year
+(NPI × HCPCS), 10-20GB multi-year against a contended 48.8GB volume — decide HCPCS-level vs
+procedure-family rollup BEFORE ingest; "no embeddings for the spine" is load-bearing.
+
+## E-7 — P0 re-scoped (the launchable core)
+P0 = NPPES specialist spine (natural-key identity) + CMS utilization (rollup granularity per
+E-6) + Doctors&Clinicians + certification/license fields + facet SQL search + per-field
+provenance + ADMIN-ONLY console + people-data manifests. CUT from P0: embedded profile
+cards, the case matcher, all outreach, Open Payments, publications/trials (until the ORCID
+pipeline exists), the India hospital tranche.
+
+## E-8 — India is a labeled PREVIEW tier, not the US product
+"Registry + academic footprint preview" only, post-legal-manifest; alphabetical/filter
+navigation, no ranking, no contacts without practitioner/hospital-published sourcing; never
+commingled with the US stats view (Gemini wanted India cut entirely; Codex's labeled-preview
+compromise adopted — the brand risk is commingling, not existence).

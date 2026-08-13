@@ -1223,13 +1223,6 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             except CassetteMiss:
                 _sse_push(run, {"type": "error", "detail": "No model available in replay mode."})
             except Exception as e:   # noqa: BLE001
-                # TEMP DIAGNOSTIC (remove after): surface the REAL exception + cause chain to logs,
-                # so a proxied/edge "Connection error" names its module/host instead of a generic string.
-                import traceback as _tb
-                _cause = e.__cause__ or e.__context__
-                print(f"[research-diag] {type(e).__module__}.{type(e).__name__}: {e!r} "
-                      f"| cause={type(_cause).__name__ if _cause else None}: {_cause!r}", flush=True)
-                _tb.print_exc()
                 _sse_push(run, {"type": "error", "detail": f"provider error: {e}"})
             finally:
                 _sse_done(run)

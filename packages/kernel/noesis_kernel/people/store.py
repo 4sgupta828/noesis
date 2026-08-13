@@ -225,6 +225,21 @@ class PeopleStore:
         d["affiliations"] = [dict(a) for a in afs]
         return d
 
+    async def affiliations_for(self, entity_ids: list[str]) -> dict[str, list[dict]]:
+        """Batch affiliation lookup for result cards — the hospital/group must be visible
+        BEFORE a click, not buried in the profile."""
+        if not entity_ids:
+            return {}
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT entity_id, kind, affil_key, name FROM noesis_entity_affiliation "
+                "WHERE entity_id = ANY($1) ORDER BY kind, name", entity_ids)
+        out: dict[str, list[dict]] = {}
+        for r in rows:
+            out.setdefault(r["entity_id"], []).append(dict(r))
+        return out
+
     async def add_affiliations(self, rows: list[dict]) -> int:
         """Bulk-upsert structural affiliations (entity ↔ group practice / facility). Like
         edges, these are SHARED FACTS keyed by a registry id (org PAC id, facility CCN) —

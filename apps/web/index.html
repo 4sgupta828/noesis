@@ -4740,6 +4740,8 @@ async function pplSend(){
         <b>${esc(c.name)}</b> <span class="grtag">${esc(c.specialty)}</span>
         <span class="grtag">${esc(c.city)}, ${esc(c.state)}</span>
         ${c.credential ? `<span class="grtag">${esc(c.credential)}</span>` : ""}
+        ${c.sort_value != null ? `<span class="grtag">${(+c.sort_value).toLocaleString()}</span>` : ""}
+        ${(c.affiliations||[]).slice(0,2).map(a => `<span class="grtag" style="border-color:var(--gold);">${esc(a.name || a.affil_key)}</span>`).join("")}
         <span class="why">tap for profile, contacts &amp; referral network</span></div>`).join("")
     + `</div>` : "");
   turn.querySelectorAll(".pplcand").forEach(el =>
@@ -4757,13 +4759,19 @@ async function pplProfile(id){
       <span class="grchip">board: <b>${esc(e.board_certified)}</b></span>
       <span class="grchip">discipline: <b>${esc(e.discipline_status)}</b></span>
       <span class="grchip">as of: <b>${esc(e.valid_as_of || "—")}</b></span></div>
+    <h4 style="margin:.8rem 0 .2rem;font-size:.75rem;color:var(--muted);text-transform:uppercase;">Affiliations (hospital &amp; group practice)</h4>
     ${(e.affiliations||[]).map(a => `<div class="gredge"><span class="grtag">${esc(a.kind.replace(/_/g," "))}</span>
-      <span>${esc(a.name || a.affil_key)}</span><span class="grtag">src: ${esc(a.source)}</span></div>`).join("")}
+      <span>${esc(a.name || a.affil_key)}</span><span class="grtag">src: ${esc(a.source)}</span></div>`).join("")
+      || '<p style="color:var(--muted);font-size:.75rem;margin:.2rem 0;">No recorded CMS affiliations for this clinician.</p>'}
+    <h4 style="margin:.8rem 0 .2rem;font-size:.75rem;color:var(--muted);text-transform:uppercase;">Recorded metrics</h4>
     ${(e.metrics||[]).map(m => `<div class="gredge"><span>${esc(m.metric_label || m.metric_key)}</span>
       <span class="grtag">${(+m.value).toLocaleString()} ${esc(m.unit)}</span>
-      <span class="grtag">${esc(m.period)}</span><span class="grtag">src: ${esc(m.source)}</span></div>`).join("")}
+      <span class="grtag">${esc(m.period)}</span><span class="grtag">src: ${esc(m.source)}</span></div>`).join("")
+      || '<p style="color:var(--muted);font-size:.75rem;margin:.2rem 0;">No recorded volume metrics (Medicare by-provider data covers ~half of physicians).</p>'}
+    <h4 style="margin:.8rem 0 .2rem;font-size:.75rem;color:var(--muted);text-transform:uppercase;">Contacts</h4>
     ${(e.contacts||[]).map(c => `<div class="gredge"><span class="grtag">${esc(c.kind)}</span>
-      <span>${esc(c.value)}</span><span class="grtag">src: ${esc(c.source)}</span></div>`).join("")}
+      <span>${esc(c.value)}</span><span class="grtag">src: ${esc(c.source)}</span></div>`).join("")
+      || '<p style="color:var(--muted);font-size:.75rem;margin:.2rem 0;">No published contacts.</p>'}
     <h4 style="margin:.8rem 0 .2rem;font-size:.75rem;color:var(--muted);text-transform:uppercase;">Network (evidence-keyed referral connections)</h4>
     ${(e.connections||[]).map(c => `<div class="gredge" style="cursor:pointer;" data-id="${esc(c.peer)}">
       <b>${esc(c.name)}</b><span class="grtag">${esc(c.specialty)}</span>

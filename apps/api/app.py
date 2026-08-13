@@ -316,8 +316,11 @@ async def _people_converse_turn(convo: str, intent: dict, breakdown: dict,
     cand_txt = "\n".join(
         f"- {c['entity_id']} | {c['name']} | {c['specialty']} | {c['city']}, {c['state']} | "
         f"{c.get('credential') or 'credential n/a'}"
-        + (f" | metrics: {c['sort_value']:,.0f}" if c.get("sort_value") is not None else "")
-        for c in candidates) or "(not fetched — too many matches to list)"
+        + (f" | metric: {c['sort_value']:,.0f}" if c.get("sort_value") is not None else "")
+        + ((" | affiliations: " + "; ".join(
+            (a.get("name") or a.get("affil_key", "")) for a in c["affiliations"][:3]))
+           if c.get("affiliations") else "")
+        for c in candidates) or "(none match)"
     system = (
         "You are the concierge of a professional-specialist directory. Converge on the "
         "RIGHT specialist(s) for the user's situation in as FEW turns as possible — "
@@ -2426,6 +2429,10 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             # top-30 slice is the meaningful one; unsorted it's presented as still-broad)
             cands = (await ps.search(**kw, sort_metric=intent["sort_metric"], limit=30)
                      if bd["total"] > 0 else [])
+            if cands:
+                afmap = await ps.affiliations_for([c["entity_id"] for c in cands])
+                for c in cands:
+                    c["affiliations"] = afmap.get(c["entity_id"], [])
             turn = await _people_converse_turn(convo, intent, bd, cands, n_asked=n_asked)
             return {**turn, "facets": {**intent, "parser": parser},
                     "total": bd["total"], "breakdown": bd,

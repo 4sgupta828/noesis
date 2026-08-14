@@ -29,6 +29,11 @@ CALLS_PER_ANSWER = (10, 20)      # honest range: ReAct steps + compose + extract
 
 
 def _prod_env() -> None:
+    # EXPLICIT LOCAL OVERRIDES WIN: prod flags now live in Railway too, and blindly applying
+    # them clobbered a NOESIS_QUESTION_CONTRACT=steer experiment back to prod's "shadow" —
+    # legs silently never executed and the arm measured the wrong config. Prod-parity means
+    # "Railway values, except the NOESIS_* knobs this run explicitly set in its environment".
+    overrides = {k: v for k, v in os.environ.items() if k.startswith("NOESIS_")}
     api = json.loads(subprocess.run(["railway", "variables", "--service", "noesis-api",
                                      "--json"], capture_output=True, text=True,
                                     cwd=ROOT).stdout)
@@ -39,6 +44,7 @@ def _prod_env() -> None:
         if not k.startswith("RAILWAY_") and k != "PORT":
             os.environ[k] = v
     os.environ["NOESIS_CORPUS_DSN"] = pg["DATABASE_PUBLIC_URL"]
+    os.environ.update(overrides)                   # the experiment's explicit flag arms
     os.environ["NOESIS_DIAG_TRACE"] = "1"          # graph-leg + trace telemetry in results
 
 

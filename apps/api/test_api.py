@@ -258,3 +258,68 @@ def test_panel_payload_carries_coverage_gaps(monkeypatch) -> None:
     d = resp.json()
     assert d["coverage_gaps"] == ["No specialist retrieved evidence for beta-drug"]
     assert d["synthesis"] == "Panel answer [1]."
+
+
+# ---- ✦ term glossary (NOESIS_TERM_GLOSSARY) ----
+
+def _terms_service(llm) -> ResearchService:
+    svc = _service()
+    svc.llm = llm
+    svc.terms_prompt = "explain medical terms"
+    return svc
+
+
+def test_terms_endpoints_404_when_flag_off(monkeypatch) -> None:
+    monkeypatch.delenv("NOESIS_TERM_GLOSSARY", raising=False)
+    client = TestClient(create_app(_service()))
+    assert client.post("/terms/explain", json={"answer": "eGFR matters"}).status_code == 404
+    assert client.post("/glossary/lookup", json={"term": "eGFR"}).status_code == 404
+    assert client.get("/glossary").status_code == 404
+
+
+def test_terms_explain_returns_terms_and_config_echo(monkeypatch) -> None:
+    from noesis_kernel.research.terms import TermExplanation, TermExplanations
+    monkeypatch.setenv("NOESIS_TERM_GLOSSARY", "1")
+    monkeypatch.delenv("NOESIS_CORPUS_DSN", raising=False)
+    llm = _LLM([TermExplanations(terms=[
+        TermExplanation(term="eGFR", category="measure", plain="Kidney filtration estimate.",
+                        purpose="Tracks kidney function.", application="Guides renal dosing.",
+                        related=["creatinine", "CKD"])])])
+    client = TestClient(create_app(_terms_service(llm)))
+    assert client.get("/config").json()["term_glossary_enabled"] is True
+    resp = client.post("/terms/explain", json={"question": "q", "answer": "eGFR guides dosing"})
+    assert resp.status_code == 200
+    d = resp.json()
+    assert d["terms"][0]["term"] == "eGFR"
+    assert d["terms"][0]["related"] == ["creatinine", "CKD"]
+    assert d["glossary_total"] is None     # no DSN → accumulation unavailable, explanations still served
+
+
+def test_terms_explain_404_without_vertical_prompt(monkeypatch) -> None:
+    monkeypatch.setenv("NOESIS_TERM_GLOSSARY", "1")
+    client = TestClient(create_app(_service()))   # no terms_prompt on the service
+    assert client.post("/terms/explain", json={"answer": "x"}).status_code == 404
+    assert client.get("/config").json()["term_glossary_enabled"] is False
+
+
+def test_glossary_lookup_explains_fresh_term(monkeypatch) -> None:
+    from noesis_kernel.research.terms import TermExplanation
+    monkeypatch.setenv("NOESIS_TERM_GLOSSARY", "1")
+    monkeypatch.delenv("NOESIS_CORPUS_DSN", raising=False)
+    llm = _LLM([TermExplanation(term="Creatinine", category="measure",
+                                plain="A muscle waste product measured in blood.",
+                                related=["eGFR"])])
+    client = TestClient(create_app(_terms_service(llm)))
+    resp = client.post("/glossary/lookup", json={"term": "creatinine", "context": "eGFR"})
+    assert resp.status_code == 200
+    d = resp.json()
+    assert d["fresh"] is True
+    assert d["entry"]["term"] == "Creatinine"
+    assert d["entry"]["related"] == [{"term": "eGFR", "known": False}]
+
+
+def test_glossary_list_empty_without_store(monkeypatch) -> None:
+    monkeypatch.setenv("NOESIS_TERM_GLOSSARY", "1")
+    monkeypatch.delenv("NOESIS_CORPUS_DSN", raising=False)
+    client = TestClient(create_app(_service()))
+    assert client.get("/glossary").json() == {"terms": [], "total": 0, "letters": {}}

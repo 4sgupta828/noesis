@@ -69,6 +69,7 @@ class ResearchService:
     layman_prompt: str | None = None        # vertical layman-rephrasing directive (opaque)
     gap_prompt: str | None = None           # vertical gap-fill-planner directive (opaque)
     suggest_prompt: str | None = None       # vertical suggested-follow-ups directive (opaque)
+    terms_prompt: str | None = None         # vertical key-term-explanation directive (opaque)
     refine_prompt: str | None = None         # vertical pre-answer question-refinement directive (opaque)
     triage_prompt: str | None = None         # vertical guided-intake/triage directive (opaque)
     triage_prompt_v2: str | None = None      # vertical intake-v2 directive (opaque; None → v2 falls back to v1)
@@ -707,6 +708,23 @@ class ResearchService:
         return await suggest_followups(
             llm=self.llm, suggest_prompt=self.suggest_prompt,
             question=question, answer=answer, history=history)
+
+    async def explain_terms(self, *, question: str, answer: str) -> list:
+        """On-demand key-term explanations for an answer (definitional, with related-term
+        edges for the vocabulary web). [] when the vertical supplies no terms directive."""
+        if not self.terms_prompt:
+            return []
+        from noesis_kernel.research.terms import explain_key_terms
+        return await explain_key_terms(
+            llm=self.llm, terms_prompt=self.terms_prompt, question=question, answer=answer)
+
+    async def explain_term(self, *, term: str, context: str = ""):
+        """On-demand single-term explanation (glossary navigation). None when unavailable."""
+        if not self.terms_prompt:
+            return None
+        from noesis_kernel.research.terms import explain_single_term
+        return await explain_single_term(
+            llm=self.llm, terms_prompt=self.terms_prompt, term=term, context=context)
 
     async def triage(self, *, transcript: list[dict], force_ready: bool = False,
                      v2: bool = False) -> dict:

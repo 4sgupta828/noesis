@@ -843,6 +843,44 @@
   .sact.rp-on{color:#f28c2e;border-color:#f28c2e;}
   /* ◉ Pulse full page */
   .pulsepage{position:fixed;inset:0;z-index:50;background:var(--bg);overflow-y:auto;padding:1rem 1.4rem 3rem;}
+  /* ✦ All Terms — the accumulating vocabulary web (same full-page frame as Pulse) */
+  .termspage{position:fixed;inset:0;z-index:50;background:var(--bg);overflow-y:auto;padding:1rem 1.4rem 3rem;}
+  .termspage .tphead{display:flex;align-items:center;gap:.9rem;padding:.4rem 0 .9rem;border-bottom:1px solid var(--hair);flex-wrap:wrap;}
+  .termspage .sback{font-family:var(--mono);font-size:.66rem;letter-spacing:.05em;text-transform:uppercase;
+    background:transparent;border:1px solid var(--hair);border-radius:999px;color:var(--muted);padding:.3rem .8rem;cursor:pointer;}
+  .termspage .sback:hover{border-color:var(--gold);color:var(--gold);}
+  .tpsearch{margin-left:auto;font-size:.82rem;background:var(--panel2);border:1px solid var(--hair);
+    border-radius:999px;color:var(--ink);padding:.4rem 1rem;min-width:16rem;}
+  .tpsearch:focus{outline:2px solid var(--gold);outline-offset:1px;}
+  .tpletters{display:flex;gap:.3rem;flex-wrap:wrap;padding:.8rem 0 .2rem;}
+  .tpl{font-family:var(--mono);font-size:.68rem;background:transparent;border:1px solid var(--hair);
+    border-radius:999px;color:var(--muted);padding:.22rem .6rem;cursor:pointer;}
+  .tpl.on{background:var(--gold);color:var(--on-accent);border-color:var(--gold);}
+  .tpl-n{opacity:.65;margin-left:.25rem;font-size:.58rem;}
+  .tpfocus{padding:.9rem 0 0;}
+  .tpfocus .termcard{border-color:var(--gold);}
+  .tplist{padding:.9rem 0 0;}
+  .termgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(19rem,1fr));gap:.8rem;}
+  .termcard{border:1px solid var(--hair);border-radius:12px;background:var(--panel2);padding:.85rem 1rem;}
+  .term-h{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;}
+  .term-h b{font-size:.95rem;color:var(--ink);}
+  .term-cat{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--gold);border:1px solid var(--hair);border-radius:999px;padding:.08rem .5rem;}
+  .term-seen{font-family:var(--mono);font-size:.62rem;color:var(--muted);margin-left:auto;}
+  .term-plain{font-size:.85rem;color:var(--ink);margin-top:.4rem;line-height:1.45;}
+  .term-row{font-size:.79rem;color:var(--muted);margin-top:.45rem;line-height:1.45;}
+  .term-l{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--gold);margin-right:.4rem;}
+  .term-rel{margin-top:.55rem;display:flex;align-items:center;gap:.3rem;flex-wrap:wrap;}
+  .term-chip{font-size:.72rem;background:transparent;border:1px dashed var(--hair);border-radius:999px;
+    color:var(--muted);padding:.18rem .6rem;cursor:pointer;}
+  .term-chip.known{border-style:solid;color:var(--ink);}
+  .term-chip:hover{border-color:var(--gold);color:var(--gold);}
+  .term-chip:focus-visible,.tpl:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+  .terms-d .termgrid{margin-top:.6rem;}
+  .termfoot{font-size:.76rem;color:var(--muted);margin-top:.7rem;}
+  .termfoot a{color:var(--gold);}
+  @media (max-width:640px){ .tpsearch{min-width:0;width:100%;margin-left:0;} }
   .pphead{display:flex;align-items:center;gap:.9rem;padding:.4rem 0 .9rem;border-bottom:1px solid var(--hair);flex-wrap:wrap;}
   .pptitle{font-family:var(--mono);font-size:1rem;letter-spacing:.06em;color:var(--gold);font-weight:700;}
   .ppsub{font-size:.78rem;color:var(--muted);}
@@ -1261,6 +1299,8 @@
             title="Evidence changes on your watched topics" aria-label="Pulse inbox">◉ Pulse<span class="pbadge" id="pbadge" hidden></span></button>
     <button type="button" class="histbtn" id="pplbtn" style="margin-left:0;"
             title="Find the right specialist for a situation" aria-label="People">⧉ People</button>
+    <button type="button" class="histbtn" id="termsbtn" style="margin-left:0;" hidden
+            title="Every medical term Noesis has explained — searchable, each linking to its related terms" aria-label="All Terms">✦ Terms</button>
   </header>
 
   <h1 id="heading">What does the evidence show?</h1>
@@ -1360,6 +1400,19 @@
       <div id="ppfeed" class="ppfeed"><div class="suggest-loading">Loading…</div></div>
     </aside>
   </div>
+</section>
+
+<!-- ✦ All Terms: full-page glossary — the accumulating, navigable web of explained medical terms -->
+<section class="termspage" id="termspage" hidden aria-label="All Terms">
+  <div class="tphead">
+    <button type="button" class="sback" id="tpback">← Back</button>
+    <span class="pptitle">✦ All Terms</span>
+    <span class="ppsub" id="tpcount"></span>
+    <input type="search" class="tpsearch" id="tpsearch" placeholder="Search terms…" aria-label="Search terms">
+  </div>
+  <div class="tpletters" id="tpletters"></div>
+  <div class="tpfocus" id="tpfocus" hidden></div>
+  <div class="tplist" id="tplist"><div class="suggest-loading">Loading…</div></div>
 </section>
 
 <section class="panelbody" id="panelbody" hidden aria-label="Specialist panel"></section>
@@ -1510,6 +1563,7 @@ let VIDEO_ENABLED = false;
 let STRUCTURED = false;     // render the answer as markdown sections (server-authoritative)
 let VISION_ENABLED = false; // image/PDF/DICOM upload → visual-context research
 let LAYMAN_ENABLED = false; // on-demand plain-language re-explanation
+let TERMS_ENABLED = false;  // on-demand key-term explanations + the accumulating All Terms glossary
 let GAP_ENABLED = false;    // self-healing: suggest + queue sources to fill evidence gaps
 let CONV_ENABLED = false;   // multi-turn conversation (follow-ups carry context)
 let SUGGEST_ENABLED = false;// suggested follow-up questions after each answer
@@ -1577,6 +1631,8 @@ async function loadConfig(){
     VIDEO_ENABLED = !!c.video_enabled;
     STRUCTURED = !!c.structured_answers;
     LAYMAN_ENABLED = !!c.layman_enabled;
+    TERMS_ENABLED = !!c.term_glossary_enabled;
+    const tb = $("#termsbtn"); if(tb && TERMS_ENABLED) tb.hidden = false;
     GAP_ENABLED = !!c.gap_healing_enabled;
     CONV_ENABLED = !!c.conversation_enabled;
     SUGGEST_ENABLED = !!c.suggest_enabled;
@@ -2331,6 +2387,9 @@ function convoActionsMarkup(data){
       title="The same answer, re-explained for a patient — plain words, same essence, no new claims.">◍ Plain language</button>
       <span class="xhint plain-hint" hidden></span></span>`);
   }
+  if(TERMS_ENABLED && data.grounded && (data.answer||"").trim()){
+    slim.push(termsActionHtml());
+  }
   const out = [];
   if(boxes.length) out.push(`<div class="addons convobox">${boxes.join("")}</div>`);
   if(slim.length) out.push(`<div class="xformrow"><span class="xlbl">This answer, another format</span>${slim.join("")}</div>`);
@@ -2339,6 +2398,7 @@ function convoActionsMarkup(data){
 function wireConvo(target, data){
   const vgo = target.querySelector("#vgo"); if(vgo) vgo.addEventListener("click", ()=>generateVideo(target));
   const pg = target.querySelector("#plaingo"); if(pg) pg.addEventListener("click", ()=>generatePlain(target));
+  const tg = target.querySelector("#termsgo"); if(tg) tg.addEventListener("click", ()=>generateTerms(target, data));
 }
 
 // Self-healing: ask the backend which sources would fill this question's gaps, render them
@@ -2452,6 +2512,120 @@ async function generatePlain(root){
     btn.disabled = false; btn.textContent = "◍ Plain language";
     if(hint){ hint.hidden = false; hint.textContent = "Couldn't generate: "+(e.message||e); }
   }
+}
+
+// ---- ✦ Key terms: on-demand explanations of an answer's medical vocabulary ----
+// Every explanation accumulates into the All Terms glossary (server-side), and every term
+// links to its RELATED terms — clicking one navigates the knowledge web, explaining
+// not-yet-known terms on the fly (browsing deepens the web).
+function termCardHtml(t){
+  const rel = (t.related||[]).map(x=>{
+    const name = (typeof x === "string") ? x : (x.term||"");
+    if(!name) return "";
+    const known = (typeof x === "object" && x.known) ? " known" : "";
+    return `<button type="button" class="term-chip${known}" data-term="${esc(name)}"
+      title="${known?"In your glossary — open it":"Not explained yet — explaining adds it to your glossary"}">${esc(name)}</button>`;
+  }).join("");
+  return `<div class="termcard">
+    <div class="term-h"><b>${esc(t.term||"")}</b>${t.category?`<span class="term-cat">${esc(t.category)}</span>`:""}${t.times_seen>1?`<span class="term-seen" title="How many answers surfaced this term">×${t.times_seen}</span>`:""}</div>
+    <div class="term-plain">${esc(t.plain||"")}</div>
+    ${t.purpose?`<div class="term-row"><span class="term-l">Purpose</span> ${esc(t.purpose)}</div>`:""}
+    ${t.application?`<div class="term-row"><span class="term-l">In practice</span> ${esc(t.application)}</div>`:""}
+    ${rel?`<div class="term-rel"><span class="term-l">Related</span> ${rel}</div>`:""}
+  </div>`;
+}
+function wireTermChips(rootEl){
+  rootEl.querySelectorAll(".term-chip").forEach(ch=>ch.addEventListener("click", ()=>{
+    const from = ch.closest(".termcard")?.querySelector(".term-h b")?.textContent || "";
+    openTermsPage(ch.dataset.term, from);
+  }));
+}
+async function generateTerms(root, data){
+  const item = root.querySelector("#terms");
+  const btn = root.querySelector("#termsgo");
+  const hint = item ? item.querySelector(".terms-hint") : null;
+  btn.disabled = true; btn.textContent = "Explaining terms…";
+  try{
+    const r = await fetch("/terms/explain",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({question:(data.question||CURRENT_Q||""), answer:(data.answer||""),
+        session_id:(data.session_id||null)})});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+    const {terms, glossary_total} = await r.json();
+    if(!terms || !terms.length) throw new Error("no key terms found in this answer");
+    const d = document.createElement("details");
+    d.className = "plain plain-d terms-d"; d.open = true;
+    d.innerHTML = `<summary class="plain-h">✦ Key terms in this answer (${terms.length})</summary>
+      <div class="termgrid">${terms.map(termCardHtml).join("")}</div>
+      <div class="termfoot">${glossary_total?`Saved — your glossary now holds <b>${glossary_total}</b> term${glossary_total===1?"":"s"}. `:""}<a href="#" class="tall">Browse All Terms →</a></div>`;
+    item.replaceWith(d);
+    wireTermChips(d);
+    const ta = d.querySelector(".tall"); if(ta) ta.addEventListener("click", e=>{e.preventDefault(); openTermsPage();});
+  }catch(e){
+    btn.disabled = false; btn.textContent = "✦ Key terms";
+    if(hint){ hint.hidden = false; hint.textContent = "Couldn't explain: "+(e.message||e); }
+  }
+}
+// The one slim-row affordance, shared by Q&A (convoActionsMarkup) and Panel (renderPanelSynth).
+function termsActionHtml(){
+  return `<span class="xitem" id="terms"><button type="button" class="xbtn" id="termsgo"
+    title="Explain the key medical terms this answer used — what each is, why it matters, how it's applied — and add them to your All Terms glossary.">✦ Key terms</button>
+    <span class="xhint terms-hint" hidden></span></span>`;
+}
+
+// ---- ✦ All Terms: the full-page navigable glossary ----
+let TP_Q = "", TP_LETTER = "";
+function closeTermsPage(){ const tp=$("#termspage"); if(tp) tp.hidden = true; document.body.style.overflow = ""; }
+async function openTermsPage(focusTerm, fromTerm){
+  const tp = $("#termspage"); if(!tp) return;
+  try{ closeSessions(); }catch(e){}
+  try{ closePulsePage(); }catch(e){}
+  tp.hidden = false; document.body.style.overflow = "hidden";
+  const f = $("#tpfocus");
+  if(focusTerm){ tpFocus(focusTerm, fromTerm||""); }
+  else if(f){ f.hidden = true; f.innerHTML = ""; }
+  tpRender();
+}
+async function tpFocus(term, fromTerm){
+  const f = $("#tpfocus"); if(!f) return;
+  f.hidden = false;
+  f.innerHTML = `<div class="suggest-loading">Explaining “${esc(term)}”…</div>`;
+  try{
+    const r = await fetch("/glossary/lookup",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({term, context: fromTerm||""})});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+    const {entry, fresh} = await r.json();
+    f.innerHTML = termCardHtml(entry) + (fresh?`<div class="termfoot">✦ Newly explained — added to your glossary.</div>`:"");
+    wireTermChips(f);
+    f.scrollIntoView({behavior:"smooth", block:"start"});
+    if(fresh) tpRender();   // the list below now has one more entry
+  }catch(e){
+    f.innerHTML = `<div class="pitem-empty">Couldn't explain “${esc(term)}” — ${esc(e.message||e)}</div>`;
+  }
+}
+async function tpRender(){
+  const list = $("#tplist"), count = $("#tpcount"), letters = $("#tpletters");
+  if(!list) return;
+  list.innerHTML = `<div class="suggest-loading">Loading…</div>`;
+  try{
+    const ps = new URLSearchParams(); if(TP_Q) ps.set("q", TP_Q); if(TP_LETTER) ps.set("letter", TP_LETTER);
+    const r = await fetch("/glossary"+(ps.toString()?"?"+ps.toString():""));
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const g = await r.json();
+    if(count) count.textContent = `${g.total||0} term${g.total===1?"":"s"} explained so far`;
+    const ls = Object.keys(g.letters||{}).sort();
+    if(letters){
+      letters.innerHTML = ls.length < 2 ? "" :
+        `<button type="button" class="tpl${TP_LETTER?"":" on"}" data-l="">All</button>` +
+        ls.map(l=>`<button type="button" class="tpl${TP_LETTER===l?" on":""}" data-l="${esc(l)}">${esc(l.toUpperCase())}<span class="tpl-n">${g.letters[l]}</span></button>`).join("");
+      letters.querySelectorAll(".tpl").forEach(b=>b.addEventListener("click",()=>{ TP_LETTER=b.dataset.l; tpRender(); }));
+    }
+    if(!(g.terms||[]).length){
+      list.innerHTML = `<div class="pitem-empty">${(TP_Q||TP_LETTER)?"No terms match.":"No terms yet — ask a question, then use “✦ Key terms” under the answer to start building your glossary."}</div>`;
+      return;
+    }
+    list.innerHTML = `<div class="termgrid">${g.terms.map(termCardHtml).join("")}</div>`;
+    wireTermChips(list);
+  }catch(e){ list.innerHTML = `<div class="pitem-empty">Couldn't load the glossary — ${esc(e.message||e)}</div>`; }
 }
 
 // Build clean Markdown of the answer + its evidence (verbatim quotes + sources).
@@ -3546,6 +3720,15 @@ function renderPanelSynth(data, el){
       const f = el.querySelector("#f"+r.dataset.n);
       if(f){ f.scrollIntoView({behavior:"smooth", block:"center"}); f.classList.add("flash"); setTimeout(()=>f.classList.remove("flash"), 1200); }
     }));
+  }
+  // ✦ Key terms — same affordance as Q&A, fed the panel's full text (synthesis + deliberation)
+  if(TERMS_ENABLED && (answer||"").trim()){
+    const tw = document.createElement("div");
+    tw.innerHTML = `<div class="xformrow"><span class="xlbl">Understand the vocabulary</span>${termsActionHtml()}</div>`;
+    el.appendChild(tw);
+    const tg = tw.querySelector("#termsgo");
+    if(tg) tg.addEventListener("click", ()=>generateTerms(tw,
+      {question: data.question||"", answer: answer + (delib ? "\n\n" + delib : "")}));
   }
 }
 // Run ONE turn (first or follow-up): stream each specialist's live trace into #panellive, then commit the
@@ -5123,6 +5306,13 @@ async function pplProfile(id){
 }
 $("#pplback").addEventListener("click", closePeople);
 $("#pplbtn").addEventListener("click", openPeople);
+$("#termsbtn").addEventListener("click", ()=>openTermsPage());
+$("#tpback").addEventListener("click", closeTermsPage);
+let _tpDeb = null;
+$("#tpsearch").addEventListener("input", e=>{
+  clearTimeout(_tpDeb);
+  _tpDeb = setTimeout(()=>{ TP_Q = e.target.value.trim(); tpRender(); }, 250);
+});
 
 $("#inggo").addEventListener("click", loadIngest);
 $("#ingpw").addEventListener("keydown", e => { if(e.key === "Enter") loadIngest(); });
@@ -5146,6 +5336,7 @@ function routeHash(){    // #s/<id> → Q&A answer/thread · #p/<id> → panel s
   else if(location.hash === "#graph"){ openGraphConsole(); }
   else if(location.hash === "#ingest"){ openIngest(); }
   else if(location.hash === "#people"){ openPeople(); }
+  else if(location.hash === "#terms"){ openTermsPage(); }
 }
 // route only AFTER config loads, so CONV_ENABLED is known (shared threads render as conversations)
 loadConfig().then(routeHash);

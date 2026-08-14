@@ -23,6 +23,7 @@ from .vision import MEDICAL_REPORT_PROMPT, MEDICAL_VISION_PROMPT
 from .layman import MEDICAL_LAYMAN_PROMPT
 from .gaps import MEDICAL_GAP_PROMPT
 from .suggest import MEDICAL_SUGGEST_PROMPT
+from .terms import MEDICAL_TERMS_PROMPT
 from .question_contract import MEDICAL_CONTRACT_PROMPT
 from .refine import MEDICAL_REFINE_PROMPT
 from .triage import MEDICAL_TRIAGE_PROMPT, MEDICAL_TRIAGE_PROMPT_V2
@@ -93,6 +94,7 @@ def build_manifest() -> VerticalManifest:
         layman_prompt=MEDICAL_LAYMAN_PROMPT,
         gap_prompt=MEDICAL_GAP_PROMPT,
         suggest_prompt=MEDICAL_SUGGEST_PROMPT,
+        terms_prompt=MEDICAL_TERMS_PROMPT,
         refine_prompt=MEDICAL_REFINE_PROMPT,
         contract_prompt=MEDICAL_CONTRACT_PROMPT,
         enumerative_compose_addendum=MEDICAL_ENUMERATIVE_COMPOSE_ADDENDUM,

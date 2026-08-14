@@ -528,6 +528,14 @@ def answer_charts_enabled() -> bool:
     return os.environ.get("NOESIS_ANSWER_CHARTS", "").lower() in ("1", "true", "yes")
 
 
+def term_glossary_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, each answer offers on-demand key-term explanations
+    (POST /terms/explain — definitional, with related-term edges) and the accumulated glossary is
+    browsable at GET /glossary (the All Terms page). OFF → both endpoints 404 and the UI affordances
+    are hidden (byte-identical to today). Explanations are user-triggered — never add answer latency."""
+    return os.environ.get("NOESIS_TERM_GLOSSARY", "").lower() in ("1", "true", "yes")
+
+
 def refine_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, a FRESH question (no history) is first sent to /refine,
     which proposes a few distinct sharper standalone questions to pick from (express refinement). The
@@ -865,6 +873,17 @@ class ExplainIn(BaseModel):
     session_id: str | None = None
 
 
+class TermsIn(BaseModel):
+    question: str = ""
+    answer: str
+    session_id: str | None = None
+
+
+class TermLookupIn(BaseModel):
+    term: str
+    context: str = ""    # the term this one was linked FROM (helps disambiguate)
+
+
 class GapPlanIn(BaseModel):
     question: str
     answer: str = ""
@@ -1074,7 +1093,8 @@ def build_default_service() -> ResearchService:
         patient_answer_format=patient_directive,
         vision_prompt=vision_prompt, report_prompt=report_prompt,
         layman_prompt=manifest.layman_prompt, gap_prompt=gap_prompt,
-        suggest_prompt=suggest_prompt, refine_prompt=refine_prompt, triage_prompt=triage_prompt,
+        suggest_prompt=suggest_prompt, terms_prompt=getattr(manifest, "terms_prompt", None),
+        refine_prompt=refine_prompt, triage_prompt=triage_prompt,
         triage_prompt_v2=triage_prompt_v2,
         reasoned_scaffold_prompt=reasoned_scaffold, reasoned_answer_format=reasoned_format,
         integrative_prompt=getattr(manifest, "integrative_prompt", None),
@@ -1196,6 +1216,18 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             else:
                 app.state.session_store = None
         return app.state.session_store
+
+    def _glossary():
+        """Vertical-isolated glossary store (the accumulating term web). Built once when a
+        corpus DSN is configured; None (no persistence) against the fixture corpus."""
+        if getattr(app.state, "glossary_store", "unset") == "unset":
+            dsn = os.environ.get("NOESIS_CORPUS_DSN")
+            if dsn:
+                from api.glossary import GlossaryStore
+                app.state.glossary_store = GlossaryStore(dsn, vertical=load_active_vertical().name)
+            else:
+                app.state.glossary_store = None
+        return app.state.glossary_store
 
     def _settings():
         """Live product-settings store (same DSN); None without a DSN → env-only flags."""
@@ -1325,6 +1357,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "gap_healing_enabled": gap_healing_enabled() and bool(getattr(svc, "gap_prompt", None)),
             "conversation_enabled": conversation_enabled(),
             "suggest_enabled": conversation_enabled() and bool(getattr(svc, "suggest_prompt", None)),
+            "term_glossary_enabled": term_glossary_enabled() and bool(getattr(svc, "terms_prompt", None)),
             "stream_enabled": stream_enabled(),
             "country_scope_enabled": country_scope_enabled(),
             "countries": AVAILABLE_COUNTRIES if country_scope_enabled() else [],
@@ -1894,6 +1927,90 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
         return {"suggestions": qs}
+
+    @app.post("/terms/explain")
+    async def terms_explain(body: TermsIn) -> dict:
+        """On-demand key-term explanations for an answer (definitional — purpose, application,
+        related-term edges). User-triggered after the answer renders; every result accumulates
+        into the vertical's glossary (the All Terms web)."""
+        if not term_glossary_enabled():
+            raise HTTPException(status_code=404, detail="term glossary not enabled")
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        if not getattr(svc, "terms_prompt", None):
+            raise HTTPException(status_code=404, detail="term explanations not available for this vertical")
+        try:
+            terms = await svc.explain_terms(question=body.question, answer=body.answer)
+        except CassetteMiss as e:
+            raise HTTPException(status_code=503, detail="No model available in replay mode.") from e
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
+        out = [t.model_dump() for t in terms]
+        total = None
+        g = _glossary()
+        if g is not None and out:
+            try:
+                await g.upsert_many(out, session_id=body.session_id)
+                total = await g.count()
+            except Exception:
+                pass    # accumulation is best-effort; the explanations still render
+        return {"terms": out, "glossary_total": total}
+
+    @app.post("/glossary/lookup")
+    async def glossary_lookup(body: TermLookupIn) -> dict:
+        """Navigate the term web: return the stored entry for a term, or — when the term was
+        linked as 'related' but never explained — explain it NOW and add it to the glossary.
+        Browsing deepens the web."""
+        if not term_glossary_enabled():
+            raise HTTPException(status_code=404, detail="term glossary not enabled")
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        g = _glossary()
+        if g is not None:
+            try:
+                got = await g.get(body.term)
+                if got:
+                    return {"entry": got, "fresh": False}
+            except Exception:
+                pass
+        if not getattr(svc, "terms_prompt", None):
+            raise HTTPException(status_code=404, detail="term explanations not available for this vertical")
+        try:
+            t = await svc.explain_term(term=body.term, context=body.context)
+        except CassetteMiss as e:
+            raise HTTPException(status_code=503, detail="No model available in replay mode.") from e
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
+        if t is None:
+            raise HTTPException(status_code=404, detail="no explanation produced")
+        entry = t.model_dump()
+        if g is not None:
+            try:
+                await g.upsert_many([entry], session_id=None)
+                stored = await g.get(entry["term"])
+                if stored:
+                    return {"entry": stored, "fresh": True}
+            except Exception:
+                pass
+        entry["related"] = [{"term": s, "known": False} for s in (entry.get("related") or [])]
+        return {"entry": entry, "fresh": True}
+
+    @app.get("/glossary")
+    async def glossary_list(q: str | None = None, letter: str | None = None,
+                            limit: int = 500, offset: int = 0) -> dict:
+        """The All Terms page: browse/search the accumulated vocabulary web."""
+        if not term_glossary_enabled():
+            raise HTTPException(status_code=404, detail="term glossary not enabled")
+        g = _glossary()
+        if g is None:
+            return {"terms": [], "total": 0, "letters": {}}
+        try:
+            return await g.list(q=q, letter=letter, limit=max(1, min(limit, 1000)),
+                                offset=max(0, offset))
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"glossary unavailable: {e}") from e
 
     @app.post("/refine")
     async def refine(body: RefineIn) -> dict:

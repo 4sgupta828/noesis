@@ -1955,6 +1955,13 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 total = await g.count()
             except Exception:
                 pass    # accumulation is best-effort; the explanations still render
+        if body.session_id and out:
+            store = _store()
+            if store is not None:
+                try:
+                    await store.save_terms(body.session_id, out)   # reopening the session re-renders them
+                except Exception:
+                    pass
         return {"terms": out, "glossary_total": total}
 
     @app.post("/glossary/lookup")

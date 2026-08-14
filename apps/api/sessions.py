@@ -51,6 +51,7 @@ ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS layman_answer TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS deleted BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS thread JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS audience TEXT NOT NULL DEFAULT 'clinician';
+ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS terms JSONB NOT NULL DEFAULT '[]'::jsonb;
 CREATE INDEX IF NOT EXISTS idx_nrs_vertical_tenant_created
     ON noesis_research_session (vertical, tenant_id, created_at DESC);
 """
@@ -168,6 +169,16 @@ class SessionStore:
             res = await conn.execute(
                 "UPDATE noesis_research_session SET layman_answer=$3 WHERE id=$1 AND vertical=$2",
                 session_id, self._vertical, text)
+        return res.endswith("1")
+
+    async def save_terms(self, session_id: str, terms: list[dict]) -> bool:
+        """Persist the key-term explanations generated for this session (re-rendered on reopen)."""
+        await self._ensure()
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            res = await conn.execute(
+                "UPDATE noesis_research_session SET terms=$3::jsonb WHERE id=$1 AND vertical=$2",
+                session_id, self._vertical, json.dumps(terms))
         return res.endswith("1")
 
     async def soft_delete(self, session_id: str) -> bool:
@@ -344,6 +355,7 @@ class SessionStore:
             "visual_observation": r["visual_observation"],
             "attachments": _j(r["attachments"], []),
             "layman_answer": r["layman_answer"],
+            "terms": _j(r["terms"], []),
             "thread": _j(r["thread"], []),
             "audience": r["audience"] or "clinician",
             "real_patient": bool(r["real_patient"]),

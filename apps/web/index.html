@@ -2399,7 +2399,12 @@ function convoActionsMarkup(data){
       title="The same answer, re-explained for a patient — plain words, same essence, no new claims.">◍ Plain language</button>
       <span class="xhint plain-hint" hidden></span></span>`);
   }
-  if(TERMS_ENABLED && data.grounded && (data.answer||"").trim()){
+  if(data.terms && data.terms.length){
+    // saved with the session — re-render collapsed on reopen (same pattern as layman_answer)
+    boxes.push(`<details class="plain plain-d terms-d"><summary class="plain-h">✦ Key terms in this answer (${data.terms.length})</summary>
+      <div class="termgrid">${data.terms.map(termCardHtml).join("")}</div>
+      <div class="termfoot"><a href="#" class="tall">Browse All Terms →</a></div></details>`);
+  } else if(TERMS_ENABLED && data.grounded && (data.answer||"").trim()){
     slim.push(termsActionHtml());
   }
   const out = [];
@@ -2411,6 +2416,9 @@ function wireConvo(target, data){
   const vgo = target.querySelector("#vgo"); if(vgo) vgo.addEventListener("click", ()=>generateVideo(target));
   const pg = target.querySelector("#plaingo"); if(pg) pg.addEventListener("click", ()=>generatePlain(target));
   const tg = target.querySelector("#termsgo"); if(tg) tg.addEventListener("click", ()=>generateTerms(target, data));
+  const td = target.querySelector(".terms-d");   // saved terms re-rendered from the session
+  if(td){ wireTermChips(td);
+    const ta = td.querySelector(".tall"); if(ta) ta.addEventListener("click", e=>{e.preventDefault(); openTermsPage();}); }
 }
 
 // Self-healing: ask the backend which sources would fill this question's gaps, render them
@@ -2560,7 +2568,7 @@ async function generateTerms(root, data){
   try{
     const r = await fetch("/terms/explain",{method:"POST",headers:{"content-type":"application/json"},
       body:JSON.stringify({question:(data.question||CURRENT_Q||""), answer:(data.answer||""),
-        session_id:(data.session_id||null)})});
+        session_id:(data.session_id || (typeof THREAD!=="undefined" && THREAD.session_id) || (typeof LAST!=="undefined" && LAST && LAST.session_id) || null)})});
     if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
     const {terms, glossary_total} = await r.json();
     if(!terms || !terms.length) throw new Error("no key terms found in this answer");
@@ -4725,7 +4733,7 @@ function showSessionDetail(row, rowEl){
   const lastTurn = turns[turns.length-1] || row;
   const actData = Object.assign({}, lastTurn, {
     video_filename: row.video_filename, video_title: row.video_title, video_duration: row.video_duration,
-    layman_answer: row.layman_answer, session_id: row.id, id: row.id});
+    layman_answer: row.layman_answer, terms: row.terms||[], session_id: row.id, id: row.id});
   LAST = {question: row.question, answer: (lastTurn.answer||row.answer||""), session_id: row.id};
   const act = document.createElement("div"); act.innerHTML = convoActionsMarkup(actData);
   if(act.firstChild){ sdbody.appendChild(act); wireConvo(act, actData); }

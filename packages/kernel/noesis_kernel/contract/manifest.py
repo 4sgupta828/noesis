@@ -175,6 +175,14 @@ class VerticalManifest:
     panel_default_ids: tuple = ()          # which specialists the default panel runs
     panel_synthesis_directive: str | None = None
     panel_examples: tuple = ()             # sample multi-specialty cases seeded into the panel intake
+    # Optional PANEL synthesis addenda (flag NOESIS_PANEL_CONTRACT — P1 decision synthesis).
+    # APPENDED by the kernel to the panel synthesis directive ONLY when the panel's shared
+    # QuestionContract fires the matching route (enumerative + ≥2 covered entities → the
+    # enumerative addendum; exploratory + ≥2 covered axes → the decision addendum). Opaque prose —
+    # ALL domain vocabulary (grid shape, columns, attribution rules) lives here; the kernel never
+    # parses it. None → that route never fires for this vertical.
+    panel_enumerative_addendum: str | None = None
+    panel_decision_addendum: str | None = None
 
     # Optional QUESTION-CONTRACT derivation directive (Evidence Contract stage 3, flag
     # NOESIS_QUESTION_CONTRACT): instructs ONE small LLM call to decide whether a question demands

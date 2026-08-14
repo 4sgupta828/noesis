@@ -257,7 +257,54 @@ reasoning point, tight (1–2 sentences), cited [n]. Cover:
 - **Tensions & reconciliation:** where the evidence differs (population, endpoint, or evidence tier) and how
   you reconcile it.
 - **What lowers/raises confidence:** the specific claims that are more or less certain, and why.
-Explain the EVIDENCE reasoning; do NOT narrate which specialist said what (no "the pharmacology lens said…").
+Explain the EVIDENCE reasoning. In PROSE, do NOT narrate which specialist said what — no he-said-she-said
+(never "the pharmacology lens said…"). But when a STRUCTURED element is called for (a decision grid or an
+"Agreements vs tensions" block), structured attribution IS REQUIRED there: name the specialties holding each
+position in that grid/block — that is panel accountability, not narrative.
 Plain `## Panel deliberation` Markdown heading + bullets — no HTML, no wall of prose.
 
 Neutral synthesis of the evidence, not individualized advice."""
+
+
+# ---- Panel synthesis addenda (flag NOESIS_PANEL_CONTRACT — P1 decision synthesis) -----------------
+# Appended by the KERNEL to PANEL_SYNTHESIS_DIRECTIVE only when the panel's shared QuestionContract
+# fires the matching route (enumerative + ≥2 covered entities / exploratory + ≥2 covered axes). The
+# validated base directive above is NEVER modified — these are purely additive, opaque to the kernel.
+
+PANEL_ENUMERATIVE_ADDENDUM = """\
+ENUMERATIVE PANEL ANSWER — this case asks about MULTIPLE candidate agents/options and the panel's pooled
+findings cover several of them. Frame the synthesis accordingly (grounding rules unchanged: pooled verified
+findings only, cite [n] everywhere):
+
+- LEAD with the practical PER-AGENT comparison. Immediately after the Bottom line, present a Markdown
+  table with one row per agent the findings cover — columns: Agent | Key dosing / threshold facts [n] |
+  Cautions (organ toxicity, interactions, monitoring) [n] | Panel position (which specialties' findings
+  support it; note any specialty whose findings cut against it). Leave out any cell the findings don't
+  support — never fill one from outside knowledge.
+- SAFETY TRAVELS WITH THE AGENT: any organ-toxicity or interaction caution in the findings sits in the
+  SAME ROW as that agent's favorable facts — and in prose, in the SAME sentence as any favorable mention.
+- The Panel position column is the REQUIRED structured attribution (see the deliberation rules): name
+  specialties there; keep prose free of he-said-she-said.
+- Population-level studies (resistance patterns, surveillance, epidemiology) are CONTEXT after the table,
+  never the headline."""
+
+PANEL_DECISION_ADDENDUM = """\
+DECISION SYNTHESIS — this case turns on several distinct decisions/causes the panel's pooled findings
+cover. Frame the synthesis around them (grounding rules unchanged: pooled verified findings only, cite [n]
+everywhere):
+
+- LEAD with a Markdown DECISION GRID immediately after the Bottom line: one row per decision/cause the
+  findings cover — columns: Do now [n] | Decisive threshold/result [n] | Action it triggers [n] |
+  Panel position (specialties agreeing; dissenting) | Open gap. "Do now" is the concrete immediate step;
+  "Decisive threshold/result" is the test result or cutoff that settles the branch; "Action it triggers"
+  is what that result changes; "Panel position" NAMES the specialties whose findings support the row and
+  any specialty whose findings dissent (structured attribution is REQUIRED here — this is the exception
+  to the prose ban); "Open gap" states what the findings do not settle for that row ("—" if none). Leave
+  out any cell the findings don't support — never fill one from outside knowledge.
+- FOLLOW the grid with an explicit **Agreements vs tensions** block: short bullets, each NAMING the
+  specialties per position — "Agreement: <point> (Specialty A, Specialty B) [n]"; "Tension: <Specialty A>
+  findings support X [n] while <Specialty B> findings support Y [n] — reconciled by <how>". Findings the
+  panel established independently across lenses (marked "found independently by N lenses") are the
+  strongest agreements — say so.
+- Everything else in the base format (Key recommendations, Safety, Uncertainties, Panel deliberation)
+  still applies AFTER the grid and tensions block; prose stays free of he-said-she-said."""

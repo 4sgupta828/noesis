@@ -8,7 +8,7 @@ from noesis_kernel.contract.manifest import VerticalManifest
 from . import entities
 from . import evidence_kind
 from .specialists import (SPECIALISTS, DEFAULT_PANEL_IDS, PANEL_SYNTHESIS_DIRECTIVE,
-                          PANEL_EXAMPLE_CASES)
+                          PANEL_EXAMPLE_CASES, PANEL_ENUMERATIVE_ADDENDUM, PANEL_DECISION_ADDENDUM)
 from .answer_format import (
     MEDICAL_ANSWER_FORMAT,
     MEDICAL_CLINICAL_SYNTHESIS_FORMAT,
@@ -86,6 +86,8 @@ def build_manifest() -> VerticalManifest:
         evidence_classifier=evidence_kind.classify,   # structural facets → evidence tier (Rule 18)
         panel_specialists=SPECIALISTS, panel_default_ids=DEFAULT_PANEL_IDS,
         panel_synthesis_directive=PANEL_SYNTHESIS_DIRECTIVE, panel_examples=PANEL_EXAMPLE_CASES,
+        panel_enumerative_addendum=PANEL_ENUMERATIVE_ADDENDUM,
+        panel_decision_addendum=PANEL_DECISION_ADDENDUM,
         vision_prompt=MEDICAL_VISION_PROMPT,
         report_prompt=MEDICAL_REPORT_PROMPT,
         layman_prompt=MEDICAL_LAYMAN_PROMPT,

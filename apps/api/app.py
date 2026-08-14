@@ -551,6 +551,26 @@ def ask_panel_enabled() -> bool:
     return os.environ.get("NOESIS_ASK_PANEL", "").lower() in ("1", "true", "yes")
 
 
+def panel_dedup_enabled() -> bool:
+    """Flag (default OFF, Rule 20 — panel upgrade P2, +0 LLM calls): when ON, the panel's pooled
+    findings are DEDUPLICATED by (atom_id, normalized quote) — a claim several lenses independently
+    established collapses to ONE survivor carrying every lens that found it, and its findings line
+    renders the computed convergence ("found independently by N lenses: …") for the chair to weigh.
+    OFF → pooling, findings strings, and claim dicts are byte-identical to today."""
+    return os.environ.get("NOESIS_PANEL_DEDUP", "").lower() in ("1", "true", "yes")
+
+
+def panel_contract_enabled() -> bool:
+    """Flag (default OFF, Rule 20 — panel upgrade P3+P1, +1 LLM call per panel run): when ON, the
+    panel derives ONE shared QuestionContract (the vertical's contract_prompt) BEFORE the specialists
+    run — each lens's focus gains a scoped 'Ensure coverage of: …' line, the POOLED claims are
+    slot-matched (entities for enumerative contracts, axes for exploratory), slots no specialist
+    evidenced surface as panel-level coverage_gaps, and the synthesis directive routes to the
+    vertical's panel enumerative/decision addendum when ≥2 slots hold evidence (stage-4 pattern).
+    OFF → no derivation, no scoped lines, no gaps, base directive only (byte-identical)."""
+    return os.environ.get("NOESIS_PANEL_CONTRACT", "").lower() in ("1", "true", "yes")
+
+
 def duel_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, `engine="reasoned"` on /research[/stream] routes through
     the ALTERNATE reason-first engine (scaffold → coverage-steered retrieval → decision-gated compose)
@@ -1042,6 +1062,10 @@ def build_default_service() -> ResearchService:
         panel_default_ids=getattr(manifest, "panel_default_ids", ()),
         panel_synthesis_directive=getattr(manifest, "panel_synthesis_directive", None),
         panel_examples=getattr(manifest, "panel_examples", ()),
+        panel_dedup=panel_dedup_enabled(),
+        panel_contract=panel_contract_enabled(),
+        panel_enumerative_addendum=getattr(manifest, "panel_enumerative_addendum", None),
+        panel_decision_addendum=getattr(manifest, "panel_decision_addendum", None),
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
         answer_format=answer_format,
         # Patient directive resolved INDEPENDENTLY of structured_answers/clinical_synthesis — the
@@ -1491,6 +1515,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "synthesis": r.synthesis, "claims": _with_urls(r.claims),
             "interpretation": r.interpretation, "confidence": r.confidence,
             "reasoning_purpose": r.reasoning_purpose, "reasoning_conclusion": r.reasoning_conclusion,
+            # Panel-level slots NO specialist evidenced (shared-contract flag; [] when OFF).
+            "coverage_gaps": list(getattr(r, "coverage_gaps", []) or []),
         }
 
     def _panel_media(body):
@@ -1516,14 +1542,16 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 "grounded": bool(pooled), "claims": pooled, "takes": payload["takes"],
                 "n_specialists": r.n_specialists, "interpretation": r.interpretation,
                 "confidence": r.confidence, "reasoning_purpose": r.reasoning_purpose,
-                "reasoning_conclusion": r.reasoning_conclusion}
+                "reasoning_conclusion": r.reasoning_conclusion,
+                "coverage_gaps": payload["coverage_gaps"]}
         try:
             if body.session_id and await store.append_turn(body.session_id, turn):
                 return body.session_id
             return await store.save(
                 tenant_id=body.tenant_id, workspace_id=body.workspace_id,
                 question=r.question, answer=r.synthesis, grounded=bool(pooled),
-                claims=pooled, source_stats={}, coverage_gaps=[], rejected=0, sources=body.sources,
+                claims=pooled, source_stats={}, coverage_gaps=payload["coverage_gaps"],
+                rejected=0, sources=body.sources,
                 interpretation=r.interpretation, confidence=r.confidence,
                 reasoning_purpose=r.reasoning_purpose, reasoning_conclusion=r.reasoning_conclusion,
                 kind="panel", extra={"takes": payload["takes"], "n_specialists": r.n_specialists})

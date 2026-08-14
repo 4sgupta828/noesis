@@ -216,3 +216,45 @@ def test_triage_v2_uses_v2_prompt_schema_and_case_cap(monkeypatch) -> None:
     d = client.post("/triage/step", json={"transcript": two_asks, "register": "fact"}).json()
     assert d["status"] == "ready"
     assert "do NOT ask another question" in llm.calls[1]["messages"][-1]["content"]
+
+
+# ---------------------------------------------------------------- Specialist Panel upgrade (P1–P3)
+
+
+def test_panel_upgrade_flags_read_env(monkeypatch) -> None:
+    # Panel upgrade: P2 dedup and P3+P1 shared-contract flags are wired from
+    # NOESIS_PANEL_DEDUP / NOESIS_PANEL_CONTRACT (both default OFF).
+    from api.app import panel_contract_enabled, panel_dedup_enabled
+    monkeypatch.delenv("NOESIS_PANEL_DEDUP", raising=False)
+    monkeypatch.delenv("NOESIS_PANEL_CONTRACT", raising=False)
+    assert panel_dedup_enabled() is False and panel_contract_enabled() is False
+    monkeypatch.setenv("NOESIS_PANEL_DEDUP", "1")
+    monkeypatch.setenv("NOESIS_PANEL_CONTRACT", "true")
+    assert panel_dedup_enabled() is True and panel_contract_enabled() is True
+    monkeypatch.setenv("NOESIS_PANEL_DEDUP", "no")
+    monkeypatch.setenv("NOESIS_PANEL_CONTRACT", "0")
+    assert panel_dedup_enabled() is False and panel_contract_enabled() is False
+
+
+def test_panel_payload_carries_coverage_gaps(monkeypatch) -> None:
+    # P3c plumbing: PanelResult.coverage_gaps → the /panel/ask payload (the same payload feeds the
+    # session turn), so the UI/session can show the panel-level gaps.
+    from noesis_kernel.research.panel import PanelResult
+    monkeypatch.setenv("NOESIS_ASK_PANEL", "1")
+    monkeypatch.delenv("NOESIS_CORPUS_DSN", raising=False)   # env-only flags, no session store
+    svc = _service()
+
+    async def fake_ask_panel(**kw):
+        return PanelResult(question=kw["question"], synthesis="Panel answer [1].",
+                           claims=[{"text": "t", "quote": "q", "atom_id": "a1", "source": "corpus",
+                                    "title": "", "document_id": "d1", "evidence_kind": ""}],
+                           n_specialists=2,
+                           coverage_gaps=["No specialist retrieved evidence for beta-drug"])
+
+    svc.ask_panel = fake_ask_panel
+    client = TestClient(create_app(svc))
+    resp = client.post("/panel/ask", json={"question": "q", "tenant_id": "acme"})
+    assert resp.status_code == 200
+    d = resp.json()
+    assert d["coverage_gaps"] == ["No specialist retrieved evidence for beta-drug"]
+    assert d["synthesis"] == "Panel answer [1]."

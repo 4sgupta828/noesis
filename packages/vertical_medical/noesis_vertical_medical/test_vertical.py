@@ -93,3 +93,35 @@ def test_authority_evidence_hierarchy() -> None:
     assert a.outranks("rct", "cohort")
     assert a.outranks("cohort", "case_report")
     assert a.is_controlling("guideline") and not a.is_controlling("rct")
+
+
+def test_panel_addenda_manifest_wiring() -> None:
+    # Panel upgrade P1: the vertical supplies BOTH panel synthesis addenda as OPAQUE manifest
+    # strings (all domain vocabulary vertical-side; the kernel only appends the matching one when
+    # the shared panel contract routes), and the base panel directive is still wired unchanged.
+    from noesis_vertical_medical import specialists as sp
+    assert med.manifest.panel_enumerative_addendum == sp.PANEL_ENUMERATIVE_ADDENDUM
+    assert med.manifest.panel_decision_addendum == sp.PANEL_DECISION_ADDENDUM
+    assert med.manifest.panel_synthesis_directive == sp.PANEL_SYNTHESIS_DIRECTIVE
+    assert (med.manifest.panel_enumerative_addendum or "").strip()
+    assert (med.manifest.panel_decision_addendum or "").strip()
+
+
+def test_panel_decision_addendum_grid_and_tensions() -> None:
+    # The decision addendum leads with the decision GRID (one row per decision/cause) with the
+    # required columns, then an explicit agreements-vs-tensions block NAMING specialties.
+    from noesis_vertical_medical.specialists import PANEL_DECISION_ADDENDUM as add
+    for col in ("Do now [n]", "Decisive threshold/result [n]", "Action it triggers [n]",
+                "Panel position (specialties agreeing; dissenting)", "Open gap"):
+        assert col in add, col
+    assert "Agreements vs tensions" in add
+    assert "NAMING the" in add or "NAMES the specialties" in add
+
+
+def test_panel_directive_attribution_ban_amended() -> None:
+    # The prose he-said-she-said ban STAYS; structured attribution in the grid/tensions block is
+    # now REQUIRED (the amendment the decision grid depends on).
+    from noesis_vertical_medical.specialists import PANEL_SYNTHESIS_DIRECTIVE as d
+    assert "no he-said-she-said" in d
+    assert 'never "the pharmacology lens said…"' in d
+    assert "structured attribution IS REQUIRED" in d

@@ -120,6 +120,13 @@ class ResearchService:
     panel_default_ids: tuple = ()           # ids the default panel runs
     panel_synthesis_directive: str | None = None
     panel_examples: tuple = ()              # sample multi-specialty cases seeded into the panel intake
+    panel_dedup: bool = False               # P2 (flag): dedup pooled panel claims by (atom_id,
+    #                                         normalized quote); survivors carry lens_count + names
+    panel_contract: bool = False            # P3+P1 (flag): ONE shared QuestionContract per panel run
+    #                                         (+1 call) → scoped lens coverage, pooled slot-matching,
+    #                                         panel coverage_gaps, decision-synthesis routing
+    panel_enumerative_addendum: str | None = None  # vertical panel enumerative addendum (opaque)
+    panel_decision_addendum: str | None = None     # vertical panel decision-grid addendum (opaque)
 
     def _retriever(self, source_keys: list[str] | None) -> MultiSourceRetriever:
         chosen = {k: v for k, v in self.sources.items()
@@ -573,6 +580,10 @@ class ResearchService:
             classify_evidence=self.classify_evidence, evidence_ranker=self.evidence_ranker,
             evidence_fitness=self.evidence_fitness, evidence_identity=self.evidence_identity,
             claim_congruence=self.claim_congruence,
+            panel_dedup=self.panel_dedup, panel_contract=self.panel_contract,
+            contract_prompt=self.contract_prompt,
+            panel_enumerative_addendum=self.panel_enumerative_addendum,
+            panel_decision_addendum=self.panel_decision_addendum,
             on_event=on_event)
 
     async def _resolve_followup(self, question: str, history: list[dict],

@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from noesis_kernel.research.atoms import identity_tag
 from noesis_kernel.research.budget import BudgetState
+from noesis_kernel.research.provenance import normalize
 from noesis_kernel.research.react import (
     ComposedAnswer, _refs_valid, _unsupported_prose_tokens, run_react, strip_control_tags,
 )
@@ -114,6 +115,45 @@ class PanelResult:
     reasoning_purpose: str = ""
     reasoning_conclusion: str = ""
     n_specialists: int = 0
+    coverage_gaps: list = field(default_factory=list)   # panel-level slots NO specialist evidenced
+    #                                                     (shared-contract flag; empty when OFF)
+
+
+# ---- Shared panel contract (flag NOESIS_PANEL_CONTRACT) ------------------------------------------
+
+_WORD_RE = re.compile(r"[a-z0-9]{4,}")
+
+
+def _contract_slots(contract) -> list[str]:
+    """The panel's coverage slots: the ENTITIES of an enumerative contract, else the AXES of an
+    exploratory one (the decision dimensions when there is nothing to enumerate). None / empty
+    contract → no slots (every downstream step is a no-op)."""
+    if contract is None:
+        return []
+    if contract.mode == "enumerative" and contract.entities:
+        return list(contract.entities)
+    return list(contract.axes)
+
+
+def _scoped_coverage_line(contract, spec) -> str:
+    """P3a — a KERNEL-GENERIC coverage line for ONE specialist: 'Ensure coverage of: <items>'.
+    Enumerative entities go to EVERY lens (each lens examines every candidate through its own
+    angle); axes are scoped by computable word overlap with the specialist's own specialty/focus/
+    lens text — structural containment against the contract's closed LLM-derived list (Rule 18:
+    no semantic judgment here; the list itself was LLM-derived) — falling back to ALL axes when
+    nothing overlaps so coverage is never silently lost."""
+    if contract is None:
+        return ""
+    items: list[str] = []
+    if contract.mode == "enumerative" and contract.entities:
+        items.extend(contract.entities)
+    axes = [a for a in contract.axes if a and a.strip()]
+    if axes:
+        hay = set(_WORD_RE.findall(
+            f"{getattr(spec, 'specialty', '')} {getattr(spec, 'focus', '')} {getattr(spec, 'lens', '')}".lower()))
+        rel = [a for a in axes if hay & set(_WORD_RE.findall(a.lower()))]
+        items.extend(rel or axes)
+    return f"Ensure coverage of: {', '.join(items)}" if items else ""
 
 
 async def _emit(on_event, ev: dict) -> None:
@@ -129,13 +169,44 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
                     rationales=None,
                     chair_system_prompt="You are an evidence-grounded clinical research panel chair.",
                     classify_evidence=None, evidence_ranker=None, evidence_fitness=False,
-                    evidence_identity=False, claim_congruence=False, on_event=None) -> PanelResult:
+                    evidence_identity=False, claim_congruence=False,
+                    panel_dedup=False, panel_contract=False, contract_prompt=None,
+                    panel_enumerative_addendum=None, panel_decision_addendum=None,
+                    on_event=None) -> PanelResult:
     """`make_retrievers(source_keys) -> (corpus_source, aux_source)` lets each specialist scope its
     sources without this module knowing the source registry (domain-free seam). `history_context` is the
     prior conversation (context ONLY, never citable) so a follow-up turn reasons in context — same
     contract as run_react's history. `on_event` streams live progress: specialist_start/_done plus each
-    specialist's own run_react trace wrapped as {type: specialist_trace, id, ev}."""
+    specialist's own run_react trace wrapped as {type: specialist_trace, id, ev}.
+
+    Panel-upgrade flags (both default OFF, byte-identical off paths):
+      - `panel_dedup` (P2, +0 calls): pooled claims dedup by (atom_id, normalized quote); a survivor
+        carries every lens that found it and renders computed convergence in its findings line.
+      - `panel_contract` (P3+P1, +1 call): ONE shared QuestionContract derived BEFORE the specialists
+        (charged to a panel-level budget note) scopes each lens's coverage, slot-matches the POOLED
+        claims, reports panel-level `coverage_gaps`, and routes the synthesis directive to the
+        vertical's enumerative/decision addendum when ≥2 slots hold evidence (stage-4 pattern)."""
     result = PanelResult(question=question, n_specialists=len(specialists))
+
+    # 0) SHARED CONTRACT (P3, flag): ONE derivation for the whole panel — never per specialist —
+    # charged to a panel-level budget note so the +1 call is observable spend (Rule 13). Fail-safe:
+    # derive_contract returns None on any failure → the panel runs exactly as without the flag.
+    contract = None
+    if panel_contract and llm is not None and (contract_prompt or "").strip():
+        from noesis_kernel.research.contract import derive_contract
+        panel_budget = BudgetState(max_calls=1)
+        panel_budget.reserve()
+        contract = await derive_contract(question, llm, contract_prompt)
+        panel_budget.charge()
+        _log.info(
+            "panel budget note: shared-contract derivation charged 1 LLM call (%d/%d) — mode=%s "
+            "entities=%d axes=%d",
+            panel_budget.spent_calls, panel_budget.max_calls,
+            getattr(contract, "mode", "none"),
+            len(getattr(contract, "entities", None) or []), len(getattr(contract, "axes", None) or []))
+        if contract is not None:
+            await _emit(on_event, {"type": "panel_contract", "mode": contract.mode,
+                                   "entities": len(contract.entities), "axes": len(contract.axes)})
 
     # 1) Each specialist runs its own grounded loop, IN PARALLEL (capped). The focus terms steer
     # retrieval (different embedded query → different atoms); the lens shapes planning/extraction.
@@ -150,6 +221,10 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
             try:
                 corpus, aux = make_retrievers(list(spec.source_keys) or None)
                 spec_q = f"{question}\n\n[Panel focus — {spec.specialty}: {spec.focus}]"
+                # P3a: the shared contract's slots relevant to THIS lens (kernel-generic rendering).
+                scope = _scoped_coverage_line(contract, spec)
+                if scope:
+                    spec_q += f"\n[{scope}]"
                 res = await run_react(
                     question=spec_q, llm=llm, embedder=embedder, source=corpus, aux_source=aux,
                     tenant_id=tenant_id, workspace_id=workspace_id, history_context=history_context,
@@ -172,8 +247,12 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
     ran = await asyncio.gather(*[_run(s) for s in specialists])
 
     # 2) Pool every specialist's span-verified findings into ONE numbered list (the only facts the
-    # synthesis may use). Keep specialist attribution for the "perspectives" section.
-    pooled = []                          # list of (specialty, VerifiedClaim)
+    # synthesis may use). Keep specialist attribution for the "perspectives" section. Each pooled
+    # entry carries its ORIGIN lens names — exactly one without the dedup flag; under P2 a claim
+    # found by several lenses collapses to ONE survivor carrying every lens that found it
+    # (dedup key: (atom_id, normalized quote) — same normalization as the span verifier).
+    pooled = []                          # list of ([lens names], VerifiedClaim)
+    _dedup_at: dict = {}                 # (atom_id, normalized quote) -> index into pooled (P2 only)
     for spec, res, err in ran:
         take = SpecialistTake(id=spec.id, specialty=spec.specialty,
                               answer=(res.composed_answer if res else ""),
@@ -184,7 +263,35 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
         result.takes.append(take)
         if res:
             for vc in res.verified_claims:
-                pooled.append((spec.specialty, vc))
+                if panel_dedup:
+                    key = (vc.atom_id, normalize(vc.quote or ""))
+                    at = _dedup_at.get(key)
+                    if at is not None:
+                        names = pooled[at][0]
+                        if spec.specialty not in names:
+                            names.append(spec.specialty)
+                        continue
+                    _dedup_at[key] = len(pooled)
+                pooled.append(([spec.specialty], vc))
+
+    # P3b/c — slot-match the POOLED claims against the shared contract and report panel-level
+    # coverage gaps ("no specialist retrieved evidence for <slot>"). Entity↔claim matching is
+    # structural containment against the contract's OWN closed list (match_entities — Rule 18);
+    # for an exploratory contract the AXES are the slot list (same containment on text+title).
+    _covered = 0
+    _slots = _contract_slots(contract)
+    if _slots:
+        from noesis_kernel.research.contract import match_entities
+        _grid = {s: 0 for s in _slots}
+        for _names, vc in pooled:
+            for s in match_entities(_slots, vc.text, vc.document_title):
+                _grid[s] += 1
+        _covered = sum(1 for n in _grid.values() if n > 0)
+        for s in _slots:
+            if _grid[s] == 0:
+                result.coverage_gaps.append(f"No specialist retrieved evidence for {s}")
+        await _emit(on_event, {"type": "panel_slots", "mode": contract.mode, "slots": len(_slots),
+                               "covered": _covered, "gaps": len(result.coverage_gaps)})
 
     if not pooled:
         result.synthesis = ("_The panel could not ground an answer — no specialist found verifiable "
@@ -210,9 +317,30 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
         note = getattr(vc, "congruence_note", "")
         return f" [{note.replace('_', '-')}]" if note else ""
 
+    def _finding_lenses(names) -> str:
+        """P2 annotation: COMPUTED convergence — rendered only under the dedup flag and only when
+        a finding actually survived deduplication across ≥2 lenses. OFF (or single-lens) → ""
+        (byte-identical findings line)."""
+        if not panel_dedup or len(names) < 2:
+            return ""
+        return f"  (found independently by {len(names)} lenses: {', '.join(names)})"
+
     findings = "\n".join(
-        f"[{i}] ({spec}) {vc.text}  (quote: \"{vc.quote}\" — {_finding_source(vc)}){_finding_note(vc)}"
-        for i, (spec, vc) in enumerate(pooled, 1))
+        f"[{i}] ({names[0]}) {vc.text}  (quote: \"{vc.quote}\" — {_finding_source(vc)})"
+        f"{_finding_note(vc)}{_finding_lenses(names)}"
+        for i, (names, vc) in enumerate(pooled, 1))
+
+    # P1 — DECISION SYNTHESIS routing (part of the shared-contract flag; stage-4 pattern: the mode
+    # is confirmed against COVERED slots at synthesis time, never the pre-retrieval contract alone).
+    # Enumerative contract + ≥2 covered entities → the vertical's panel_enumerative_addendum;
+    # exploratory contract + ≥2 covered axes → the vertical's panel_decision_addendum. Both are
+    # OPAQUE vertical prose appended to the base directive — the validated base is never modified.
+    directive = synthesis_directive
+    if contract is not None and _covered >= 2:
+        if contract.mode == "enumerative" and contract.entities and (panel_enumerative_addendum or "").strip():
+            directive = f"{directive}\n\n{panel_enumerative_addendum}" if directive else panel_enumerative_addendum
+        elif contract.mode == "exploratory" and (panel_decision_addendum or "").strip():
+            directive = f"{directive}\n\n{panel_decision_addendum}" if directive else panel_decision_addendum
 
     # 3) Grounded synthesis: ONE compose over the pooled findings. The panel's reasoning lives in the
     # answer's "How the panel reasoned" section (the collective reasoning) — we do NOT also request the
@@ -239,15 +367,31 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
     attach = (attachment_context or "").strip()
     attach_ctx = (f"ATTACHMENT CONTEXT (what the user uploaded — an image reading and/or document text; "
                   f"use it to interpret the case, but it is NOT a citable finding):\n{attach}\n\n" if attach else "")
+    # P2: when computed convergence is present, tell the chair what the annotation MEANS (guarded by
+    # the flag AND an actual convergent finding — otherwise "" keeps the prompt byte-identical).
+    dedup_note = ""
+    if panel_dedup and any(len(names) >= 2 for names, _ in pooled):
+        dedup_note = ('\nFindings annotated "found independently by N lenses" are COMPUTED convergence — '
+                      'multiple specialist lenses independently established the same evidence; you may '
+                      'state that convergence and weight those findings accordingly.')
     synth_user = (
         conv_ctx + attach_ctx + assess_ctx
         + f"Question: {question}\n\nVERIFIED PANEL FINDINGS (the ONLY facts you may cite, each tagged with "
-        f"the specialist who found it):\n{findings}\n\n"
+        f"the specialist who found it):\n{findings}{dedup_note}\n\n"
         "As the panel's OVERALL REASONER, integrate the specialist assessments and these findings into ONE "
         "collective answer. Reference each finding inline as [n]. Every FACTUAL statement must rest on a "
         "finding above — add no fact, figure, dose, or claim not present in them (the assessments guide the "
         "REASONING, never introduce a new fact)."
-        + (("\n\n" + synthesis_directive) if synthesis_directive else ""))
+        + (("\n\n" + directive) if directive else ""))
+
+    def _claim_dicts() -> list:
+        """The pooled claim dicts. Under P2 each survivor carries the lenses that found it
+        (lens_count + lens names — computed convergence for the UI/session). OFF → byte-identical
+        dicts (no new keys)."""
+        if not panel_dedup:
+            return [_vc_dict(vc) for vc in verified]
+        return [{**_vc_dict(vc), "lens_count": len(names), "lenses": list(names)}
+                for names, vc in pooled]
 
     async def _compose():
         comp = await llm.complete(system=chair_system_prompt,
@@ -267,11 +411,11 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
     if not text:
         result.synthesis = ("_The panel gathered verified evidence (below) but could not compose a "
                             "synthesis just now. Please retry._")
-        result.claims = [_vc_dict(vc) for vc in verified]
+        result.claims = _claim_dicts()
         return result
 
     result.synthesis = text
-    result.claims = [_vc_dict(vc) for vc in verified]
+    result.claims = _claim_dicts()
     # Reasoning lives in the answer's "How the panel reasoned" section (purpose, integration, conclusion,
     # and confidence-in-prose) — the structured reasoning-read layer is intentionally OFF for the panel.
     unsupported = _unsupported_prose_tokens(text, verified)

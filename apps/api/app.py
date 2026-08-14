@@ -528,6 +528,14 @@ def answer_charts_enabled() -> bool:
     return os.environ.get("NOESIS_ANSWER_CHARTS", "").lower() in ("1", "true", "yes")
 
 
+def voice_intake_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, Guided Intake offers a hands-free voice conversation —
+    browser-native SpeechRecognition dictates the user's answers and SpeechSynthesis speaks each
+    clarifying question. FE-only behavior (feature-detected per browser); this flag just gates the
+    affordance via /config. OFF → the mic never shows (byte-identical to today)."""
+    return os.environ.get("NOESIS_VOICE_INTAKE", "").lower() in ("1", "true", "yes")
+
+
 def term_glossary_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, each answer offers on-demand key-term explanations
     (POST /terms/explain — definitional, with related-term edges) and the accumulated glossary is
@@ -1358,6 +1366,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "conversation_enabled": conversation_enabled(),
             "suggest_enabled": conversation_enabled() and bool(getattr(svc, "suggest_prompt", None)),
             "term_glossary_enabled": term_glossary_enabled() and bool(getattr(svc, "terms_prompt", None)),
+            "voice_intake_enabled": voice_intake_enabled() and live_triage,
             "stream_enabled": stream_enabled(),
             "country_scope_enabled": country_scope_enabled(),
             "countries": AVAILABLE_COUNTRIES if country_scope_enabled() else [],

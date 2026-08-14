@@ -843,6 +843,13 @@
   .sact.rp-on{color:#f28c2e;border-color:#f28c2e;}
   /* ◉ Pulse full page */
   .pulsepage{position:fixed;inset:0;z-index:50;background:var(--bg);overflow-y:auto;padding:1rem 1.4rem 3rem;}
+  /* 🎙 voice intake — mic lives in the composer, guided mode only */
+  body:not([data-mode="triage"]) #voicebtn{display:none !important;}
+  #voicebtn.on{color:var(--gold);}
+  #voicebtn.listening{color:var(--gap);animation:vpulse 1.15s ease-in-out infinite;}
+  #voicebtn.speaking{color:var(--gold);animation:vpulse 1.8s ease-in-out infinite;}
+  @keyframes vpulse{50%{opacity:.4;}}
+  @media (prefers-reduced-motion: reduce){ #voicebtn.listening,#voicebtn.speaking{animation:none;} }
   /* ✦ All Terms — the accumulating vocabulary web (same full-page frame as Pulse) */
   .termspage{position:fixed;inset:0;z-index:50;background:var(--bg);overflow-y:auto;padding:1rem 1.4rem 3rem;}
   .termspage .tphead{display:flex;align-items:center;gap:.9rem;padding:.4rem 0 .9rem;border-bottom:1px solid var(--hair);flex-wrap:wrap;}
@@ -1328,6 +1335,14 @@
           <path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/>
         </svg>
       </button>
+      <button class="attach" id="voicebtn" type="button" hidden aria-label="Voice conversation"
+              title="Voice conversation — speak your answers, hear the questions">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="9" y="2.5" width="6" height="11.5" rx="3"/>
+          <path d="M5 11a7 7 0 0 0 14 0M12 18v3.5M8.5 21.5h7"/>
+        </svg>
+      </button>
       <button class="go" id="go" type="submit" aria-label="Research">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1564,6 +1579,7 @@ let STRUCTURED = false;     // render the answer as markdown sections (server-au
 let VISION_ENABLED = false; // image/PDF/DICOM upload → visual-context research
 let LAYMAN_ENABLED = false; // on-demand plain-language re-explanation
 let TERMS_ENABLED = false;  // on-demand key-term explanations + the accumulating All Terms glossary
+let VOICE_INTAKE_ENABLED = false; // hands-free guided intake (speak answers, hear questions)
 let GAP_ENABLED = false;    // self-healing: suggest + queue sources to fill evidence gaps
 let CONV_ENABLED = false;   // multi-turn conversation (follow-ups carry context)
 let SUGGEST_ENABLED = false;// suggested follow-up questions after each answer
@@ -1633,6 +1649,8 @@ async function loadConfig(){
     LAYMAN_ENABLED = !!c.layman_enabled;
     TERMS_ENABLED = !!c.term_glossary_enabled;
     const tb = $("#termsbtn"); if(tb && TERMS_ENABLED) tb.hidden = false;
+    VOICE_INTAKE_ENABLED = !!c.voice_intake_enabled;
+    maybeShowVoice();
     GAP_ENABLED = !!c.gap_healing_enabled;
     CONV_ENABLED = !!c.conversation_enabled;
     SUGGEST_ENABLED = !!c.suggest_enabled;
@@ -3204,7 +3222,8 @@ function setMode(mode, opts){
   APP_MODE = mode;
   GUIDED_REFINED = false;   // any mode change clears the stale "skip refine" flag (routeTriage re-sets it)
   document.body.dataset.mode = mode;
-  if(mode !== "triage") document.body.classList.remove("triage-live");   // undock when leaving guided mode
+  if(mode !== "triage"){ document.body.classList.remove("triage-live");   // undock when leaving guided mode
+    if(typeof voiceOff === "function") voiceOff(); }                      // leaving guided mode ends the voice loop
   $("#modeswitch").querySelectorAll(".mbtn").forEach(b =>
     b.setAttribute("aria-selected", b.dataset.mode === mode ? "true" : "false"));
   ATTN_BOX = "#attns"; renderAttachments();   // one intake box → one attachment surface
@@ -3242,6 +3261,83 @@ function closePanel(){ setMode("qa"); }
 // server holds no state (Rule: stateless) — TRIAGE.transcript is the whole memory, sent each turn.
 let TRIAGE = {transcript: [], busy: false, refined: "", register: "", urgent: false};
 const tbody = () => $("#triagebody");
+
+// ---- 🎙 Voice intake (flag NOESIS_VOICE_INTAKE; browser-native, feature-detected) ----
+// Hands-free guided intake: SpeechSynthesis speaks each clarifying question, SpeechRecognition
+// dictates the answer into the composer, and end-of-speech auto-sends the turn. The mic button
+// cycles: off → on (speak+listen) → tap while listening = send now → tap while idle = off.
+// Everything runs in the browser — no audio ever reaches our servers (only the transcript text
+// flows through the existing /triage/step path).
+const _SRCls = window.SpeechRecognition || window.webkitSpeechRecognition;
+let VOICE = {on:false, rec:null, listening:false};
+function voiceSupported(){ return !!_SRCls && ("speechSynthesis" in window); }
+function voiceUiState(st){
+  const b = $("#voicebtn"); if(!b) return;
+  b.classList.toggle("on", VOICE.on);
+  b.classList.toggle("listening", st==="listen");
+  b.classList.toggle("speaking", st==="speak");
+  b.title = !VOICE.on ? "Voice conversation — speak your answers, hear the questions"
+    : st==="listen" ? "Listening… tap to send" : st==="speak" ? "Speaking… tap to skip ahead"
+    : "Voice is on — tap to turn off";
+}
+function voiceStopAll(){
+  try{ speechSynthesis.cancel(); }catch(e){}
+  if(VOICE.rec){ try{ VOICE.rec.onend = null; VOICE.rec.stop(); }catch(e){} VOICE.rec = null; }
+  VOICE.listening = false; voiceUiState("idle");
+}
+function voiceOff(){ VOICE.on = false; voiceStopAll(); }
+function voiceSay(text, then){
+  if(!VOICE.on){ if(then) then(); return; }
+  // strip markdown/citation noise for the ear; the eye still gets the full text on screen
+  const clean = (text||"").replace(/\[\d+\]/g,"").replace(/[*_#`>⚠◍✦◈]/g,"").replace(/\s+/g," ").trim();
+  if(!clean){ if(then) then(); return; }
+  try{ speechSynthesis.cancel(); }catch(e){}
+  const u = new SpeechSynthesisUtterance(clean);
+  u.lang = navigator.language || "en-US";
+  u.onend = ()=>{ voiceUiState("idle"); if(VOICE.on && then) then(); };
+  u.onerror = ()=>{ voiceUiState("idle"); if(VOICE.on && then) then(); };
+  voiceUiState("speak");
+  speechSynthesis.speak(u);
+}
+function voiceListen(){
+  if(!VOICE.on || VOICE.listening || !_SRCls) return;
+  let final = "";
+  const rec = new _SRCls();
+  rec.lang = navigator.language || "en-US";
+  rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+  rec.onresult = ev=>{
+    let interim = "";
+    for(const r of ev.results){ if(r.isFinal) final += r[0].transcript; else interim += r[0].transcript; }
+    q.value = (final + " " + interim).replace(/\s+/g," ").trim(); autoGrow();
+  };
+  rec.onend = ()=>{
+    VOICE.rec = null; VOICE.listening = false; voiceUiState("idle");
+    const text = q.value.trim();
+    if(VOICE.on && text && APP_MODE === "triage" && !TRIAGE.busy) submitTriage(text);
+  };
+  rec.onerror = ()=>{};   // onend still fires and settles state
+  VOICE.rec = rec; VOICE.listening = true; voiceUiState("listen");
+  try{ rec.start(); }catch(e){ VOICE.rec = null; VOICE.listening = false; voiceUiState("idle"); }
+}
+function voiceToggle(){
+  if(!VOICE.on){
+    VOICE.on = true; voiceUiState("idle");
+    const lastBot = [...TRIAGE.transcript].reverse().find(m=>m.role !== "user");
+    voiceSay(lastBot ? lastBot.text : "Tell me the clinical problem in your own words. I'll ask only what's needed.", voiceListen);
+  } else if(VOICE.listening && VOICE.rec){
+    try{ VOICE.rec.stop(); }catch(e){}          // send what we heard
+  } else if(speechSynthesis.speaking){
+    try{ speechSynthesis.cancel(); }catch(e){}  // skip the reading, go straight to listening
+    voiceListen();
+  } else {
+    voiceOff();
+  }
+}
+function maybeShowVoice(){
+  const b = $("#voicebtn"); if(!b) return;
+  b.hidden = !(VOICE_INTAKE_ENABLED && voiceSupported());
+  if(!b.dataset.wired){ b.dataset.wired = "1"; b.addEventListener("click", voiceToggle); }
+}
 function triageMsgHtml(m){ return `<div class="tgt-msg ${m.role==='user'?'user':'bot'}">${esc(m.text)}</div>`; }
 function renderTriage(fresh){
   if(fresh){ TRIAGE = {transcript: [], busy: false, refined: "", register: "", urgent: false}; q.value = ""; autoGrow(); }
@@ -3283,19 +3379,29 @@ function handleTriageTurn(d){
   // surface immediately (the panel's code review found ask-turns silently dropped d.safety).
   if(d.safety === "urgent" && d.status !== "ready"){
     TRIAGE.urgent = true;   // the wrap-up affordance turns prominent from here on
-    TRIAGE.transcript.push({role:"assistant", text: (d.message || "") +
-      "\n\n⚠ Based on what you've described, please seek urgent in-person or emergency medical evaluation now. I can keep researching the evidence meanwhile."});
+    const utext = (d.message || "") +
+      "\n\n⚠ Based on what you've described, please seek urgent in-person or emergency medical evaluation now. I can keep researching the evidence meanwhile.";
+    TRIAGE.transcript.push({role:"assistant", text: utext});
     renderTriage(false);
+    if(VOICE.on) voiceSay(utext, voiceListen);
   }
-  else if(d.status === "ready"){ renderTriageReady(d); }
+  else if(d.status === "ready"){
+    renderTriageReady(d);
+    // hand-off: read the understood question aloud, then leave the (visual) route choice to the user
+    if(VOICE.on) voiceSay("I have what I need. Here's the question I'll research: "
+      + (d.plain || d.refined || ""), voiceOff);
+  }
   else {
-    TRIAGE.transcript.push({role:"assistant", text: d.message || "Could you tell me a bit more about the case?"});
+    const atext = d.message || "Could you tell me a bit more about the case?";
+    TRIAGE.transcript.push({role:"assistant", text: atext});
     renderTriage(false);
+    if(VOICE.on) voiceSay(atext, voiceListen);
   }
 }
 async function submitTriage(text){
   if(TRIAGE.busy) return;
   if(!text){ q.focus(); return; }
+  try{ speechSynthesis.cancel(); }catch(e){}   // a submitted answer supersedes any question being read
   TRIAGE.transcript.push({role:"user", text});
   q.value = ""; autoGrow();
   renderTriage(false);

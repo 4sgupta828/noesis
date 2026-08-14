@@ -323,3 +323,13 @@ def test_glossary_list_empty_without_store(monkeypatch) -> None:
     monkeypatch.delenv("NOESIS_CORPUS_DSN", raising=False)
     client = TestClient(create_app(_service()))
     assert client.get("/glossary").json() == {"terms": [], "total": 0, "letters": {}}
+
+
+def test_voice_intake_flag_echo(monkeypatch) -> None:
+    monkeypatch.setenv("NOESIS_TRIAGE", "1")
+    monkeypatch.setenv("NOESIS_VOICE_INTAKE", "1")
+    svc = _service(); svc.triage_prompt = "intake"
+    assert TestClient(create_app(svc)).get("/config").json()["voice_intake_enabled"] is True
+    monkeypatch.delenv("NOESIS_VOICE_INTAKE", raising=False)
+    svc2 = _service(); svc2.triage_prompt = "intake"
+    assert TestClient(create_app(svc2)).get("/config").json()["voice_intake_enabled"] is False

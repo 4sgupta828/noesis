@@ -1773,18 +1773,49 @@ function reasoningMarkup(data){
 // (label/value_str/series/title/unit) is esc()'d into <text> content, and every geometry attribute is
 // a COMPUTED NUMBER — no raw model markup ever reaches the DOM. Self-contained (no chart lib).
 // Kinds: 'bar' (one value/option), 'grouped_bar' (a trade-off, 2+ series/option), 'interval' (a forest
-// plot — point estimate + CI/range per option). Series colors are fixed (not model-derived).
-const _CHART_COLS = ["var(--gold)", "#3b82c4", "#5b8f6a", "#b0693a", "#8a63b0"];
+// plot — point estimate + CI/range per option), 'line' (a trend over ordered x-steps, <=3 series),
+// 'pie' (a donut of parts-of-a-whole shares). Series colors are fixed theme vars (not model-derived),
+// validated per theme for lightness/chroma/CVD separation/contrast; series beyond the first also carry
+// a hatch texture (bars/slices) or a dash pattern (lines) so identity never rides on color alone.
+const _CHART_COLS = ["var(--chart1)", "var(--chart2)", "var(--chart3)"];
+let _CHART_UID = 0;
+// clean round tick values covering [lo,hi]: step 1/2/5 × 10^k, ~n of them, ascending
+function _chartTicks(lo, hi, n){
+  const span = (hi - lo) || 1, raw = span/Math.max(1, n);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1,2,5,10].map(m => m*mag).find(s => span/s <= n) || 10*mag;
+  const out = [];
+  for(let v = Math.ceil(lo/step - 1e-9)*step; v <= hi + step*1e-6; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+const _fmtTick = v => Math.abs(v) >= 1000 ? v.toLocaleString("en-US") : String(+(+v).toFixed(3));
 function chartSvg(chart){
   const bars = ((chart && (chart.bars || chart.points)) || [])
     .filter(b => typeof b.value === "number" && isFinite(b.value));
   if(bars.length < 2) return "";
   const kind = (chart.kind || "bar");
   const E = s => esc(String(s == null ? "" : s));
+  const uid = ++_CHART_UID;
+  // hatch textures (45°/135°, surface-colored, tone-on-tone) laid OVER series-2/3 fills
+  const defs = `<defs>`
+    + `<pattern id="ch-h1-${uid}" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">`
+    + `<line x1="0" y1="0" x2="0" y2="5" stroke="var(--panel2)" stroke-width="1.6" opacity=".55"></line></pattern>`
+    + `<pattern id="ch-h2-${uid}" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(135)">`
+    + `<line x1="0" y1="0" x2="0" y2="5" stroke="var(--panel2)" stroke-width="1.6" opacity=".55"></line></pattern>`
+    + `</defs>`;
   const barX = 200, plotW = 230;               // barX = generous left column so labels aren't clipped
   // right-aligned label ending at barX-8; truncate to fit the column and add a <title> for the full text
   const lbl = (s, y) => { const t = String(s == null ? "" : s); const shown = t.length > 28 ? t.slice(0,27)+"…" : t;
     return `<text x="${barX-8}" y="${y}" text-anchor="end" class="c-lbl">${E(shown)}<title>${E(t)}</title></text>`; };
+  // faint vertical gridlines + tick labels + unit for the horizontal value-scale kinds (bar/grouped/interval)
+  const axisH = 20;
+  const hAxis = (X, lo, hi, yTop, yBot, H) => {
+    const ticks = _chartTicks(lo, hi, 4);
+    return ticks.map(t => `<line x1="${X(t)}" y1="${yTop}" x2="${X(t)}" y2="${yBot}" class="c-grid"></line>`).join("")
+      + ticks.map(t => `<text x="${X(t)}" y="${H-6}" text-anchor="middle" class="c-tick">${_fmtTick(t)}</text>`).join("")
+      + (chart.unit ? `<text x="${barX+plotW+10}" y="${H-6}" class="c-unit">${E(chart.unit)}</text>` : "")
+      + `<line x1="${X(Math.max(lo, 0) <= 0 && hi >= 0 ? 0 : lo)}" y1="${yTop}" x2="${X(Math.max(lo, 0) <= 0 && hi >= 0 ? 0 : lo)}" y2="${yBot}" class="c-axis"></line>`;
+  };
   let W, H, body = "", legend = "";
 
   if(kind === "interval"){                     // forest plot: whisker low..high + marker at value
@@ -1794,10 +1825,15 @@ function chartSvg(chart){
     if(!isFinite(lo) || !(hi > lo)) hi = lo + 1;
     const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
     const X = v => barX + Math.round((v - lo)/(hi - lo) * plotW);
-    const rowH = 30; H = bars.length*rowH + 18;
+    const rowH = 30; H = bars.length*rowH + 18 + axisH;
+    const yBot = H - axisH + 2;
     const crosses1 = (lo < 1 && 1 < hi);
-    const ref = crosses1 ? `<line x1="${X(1)}" y1="6" x2="${X(1)}" y2="${H-6}" class="c-ref"></line>` : "";
-    body = ref + bars.map((b,i) => {
+    const ticks = _chartTicks(lo, hi, 4);
+    body = ticks.map(t => `<line x1="${X(t)}" y1="6" x2="${X(t)}" y2="${yBot}" class="c-grid"></line>`).join("")
+      + ticks.map(t => `<text x="${X(t)}" y="${H-6}" text-anchor="middle" class="c-tick">${_fmtTick(t)}</text>`).join("")
+      + (chart.unit ? `<text x="${barX+plotW+10}" y="${H-6}" class="c-unit">${E(chart.unit)}</text>` : "");
+    body += crosses1 ? `<line x1="${X(1)}" y1="6" x2="${X(1)}" y2="${yBot}" class="c-ref"></line>` : "";
+    body += bars.map((b,i) => {
       const cy = 18 + i*rowH, x1 = X(b.low ?? b.value), x2 = X(b.high ?? b.value), xm = X(b.value);
       const ci = (b.low_str && b.high_str) ? " ["+E(b.low_str)+"–"+E(b.high_str)+"]" : "";
       return lbl(b.label, cy+4)
@@ -1815,36 +1851,126 @@ function chartSvg(chart){
     const labels = [...new Set(bars.map(b => b.label))];
     const series = [...new Set(bars.map(b => b.series || "value"))];
     const max = Math.max(...bars.map(b => Math.abs(b.value)), 0) || 1;
+    const X = v => barX + Math.round(v/max * plotW);
     const subH = 15, gap = 3, grpH = series.length*(subH+gap) + 10;
-    H = labels.length*grpH + 12;
+    H = labels.length*grpH + 12 + axisH;
+    body = hAxis(X, 0, max, 8, H - axisH + 2, H);
     let y = 10;
     labels.forEach(lb0 => {
       series.forEach((sname, si) => {
         const b = bars.find(x => x.label === lb0 && (x.series || "value") === sname);
         if(!b) return;
         const yy = y + si*(subH+gap), bw = Math.max(2, Math.round(Math.abs(b.value)/max * plotW));
-        body += `<rect x="${barX}" y="${yy}" width="${bw}" height="${subH}" rx="2" fill="${_CHART_COLS[si%_CHART_COLS.length]}" opacity=".9"></rect>`
-          + `<text x="${barX+bw+6}" y="${yy+12}" class="c-val" style="fill:${_CHART_COLS[si%_CHART_COLS.length]}">${E(b.value_str||b.value)}</text>`;
+        body += `<rect x="${barX}" y="${yy}" width="${bw}" height="${subH}" rx="2" fill="${_CHART_COLS[si%3]}"></rect>`
+          + (si ? `<rect x="${barX}" y="${yy}" width="${bw}" height="${subH}" rx="2" fill="url(#ch-h${(si%2)?1:2}-${uid})"></rect>` : "")
+          + `<text x="${barX+bw+6}" y="${yy+12}" class="c-val">${E(b.value_str||b.value)}</text>`;
       });
       body += lbl(lb0, y + series.length*(subH+gap)/2 + 2);
       y += grpH;
     });
-    legend = series.map((s,i) => `<span class="lg"><i style="background:${_CHART_COLS[i%_CHART_COLS.length]}"></i>${E(s)}</span>`).join("");
+    legend = series.map((s,si) => `<span class="lg"><i class="${si?("tx"+((si%2)?1:2)):""}" style="background:${_CHART_COLS[si%3]}"></i>${E(s)}</span>`).join("");
+  } else if(kind === "line"){                  // trend over ordered x-steps; one polyline per series
+    const padL = 52, padR = 96, padT = 12, padB = 30;
+    W = 560; H = 240;
+    const cats = [...new Set(bars.map(b => b.label))];                 // x order as emitted (ordinal)
+    const series = [...new Set(bars.map(b => b.series || ""))];
+    let lo = Math.min(...bars.map(b => b.value)), hi = Math.max(...bars.map(b => b.value));
+    if(!(hi > lo)) hi = lo + 1;
+    const dp = (hi - lo) * 0.08; lo -= dp; hi += dp;
+    const X = i => padL + (cats.length < 2 ? 0 : Math.round(i/(cats.length-1) * (W-padL-padR)));
+    const Y = v => padT + Math.round((hi - v)/(hi - lo) * (H-padT-padB));
+    const ticks = _chartTicks(lo, hi, 4);
+    body = ticks.map(t => `<line x1="${padL}" y1="${Y(t)}" x2="${W-padR+18}" y2="${Y(t)}" class="c-grid"></line>`
+        + `<text x="${padL-7}" y="${Y(t)+4}" text-anchor="end" class="c-tick">${_fmtTick(t)}</text>`).join("")
+      + `<line x1="${padL}" y1="${padT-2}" x2="${padL}" y2="${H-padB+4}" class="c-axis"></line>`
+      + `<line x1="${padL}" y1="${H-padB+4}" x2="${W-padR+18}" y2="${H-padB+4}" class="c-axis"></line>`
+      + (chart.unit ? `<text x="${padL-7}" y="${padT-1}" text-anchor="end" class="c-unit">${E(chart.unit)}</text>` : "");
+    const xStep = Math.ceil(cats.length/7);                            // thin x labels when crowded
+    body += cats.map((c,i) => (i % xStep && i !== cats.length-1) ? "" : (() => {
+      const t = String(c == null ? "" : c), shown = t.length > 12 ? t.slice(0,11)+"…" : t;
+      return `<text x="${X(i)}" y="${H-9}" text-anchor="middle" class="c-tick">${E(shown)}<title>${E(t)}</title></text>`;
+    })()).join("");
+    const dash = ["", "7 4", "2.5 3.5"];                               // series 2/3 dashed, not color-alone
+    series.forEach((s, si) => {
+      const pts = [];
+      cats.forEach((c, i) => { const b = bars.find(x => x.label === c && (x.series || "") === s); if(b) pts.push([i, b]); });
+      if(pts.length < 2) return;
+      const col = _CHART_COLS[si%3];
+      body += `<polyline points="${pts.map(([i,b]) => X(i)+","+Y(b.value)).join(" ")}" class="c-line" stroke="${col}"${dash[si%3] ? ` stroke-dasharray="${dash[si%3]}"` : ""}></polyline>`;
+      body += pts.map(([i,b]) => `<circle cx="${X(i)}" cy="${Y(b.value)}" r="3.5" fill="${col}" class="c-pt"><title>${E(b.label)}: ${E(b.value_str||b.value)}</title></circle>`).join("");
+      const [li, lb] = pts[pts.length-1];                              // endpoint value label
+      body += `<text x="${X(li)+8}" y="${Y(lb.value)+4}" class="c-val">${E(lb.value_str||lb.value)}</text>`;
+    });
+    if(series.length > 1){
+      legend = series.map((s,si) => { const col = _CHART_COLS[si%3];
+        const chip = !si ? `background:${col}`
+          : si === 1 ? `background:repeating-linear-gradient(90deg,${col} 0 6px,transparent 6px 9px)`
+          : `background:repeating-linear-gradient(90deg,${col} 0 2.5px,transparent 2.5px 6px)`;
+        return `<span class="lg"><i style="${chip};height:.22rem;border-radius:1px"></i>${E(s||"series")}</span>`; }).join("");
+    }
+  } else if(kind === "pie"){                   // donut of shares; external labels or side legend
+    const total = bars.reduce((a,b) => a + Math.max(0, b.value), 0);
+    if(!(total > 0)) return "";
+    const sideLegend = bars.length > 4;
+    W = 560; H = 216;
+    const cx = sideLegend ? 118 : 280, cy = 104, R = 80, r = 46;
+    const P = (rad, a) => `${(cx + rad*Math.cos(a)).toFixed(2)} ${(cy + rad*Math.sin(a)).toFixed(2)}`;
+    let ang = -Math.PI/2;
+    body = "";
+    const rows = [];
+    bars.forEach((b, i) => {
+      const frac = Math.max(0, b.value)/total, a0 = ang, a1 = ang + frac*2*Math.PI; ang = a1;
+      const pct = Math.round(frac*100), col = _CHART_COLS[i%3], tx = i < 3 ? 0 : ((i-3)%2)+1;
+      rows.push({b, pct, col, tx});
+      if(frac <= 0) return;
+      const large = (a1 - a0) > Math.PI ? 1 : 0;
+      const d = `M${P(R, a0)} A${R} ${R} 0 ${large} 1 ${P(R, a1)} L${P(r, a1)} A${r} ${r} 0 ${large} 0 ${P(r, a0)} Z`;
+      body += `<path d="${d}" fill="${col}" class="c-slice"><title>${E(b.label)}: ${E(b.value_str||b.value)} (${pct}%)</title></path>`
+        + (tx ? `<path d="${d}" fill="url(#ch-h${tx}-${uid})" class="c-slice" stroke="none"></path>` : "");
+      if(!sideLegend){                         // external label + leader line per slice
+        const am = (a0 + a1)/2, right = Math.cos(am) >= 0;
+        const lx = cx + (R + 10)*Math.cos(am), ly = cy + (R + 10)*Math.sin(am);
+        const hx = lx + (right ? 14 : -14);
+        const t = String(b.label == null ? "" : b.label), shown = t.length > 18 ? t.slice(0,17)+"…" : t;
+        body += `<polyline points="${P(R + 2, am)},${lx.toFixed(2)},${ly.toFixed(2)},${hx.toFixed(2)},${ly.toFixed(2)}" class="c-lead"></polyline>`
+          + `<text x="${(hx + (right ? 5 : -5)).toFixed(2)}" y="${(ly + 4).toFixed(2)}" text-anchor="${right ? "start" : "end"}" class="c-lbl">${E(shown)} <tspan class="c-val">${pct}%</tspan><title>${E(t)}</title></text>`;
+      }
+    });
+    if(sideLegend){                            // >4 slices: swatch + label + share, one row each
+      const lx0 = 236, rowH = 26, y0 = Math.round(cy - (rows.length-1)*rowH/2 - 5);
+      rows.forEach((rw, i) => {
+        const yy = y0 + i*rowH;
+        const vs = String(rw.b.value_str || "");
+        const showVs = vs && vs.replace(/\s/g, "") !== rw.pct + "%";   // skip when it just repeats the pct
+        body += `<rect x="${lx0}" y="${yy}" width="11" height="11" rx="2" fill="${rw.col}"></rect>`
+          + (rw.tx ? `<rect x="${lx0}" y="${yy}" width="11" height="11" rx="2" fill="url(#ch-h${rw.tx}-${uid})"></rect>` : "")
+          + `<text x="${lx0+18}" y="${yy+10}" class="c-lbl">${E(String(rw.b.label).length > 26 ? String(rw.b.label).slice(0,25)+"…" : rw.b.label)}<title>${E(rw.b.label)}</title></text>`
+          + `<text x="${lx0+218}" y="${yy+10}" text-anchor="end" class="c-val">${rw.pct}%</text>`
+          + (showVs ? `<text x="${lx0+228}" y="${yy+10}" class="c-tick">${E(vs)}</text>` : "");
+      });
+    }
   } else {                                     // single-series horizontal bars
     W = barX + plotW + 74;
     const max = Math.max(...bars.map(b => Math.abs(b.value)), 0) || 1;
-    const rowH = 30; H = bars.length*rowH + 12;
-    body = bars.map((b,i) => {
+    const X = v => barX + Math.round(v/max * plotW);
+    const rowH = 30; H = bars.length*rowH + 12 + axisH;
+    body = hAxis(X, 0, max, 10, H - axisH + 2, H);
+    body += bars.map((b,i) => {
       const yy = 12 + i*rowH, bw = Math.max(2, Math.round(Math.abs(b.value)/max * plotW));
       return lbl(b.label, yy+15)
         + `<rect x="${barX}" y="${yy+3}" width="${bw}" height="17" rx="3" class="c-bar"></rect>`
         + `<text x="${barX+bw+6}" y="${yy+15}" class="c-val">${E(b.value_str||b.value)}</text>`;
     }).join("");
   }
+  // citation footnote: which verified findings the plotted numbers come from (clickable [n] refs)
+  const refs = [...new Set(bars.map(b => b.finding).filter(n => Number.isFinite(n) && n > 0))].sort((a,b) => a-b);
+  const foot = refs.length
+    ? `<div class="chartrefs">Data from finding${refs.length > 1 ? "s" : ""} ${refs.map(n => `<sup class="ref" data-n="${n}">[${n}]</sup>`).join(" ")}</div>`
+    : "";
   const cap = chart.title ? `<figcaption class="chartcap">📊 ${E(chart.title)}${chart.unit?" · "+E(chart.unit):""}</figcaption>` : "";
-  const svg = `<div class="tw chartwrap"><svg viewBox="0 0 ${W} ${H}" class="chart" preserveAspectRatio="xMinYMin meet" role="img" aria-label="${E(chart.title||"chart")}">${body}</svg></div>`;
+  const svg = `<div class="tw chartwrap"><svg viewBox="0 0 ${W} ${H}" class="chart" preserveAspectRatio="xMinYMin meet" role="img" aria-label="${E(chart.title||"chart")}">${defs}${body}</svg></div>`;
   const leg = legend ? `<div class="chartlegend">${legend}</div>` : "";
-  return `<figure class="chartfig">${cap}${svg}${leg}</figure>`;
+  return `<figure class="chartfig">${cap}${svg}${leg}${foot}</figure>`;
 }
 // Minimal, self-contained, XSS-safe markdown → HTML. We esc() the whole source FIRST,
 // so any HTML in the model output is neutralized before we add known-safe tags. Handles
@@ -1965,7 +2091,8 @@ function render(data, target, opts){
         <span><i class="lr"></i>Critical reasoning</span>
         <span><i class="lk"></i>Key context</span></div>`);
     }
-    // Grounded bar charts — each bar was code-validated against its cited finding server-side.
+    // Grounded charts (bar/grouped/interval/line/pie) — every plotted number was code-validated
+    // against its cited finding server-side.
     if(Array.isArray(data.charts) && data.charts.length){
       parts.push(data.charts.map(chartSvg).join(""));
     }

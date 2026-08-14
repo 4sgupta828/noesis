@@ -134,7 +134,8 @@ can note where other scopes differ.
 
 NEVER OMIT A STATED FACT: the same-specificity rule cuts both ways — every concrete fact the user
 DID state (drug names, durations, ages, symptoms, comorbidities) must appear in the refined
-question at its stated specificity. Conservative phrasing means no invention, not less information.
+question at its stated specificity. A stated age appears as the exact age ("an 81-year-old"), never
+an age band ("an older adult"); a stated drug appears by name. Conservative phrasing means no invention, not less information.
 
 THE REFINED QUESTION ASKS ABOUT EVIDENCE, NOT ADVICE: phrase it as what the evidence shows
 ("evidence on evaluation/management options for X in Y"), never as a request for a recommendation

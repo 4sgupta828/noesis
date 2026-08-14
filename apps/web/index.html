@@ -40,10 +40,22 @@
     --hair:#DCD4C0; --hair-soft:rgba(34,29,18,.06);
     --hl-f:46,107,79; --hl-r:138,106,31; --hl-k:63,94,150;
   }
-  :root[data-theme="editorial"] body{background-image:none;}
+  /* Editorial legibility for CLINICAL notation: Charter-first serif (screen-designed, LINING
+     figures — Iowan/Palatino's old-style digits jar in doses and citation markers), lining +
+     tabular numerals everywhere, and sub/superscripts (the [n] citation sups, chemical
+     notation) set in the mono face so they stay crisp at small sizes. */
+  :root[data-theme="editorial"]{
+    --serif:"Charter","Bitstream Charter",Cambria,"Iowan Old Style",Georgia,serif;
+  }
+  :root[data-theme="editorial"] body{background-image:none;font-variant-numeric:lining-nums;}
   :root[data-theme="editorial"] h1, :root[data-theme="editorial"] h2,
-  :root[data-theme="editorial"] h3{font-family:var(--serif);letter-spacing:-.012em;font-weight:600;}
+  :root[data-theme="editorial"] h3{font-family:var(--serif);letter-spacing:-.012em;font-weight:600;
+    font-variant-numeric:lining-nums;}
   :root[data-theme="editorial"] #heading{font-weight:500;letter-spacing:-.018em;}
+  :root[data-theme="editorial"] sup, :root[data-theme="editorial"] sub{
+    font-family:var(--mono);font-variant-numeric:tabular-nums lining-nums;letter-spacing:-.02em;}
+  :root[data-theme="editorial"] .answer table, :root[data-theme="editorial"] .answer td,
+  :root[data-theme="editorial"] .answer th{font-variant-numeric:tabular-nums lining-nums;}
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%;font-size:15px}   /* slightly smaller, more professional scale */
   body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);

@@ -1,0 +1,152 @@
+{
+  "summary": {
+    "git": "bed0d0b",
+    "answers_judged": 5,
+    "must_have_recall_mean": 0.583,
+    "answers_fully_covered": 1,
+    "contradiction_answers": 0,
+    "failure_buckets": {
+      "missing_evidence": 2,
+      "wrong_evidence_selected": 0,
+      "ranking_failure": 0,
+      "reasoning_or_composition": 2,
+      "abstained_despite_evidence": 0,
+      "question_misunderstood": 0,
+      "not_a_failure": 0
+    },
+    "judge_agreement_double_grade": 0.75
+  },
+  "judgments": [
+    {
+      "id": "act-001-transplant-abx",
+      "question": "Which antibiotics are safe to use in kidney transplant patients with impaired graft function (reduced eGFR) requiring do",
+      "must_have": [
+        "Names specific commonly used antibiotics with their renal handling (e.g. ceftriaxone usually needs no renal dose adjustment; cefepime requires dose reduction at reduced CrCl with neurotoxicity risk if unadjusted; amoxicillin/amoxicillin-clavulanate need adjustment in severe impairment; TMP-SMX needs dose reduction and potassium monitoring)",
+        "Flags aminoglycosides (gentamicin/amikacin/tobramycin) as nephrotoxic and NOT a renal-safe default for a vulnerable graft even where resistance data favor their coverage",
+        "Surfaces the immunosuppressant interaction axis: macrolides such as clarithromycin/erythromycin raise tacrolimus/cyclosporine levels (CYP3A) requiring trough monitoring",
+        "Every drug-specific claim is supported by evidence about THAT drug or class \u2014 no citations from unrelated (non-antibiotic) drug labels presented as antibiotic evidence"
+      ],
+      "verdicts": [
+        "missing",
+        "missing",
+        "missing",
+        "covered"
+      ],
+      "covered": 1,
+      "missing": 3,
+      "contradicted": 0,
+      "n": 4,
+      "recall": 0.25,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved evidence set (drug labels for cefixime, ciprofloxacin, piperacillin/tazobactam, gentamicin, vancomycin, meropenem, nitrofurantoin, plus ICU dosing studies) never included labeling or lit"
+      }
+    },
+    {
+      "id": "act-003-ssri-pregnancy",
+      "question": "What is the safest SSRI to continue during pregnancy?",
+      "must_have": [
+        "Answers with SAFETY evidence (label pregnancy sections, teratogenicity/neonatal outcomes data), not efficacy or usage-prevalence evidence",
+        "Names agents: sertraline commonly favored; paroxetine associated with cardiac malformation signal and generally avoided",
+        "States that untreated depression carries its own risk \u2014 the decision is individualized"
+      ],
+      "verdicts": [
+        "covered",
+        "missing",
+        "missing"
+      ],
+      "covered": 1,
+      "missing": 2,
+      "contradicted": 0,
+      "n": 3,
+      "recall": 0.333,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "reasoning_or_composition",
+        "why": "The retrieved evidence (sertraline-specific studies showing no significant overall malformation increase, paroxetine FDA cardiac caution) actually supports naming sertraline as commonly favored and pa"
+      }
+    },
+    {
+      "id": "act-004-triple-whammy",
+      "question": "Is it okay to take ibuprofen for knee pain if I already take lisinopril and spironolactone?",
+      "must_have": [
+        "Surfaces the NSAID + ACE inhibitor + potassium-sparing diuretic interaction axis: additive risk of acute kidney injury and hyperkalemia (the 'triple whammy')",
+        "Gives an actionable answer (avoid or limit NSAID; alternatives such as topical NSAID/acetaminophen; monitoring if used)",
+        "Interaction claims are supported by evidence about these drug classes, not generic renal boilerplate from unrelated labels"
+      ],
+      "verdicts": [
+        "covered",
+        "missing",
+        "covered"
+      ],
+      "covered": 2,
+      "missing": 1,
+      "contradicted": 0,
+      "n": 3,
+      "recall": 0.667,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "reasoning_or_composition",
+        "why": "The evidence retrieved (drug labels, interaction studies) fully supports actionable guidance\u2014e.g., labels recommend monitoring, avoiding NSAIDs in volume-depleted patients, and alternatives are standa"
+      }
+    },
+    {
+      "id": "act-005-no-adjust-enumeration",
+      "question": "Which commonly used oral antibiotics do NOT need dose adjustment in chronic kidney disease?",
+      "must_have": [
+        "Enumerates named agents with no/minimal renal adjustment (e.g. azithromycin, doxycycline, clindamycin, linezolid, moxifloxacin) rather than answering only with a general principle",
+        "Contrasts with at least one common agent that DOES require adjustment to show the distinction is drug-specific",
+        "Each named agent's claim is backed by evidence about that agent"
+      ],
+      "verdicts": [
+        "missing",
+        "covered",
+        "covered"
+      ],
+      "covered": 2,
+      "missing": 1,
+      "contradicted": 0,
+      "n": 3,
+      "recall": 0.667,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved evidence set never included labels/sources for azithromycin, doxycycline, clindamycin, or moxifloxacin, so the answer could not enumerate these commonly cited no-adjustment agents. The e"
+      }
+    },
+    {
+      "id": "act-002-doac-hepatic",
+      "question": "Which anticoagulants can be used in a patient with severe hepatic impairment (Child-Pugh C), and which are contraindicat",
+      "must_have": [
+        "Names specific agents: rivaroxaban avoided in Child-Pugh B/C; apixaban not recommended in severe hepatic impairment; dabigatran caution; warfarin usable with intensified INR monitoring though baseline INR may already be elevated",
+        "Every claim cites evidence about the named anticoagulant, not hepatic-dosing boilerplate from unrelated drug labels"
+      ],
+      "verdicts": [
+        "covered",
+        "covered"
+      ],
+      "covered": 2,
+      "missing": 0,
+      "contradicted": 0,
+      "n": 2,
+      "recall": 1.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      }
+    }
+  ]
+}

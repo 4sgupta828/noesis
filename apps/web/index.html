@@ -638,6 +638,10 @@
   .prow-name{font-weight:600;color:var(--ink);font-size:.92rem;}
   .prow-st{margin-left:auto;font-family:var(--mono);font-size:.68rem;color:var(--muted);}
   .prow.done .prow-st{color:var(--verified);}
+  .prow-el{font-family:var(--mono);font-size:.68rem;color:var(--muted);white-space:nowrap;
+    font-variant-numeric:tabular-nums;}
+  .pphase .pph-elapsed{margin-left:auto;font-variant-numeric:tabular-nums;}
+  .pnet{margin:.5rem 0 0;font-family:var(--mono);font-size:.72rem;color:var(--gap);}
   .prow-trace{padding:0 .8rem;max-height:0;overflow-y:auto;transition:max-height .2s ease;}
   .prow-trace:not(:empty){max-height:180px;padding:.1rem .8rem .6rem 1.5rem;border-top:1px solid var(--hair);}
   .prow-trace .tstep{font-size:.76rem;}
@@ -2887,7 +2891,10 @@ async function readSSE(resp, state, onEvent){
       }
       if(ev.type==="final"){ state.final = ev.result; return; }
       if(ev.type==="error"){ const e = new Error(ev.detail || "stream error"); e.server = true; throw e; }
-      onEvent(ev);
+      // A handler exception must never break the read loop: `_seq` was already advanced above, so a
+      // throw here would silently DROP every later event on this connection (frozen progress UI)
+      // until a resume skips past it. Log and keep reading — the stream owns delivery, not the handler.
+      try{ onEvent(ev); }catch(err){ console.warn("stream event handler failed on", ev && ev.type, err); }
     }
   }
 }
@@ -3322,10 +3329,11 @@ function renderPanelPlan(question, data, manual){
 }
 // Stream /panel/ask/stream, calling onEvent(ev) for each progress event; returns the final panel result.
 // A multi-minute panel run WILL get cut by the edge — streamRun resumes it silently via /stream/{run_id}.
-async function streamPanel(payload, onEvent, signal){
+async function streamPanel(payload, onEvent, signal, onAlive){
   // 60s idle watchdog: the server pings every ~15s, so a minute of true silence means the edge
   // silently killed this connection — abort it and let streamRun's run_id resume take over.
-  return streamRun("/panel/ask/stream", payload, onEvent, signal, null, 60000);
+  // `onAlive` (any bytes on the wire) lets the board show honest connection health.
+  return streamRun("/panel/ask/stream", payload, onEvent, signal, onAlive || null, 60000);
 }
 // Phase 2 — DELIBERATE: run the confirmed panel (streamed) and render the case conference. Shows each
 // specialist's live status so a multi-minute run reads as progress, not a hang.
@@ -3550,10 +3558,11 @@ async function runPanelTurn(question){
     ${follow ? `<div class="panelq-echo"><span class="pqt">Follow-up</span> <b>${esc(question)}</b></div>` : ""}
     <div class="planintro">The panel is reviewing the evidence — each specialist through its own lens.
       <button type="button" class="pstop" id="pstop">■ Stop</button></div>
-    <div class="pphase" id="pphase"><span class="pph on" data-ph="convene">Convening panel</span><span class="pph-sep">→</span><span class="pph" data-ph="work">${ids.length} specialist${ids.length===1?"":"s"} working</span><span class="pph-sep">→</span><span class="pph" data-ph="synth">Synthesizing</span></div>
+    <div class="pphase" id="pphase"><span class="pph on" data-ph="convene">Convening panel</span><span class="pph-sep">→</span><span class="pph" data-ph="work">${ids.length} specialist${ids.length===1?"":"s"} working</span><span class="pph-sep">→</span><span class="pph" data-ph="synth">Synthesizing</span><span class="pph-elapsed" id="pelapsed"></span></div>
+    <div class="pnet" id="pnet" hidden>⚠ Connection lost — retrying…</div>
     <div class="presolved" id="presolved" hidden></div>
     <div class="prows">${ids.map(id=>`<div class="prow" data-id="${esc(id)}">
-        <div class="prow-h"><span class="prow-dot"></span><span class="prow-name">${esc((specById[id]||{}).specialty||id)}</span><span class="prow-st">waiting…</span></div>
+        <div class="prow-h"><span class="prow-dot"></span><span class="prow-name">${esc((specById[id]||{}).specialty||id)}</span><span class="prow-st">waiting…</span><span class="prow-el"></span></div>
         <div class="prow-trace" data-trace="${esc(id)}"></div></div>`).join("")}</div>
     <div class="psynthstat" id="psynthstat" hidden><span class="spin">◈</span> The chair is synthesizing the panel's findings…</div>`;
   live.scrollIntoView({behavior:"smooth", block:"start"});
@@ -3589,22 +3598,43 @@ async function runPanelTurn(question){
     claims:(t.result.claims||[]).slice(0,8).map(c=>({text:c.text||""}))}));
   const ctrl = new AbortController();
   let userStopped = false;
-  const timer = setTimeout(()=>ctrl.abort(), 600000);   // 10-min hard cap
+  // NO hard time cap: a visibly-working panel is never killed by a stopwatch. The user's Stop
+  // button is the only manual kill; a truly dead stream surfaces through the health line below
+  // and ultimately streamRun's bounded no-progress resume loop.
   const stopBtn = $("#pstop");
   if(stopBtn) stopBtn.addEventListener("click", ()=>{ userStopped = true; try{ ctrl.abort(); }catch(_){} });
+  // HONEST long-run UI: overall + per-specialist elapsed tick client-side every second, and the
+  // connection-health line shows when the wire has gone quiet (server pings every ~15s, so >25s of
+  // silence = a stalled/cut connection that the idle-abort → resume machinery is working to revive).
+  const t0 = Date.now();
+  let lastAlive = Date.now();
+  const rowStart = {};                       // specialist id → Date.now() at specialist_start
+  const fmtEl = ms => { const s = Math.max(0, Math.floor(ms/1000));
+    return s < 60 ? `${s}s` : `${Math.floor(s/60)}m${String(s%60).padStart(2,"0")}s`; };
+  const tick = setInterval(()=>{
+    const pe = $("#pelapsed"); if(pe) pe.textContent = fmtEl(Date.now()-t0);
+    Object.keys(rowStart).forEach(id=>{ const r = rowOf(id); if(!r) return;
+      const el = r.querySelector(".prow-el"); if(el) el.textContent = fmtEl(Date.now()-rowStart[id]); });
+    const pn = $("#pnet"); if(pn) pn.hidden = (Date.now()-lastAlive) < 25000;
+  }, 1000);
   try{
     const attachments = (PANEL_THREAD.turns.length === 0 && PANEL_ATTACHMENTS.length) ? PANEL_ATTACHMENTS.slice() : undefined;
     const result = await streamPanel({question, tenant_id:"demo", specialists: ids, history,
         session_id: PANEL_THREAD.session_id, rationales: PANEL_THREAD.rationales, attachments}, ev=>{
       if(ev.type==="panel_plan_done") setPhase("work");
-      else if(ev.type==="specialist_start"){ setPhase("work"); setRow(ev.id, "run", "reviewing evidence…"); }
+      else if(ev.type==="specialist_start"){ setPhase("work"); rowStart[ev.id] = Date.now();
+        setRow(ev.id, "run", "reviewing evidence…"); }
       else if(ev.type==="specialist_trace"){ pushTrace(traceOf(ev.id), ev.ev);
         const st = ev.ev && stText(ev.ev); if(st) setRow(ev.id, "run", st); }
-      else if(ev.type==="specialist_done") setRow(ev.id, ev.error?"err":"done", doneText(ev));
+      else if(ev.type==="specialist_done"){ setRow(ev.id, ev.error?"err":"done", doneText(ev));
+        const r0 = rowStart[ev.id]; delete rowStart[ev.id];    // freeze this row's elapsed at its total
+        const r = rowOf(ev.id), el = r && r.querySelector(".prow-el");
+        if(el){ const secs = (typeof ev.seconds === "number") ? ev.seconds*1000 : (r0 ? Date.now()-r0 : null);
+          if(secs !== null) el.textContent = fmtEl(secs); } }
       else if(ev.type==="synthesizing"){ setPhase("synth"); const ss=$("#psynthstat"); if(ss) ss.hidden=false; }
       else if(ev.type==="resolved_question"){ const rq=$("#presolved");   // followed the context intelligently
         if(rq){ rq.hidden=false; rq.innerHTML = `↳ Interpreting your follow-up as: <span class="tq">${esc(ev.question||"")}</span>`; } }
-    }, ctrl.signal);
+    }, ctrl.signal, ()=>{ lastAlive = Date.now(); const pn=$("#pnet"); if(pn) pn.hidden = true; });
     if(result.session_id) PANEL_THREAD.session_id = result.session_id;   // shareable thread (permalink)
     if(attachments){ PANEL_ATTACHMENTS = []; ATTACHMENTS = []; }          // consumed by the case turn
     PANEL_THREAD.turns.push({question, result});
@@ -3617,12 +3647,12 @@ async function runPanelTurn(question){
         <div style="margin-top:1rem"><button type="button" class="panelbtn" onclick="runPanelTurn(${JSON.stringify(question)})">↻ Run again</button></div></div>`;
       const ff3 = $("#panelfollow"); if(ff3 && PANEL_THREAD.turns.length) ff3.hidden = false;
     } else {
-      const msg = ctrl.signal.aborted ? "The panel timed out." : esc(String(e.message||e));
+      const msg = esc(String(e.message||e));   // no stopwatch abort anymore — only real failures land here
       live.innerHTML = `<div class="panelstatus">The panel couldn't complete. ${msg}
         <div style="margin-top:1rem"><button type="button" class="panelbtn" onclick="runPanelTurn(${JSON.stringify(question)})">↻ Retry</button>
           <button type="button" class="panelbtn" onclick="panelNewCase()" style="margin-left:.5rem;">＋ New case</button></div></div>`;
     }
-  }finally{ clearTimeout(timer); }
+  }finally{ clearInterval(tick); }
 }
 
 // ---- A/B DUEL (flag): one fresh question → BOTH engines in parallel, blinded tabs, preference vote.

@@ -571,6 +571,9 @@ async def run_react(
     atom_cap: int = 1600,                     # per-atom char window for the extractor (evidence-select raises it)
     facets: dict | None = None,               # hard retrieval facet filter (empty {} = no filter, byte-identical)
     max_steps: int = 8,
+    max_extract_recoveries: int = 3,          # bound on the empty-answer forceful re-extract re-asks
+    #                                           (default preserves behavior; panel lenses pass 1)
+    compose_attempts: int = _COMPOSE_ATTEMPTS,  # bound on compose retries (default preserves behavior)
     k: int = 10,
     planner_atom_window: int = 60,            # atoms SHOWN to the planner per step (store keeps all)
     compose_claim_cap: int = _COMPOSE_CLAIM_CAP,  # max verified findings sent to compose (effort-scalable)
@@ -845,7 +848,7 @@ async def run_react(
         _apply_answer(step)
         attempts = 0
         while (not result.verified_claims and not result.rejected_claims
-               and atoms.all() and not budget.exhausted and attempts < 3):
+               and atoms.all() and not budget.exhausted and attempts < max_extract_recoveries):
             attempts += 1
             try:
                 budget.reserve()
@@ -1529,7 +1532,7 @@ async def run_react(
         # can't complete, SURFACE a note + log it (Rule 13) rather than returning a blank answer.
         parsed = None
         text = ""
-        for _attempt in range(_COMPOSE_ATTEMPTS):
+        for _attempt in range(max(1, compose_attempts)):
             try:
                 cand = await _compose(_compose_directive)
                 text = strip_control_tags((cand.answer or "").strip())   # a malformed/empty parse raises or stays "" →
@@ -1538,8 +1541,8 @@ async def run_react(
                     break                             # got a real answer — done
                 raise ValueError("empty compose answer")   # empty → treat as a failed attempt, retry
             except Exception as _e:   # noqa: BLE001
-                _log.warning("compose attempt %d/%d failed: %r", _attempt + 1, _COMPOSE_ATTEMPTS, _e)
-                if _attempt + 1 < _COMPOSE_ATTEMPTS:
+                _log.warning("compose attempt %d/%d failed: %r", _attempt + 1, compose_attempts, _e)
+                if _attempt + 1 < compose_attempts:
                     await asyncio.sleep(_COMPOSE_BACKOFF_S * (_attempt + 1))   # backoff for a transient error
         if text:
             # Domain-free provenance check: if a directive produced an answer with a bad/absent [n]
@@ -1649,7 +1652,7 @@ async def run_react(
             _log.warning("compose produced NO answer despite %d verified findings", n_findings)
             if diag is not None:
                 diag["failures"].append({"stage": "compose",
-                                         "detail": f"exhausted {_COMPOSE_ATTEMPTS} attempts — answer not generated"})
+                                         "detail": f"exhausted {compose_attempts} attempts — answer not generated"})
 
     # per-source contribution: retrieved (atoms) vs. cited (verified claims)
     stats: dict[str, dict[str, int]] = {}

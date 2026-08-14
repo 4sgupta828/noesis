@@ -618,6 +618,13 @@
   .panelstatus .spin,.psynthstat .spin{display:inline-block;margin-right:.5rem;animation:spin 1.1s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
   /* live per-specialist progress + trace during a streamed panel run */
+  .pphase{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem;margin:.9rem 0 .1rem;
+    font-family:var(--mono);font-size:.7rem;color:var(--muted);}
+  .pphase .pph{padding:.2rem .6rem;border:1px solid var(--hair);border-radius:999px;
+    background:var(--panel2);white-space:nowrap;}
+  .pphase .pph.on{color:var(--gold);border-color:rgba(var(--gold-rgb),.55);}
+  .pphase .pph.past{color:var(--verified);}
+  .pphase .pph-sep{color:var(--muted);opacity:.6;}
   .prows{display:flex;flex-direction:column;gap:.5rem;margin:1.2rem 0;}
   .prow{border:1px solid var(--hair);border-radius:10px;background:var(--panel2);overflow:hidden;}
   .prow-h{display:flex;align-items:center;gap:.7rem;padding:.6rem .8rem;}
@@ -2885,44 +2892,62 @@ async function readSSE(resp, state, onEvent){
   }
 }
 // POST a streaming run and see it through to the final event, resuming across edge cuts.
-async function streamRun(url, payload, onEvent, signal, onAlive){
-  const state = {runId:null, seq:0, final:null, onAlive: onAlive || null};
+// `idleMs` (opt-in): a per-CONNECTION idle watchdog — that long with zero bytes (the server pings
+// every 15s, so true silence = a dead edge connection the browser never notices) aborts ONLY the
+// current connection; the run_id resume loop below then reconnects. Silence becomes a resume, not
+// a permanent hang. The caller's `signal` still aborts the WHOLE run (user Stop / hard cap).
+async function streamRun(url, payload, onEvent, signal, onAlive, idleMs){
+  let conn = null, idleT = null;
+  const kick = () => { if(!idleMs) return; clearTimeout(idleT);
+    idleT = setTimeout(()=>{ try{ if(conn) conn.abort(); }catch(_){} }, idleMs); };
+  const mkSignal = () => {                       // no idleMs → the caller's signal, byte-identical
+    if(!idleMs) return signal;
+    conn = new AbortController();
+    if(signal){ if(signal.aborted) conn.abort();
+      else signal.addEventListener("abort", ()=>conn.abort(), {once:true}); }
+    kick();
+    return conn.signal;
+  };
+  const state = {runId:null, seq:0, final:null,
+    onAlive: (onAlive || idleMs) ? ()=>{ kick(); if(onAlive) onAlive(); } : null};
   try{
-    const resp = await fetch(url,{method:"POST",
-      headers:{"content-type":"application/json",
-               "x-noesis-token":(typeof USER!=="undefined"&&USER&&USER.token)||""},
-      body:JSON.stringify(payload), signal});
-    if(!resp.ok || !resp.body) throw new Error("HTTP "+resp.status);
-    await readSSE(resp, state, onEvent);
-    if(state.final) return state.final;
-  }catch(err){
-    if(err && err.server) throw err;            // real server-side error — don't retry
-    if(signal && signal.aborted) throw err;     // user cancelled
-    if(!state.runId) throw err;                 // never got a run id — nothing to resume
-  }
-  // Cut before the final event → resume silently. `att` resets whenever progress lands, so long
-  // runs survive any number of cuts; a 404 means this replica doesn't hold the run — retrying
-  // re-rolls the replica. If resume truly can't complete, the caller's /sessions recovery kicks in.
-  let miss = 0;
-  for(let att = 0; att < 40; att++){
-    if(signal && signal.aborted) throw new Error("aborted");
-    await new Promise(r=>setTimeout(r, att ? 1500 : 250));
-    let resp;
-    try{ resp = await fetch(`/stream/${state.runId}?since=${state.seq}`, {signal}); }
-    catch(_){ continue; }                       // transient network error — retry
-    if(resp.status === 404){ if(++miss >= 10) break; att--; continue; }
-    if(!resp.ok || !resp.body) continue;
-    miss = 0;
-    const before = state.seq;
-    try{ await readSSE(resp, state, onEvent); }
-    catch(err){
-      if(err && err.server) throw err;
-      if(signal && signal.aborted) throw err;
+    try{
+      const resp = await fetch(url,{method:"POST",
+        headers:{"content-type":"application/json",
+                 "x-noesis-token":(typeof USER!=="undefined"&&USER&&USER.token)||""},
+        body:JSON.stringify(payload), signal: mkSignal()});
+      if(!resp.ok || !resp.body) throw new Error("HTTP "+resp.status);
+      await readSSE(resp, state, onEvent);
+      if(state.final) return state.final;
+    }catch(err){
+      if(err && err.server) throw err;            // real server-side error — don't retry
+      if(signal && signal.aborted) throw err;     // user cancelled (idle-abort of `conn` ≠ this)
+      if(!state.runId) throw err;                 // never got a run id — nothing to resume
     }
-    if(state.final) return state.final;
-    if(state.seq > before) att = 0;             // made progress — keep going
-  }
-  throw new Error("stream ended without a final answer");
+    // Cut before the final event → resume silently. `att` resets whenever progress lands, so long
+    // runs survive any number of cuts; a 404 means this replica doesn't hold the run — retrying
+    // re-rolls the replica. If resume truly can't complete, the caller's /sessions recovery kicks in.
+    let miss = 0;
+    for(let att = 0; att < 40; att++){
+      if(signal && signal.aborted) throw new Error("aborted");
+      await new Promise(r=>setTimeout(r, att ? 1500 : 250));
+      let resp;
+      try{ resp = await fetch(`/stream/${state.runId}?since=${state.seq}`, {signal: mkSignal()}); }
+      catch(_){ continue; }                       // transient network error — retry
+      if(resp.status === 404){ if(++miss >= 10) break; att--; continue; }
+      if(!resp.ok || !resp.body) continue;
+      miss = 0;
+      const before = state.seq;
+      try{ await readSSE(resp, state, onEvent); }
+      catch(err){
+        if(err && err.server) throw err;
+        if(signal && signal.aborted) throw err;
+      }
+      if(state.final) return state.final;
+      if(state.seq > before) att = 0;             // made progress — keep going
+    }
+    throw new Error("stream ended without a final answer");
+  }finally{ clearTimeout(idleT); }
 }
 // Stream /research/stream, calling onEvent(ev) for each progress event; returns the final result.
 async function streamResearch(payload, onEvent, signal, onAlive){
@@ -3298,7 +3323,9 @@ function renderPanelPlan(question, data, manual){
 // Stream /panel/ask/stream, calling onEvent(ev) for each progress event; returns the final panel result.
 // A multi-minute panel run WILL get cut by the edge — streamRun resumes it silently via /stream/{run_id}.
 async function streamPanel(payload, onEvent, signal){
-  return streamRun("/panel/ask/stream", payload, onEvent, signal);
+  // 60s idle watchdog: the server pings every ~15s, so a minute of true silence means the edge
+  // silently killed this connection — abort it and let streamRun's run_id resume take over.
+  return streamRun("/panel/ask/stream", payload, onEvent, signal, null, 60000);
 }
 // Phase 2 — DELIBERATE: run the confirmed panel (streamed) and render the case conference. Shows each
 // specialist's live status so a multi-minute run reads as progress, not a hang.
@@ -3523,6 +3550,7 @@ async function runPanelTurn(question){
     ${follow ? `<div class="panelq-echo"><span class="pqt">Follow-up</span> <b>${esc(question)}</b></div>` : ""}
     <div class="planintro">The panel is reviewing the evidence — each specialist through its own lens.
       <button type="button" class="pstop" id="pstop">■ Stop</button></div>
+    <div class="pphase" id="pphase"><span class="pph on" data-ph="convene">Convening panel</span><span class="pph-sep">→</span><span class="pph" data-ph="work">${ids.length} specialist${ids.length===1?"":"s"} working</span><span class="pph-sep">→</span><span class="pph" data-ph="synth">Synthesizing</span></div>
     <div class="presolved" id="presolved" hidden></div>
     <div class="prows">${ids.map(id=>`<div class="prow" data-id="${esc(id)}">
         <div class="prow-h"><span class="prow-dot"></span><span class="prow-name">${esc((specById[id]||{}).specialty||id)}</span><span class="prow-st">waiting…</span></div>
@@ -3532,6 +3560,30 @@ async function runPanelTurn(question){
   const rowOf = id => [...live.querySelectorAll(".prow")].find(el=>el.dataset.id===id);
   const setRow = (id, cls, txt) => { const r=rowOf(id); if(r){ r.classList.remove("run","done","err"); r.classList.add(cls); r.querySelector(".prow-st").textContent = txt; } };
   const traceOf = id => { const r=rowOf(id); return r ? r.querySelector(".prow-trace") : null; };
+  // phase line: Convening panel → N specialists working → Synthesizing (advances, never reverses)
+  const PHASES = ["convene","work","synth"];
+  const setPhase = ph => { const pp=$("#pphase"); if(!pp) return; const at=PHASES.indexOf(ph);
+    pp.querySelectorAll(".pph").forEach(el=>{ const i=PHASES.indexOf(el.dataset.ph);
+      el.classList.toggle("on", i===at); el.classList.toggle("past", i<at); }); };
+  // a specialist row's LIVE status text from its tagged run_react narration events
+  const stText = e => {
+    if(e.type==="search") return "searching…";
+    if(e.type==="found") return `found ${e.total}`;
+    if(e.type==="grounding") return "grounding…";
+    if(e.type==="verifying") return "verifying…";
+    if(e.type==="verified") return `${e.verified} verified`;
+    if(e.type==="extracting") return "mining evidence…";
+    if(e.type==="extracted") return `${e.total} grounded`;
+    if(e.type==="composing") return "composing…";
+    return null;
+  };
+  const doneText = ev => {
+    if(!ev.error){ const n = (ev.n_verified!==undefined ? ev.n_verified : ev.verified)||0;
+      return `✓ ${n} finding${n===1?"":"s"}`; }
+    if(ev.error==="timeout") return "✗ timed out";
+    if(ev.error==="panel_deadline") return "✗ deadline";
+    return "✗ failed";
+  };
   // prior turns → history (same shape the primary agent sends): {question, answer, claims:[{text}]}
   const history = PANEL_THREAD.turns.map(t=>({question:t.question, answer:t.result.synthesis||"",
     claims:(t.result.claims||[]).slice(0,8).map(c=>({text:c.text||""}))}));
@@ -3544,10 +3596,12 @@ async function runPanelTurn(question){
     const attachments = (PANEL_THREAD.turns.length === 0 && PANEL_ATTACHMENTS.length) ? PANEL_ATTACHMENTS.slice() : undefined;
     const result = await streamPanel({question, tenant_id:"demo", specialists: ids, history,
         session_id: PANEL_THREAD.session_id, rationales: PANEL_THREAD.rationales, attachments}, ev=>{
-      if(ev.type==="specialist_start") setRow(ev.id, "run", "reviewing evidence…");
-      else if(ev.type==="specialist_trace") pushTrace(traceOf(ev.id), ev.ev);
-      else if(ev.type==="specialist_done") setRow(ev.id, ev.error?"err":"done", ev.error?"failed":`${ev.verified} finding${ev.verified===1?"":"s"}`);
-      else if(ev.type==="synthesizing"){ const ss=$("#psynthstat"); if(ss) ss.hidden=false; }
+      if(ev.type==="panel_plan_done") setPhase("work");
+      else if(ev.type==="specialist_start"){ setPhase("work"); setRow(ev.id, "run", "reviewing evidence…"); }
+      else if(ev.type==="specialist_trace"){ pushTrace(traceOf(ev.id), ev.ev);
+        const st = ev.ev && stText(ev.ev); if(st) setRow(ev.id, "run", st); }
+      else if(ev.type==="specialist_done") setRow(ev.id, ev.error?"err":"done", doneText(ev));
+      else if(ev.type==="synthesizing"){ setPhase("synth"); const ss=$("#psynthstat"); if(ss) ss.hidden=false; }
       else if(ev.type==="resolved_question"){ const rq=$("#presolved");   // followed the context intelligently
         if(rq){ rq.hidden=false; rq.innerHTML = `↳ Interpreting your follow-up as: <span class="tq">${esc(ev.question||"")}</span>`; } }
     }, ctrl.signal);

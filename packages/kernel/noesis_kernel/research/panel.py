@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 
 from pydantic import BaseModel
@@ -86,7 +87,7 @@ async def plan_panel(*, question, roster, llm) -> list[dict]:
     return out
 
 _REF_RE = re.compile(r"\[\d+\]")   # strip a specialist's OWN local [n] refs when feeding its prose to the chair
-_SPECIALIST_MAX_STEPS = 4       # narrower than a full answer (each lens is scoped)
+_SPECIALIST_MAX_STEPS = 3       # narrower than a full answer (each lens is scoped); 4→3 latency diet
 # Per-specialist budget ceiling (panel = N × this, hard-capped). Raised 12 → 16 (Evidence Contract
 # stage 2 re-plan): the fallback grounder (+1) and, under the claim-congruence flag, the binding
 # batches (+1–2) are now CHARGED — previously-unmetered spend a worst-case specialist run (4 steps
@@ -94,6 +95,25 @@ _SPECIALIST_MAX_STEPS = 4       # narrower than a full answer (each lens is scop
 _SPECIALIST_MAX_CALLS = 16
 _PANEL_CONCURRENCY = 3
 _SYNTH_MAX_TOKENS = 8000
+# Latency diet: a specialist is a scoped lens, not a full answer — bound its retries tighter than
+# run_react's defaults (extract-recovery re-asks 3→1, compose retries 3→2).
+_SPECIALIST_EXTRACT_RECOVERIES = 1
+_SPECIALIST_COMPOSE_ATTEMPTS = 2
+
+# run_react events worth streaming per specialist (the narration the Q&A trace renders). Everything
+# else (contract/graph_legs/selecting/internal diagnostics) is dropped to keep SSE volume sane —
+# with N concurrent lenses every event is multiplied by the panel size.
+_TRACE_FORWARD = frozenset({"step", "search", "found", "grounding", "verifying", "verified",
+                            "extracting", "extracted", "composing"})
+
+
+def _env_int(name: str, default: int) -> int:
+    """An env-overridable integer tunable (bad value → the honest default, never a crash)."""
+    import os
+    try:
+        return int(os.environ.get(name, "") or default)
+    except ValueError:
+        return default
 
 
 @dataclass
@@ -191,8 +211,17 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
     """`make_retrievers(source_keys) -> (corpus_source, aux_source)` lets each specialist scope its
     sources without this module knowing the source registry (domain-free seam). `history_context` is the
     prior conversation (context ONLY, never citable) so a follow-up turn reasons in context — same
-    contract as run_react's history. `on_event` streams live progress: specialist_start/_done plus each
-    specialist's own run_react trace wrapped as {type: specialist_trace, id, ev}.
+    contract as run_react's history. `on_event` streams live progress — phase events (`panel_plan_done`
+    with the convened set, `specialist_start`/`specialist_done` with {id, specialty, grounded,
+    n_verified, seconds}, `synthesizing`, plus `panel_contract`/`panel_slots`) and each specialist's
+    own run_react narration wrapped as {type: specialist_trace, id, specialty, ev} — throttled to the
+    meaningful event types (_TRACE_FORWARD) so N concurrent lenses don't flood the SSE stream.
+
+    Latency guardrails (env-overridable): NOESIS_PANEL_SPECIALIST_TIMEOUT (default 240s) bounds each
+    lens; NOESIS_PANEL_DEADLINE (default 420s) bounds ALL specialists — stragglers are cancelled and
+    the panel synthesizes with whatever completed; NOESIS_PANEL_SYNTH_CLAIMS (default 40) caps the
+    pooled findings fed to synthesis (slot-covering claims seated first); NOESIS_PANEL_SYNTH_ATTEMPTS
+    (default 2) caps synthesis compose retries.
 
     Panel-upgrade flags (both default OFF, byte-identical off paths):
       - `panel_dedup` (P2, +0 calls): pooled claims dedup by (atom_id, normalized quote); a survivor
@@ -202,6 +231,20 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
         claims, reports panel-level `coverage_gaps`, and routes the synthesis directive to the
         vertical's enumerative/decision addendum when ≥2 slots hold evidence (stage-4 pattern)."""
     result = PanelResult(question=question, n_specialists=len(specialists))
+
+    # Latency guardrails (env-overridable): one slow lens must never hold the panel, and the panel
+    # as a whole has a hard deadline after which it synthesizes with whatever completed.
+    spec_timeout = _env_int("NOESIS_PANEL_SPECIALIST_TIMEOUT", 240)   # seconds per specialist run
+    panel_deadline = _env_int("NOESIS_PANEL_DEADLINE", 420)           # seconds for ALL specialists
+    synth_claim_cap = _env_int("NOESIS_PANEL_SYNTH_CLAIMS", 40)       # pooled findings fed to synthesis
+    synth_attempts = _env_int("NOESIS_PANEL_SYNTH_ATTEMPTS", 2)       # synthesis compose retries
+
+    # Phase event: the convened panel (planning/elimination happened pre-stream in /panel/plan — the
+    # user confirmed this set, so `eliminated` is empty here; the strike list lives on the convene
+    # screen). Emitted FIRST so the UI can build its progress board before any specialist starts.
+    await _emit(on_event, {"type": "panel_plan_done", "n": len(specialists),
+                           "selected": [{"id": s.id, "specialty": s.specialty} for s in specialists],
+                           "eliminated": []})
 
     # 0) SHARED CONTRACT (P3, flag): ONE derivation for the whole panel — never per specialist —
     # charged to a panel-level budget note so the +1 call is observable spend (Rule 13). Fail-safe:
@@ -229,10 +272,16 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
 
     async def _run(spec):
         async with sem:
+            _t0 = time.monotonic()
+            _secs = lambda: round(time.monotonic() - _t0, 1)   # noqa: E731
             await _emit(on_event, {"type": "specialist_start", "id": spec.id, "specialty": spec.specialty})
-            # forward this specialist's OWN run_react trace, tagged so the UI routes it to its row
-            async def _spec_emit(ev, _sid=spec.id):
-                await _emit(on_event, {"type": "specialist_trace", "id": _sid, "ev": ev})
+            # forward this specialist's OWN run_react trace, tagged {id, specialty} so the UI routes
+            # it to its row — THROTTLED to the meaningful narration events (never internal chatter:
+            # N concurrent lenses multiply every event by the panel size).
+            async def _spec_emit(ev, _sid=spec.id, _sp=spec.specialty):
+                if not isinstance(ev, dict) or ev.get("type") not in _TRACE_FORWARD:
+                    return
+                await _emit(on_event, {"type": "specialist_trace", "id": _sid, "specialty": _sp, "ev": ev})
             try:
                 corpus, aux = make_retrievers(list(spec.source_keys) or None)
                 spec_q = f"{question}\n\n[Panel focus — {spec.specialty}: {spec.focus}]"
@@ -240,26 +289,62 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
                 scope = _scoped_coverage_line(contract, spec)
                 if scope:
                     spec_q += f"\n[{scope}]"
-                res = await run_react(
+                res = await asyncio.wait_for(run_react(
                     question=spec_q, llm=llm, embedder=embedder, source=corpus, aux_source=aux,
                     tenant_id=tenant_id, workspace_id=workspace_id, history_context=history_context,
                     attachment_context=attachment_context,
                     budget=BudgetState(max_calls=_SPECIALIST_MAX_CALLS),
                     system_prompt=spec.lens, answer_format=_SPECIALIST_ANSWER_FORMAT, reasoning_read=False,
-                    max_steps=_SPECIALIST_MAX_STEPS, classify_evidence=classify_evidence,
+                    max_steps=_SPECIALIST_MAX_STEPS,
+                    max_extract_recoveries=_SPECIALIST_EXTRACT_RECOVERIES,
+                    compose_attempts=_SPECIALIST_COMPOSE_ATTEMPTS,
+                    classify_evidence=classify_evidence,
                     evidence_ranker=evidence_ranker, evidence_fitness=evidence_fitness,
                     evidence_identity=evidence_identity, claim_congruence=claim_congruence,
-                    on_event=_spec_emit)
+                    on_event=_spec_emit), timeout=(spec_timeout or None))
                 await _emit(on_event, {"type": "specialist_done", "id": spec.id,
-                                       "verified": len(res.verified_claims)})
+                                       "specialty": spec.specialty,
+                                       "verified": len(res.verified_claims),        # legacy field name
+                                       "n_verified": len(res.verified_claims),
+                                       "grounded": bool(res.grounded), "seconds": _secs()})
                 return spec, res, ""
+            except (TimeoutError, asyncio.TimeoutError):   # one slow lens must never hold the panel
+                _log.warning("panel specialist %s timed out after %ss", spec.id, spec_timeout)
+                await _emit(on_event, {"type": "specialist_done", "id": spec.id,
+                                       "specialty": spec.specialty, "verified": 0, "n_verified": 0,
+                                       "grounded": False, "error": "timeout", "seconds": _secs()})
+                return spec, None, f"timed out after {spec_timeout}s"
             except Exception as e:   # noqa: BLE001 — one specialist failing must not sink the panel
                 _log.warning("panel specialist %s failed: %r", spec.id, e)
-                await _emit(on_event, {"type": "specialist_done", "id": spec.id, "verified": 0,
-                                       "error": repr(e)[:120]})
+                await _emit(on_event, {"type": "specialist_done", "id": spec.id,
+                                       "specialty": spec.specialty, "verified": 0, "n_verified": 0,
+                                       "grounded": False, "error": repr(e)[:120], "seconds": _secs()})
                 return spec, None, repr(e)[:200]
 
-    ran = await asyncio.gather(*[_run(s) for s in specialists])
+    # Run all specialists under a PANEL-LEVEL deadline: when it passes, stragglers are cancelled
+    # (each reported as a deadline take) and the panel synthesizes with whatever completed.
+    _t_all = time.monotonic()
+    _tasks = [asyncio.ensure_future(_run(s)) for s in specialists]
+    if _tasks:
+        await asyncio.wait(_tasks, timeout=(panel_deadline or None))
+    ran = []
+    for spec, t in zip(specialists, _tasks):
+        if not t.done():
+            t.cancel()
+            try:
+                await t
+            except (asyncio.CancelledError, Exception):   # noqa: BLE001
+                pass
+        if t.cancelled():
+            _log.warning("panel deadline (%ss) exceeded — cancelled specialist %s",
+                         panel_deadline, spec.id)
+            await _emit(on_event, {"type": "specialist_done", "id": spec.id,
+                                   "specialty": spec.specialty, "verified": 0, "n_verified": 0,
+                                   "grounded": False, "error": "panel_deadline",
+                                   "seconds": round(time.monotonic() - _t_all, 1)})
+            ran.append((spec, None, f"panel deadline exceeded ({panel_deadline}s)"))
+        else:
+            ran.append(t.result())
 
     # 2) Pool every specialist's span-verified findings into ONE numbered list (the only facts the
     # synthesis may use). Keep specialist attribution for the "perspectives" section. Each pooled
@@ -294,6 +379,7 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
     # structural containment against the contract's OWN closed list (match_entities — Rule 18);
     # for an exploratory contract the AXES are the slot list (same containment on text+title).
     _covered = 0
+    _slot_first: dict = {}               # slot -> index of the FIRST pooled claim covering it
     _slots = _contract_slots(contract)
     if _slots:
         from noesis_kernel.research.contract import match_entities
@@ -318,15 +404,30 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
             return hits
 
         _grid = {s: 0 for s in _slots}
-        for _names, vc in pooled:
+        for _i, (_names, vc) in enumerate(pooled):
             for s in _slot_hits(vc):
                 _grid[s] += 1
+                _slot_first.setdefault(s, _i)   # first pooled claim covering this slot (cap-protected)
         _covered = sum(1 for n in _grid.values() if n > 0)
         for s in _slots:
             if _grid[s] == 0:
                 result.coverage_gaps.append(f"No specialist retrieved evidence for {s}")
         await _emit(on_event, {"type": "panel_slots", "mode": contract.mode, "slots": len(_slots),
                                "covered": _covered, "gaps": len(result.coverage_gaps)})
+
+    # SYNTHESIS DIET: cap the pooled findings fed to the chair (a 6-lens panel can pool 60+ claims —
+    # a huge prompt that slows synthesis and dilutes it). Slot-covering claims are seated FIRST (the
+    # first claim per covered slot, so the cap never re-opens a coverage gap), then first-come.
+    # The capped list IS the panel's claims list, so the synthesis [n] refs stay consistent.
+    if synth_claim_cap > 0 and len(pooled) > synth_claim_cap:
+        _keep = set(sorted(_slot_first.values())[:synth_claim_cap])
+        for _i in range(len(pooled)):
+            if len(_keep) >= synth_claim_cap:
+                break
+            _keep.add(_i)
+        _log.info("panel synthesis findings capped %d→%d (NOESIS_PANEL_SYNTH_CLAIMS)",
+                  len(pooled), synth_claim_cap)
+        pooled = [pooled[_i] for _i in sorted(_keep)[:synth_claim_cap]]
 
     if not pooled:
         result.synthesis = ("_The panel could not ground an answer — no specialist found verifiable "
@@ -435,7 +536,7 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
         return comp.parsed
 
     parsed, text = None, ""
-    for attempt in range(3):
+    for attempt in range(max(1, synth_attempts)):
         try:
             parsed = await _compose()
             text = strip_control_tags((parsed.answer or "").strip())

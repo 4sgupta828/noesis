@@ -123,3 +123,135 @@ def test_panel_no_evidence_says_so():
     r = asyncio.run(run_panel(question="?", specialists=_specialists(), llm=_Empty(),
         embedder=FakeEmbedder(dim=8), make_retrievers=lambda k: (empty, None), tenant_id="A"))
     assert "could not ground" in r.synthesis and not r.claims
+
+
+# ---- live progress streaming + latency guardrails ------------------------------------------------
+
+def _collect_events():
+    events = []
+    async def on_event(ev):
+        events.append(ev)
+    return events, on_event
+
+
+def test_panel_streams_tagged_progress_events_in_phase_order():
+    """Full scripted run through the REAL run_react: phase events arrive in order (plan_done →
+    specialist_start/…/_done → synthesizing) and every specialist trace event is tagged with the
+    lens that produced it (id + specialty) and is a whitelisted narration type."""
+    from noesis_kernel.research.panel import _TRACE_FORWARD
+    src = _source()
+    events, on_event = _collect_events()
+    r = asyncio.run(run_panel(
+        question="What is the dose?", specialists=_specialists(), llm=_LLM(), embedder=FakeEmbedder(dim=8),
+        make_retrievers=lambda k: (src, None), tenant_id="A", on_event=on_event))
+    assert r.synthesis
+    types = [e["type"] for e in events]
+    # panel_plan_done is FIRST and carries the convened set
+    assert types[0] == "panel_plan_done"
+    assert {s["id"] for s in events[0]["selected"]} == {"pharm", "ebm"} and events[0]["n"] == 2
+    # phase order: plan_done before any specialist_start; every specialist_done before synthesizing
+    assert "synthesizing" in types
+    assert types.index("panel_plan_done") < types.index("specialist_start")
+    assert max(i for i, t in enumerate(types) if t == "specialist_done") < types.index("synthesizing")
+    assert types.count("specialist_start") == 2 and types.count("specialist_done") == 2
+    # every trace event is tagged with id + specialty and is a whitelisted narration type
+    traces = [e for e in events if e["type"] == "specialist_trace"]
+    assert traces
+    assert all(e["id"] in {"pharm", "ebm"} and e["specialty"] for e in traces)
+    assert all(e["ev"]["type"] in _TRACE_FORWARD for e in traces)
+    # specialist_done carries the observability fields (grounded / n_verified / seconds + legacy verified)
+    dones = [e for e in events if e["type"] == "specialist_done"]
+    assert all(e["grounded"] and e["n_verified"] >= 1 and e["verified"] == e["n_verified"]
+               and isinstance(e["seconds"], float) and e["specialty"] for e in dones)
+
+
+class _FakeVC:
+    def __init__(self, i=1):
+        self.text = f"claim {i}"; self.quote = f"quote {i}"; self.atom_id = f"a{i}"
+        self.source_key = "corpus"; self.document_title = "Doc"; self.document_id = "d1"
+
+
+class _FakeRes:
+    def __init__(self, n=1):
+        self.verified_claims = [_FakeVC(i) for i in range(1, n + 1)]
+        self.grounded = n > 0
+        self.composed_answer = "take [1]" if n else ""
+
+
+def test_specialist_trace_is_throttled_to_meaningful_events(monkeypatch):
+    """A scripted run_react emitting fixed events: whitelisted narration is forwarded (tagged);
+    internal chatter (contract/graph_legs/selecting) is dropped."""
+    import noesis_kernel.research.panel as panel_mod
+    scripted = [{"type": "search", "query": "q"}, {"type": "contract", "mode": "shadow"},
+                {"type": "found", "added": 1, "total": 1}, {"type": "graph_legs", "legs": []},
+                {"type": "selecting", "from": 9, "to": 5}, {"type": "verified", "verified": 1},
+                {"type": "composing", "findings": 1}]
+    async def fake_run_react(*, on_event=None, **kw):
+        for ev in scripted:
+            if on_event is not None:
+                await on_event(ev)
+        return _FakeRes(0)
+    monkeypatch.setattr(panel_mod, "run_react", fake_run_react)
+    events, on_event = _collect_events()
+    asyncio.run(run_panel(question="q", specialists=_specialists()[:1], llm=None,
+        embedder=None, make_retrievers=lambda k: (None, None), tenant_id="A", on_event=on_event))
+    fwd = [e["ev"]["type"] for e in events if e["type"] == "specialist_trace"]
+    assert fwd == ["search", "found", "verified", "composing"]
+    assert all(e["id"] == "pharm" and e["specialty"] == "Clinical Pharmacology"
+               for e in events if e["type"] == "specialist_trace")
+
+
+def test_specialist_timeout_panel_proceeds(monkeypatch):
+    """One lens hangs → it times out (NOESIS_PANEL_SPECIALIST_TIMEOUT) and the panel completes on
+    the other lens's findings, with the timeout surfaced on the take and the done event."""
+    import noesis_kernel.research.panel as panel_mod
+    monkeypatch.setenv("NOESIS_PANEL_SPECIALIST_TIMEOUT", "1")
+    async def fake_run_react(*, question, on_event=None, **kw):
+        if "Clinical Pharmacology" in question:      # the panel-focus line names the lens
+            await asyncio.sleep(30)                  # hangs — must be cut by the timeout
+        return _FakeRes(1)
+    monkeypatch.setattr(panel_mod, "run_react", fake_run_react)
+    events, on_event = _collect_events()
+    r = asyncio.run(run_panel(question="q", specialists=_specialists(), llm=_LLM(),
+        embedder=None, make_retrievers=lambda k: (None, None), tenant_id="A", on_event=on_event))
+    by_id = {t.id: t for t in r.takes}
+    assert "timed out after 1s" in by_id["pharm"].error and by_id["pharm"].n_verified == 0
+    assert by_id["ebm"].grounded and by_id["ebm"].n_verified == 1
+    assert r.synthesis and r.claims                  # the panel still synthesized without the slow lens
+    dones = {e["id"]: e for e in events if e["type"] == "specialist_done"}
+    assert dones["pharm"]["error"] == "timeout" and dones["pharm"]["grounded"] is False
+    assert "seconds" in dones["pharm"] and dones["ebm"]["n_verified"] == 1
+
+
+def test_panel_deadline_cancels_stragglers(monkeypatch):
+    """Every lens too slow + a 1s total deadline → stragglers are cancelled, each reported as a
+    deadline take, and the panel returns (honest no-evidence synthesis) instead of hanging."""
+    import noesis_kernel.research.panel as panel_mod
+    monkeypatch.setenv("NOESIS_PANEL_DEADLINE", "1")
+    monkeypatch.setenv("NOESIS_PANEL_SPECIALIST_TIMEOUT", "60")
+    async def fake_run_react(*, on_event=None, **kw):
+        await asyncio.sleep(30)
+        return _FakeRes(1)
+    monkeypatch.setattr(panel_mod, "run_react", fake_run_react)
+    events, on_event = _collect_events()
+    r = asyncio.run(run_panel(question="q", specialists=_specialists(), llm=_LLM(),
+        embedder=None, make_retrievers=lambda k: (None, None), tenant_id="A", on_event=on_event))
+    assert len(r.takes) == 2
+    assert all("deadline" in t.error for t in r.takes)
+    assert "could not ground" in r.synthesis
+    dones = [e for e in events if e["type"] == "specialist_done"]
+    assert len(dones) == 2 and all(e["error"] == "panel_deadline" for e in dones)
+
+
+def test_panel_synthesis_findings_cap(monkeypatch):
+    """Pooled findings beyond NOESIS_PANEL_SYNTH_CLAIMS are trimmed before synthesis — the panel's
+    claims list IS the capped list, so the synthesis [n] refs stay consistent."""
+    import noesis_kernel.research.panel as panel_mod
+    monkeypatch.setenv("NOESIS_PANEL_SYNTH_CLAIMS", "4")
+    async def fake_run_react(*, on_event=None, **kw):
+        return _FakeRes(10)                          # 2 lenses × 10 claims = 20 pooled
+    monkeypatch.setattr(panel_mod, "run_react", fake_run_react)
+    r = asyncio.run(run_panel(question="q", specialists=_specialists(), llm=_LLM(),
+        embedder=None, make_retrievers=lambda k: (None, None), tenant_id="A"))
+    assert len(r.claims) == 4                        # capped after pooling
+    assert r.synthesis and "[1]" in r.synthesis

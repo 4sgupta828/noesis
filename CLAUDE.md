@@ -132,3 +132,12 @@ about the system; "pre-existing" describes when it broke, not whether it matters
 before dismissing any failing test as known/unrelated, spend the five minutes to find WHAT
 it is actually asserting and why it fails — or file it as a tracked bug with an owner. A
 test suite with tolerated red is a test suite that cannot catch the next regression.
+
+## Route the Next Dollar with the Coverage Diagnostic (STANDING METHOD)
+
+Before building machinery to "improve answers", run the coverage diagnostic
+(`learnings/diagnosticprocess.md`; harness `evals/realworld/diag_axes.py`): real questions +
+gold must-cover axes → three buckets (covered / uncovered-retrievable / uncovered-absent)
+→ the dominant bucket routes the fix (machinery vs ingestion vs nothing). ~$4 converts the
+build debate into data; the end-to-end re-run (not the probe) is the truth. Keep evolving
+the method in its doc — every use should leave it sharper.

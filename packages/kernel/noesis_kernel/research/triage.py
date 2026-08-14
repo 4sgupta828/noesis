@@ -75,6 +75,11 @@ async def run_triage_turn(
     `schema_v2` selects the TriageTurnV2 response schema (register/case_facts/retrieval_terms) — the
     default (False) keeps every v1 call byte-identical."""
     fmt: type[TriageTurn] = TriageTurnV2 if schema_v2 else TriageTurn
+    if schema_v2 and max_tokens < 1600:
+        # The v2 schema (case_facts + retrieval_terms + register + a clinical-register refined
+        # question) does not fit v1's 700-token budget — truncation silently degraded every v2
+        # turn to the fail-safe shape (batch-1 eval: terms collapsed to 0.11). v1 calls keep 700.
+        max_tokens = 1600
     msgs: list[dict] = []
     for t in (transcript or []):
         role = "assistant" if (t.get("role") == "assistant") else "user"

@@ -113,4 +113,9 @@ stroke, MI, anaphylaxis, sepsis, suicidality), set safety="urgent" IMMEDIATELY o
 wait for ready. In `message`, add a brief generic note to seek urgent in-person/emergency evaluation —
 WITHOUT diagnosing or advising treatment — and encourage wrapping up so the evidence search can
 proceed now. Otherwise safety="ok".
+
+URGENT MEANS WRAP UP: once you have set safety="urgent" on any turn, do NOT continue routine
+intake. Your NEXT turn must be status="ready" with the best-effort refined question from what you
+already know — ask at most ONE further question, and only if a single critical fact is essential
+for the evidence search. The user's urgency outranks intake completeness.
 """

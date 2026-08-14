@@ -117,3 +117,102 @@ def test_answer_mode_routing_flag_reads_env(monkeypatch) -> None:
     assert answer_mode_routing_enabled() is True
     monkeypatch.setenv("NOESIS_ANSWER_MODE_ROUTING", "no")
     assert answer_mode_routing_enabled() is False
+
+
+# ---------------------------------------------------------------- Guided Intake v2
+
+
+def test_intake_v2_flag_reads_env(monkeypatch) -> None:
+    # Guided Intake v2: the flag is wired from NOESIS_INTAKE_V2 (default OFF → v1 byte-identical).
+    from api.app import intake_v2_enabled
+    monkeypatch.delenv("NOESIS_INTAKE_V2", raising=False)
+    assert intake_v2_enabled() is False
+    monkeypatch.setenv("NOESIS_INTAKE_V2", "1")
+    assert intake_v2_enabled() is True
+    monkeypatch.setenv("NOESIS_INTAKE_V2", "false")
+    assert intake_v2_enabled() is False
+
+
+def test_triage_ask_cap_per_register() -> None:
+    # v1 → always TRIAGE_MAX_ASK; v2 → fact keeps it, case (and an absent/unknown echo) gets the
+    # case backstop. Defaults: TRIAGE_MAX_ASK=2, TRIAGE_MAX_ASK_CASE=8.
+    from api.app import TRIAGE_MAX_ASK, TRIAGE_MAX_ASK_CASE, triage_ask_cap
+    assert triage_ask_cap(False, "fact") == TRIAGE_MAX_ASK
+    assert triage_ask_cap(False, "case") == TRIAGE_MAX_ASK
+    assert triage_ask_cap(False, "") == TRIAGE_MAX_ASK
+    assert triage_ask_cap(True, "fact") == TRIAGE_MAX_ASK
+    assert triage_ask_cap(True, "case") == TRIAGE_MAX_ASK_CASE
+    assert triage_ask_cap(True, "") == TRIAGE_MAX_ASK_CASE          # lost echo → fail-open
+    assert triage_ask_cap(True, "weird") == TRIAGE_MAX_ASK_CASE
+
+
+class _RecordingLLM:
+    """Returns scripted parsed turns and records every call for schema/prompt assertions."""
+
+    def __init__(self, turns):
+        self._t = list(turns)
+        self.calls = []
+
+    async def complete(self, *, system, messages, response_format, max_tokens=2048, temperature=None):
+        self.calls.append({"system": system, "messages": messages,
+                           "response_format": response_format})
+        return LLMResult(parsed=self._t.pop(0), model="fake")
+
+
+def _triage_service(llm) -> ResearchService:
+    return ResearchService(llm=llm, embedder=FakeEmbedder(dim=16), sources={},
+                           triage_prompt="V1-DIRECTIVE", triage_prompt_v2="V2-DIRECTIVE")
+
+
+def test_triage_wrap_up_forces_ready(monkeypatch) -> None:
+    # wrap_up:true → force_ready plumbing (v1 mode): the model wanted to keep asking, but the
+    # user's wrap-up coerces a route this turn (and the force instruction reached the LLM).
+    from noesis_kernel.research.triage import TriageTurn
+    monkeypatch.setenv("NOESIS_TRIAGE", "1")
+    monkeypatch.delenv("NOESIS_INTAKE_V2", raising=False)
+    monkeypatch.delenv("NOESIS_CORPUS_DSN", raising=False)   # env-only flag resolution (no DB)
+    llm = _RecordingLLM([TriageTurn(status="ask", message="one more?",
+                                    understood_problem="knee pain after running")])
+    client = TestClient(create_app(_triage_service(llm)))
+    resp = client.post("/triage/step", json={
+        "transcript": [{"role": "user", "text": "my knee hurts after running"}], "wrap_up": True})
+    assert resp.status_code == 200
+    d = resp.json()
+    assert d["status"] == "ready"                                 # coerced despite the model's "ask"
+    assert d["refined_question"] == "knee pain after running"
+    assert llm.calls[0]["response_format"] is TriageTurn          # v1 schema without the v2 flag
+    assert llm.calls[0]["system"] == "V1-DIRECTIVE"
+    assert "do NOT ask another question" in llm.calls[0]["messages"][-1]["content"]
+
+
+def test_triage_v2_uses_v2_prompt_schema_and_case_cap(monkeypatch) -> None:
+    # Under NOESIS_INTAKE_V2: the v2 directive + TriageTurnV2 schema are selected, the new fields
+    # come back in the response, and the ask cap is per-register (2 assistant asks: fact → forced,
+    # absent register → case cap → NOT forced).
+    from noesis_kernel.research.triage import TriageTurnV2
+    monkeypatch.setenv("NOESIS_TRIAGE", "1")
+    monkeypatch.setenv("NOESIS_INTAKE_V2", "1")
+    monkeypatch.delenv("NOESIS_CORPUS_DSN", raising=False)   # env-only flag resolution (no DB)
+    turns = [TriageTurnV2(status="ask", message="So I can search the right evidence — when did it start?",
+                          register="case",
+                          case_facts=[{"category": "core-issue", "text": "knee pain"}],
+                          retrieval_terms=["knee pain"]),
+             TriageTurnV2(status="ask", message="q", register="fact")]
+    llm = _RecordingLLM(turns)
+    client = TestClient(create_app(_triage_service(llm)))
+    two_asks = [{"role": "user", "text": "my knee hurts"},
+                {"role": "assistant", "text": "q1"}, {"role": "user", "text": "a1"},
+                {"role": "assistant", "text": "q2"}, {"role": "user", "text": "a2"}]
+    # absent register under v2 → case cap (8) → 2 asks do NOT force a route
+    d = client.post("/triage/step", json={"transcript": two_asks}).json()
+    assert d["status"] == "ask"
+    assert d["register"] == "case"                                # new fields echoed in the response
+    assert d["case_facts"] == [{"category": "core-issue", "text": "knee pain"}]
+    assert d["retrieval_terms"] == ["knee pain"]
+    assert llm.calls[0]["response_format"] is TriageTurnV2
+    assert llm.calls[0]["system"] == "V2-DIRECTIVE"
+    assert all("do NOT ask another question" not in m["content"] for m in llm.calls[0]["messages"])
+    # fact register echoed back → v1 cap (2) → the same 2 asks DO force a route
+    d = client.post("/triage/step", json={"transcript": two_asks, "register": "fact"}).json()
+    assert d["status"] == "ready"
+    assert "do NOT ask another question" in llm.calls[1]["messages"][-1]["content"]

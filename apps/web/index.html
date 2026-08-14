@@ -572,6 +572,18 @@
   .tgt-restart{margin-top:.9rem;font-family:var(--mono);font-size:.72rem;color:var(--muted);background:transparent;
     border:1px solid var(--hair);border-radius:8px;padding:.35rem .7rem;cursor:pointer;}
   .tgt-restart:hover{border-color:var(--gold);color:var(--gold);}
+  /* Intake v2: persistent "wrap up & search now" affordance (quiet; prominent after an urgent turn) */
+  .tgt-wrapline{margin:.5rem 0 0;text-align:right;}
+  .tgt-wrapup{font-family:var(--mono);font-size:.72rem;color:var(--muted);background:transparent;
+    border:1px solid var(--hair);border-radius:999px;padding:.35rem .85rem;cursor:pointer;}
+  .tgt-wrapup:hover{border-color:var(--gold);color:var(--gold);}
+  .tgt-wrapline.prominent{text-align:center;margin-top:.7rem;}
+  .tgt-wrapline.prominent .tgt-wrapup{background:var(--gold);color:var(--on-accent);border-color:var(--gold);
+    font-size:.8rem;padding:.5rem 1.1rem;}
+  /* Intake v2: retrieval-vocabulary chips on the ready card */
+  .tgt-chips{display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:1rem;}
+  .tgt-chip{font-family:var(--mono);font-size:.62rem;color:var(--muted);border:1px solid var(--hair);
+    border-radius:999px;padding:.18rem .55rem;background:var(--panel);}
   .panelbody>.panelwrap,.panellanding{max-width:760px;margin:0 auto;}
   .panelsub{font-size:.9rem;color:var(--muted);line-height:1.6;margin:.2rem 0 1.5rem;}
   .panelq{width:100%;box-sizing:border-box;resize:none;overflow-y:auto;min-height:3.4rem;font:inherit;font-size:1rem;line-height:1.55;
@@ -2855,11 +2867,11 @@ function closePanel(){ setMode("qa"); }
 // ---- Guided intake (triage): a short clarifying chat that converges on a crisp question, then routes ----
 // The shared #ask box is the message input; the conversation + hand-off card render into #triagebody. The
 // server holds no state (Rule: stateless) — TRIAGE.transcript is the whole memory, sent each turn.
-let TRIAGE = {transcript: [], busy: false, refined: ""};
+let TRIAGE = {transcript: [], busy: false, refined: "", register: "", urgent: false};
 const tbody = () => $("#triagebody");
 function triageMsgHtml(m){ return `<div class="tgt-msg ${m.role==='user'?'user':'bot'}">${esc(m.text)}</div>`; }
 function renderTriage(fresh){
-  if(fresh){ TRIAGE = {transcript: [], busy: false, refined: ""}; q.value = ""; autoGrow(); }
+  if(fresh){ TRIAGE = {transcript: [], busy: false, refined: "", register: "", urgent: false}; q.value = ""; autoGrow(); }
   // dock the composer to the bottom once the conversation has started (chat feel); top on the empty landing
   document.body.classList.toggle("triage-live", TRIAGE.transcript.length > 0);
   q.setAttribute("placeholder", TRIAGE.transcript.length ? "Type your answer…"
@@ -2868,7 +2880,13 @@ function renderTriage(fresh){
     `<div class="tgt-lead">Tell me the clinical problem in your own words. I'll ask only what's needed to make
      the answer high-quality — then point you to a quick answer or a full specialist panel. I don't diagnose
      or advise; I just help you ask the sharpest question.</div>`;
-  tbody().innerHTML = lead + `<div class="tgt-thread" id="tgt-thread">${TRIAGE.transcript.map(triageMsgHtml).join("")}</div>`;
+  // Persistent "wrap up & search now" — the user can end the intake on ANY turn (server forces a route).
+  // Quiet by default; PROMINENT once an urgent detail has surfaced mid-intake.
+  const wrap = TRIAGE.transcript.length ?
+    `<div class="tgt-wrapline${TRIAGE.urgent ? " prominent" : ""}">
+       <button type="button" class="tgt-wrapup" id="tgt-wrapup">✓ Wrap up &amp; search now</button></div>` : "";
+  tbody().innerHTML = lead + `<div class="tgt-thread" id="tgt-thread">${TRIAGE.transcript.map(triageMsgHtml).join("")}</div>` + wrap;
+  const w = $("#tgt-wrapup"); if(w) w.addEventListener("click", wrapUpTriage);
   triageScroll();
 }
 // Scroll to the newest message when a conversation is active; on the empty landing scroll to the TOP (the
@@ -2876,6 +2894,31 @@ function renderTriage(fresh){
 function triageScroll(){
   if(TRIAGE.transcript.length) window.scrollTo({top: document.body.scrollHeight, behavior:"smooth"});
   else window.scrollTo({top: 0});
+}
+// One triage POST — carries the last echoed register (v2 cap selection; "" under v1 → inert) and
+// the user's explicit wrap-up request (forces a route server-side; harmless under v1).
+function triageFetch(wrapUp){
+  return fetch("/triage/step", {method:"POST", headers:{"content-type":"application/json"},
+    body: JSON.stringify({transcript: TRIAGE.transcript, tenant_id:"demo",
+                          register: TRIAGE.register || "", wrap_up: !!wrapUp})});
+}
+// Shared turn handler for submit + wrap-up. v1-shaped turns (no register/retrieval_terms) flow
+// through untouched — every v2 affordance stays inert.
+function handleTriageTurn(d){
+  if(typeof d.register === "string" && d.register) TRIAGE.register = d.register;  // echoed choice (v2)
+  // SAFETY on every turn, not only at ready: an emergent detail revealed mid-intake must
+  // surface immediately (the panel's code review found ask-turns silently dropped d.safety).
+  if(d.safety === "urgent" && d.status !== "ready"){
+    TRIAGE.urgent = true;   // the wrap-up affordance turns prominent from here on
+    TRIAGE.transcript.push({role:"assistant", text: (d.message || "") +
+      "\n\n⚠ Based on what you've described, please seek urgent in-person or emergency medical evaluation now. I can keep researching the evidence meanwhile."});
+    renderTriage(false);
+  }
+  else if(d.status === "ready"){ renderTriageReady(d); }
+  else {
+    TRIAGE.transcript.push({role:"assistant", text: d.message || "Could you tell me a bit more about the case?"});
+    renderTriage(false);
+  }
 }
 async function submitTriage(text){
   if(TRIAGE.busy) return;
@@ -2888,8 +2931,7 @@ async function submitTriage(text){
   thread.appendChild(think); triageScroll();
   TRIAGE.busy = true;
   try{
-    const r = await fetch("/triage/step", {method:"POST", headers:{"content-type":"application/json"},
-      body: JSON.stringify({transcript: TRIAGE.transcript, tenant_id:"demo"})});
+    const r = await triageFetch(false);
     think.remove();
     if(!r.ok){
       // A failed turn must NOT masquerade as an instant "ready" — surface WHY, offer a direct route.
@@ -2898,19 +2940,25 @@ async function submitTriage(text){
                                     : `The intake service returned an error (${r.status}).`);
       triageError(why); return;
     }
-    const d = await r.json();
-    // SAFETY on every turn, not only at ready: an emergent detail revealed mid-intake must
-    // surface immediately (the panel's code review found ask-turns silently dropped d.safety).
-    if(d.safety === "urgent" && d.status !== "ready"){
-      TRIAGE.transcript.push({role:"assistant", text: (d.message || "") +
-        "\n\n⚠ Based on what you've described, please seek urgent in-person or emergency medical evaluation now. I can keep researching the evidence meanwhile."});
-      renderTriage(false);
-    }
-    else if(d.status === "ready"){ renderTriageReady(d); }
-    else {
-      TRIAGE.transcript.push({role:"assistant", text: d.message || "Could you tell me a bit more about the case?"});
-      renderTriage(false);
-    }
+    handleTriageTurn(await r.json());
+  }catch(e){
+    think.remove();
+    triageError("I couldn't reach the guided-intake service.");
+  }finally{ TRIAGE.busy = false; }
+}
+// The user's explicit "wrap up & search now": no new user message — the server forces this turn to
+// route (wrap_up → force_ready) and the ready card renders.
+async function wrapUpTriage(){
+  if(TRIAGE.busy || !TRIAGE.transcript.length) return;
+  const thread = $("#tgt-thread");
+  const think = document.createElement("div"); think.className = "tgt-msg bot thinking"; think.textContent = "wrapping up…";
+  if(thread){ thread.appendChild(think); } triageScroll();
+  TRIAGE.busy = true;
+  try{
+    const r = await triageFetch(true);
+    think.remove();
+    if(!r.ok){ triageError(`The intake service returned an error (${r.status}).`); return; }
+    handleTriageTurn(await r.json());
   }catch(e){
     think.remove();
     triageError("I couldn't reach the guided-intake service.");
@@ -2942,12 +2990,25 @@ function renderTriageReady(d){
   const panelBtn = ASK_PANEL_ENABLED ? `<button type="button" class="tgt-route ${rec==='panel'?'rec':''}" data-route="panel">
       <div class="tgt-route-t">◈ Specialist Panel ${rec==='panel'?'<span class="rec-badge">Recommended</span>':''}</div>
       <div class="tgt-route-why">Take it to the panel — pick the specialists, then convene.</div></button>` : "";
+  // Intake v2 ready card (inert on v1-shaped turns, which carry neither field): the PLAIN
+  // understood_problem is the primary ratified text; the clinical-register refined question renders
+  // secondary and still flows into the editable composer via routeTriage (no new gate); the clinical
+  // vocabulary shows as small chips.
+  const isV2 = Array.isArray(d.retrieval_terms) || (typeof d.register === "string" && d.register);
+  const chips = (isV2 && Array.isArray(d.retrieval_terms) && d.retrieval_terms.length)
+    ? `<div class="tgt-chips">${d.retrieval_terms.map(t => `<span class="tgt-chip">${esc(String(t))}</span>`).join("")}</div>` : "";
+  const bodyHtml = (isV2 && d.understood_problem)
+    ? `<div class="tgt-refined">${esc(d.understood_problem)}</div>
+       ${d.refined_question ? `<div class="tgt-understood">${esc(d.refined_question)}</div>` : ""}
+       ${chips}`
+    : `${d.understood_problem ? `<div class="tgt-understood">${esc(d.understood_problem)}</div>` : ""}
+       <div class="tgt-refined">${esc(refined)}</div>
+       ${chips}`;
   tbody().innerHTML = `<div class="tgt-thread">${TRIAGE.transcript.map(triageMsgHtml).join("")}</div>
     ${urgent}
     <div class="tgt-ready">
       <div class="tgt-ready-h">Here's your refined question — where should it go?</div>
-      ${d.understood_problem ? `<div class="tgt-understood">${esc(d.understood_problem)}</div>` : ""}
-      <div class="tgt-refined">${esc(refined)}</div>
+      ${bodyHtml}
       <div class="tgt-routes">
         <button type="button" class="tgt-route ${rec==='qa'?'rec':''}" data-route="qa">
           <div class="tgt-route-t">⚡ Quick Q&amp;A ${rec==='qa'?'<span class="rec-badge">Recommended</span>':''}</div>
@@ -4009,7 +4070,7 @@ function newConversation(){
   out.innerHTML = "";
   q.value=""; q.style.height="auto";
   if(APP_MODE === "panel"){ closePanel(); return; }   // New chat from panel → back to Q&A landing
-  if(APP_MODE === "triage"){ TRIAGE = {transcript: [], busy: false, refined: ""}; setMode("qa"); return; }
+  if(APP_MODE === "triage"){ TRIAGE = {transcript: [], busy: false, refined: "", register: "", urgent: false}; setMode("qa"); return; }
   try{ history.replaceState(null, "", location.pathname + location.search); }catch(e){}
   q.setAttribute("placeholder", pickPlaceholder());  // fresh question each New chat
   window.scrollTo({top:0}); q.focus();

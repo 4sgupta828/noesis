@@ -71,6 +71,7 @@ class ResearchService:
     suggest_prompt: str | None = None       # vertical suggested-follow-ups directive (opaque)
     refine_prompt: str | None = None         # vertical pre-answer question-refinement directive (opaque)
     triage_prompt: str | None = None         # vertical guided-intake/triage directive (opaque)
+    triage_prompt_v2: str | None = None      # vertical intake-v2 directive (opaque; None → v2 falls back to v1)
     reasoned_scaffold_prompt: str | None = None  # alternate-engine scaffold directive (coverage as QUESTIONS)
     reasoned_answer_format: str | None = None    # alternate-engine compose directive (decision-gated answer)
     integrative_prompt: str | None = None        # opt-in complementary/integrative answer-section directive
@@ -696,18 +697,24 @@ class ResearchService:
             llm=self.llm, suggest_prompt=self.suggest_prompt,
             question=question, answer=answer, history=history)
 
-    async def triage(self, *, transcript: list[dict], force_ready: bool = False) -> dict:
+    async def triage(self, *, transcript: list[dict], force_ready: bool = False,
+                     v2: bool = False) -> dict:
         """Guided-intake / triage: run ONE clarifying turn over the transcript ([{role, text}]) and return
         either the next question (status="ask") or a crisp refined question + recommended route
         (status="ready"). `force_ready` (caller's turn cap) coerces a route. {} when the vertical has no
-        triage prompt (feature effectively off). Never answers the medical question — only narrows + routes."""
+        triage prompt (feature effectively off). `v2` selects the vertical's intake-v2 directive + the
+        TriageTurnV2 schema (register/case_facts/retrieval_terms); without a v2 directive it falls back
+        to v1 behavior, byte-identical. Never answers the medical question — only narrows + routes."""
         if not self.triage_prompt:
             return {}
         from noesis_kernel.research.triage import run_triage_turn
+        use_v2 = bool(v2 and self.triage_prompt_v2)
         roster = ", ".join(f"{s.get('specialty','')}" for s in self.panel_roster()) if self.panel_specialists else ""
         turn = await run_triage_turn(
-            llm=self.llm, triage_prompt=self.triage_prompt, transcript=transcript,
-            roster_summary=roster, force_ready=force_ready)
+            llm=self.llm,
+            triage_prompt=(self.triage_prompt_v2 if use_v2 else self.triage_prompt),
+            transcript=transcript, roster_summary=roster, force_ready=force_ready,
+            schema_v2=use_v2)
         return turn.model_dump()
 
     async def refine(self, *, question: str) -> list[str]:

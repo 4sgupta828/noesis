@@ -89,6 +89,9 @@ class VerticalManifest:
     # Optional GUIDED-INTAKE / triage directive: a short clarifying conversation that converges on a crisp
     # question and recommends a route (Q&A vs Panel). Opaque prose; kernel owns the turn mechanics + cap.
     triage_prompt: str | None = None
+    # Optional Guided Intake v2 directive (register choice + structured case intake + clinical-register
+    # rewrite). Selected only when the caller requests v2; None → v2 request falls back to v1. Opaque.
+    triage_prompt_v2: str | None = None
     # Optional ALTERNATE "reasoned" engine (A/B duel arm): a pre-retrieval scaffold directive (coverage
     # as QUESTIONS, never conclusions) + a decision-gated compose directive. Opaque prose.
     reasoned_scaffold_prompt: str | None = None

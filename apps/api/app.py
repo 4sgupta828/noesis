@@ -599,6 +599,27 @@ def triage_enabled() -> bool:
 TRIAGE_MAX_ASK = int(os.environ.get("NOESIS_TRIAGE_MAX_ASK", "2"))
 
 
+def intake_v2_enabled() -> bool:
+    """Flag (default OFF, Rule 20): Guided Intake v2 — /triage/step uses the vertical's v2 directive +
+    the TriageTurnV2 schema (register choice fact/case, structured case_facts, clinical-register
+    refined_question + retrieval_terms) with a per-REGISTER ask backstop. OFF → v1, byte-identical."""
+    return os.environ.get("NOESIS_INTAKE_V2", "").lower() in ("1", "true", "yes")
+
+
+# Under v2 the ask cap is a per-register BACKSTOP (the prompt owns convergence; code owns the ceiling):
+# "fact" keeps the v1 cap; "case" (a described patient/situation) gets room for a structured intake.
+TRIAGE_MAX_ASK_CASE = int(os.environ.get("NOESIS_TRIAGE_MAX_ASK_CASE", "8"))
+
+
+def triage_ask_cap(v2: bool, register: str) -> int:
+    """The forced-convergence ask cap for this turn. v1 → always TRIAGE_MAX_ASK. Under v2 the register
+    (echoed by the LAST assistant turn, posted back by the FE) selects the backstop — absent/unknown
+    defaults to the CASE cap so a lost echo never truncates a structured intake."""
+    if not v2:
+        return TRIAGE_MAX_ASK
+    return TRIAGE_MAX_ASK if register == "fact" else TRIAGE_MAX_ASK_CASE
+
+
 def evidence_fitness_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, the relevance-selection step additionally BOOSTS stronger
     evidence tiers (guideline/systematic-review > RCT > cohort > case report, via the medical authority
@@ -787,6 +808,11 @@ class TriageIn(BaseModel):
     # (stateless server) and appends each turn. The last item is the user's latest message.
     transcript: list[dict] = []
     tenant_id: str = "demo"
+    # v2: the LAST assistant turn's echoed register, posted back by the FE. Trusted ONLY for ask-cap
+    # selection (never passed to the model); absent under v2 → the case cap applies (fail-open).
+    register: str = ""
+    # The USER's explicit "wrap up & search now" — forces this turn to route (works under v1 too).
+    wrap_up: bool = False
 
 
 class RegisterIn(BaseModel):
@@ -975,6 +1001,7 @@ def build_default_service() -> ResearchService:
     # Prompts are wired UNCONDITIONALLY so the live admin toggles (duel/triage) work without a
     # redeploy — an unused prompt is inert; gating happens at request time on the live flag.
     triage_prompt = getattr(manifest, "triage_prompt", None)
+    triage_prompt_v2 = getattr(manifest, "triage_prompt_v2", None)
     reasoned_scaffold = getattr(manifest, "reasoned_scaffold_prompt", None)
     reasoned_format = getattr(manifest, "reasoned_answer_format", None)
     # Use the BEST model for EVERY research step (planning + claim extraction + compose). A cheaper
@@ -1024,6 +1051,7 @@ def build_default_service() -> ResearchService:
         vision_prompt=vision_prompt, report_prompt=report_prompt,
         layman_prompt=manifest.layman_prompt, gap_prompt=gap_prompt,
         suggest_prompt=suggest_prompt, refine_prompt=refine_prompt, triage_prompt=triage_prompt,
+        triage_prompt_v2=triage_prompt_v2,
         reasoned_scaffold_prompt=reasoned_scaffold, reasoned_answer_format=reasoned_format,
         integrative_prompt=getattr(manifest, "integrative_prompt", None),
         integrative_query_hint=getattr(manifest, "integrative_query_hint", None),
@@ -1866,8 +1894,10 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         (status="qa"|"panel", via `recommended_mode`) when ready. Stateless — the FE holds the transcript.
         404 when the flag/vertical is off. Never answers the medical question; only narrows + routes.
 
-        Convergence is code-guaranteed: once the assistant has already asked TRIAGE_MAX_ASK questions,
-        this turn is FORCED to route (the LLM still owns whether/what to ask below that cap — Rule 18)."""
+        Convergence is code-guaranteed: once the assistant has already asked TRIAGE_MAX_ASK questions
+        (per-register backstop under NOESIS_INTAKE_V2: fact=TRIAGE_MAX_ASK, case=TRIAGE_MAX_ASK_CASE),
+        this turn is FORCED to route (the LLM still owns whether/what to ask below that cap — Rule 18).
+        `wrap_up` (the user's explicit "search now") forces a route on any turn."""
         if not await _flag_live("triage_enabled"):
             raise HTTPException(status_code=404, detail="triage mode is not enabled")
         if app.state.service is None:
@@ -1878,10 +1908,11 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         transcript = [t for t in (body.transcript or []) if isinstance(t, dict) and (t.get("text") or "").strip()]
         if not transcript:
             raise HTTPException(status_code=400, detail="transcript is empty")
+        v2 = intake_v2_enabled()
         asked = sum(1 for t in transcript if (t.get("role") or "") == "assistant")
-        force_ready = asked >= TRIAGE_MAX_ASK
+        force_ready = bool(body.wrap_up) or asked >= triage_ask_cap(v2, (body.register or "").strip().lower())
         try:
-            return await svc.triage(transcript=transcript, force_ready=force_ready)
+            return await svc.triage(transcript=transcript, force_ready=force_ready, v2=v2)
         except CassetteMiss:
             # replay mode → route the last user message straight to Q&A (never dead-end)
             last = next((t["text"] for t in reversed(transcript) if t.get("role") == "user"), "")

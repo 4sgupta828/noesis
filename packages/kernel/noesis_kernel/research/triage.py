@@ -41,6 +41,22 @@ class TriageTurn(BaseModel):
     safety: Literal["ok", "urgent"] = "ok"
 
 
+class TriageTurnV2(TriageTurn):
+    """Intake v2 turn — GENERIC extensions only; all semantics come from the vertical prompt
+    (the kernel stays domain-free: category names, register meaning, and the retrieval
+    vocabulary are the vertical's, opaquely echoed through these fields):
+      - `register`: the model's echoed turn-1 choice — "fact" (a factual/evidence lookup:
+        converge immediately) vs "case" (a situation is being described: the caller may allow
+        a deeper structured intake before forcing convergence);
+      - `case_facts`: cumulative structured facts gathered so far ({category, text} — the
+        category vocabulary is supplied by the vertical prompt);
+      - `retrieval_terms`: the retrieval vocabulary used in the refined question (a display
+        artifact for the caller's UI)."""
+    register: Literal["fact", "case"] = "fact"
+    case_facts: list[dict] = []              # items: {category: str, text: str}
+    retrieval_terms: list[str] = []
+
+
 def _last_user(transcript: list[dict]) -> str:
     for t in reversed(transcript or []):
         if (t.get("role") or "") == "user" and (t.get("text") or "").strip():
@@ -51,10 +67,14 @@ def _last_user(transcript: list[dict]) -> str:
 async def run_triage_turn(
     *, llm: LLMClient, triage_prompt: str, transcript: list[dict],
     roster_summary: str = "", force_ready: bool = False, max_tokens: int = 700,
+    schema_v2: bool = False,
 ) -> TriageTurn:
     """Run ONE triage turn over the running transcript ([{role:"user"|"assistant", text}]) and return a
     validated TriageTurn. Fail-safe: any error → route the last user message straight to Quick Q&A so the
-    user is never stuck. `force_ready` (caller-enforced turn cap) coerces a route this turn."""
+    user is never stuck. `force_ready` (caller-enforced turn cap) coerces a route this turn.
+    `schema_v2` selects the TriageTurnV2 response schema (register/case_facts/retrieval_terms) — the
+    default (False) keeps every v1 call byte-identical."""
+    fmt: type[TriageTurn] = TriageTurnV2 if schema_v2 else TriageTurn
     msgs: list[dict] = []
     for t in (transcript or []):
         role = "assistant" if (t.get("role") == "assistant") else "user"
@@ -62,7 +82,7 @@ async def run_triage_turn(
         if text:
             msgs.append({"role": role, "content": text})
     if not msgs:
-        return TriageTurn(status="ask", message="What clinical question can I help you narrow down?")
+        return fmt(status="ask", message="What clinical question can I help you narrow down?")
     if msgs[-1]["role"] != "user":
         # the conversation must end on the user's turn for the model to respond to
         msgs.append({"role": "user", "content": "(continue)"})
@@ -75,13 +95,13 @@ async def run_triage_turn(
                      "refined_question and recommended_mode — do NOT ask another question.]"})
     try:
         comp = await llm.complete(
-            system=triage_prompt, messages=msgs, response_format=TriageTurn, max_tokens=max_tokens)
+            system=triage_prompt, messages=msgs, response_format=fmt, max_tokens=max_tokens)
         turn = comp.parsed
     except Exception as e:   # noqa: BLE001 — triage must never block the user
         _log.warning("triage turn failed: %r", e)
-        return TriageTurn(status="ready", recommended_mode="qa", refined_question=_last_user(transcript),
-                          understood_problem=_last_user(transcript),
-                          message="Let me search the evidence for that.", rationale="fallback")
+        return fmt(status="ready", recommended_mode="qa", refined_question=_last_user(transcript),
+                   understood_problem=_last_user(transcript),
+                   message="Let me search the evidence for that.", rationale="fallback")
     if force_ready:
         turn.status = "ready"
     if turn.status == "ready" and not (turn.refined_question or "").strip():

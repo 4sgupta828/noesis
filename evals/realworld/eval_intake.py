@@ -49,7 +49,9 @@ for p in ("apps", "packages/kernel", "packages/vertical_medical"):
 
 from pydantic import BaseModel, Field  # noqa: E402
 
-BACKSTOP_TURNS = 8       # harness safety cap; the real convergence cap is TRIAGE_MAX_ASK parity
+BACKSTOP_TURNS = 10      # harness safety cap; the real convergence cap is TRIAGE_MAX_ASK parity.
+#                          MUST exceed the v2 case cap (TRIAGE_MAX_ASK_CASE, default 8) so the
+#                          endpoint-parity force-ready fires before the harness cap truncates a case.
 
 
 # ---------------------------------------------------------------- env (run.py contract)
@@ -122,21 +124,28 @@ async def simulate_user(llm, persona: dict, transcript: list[dict]) -> str:
 # ---------------------------------------------------------------- the intake loop
 
 async def run_case(*, question: str, triage_fn, user_fn, max_ask: int,
+                   max_ask_case: int | None = None,
                    backstop: int = BACKSTOP_TURNS) -> dict:
     """Drive one full intake conversation: opening ask → triage turn → if "ask": simulated user
     answers → repeat → ready. `triage_fn(transcript, force_ready) -> dict(TriageTurn)`;
     `user_fn(transcript) -> str`. force_ready mirrors the /triage/step endpoint (assistant-turn
-    count >= TRIAGE_MAX_ASK); `backstop` is a pure safety cap on loop iterations."""
+    count >= the ask cap); `backstop` is a pure safety cap on loop iterations.
+    `max_ask_case` (v2 endpoint parity): the per-register backstop — the cap is `max_ask` only when
+    the LAST turn echoed register="fact", else `max_ask_case` (absent echo → case cap, exactly like
+    app.py's triage_ask_cap). None → v1 behavior (always `max_ask`)."""
     transcript: list[dict] = [{"role": "user", "text": question}]
     turns: list[dict] = []
     n_asks = 0
     backstop_hit = False
+    register = ""                          # last assistant turn's echoed register (v2)
     for _ in range(backstop):
-        force = n_asks >= max_ask          # endpoint parity: app.py counts assistant turns
+        cap = max_ask if (max_ask_case is None or register == "fact") else max_ask_case
+        force = n_asks >= cap              # endpoint parity: app.py counts assistant turns
         turn = await triage_fn(transcript, force)
         turns.append(turn)
         if (turn.get("status") or "ask") == "ready":
             break
+        register = str(turn.get("register") or register)
         n_asks += 1
         transcript.append({"role": "assistant", "text": (turn.get("message") or "").strip()})
         transcript.append({"role": "user", "text": await user_fn(transcript)})
@@ -310,6 +319,10 @@ async def _run(recs: list[dict], arm: str, slice_name: str) -> pathlib.Path:
     svc = appmod.build_default_service()
     max_ask = appmod.TRIAGE_MAX_ASK
     prompt, prompt_sha, arm_used = _select_prompt(arm)
+    # v2 endpoint parity: the TriageTurnV2 schema + the per-register ask backstop (fact keeps
+    # TRIAGE_MAX_ASK; case gets TRIAGE_MAX_ASK_CASE — see app.py triage_ask_cap).
+    schema_v2 = arm_used == "v2"
+    max_ask_case = appmod.TRIAGE_MAX_ASK_CASE if schema_v2 else None
     roster = ""
     if getattr(svc, "panel_specialists", None):
         roster = ", ".join(s.get("specialty", "") for s in svc.panel_roster())
@@ -317,9 +330,11 @@ async def _run(recs: list[dict], arm: str, slice_name: str) -> pathlib.Path:
 
     async def triage_fn(transcript: list[dict], force_ready: bool) -> dict:
         # The REAL machinery, in-process: exactly what svc.triage / POST /triage/step runs,
-        # with the arm-selected prompt in place of the manifest's.
+        # with the arm-selected prompt (and, for v2, the arm-selected schema) in place of the
+        # manifest's.
         turn = await run_triage_turn(llm=svc.llm, triage_prompt=prompt, transcript=transcript,
-                                     roster_summary=roster, force_ready=force_ready)
+                                     roster_summary=roster, force_ready=force_ready,
+                                     schema_v2=schema_v2)
         return turn.model_dump()
 
     cases: list[dict] = []
@@ -331,7 +346,7 @@ async def _run(recs: list[dict], arm: str, slice_name: str) -> pathlib.Path:
 
         try:
             res = await run_case(question=r["question"], triage_fn=triage_fn,
-                                 user_fn=user_fn, max_ask=max_ask)
+                                 user_fn=user_fn, max_ask=max_ask, max_ask_case=max_ask_case)
             s = structural_metrics(r, res)
             j = judged_metrics(await judge_case(svc.llm, r, res), r.get("gold") or {})
             cases.append({"id": r["id"], "question": r["question"], "persona": persona,
@@ -350,11 +365,12 @@ async def _run(recs: list[dict], arm: str, slice_name: str) -> pathlib.Path:
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     provenance = {
         "git_sha": sha, "arm_requested": arm, "arm_used": arm_used,
-        "triage_prompt_sha": prompt_sha,
+        "triage_prompt_sha": prompt_sha, "schema_v2": schema_v2,
         "judge_prompt_sha": hashlib.sha256(
             (_JUDGE_SYSTEM + _SIM_USER_SYSTEM).encode()).hexdigest()[:12],
         "model": os.environ.get("NOESIS_LLM_MODEL", "(default)"),
-        "triage_max_ask": max_ask, "backstop_turns": BACKSTOP_TURNS,
+        "triage_max_ask": max_ask, "triage_max_ask_case": max_ask_case,
+        "backstop_turns": BACKSTOP_TURNS,
         "slice": slice_name, "ran_at": stamp,
     }
     RUNS.mkdir(parents=True, exist_ok=True)
@@ -377,11 +393,13 @@ def main(argv: list[str] | None = None) -> None:
     recs = [json.loads(ln) for ln in sp.read_text().splitlines() if ln.strip()][:a.limit]
     n = len(recs)
     max_ask = int(os.environ.get("NOESIS_TRIAGE_MAX_ASK", "2"))
+    if a.arm == "v2":   # per-register backstop: case-register conversations may run to the case cap
+        max_ask = int(os.environ.get("NOESIS_TRIAGE_MAX_ASK_CASE", "8"))
     typical = n * ((max_ask + 1) * 2 + 1)
     worst = n * (BACKSTOP_TURNS * 2 + 1)
     print(f"PROJECTED SPEND: {n} cases; per case ≈ turns×2 small calls (triage + simulated "
           f"user) + 1 batched judge call → ~{typical} LLM calls typical "
-          f"(TRIAGE_MAX_ASK={max_ask}), {worst} worst-case (backstop {BACKSTOP_TURNS}).")
+          f"(ask cap {max_ask} for --arm {a.arm}), {worst} worst-case (backstop {BACKSTOP_TURNS}).")
     if not a.confirm_spend:
         raise SystemExit("refusing to run without --confirm-spend")
     _prod_env()

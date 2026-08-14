@@ -282,9 +282,29 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
     _slots = _contract_slots(contract)
     if _slots:
         from noesis_kernel.research.contract import match_entities
+
+        def _slot_hits(vc) -> list[str]:
+            """Entities (enumerative): exact containment — short closed names. AXES
+            (exploratory): long descriptive phrases that never appear verbatim in a claim,
+            so an axis counts as covered when ≥2 of its significant (≥4-char) words appear
+            in the claim text+title (≥1 when the axis has a single significant word).
+            Structural word membership, not semantic judgment (Rule 18) — first prod run
+            matched ZERO axes by containment and reported four false gaps."""
+            if contract.mode == "enumerative":
+                return match_entities(_slots, vc.text, vc.document_title)
+            hay = f"{vc.text}\n{vc.document_title or ''}".lower()
+            hits = []
+            for s in _slots:
+                words = [w for w in "".join(c if c.isalnum() else " " for c in s.lower()).split()
+                         if len(w) >= 4]
+                need = 2 if len(words) >= 2 else 1
+                if words and sum(1 for w in words if w in hay) >= need:
+                    hits.append(s)
+            return hits
+
         _grid = {s: 0 for s in _slots}
         for _names, vc in pooled:
-            for s in match_entities(_slots, vc.text, vc.document_title):
+            for s in _slot_hits(vc):
                 _grid[s] += 1
         _covered = sum(1 for n in _grid.values() if n > 0)
         for s in _slots:

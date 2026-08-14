@@ -1,0 +1,1078 @@
+{
+  "provenance": {
+    "git_sha": "130b5b9",
+    "run_a": "run-slice-stage4-ab-30-2026-08-14-env-20260814T061658Z.jsonl",
+    "run_b": "run-slice-stage4-ab-30-2026-08-14-env-20260814T070258Z.jsonl",
+    "arm_a_env": {
+      "NOESIS_EVIDENCE_IDENTITY": "1",
+      "NOESIS_CLAIM_CONGRUENCE": "1",
+      "NOESIS_QUESTION_CONTRACT": "steer",
+      "NOESIS_ANSWER_MODE_ROUTING": ""
+    },
+    "arm_b_env": {
+      "NOESIS_EVIDENCE_IDENTITY": "1",
+      "NOESIS_CLAIM_CONGRUENCE": "1",
+      "NOESIS_QUESTION_CONTRACT": "steer",
+      "NOESIS_ANSWER_MODE_ROUTING": "1"
+    },
+    "seed": 20260814,
+    "judge_model": "(default anthropic)",
+    "judge_prompt_sha": "828d53235e9a",
+    "ran_at": "2026-08-14T07:03:44.754338+00:00"
+  },
+  "summary": {
+    "per_stratum": {
+      "low": {
+        "n": 8,
+        "judged": 8,
+        "wins_b": 2,
+        "wins_a": 2,
+        "ties": 4,
+        "dim_delta_b_minus_a": {
+          "format_fit": -0.062,
+          "coverage": -0.062,
+          "coherence": 0.125,
+          "honesty": 0.125
+        },
+        "routing_b": {
+          "true": 0,
+          "false": 0,
+          "missed": 0,
+          "precision": null,
+          "recall": null
+        },
+        "arm_a_routed_anomaly": 0,
+        "entity_coverage": {
+          "a": null,
+          "b": null,
+          "delta": null
+        },
+        "citation_violations": {
+          "a": 0,
+          "b": 0
+        },
+        "declared_gaps": {
+          "a": 1,
+          "b": 1
+        }
+      },
+      "medium": {
+        "n": 10,
+        "judged": 10,
+        "wins_b": 4,
+        "wins_a": 0,
+        "ties": 6,
+        "dim_delta_b_minus_a": {
+          "format_fit": 0.75,
+          "coverage": 0.55,
+          "coherence": 0.15,
+          "honesty": 0.0
+        },
+        "routing_b": {
+          "true": 8,
+          "false": 0,
+          "missed": 0,
+          "precision": 1.0,
+          "recall": 1.0
+        },
+        "arm_a_routed_anomaly": 0,
+        "entity_coverage": {
+          "a": 0.975,
+          "b": 0.93,
+          "delta": -0.045
+        },
+        "citation_violations": {
+          "a": 210,
+          "b": 207
+        },
+        "declared_gaps": {
+          "a": 35,
+          "b": 34
+        }
+      },
+      "high": {
+        "n": 2,
+        "judged": 2,
+        "wins_b": 0,
+        "wins_a": 1,
+        "ties": 1,
+        "dim_delta_b_minus_a": {
+          "format_fit": 0.0,
+          "coverage": -0.75,
+          "coherence": 0.25,
+          "honesty": -0.5
+        },
+        "routing_b": {
+          "true": 2,
+          "false": 0,
+          "missed": 0,
+          "precision": 1.0,
+          "recall": 1.0
+        },
+        "arm_a_routed_anomaly": 0,
+        "entity_coverage": {
+          "a": 0.8,
+          "b": 0.8,
+          "delta": 0.0
+        },
+        "citation_violations": {
+          "a": 16,
+          "b": 15
+        },
+        "declared_gaps": {
+          "a": 10,
+          "b": 9
+        }
+      }
+    },
+    "overall": {
+      "n": 20,
+      "judged": 20,
+      "wins_b": 6,
+      "wins_a": 3,
+      "ties": 11,
+      "dim_delta_b_minus_a": {
+        "format_fit": 0.35,
+        "coverage": 0.175,
+        "coherence": 0.15,
+        "honesty": 0.0
+      },
+      "routing_b": {
+        "true": 10,
+        "false": 0,
+        "missed": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "arm_a_routed_anomaly": 0,
+      "entity_coverage": {
+        "a": 0.946,
+        "b": 0.908,
+        "delta": -0.038
+      },
+      "citation_violations": {
+        "a": 226,
+        "b": 222
+      },
+      "declared_gaps": {
+        "a": 46,
+        "b": 44
+      },
+      "sign_test_p": 0.5078125
+    },
+    "healthy_rows": {
+      "a": 20,
+      "b": 20,
+      "paired": 20
+    },
+    "judge_errors": []
+  },
+  "structural": {
+    "A": {
+      "s4-med-003": {
+        "routed": false,
+        "covered_entities": 5,
+        "routing": "missed_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 18,
+        "declared_gaps": 3
+      },
+      "s4-med-004": {
+        "routed": false,
+        "covered_entities": 1,
+        "routing": "ok",
+        "entity_coverage": 1.0,
+        "citation_violations": 23,
+        "declared_gaps": 6
+      },
+      "s4-med-005": {
+        "routed": false,
+        "covered_entities": 6,
+        "routing": "missed_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 5,
+        "declared_gaps": 2
+      },
+      "s4-med-006": {
+        "routed": false,
+        "covered_entities": 3,
+        "routing": "missed_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 19,
+        "declared_gaps": 3
+      },
+      "s4-med-007": {
+        "routed": false,
+        "covered_entities": 3,
+        "routing": "missed_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 27,
+        "declared_gaps": 3
+      },
+      "s4-med-008": {
+        "routed": false,
+        "covered_entities": 4,
+        "routing": "missed_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 33,
+        "declared_gaps": 3
+      },
+      "s4-med-009": {
+        "routed": false,
+        "covered_entities": 3,
+        "routing": "missed_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 20,
+        "declared_gaps": 5
+      },
+      "s4-med-010": {
+        "routed": false,
+        "covered_entities": 7,
+        "routing": "missed_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 24,
+        "declared_gaps": 0
+      },
+      "s4-high-001": {
+        "routed": false,
+        "covered_entities": 4,
+        "routing": "missed_route",
+        "entity_coverage": 0.8,
+        "citation_violations": 13,
+        "declared_gaps": 5
+      },
+      "s4-high-002": {
+        "routed": false,
+        "covered_entities": 3,
+        "routing": "missed_route",
+        "entity_coverage": 0.8,
+        "citation_violations": 3,
+        "declared_gaps": 5
+      },
+      "s4-low-003": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 1
+      },
+      "s4-low-004": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-005": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-006": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-007": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-008": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-med-001": {
+        "routed": false,
+        "covered_entities": 1,
+        "routing": "ok",
+        "entity_coverage": 1.0,
+        "citation_violations": 19,
+        "declared_gaps": 7
+      },
+      "s4-med-002": {
+        "routed": false,
+        "covered_entities": 5,
+        "routing": "missed_route",
+        "entity_coverage": 0.75,
+        "citation_violations": 22,
+        "declared_gaps": 3
+      },
+      "s4-low-001": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-002": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      }
+    },
+    "B": {
+      "s4-med-003": {
+        "routed": true,
+        "covered_entities": 2,
+        "routing": "true_route",
+        "entity_coverage": 0.75,
+        "citation_violations": 13,
+        "declared_gaps": 5
+      },
+      "s4-med-004": {
+        "routed": false,
+        "covered_entities": 1,
+        "routing": "ok",
+        "entity_coverage": 1.0,
+        "citation_violations": 12,
+        "declared_gaps": 6
+      },
+      "s4-med-005": {
+        "routed": true,
+        "covered_entities": 6,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 6,
+        "declared_gaps": 2
+      },
+      "s4-med-006": {
+        "routed": true,
+        "covered_entities": 3,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 26,
+        "declared_gaps": 3
+      },
+      "s4-med-007": {
+        "routed": true,
+        "covered_entities": 4,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 24,
+        "declared_gaps": 2
+      },
+      "s4-med-008": {
+        "routed": true,
+        "covered_entities": 6,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 29,
+        "declared_gaps": 1
+      },
+      "s4-med-009": {
+        "routed": true,
+        "covered_entities": 4,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 34,
+        "declared_gaps": 4
+      },
+      "s4-med-010": {
+        "routed": true,
+        "covered_entities": 7,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 22,
+        "declared_gaps": 0
+      },
+      "s4-high-001": {
+        "routed": true,
+        "covered_entities": 3,
+        "routing": "true_route",
+        "entity_coverage": 0.6,
+        "citation_violations": 9,
+        "declared_gaps": 6
+      },
+      "s4-high-002": {
+        "routed": true,
+        "covered_entities": 5,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 6,
+        "declared_gaps": 3
+      },
+      "s4-low-003": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 1
+      },
+      "s4-low-004": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-005": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-006": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-007": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-008": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-med-001": {
+        "routed": false,
+        "covered_entities": 1,
+        "routing": "ok",
+        "entity_coverage": 0.8,
+        "citation_violations": 21,
+        "declared_gaps": 7
+      },
+      "s4-med-002": {
+        "routed": true,
+        "covered_entities": 4,
+        "routing": "true_route",
+        "entity_coverage": 0.75,
+        "citation_violations": 20,
+        "declared_gaps": 4
+      },
+      "s4-low-001": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-002": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      }
+    }
+  },
+  "judgments": [
+    {
+      "id": "s4-low-001",
+      "stratum": "low",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "first",
+      "better_call2": "second",
+      "winner": "A",
+      "dims": {
+        "A": {
+          "format_fit": 4.0,
+          "coverage": 4.5,
+          "coherence": 4.0,
+          "honesty": 4.0
+        },
+        "B": {
+          "format_fit": 3.5,
+          "coverage": 3.0,
+          "coherence": 4.0,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both are well-organized, labeling-grounded answers. First adds mechanism of action and hypoglycemia/hyperinsulinemia safety comparison, giving richer coverage; second is slightly thinner, omitting mechanism details present in its own retrieval scope.",
+        "Both correctly answer the simple factual question without unneeded scaffolding, but second adds mechanism, comparative safety (no hypoglycemia/hyperinsulinemia), and richer detail, giving a more complete, useful answer while remaining equally well-ci"
+      ]
+    },
+    {
+      "id": "s4-high-001",
+      "stratum": "high",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "first",
+      "better_call2": "second",
+      "winner": "A",
+      "dims": {
+        "A": {
+          "format_fit": 4.5,
+          "coverage": 4.0,
+          "coherence": 4.0,
+          "honesty": 4.0
+        },
+        "B": {
+          "format_fit": 4.0,
+          "coverage": 3.0,
+          "coherence": 4.0,
+          "honesty": 3.0
+        }
+      },
+      "rationales": [
+        "First explicitly covers GI-bleeding mitigation (PPI/KDIGO) and timing, both required by the prompt, while flagging gaps honestly. Second admits it omits GI mitigation strategies entirely, a direct question requirement, weakening coverage and honesty ",
+        "Second explicitly quantifies absolute risk trade-offs (HR 0.44 vs 1.48, event rates per 100 pt-yrs), addresses GI mitigation (PPI/KDIGO) which first entirely omits, and organizes by the question's own subheadings. First gives good dosing detail but s"
+      ]
+    },
+    {
+      "id": "s4-low-002",
+      "stratum": "low",
+      "order_call1": [
+        "B",
+        "A"
+      ],
+      "better_call1": "second",
+      "better_call2": "first",
+      "winner": "A",
+      "dims": {
+        "A": {
+          "format_fit": 5.0,
+          "coverage": 5.0,
+          "coherence": 4.5,
+          "honesty": 4.5
+        },
+        "B": {
+          "format_fit": 4.0,
+          "coverage": 4.0,
+          "coherence": 4.0,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both give the correct 4.5h answer with good structure. Second adds trial-level evidence (NINDS, ECASS III, pooled analysis), the 4.5-24h extended window with sICH risk data, and clearer evidence grading, giving stronger coverage, honesty, and coheren",
+        "Both are well-organized and grounded. First adds trial-level evidence (NINDS, ECASS III, pooled analysis, extended-window meta-analysis with sICH risk data), giving richer evidentiary depth and quality grading. Second is guideline-heavy but lacks any"
+      ]
+    },
+    {
+      "id": "s4-high-002",
+      "stratum": "high",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "second",
+      "better_call2": "second",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "format_fit": 4.0,
+          "coverage": 4.5,
+          "coherence": 4.0,
+          "honesty": 4.5
+        },
+        "B": {
+          "format_fit": 4.5,
+          "coverage": 4.0,
+          "coherence": 4.5,
+          "honesty": 4.5
+        }
+      },
+      "rationales": [
+        "Both cover the required decisions well with citations and caveats. Second is better organized around each explicit decision point (diuresis, RAAS/MRA, iron, bleeding), more clearly flags extrapolation/uncertainty, and ends with an honest \"not address",
+        "Both are well-organized and cite thresholds carefully. Second adds HFpEF-specific iron trials (FAIR-HFpEF, FAIR-HF2) improving honesty/coverage on the extrapolation question, and better distinguishes functional vs structural creatinine rise. Minor fo"
+      ]
+    },
+    {
+      "id": "s4-low-004",
+      "stratum": "low",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "second",
+      "better_call2": "second",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "format_fit": 4.0,
+          "coverage": 4.5,
+          "coherence": 4.5,
+          "honesty": 4.5
+        },
+        "B": {
+          "format_fit": 4.0,
+          "coverage": 4.5,
+          "coherence": 4.5,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both accurately report the 20% MACE reduction with appropriate caveats on secondary endpoints. Second adds subgroup consistency data (age, BP) and an explicit safety-gap note near the top, giving slightly fuller coverage and tighter organization with",
+        "Both cover the 20% MACE reduction with proper caveats on secondary endpoints. Second adds nonfatal MI/stroke breakdowns and flags that stroke's CI crosses null adjacent to the claim, giving richer, more honest coverage without sacrificing coherence."
+      ]
+    },
+    {
+      "id": "s4-low-005",
+      "stratum": "low",
+      "order_call1": [
+        "B",
+        "A"
+      ],
+      "better_call1": "second",
+      "better_call2": "second",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "format_fit": 4.0,
+          "coverage": 4.5,
+          "coherence": 4.0,
+          "honesty": 3.5
+        },
+        "B": {
+          "format_fit": 4.0,
+          "coverage": 4.5,
+          "coherence": 4.5,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both give clear bottom-line answers with well-organized tables comparing guideline bodies. Second is slightly more complete, noting ACG omission is corrected, includes timeline of shift (2018/2021), and explicitly flags the USPSTF A vs B grading nuan",
+        "Both give clear comparative tables across guidelines. Second is more accurate: USPSTF actually recommends 45-75 as one 2021 update (not split A/B as first implies), and second correctly notes ACG's conditional 45 vs strong 50, adding nuance first omi"
+      ]
+    },
+    {
+      "id": "s4-low-003",
+      "stratum": "low",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "second",
+      "better_call2": "first",
+      "winner": "B",
+      "dims": {
+        "A": {
+          "format_fit": 4.5,
+          "coverage": 3.5,
+          "coherence": 4.5,
+          "honesty": 3.5
+        },
+        "B": {
+          "format_fit": 4.5,
+          "coverage": 5.0,
+          "coherence": 4.5,
+          "honesty": 5.0
+        }
+      },
+      "rationales": [
+        "Both correctly conclude metformin monotherapy isn't indicated for T1D, but first misreports the adolescent LDL finding as significant weight-loss benefit without noting glycemic non-improvement, while second cites specific HbA1c trial data showing no",
+        "Both correctly conclude no monotherapy evidence exists and note adjunct-only trials. First gives more granular HbA1c, weight, insulin-dose, and hypoglycemia data with specific stats, offering fuller coverage. Second is solid but slightly thinner on e"
+      ]
+    },
+    {
+      "id": "s4-low-006",
+      "stratum": "low",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "tie",
+      "better_call2": "second",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "format_fit": 4.0,
+          "coverage": 4.5,
+          "coherence": 4.0,
+          "honesty": 4.0
+        },
+        "B": {
+          "format_fit": 4.0,
+          "coverage": 4.5,
+          "coherence": 4.0,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both nearly identical in structure and content. Second adds epidemiology, Italian guideline consensus note, and slightly more explicit safety framing, giving marginally better coverage. First includes extra detail on natural thyroid extract alternati",
+        "Both are well-organized and honestly caveated. Second adds NICE guidance, more detail on persistent-symptom subgroup and alternative therapies (with caveats on evidence/licensing), and slightly richer population/etiology detail, giving it an edge in "
+      ]
+    },
+    {
+      "id": "s4-low-008",
+      "stratum": "low",
+      "order_call1": [
+        "B",
+        "A"
+      ],
+      "better_call1": "first",
+      "better_call2": "second",
+      "winner": "B",
+      "dims": {
+        "A": {
+          "format_fit": 4.0,
+          "coverage": 3.5,
+          "coherence": 4.0,
+          "honesty": 4.0
+        },
+        "B": {
+          "format_fit": 5.0,
+          "coverage": 4.5,
+          "coherence": 4.5,
+          "honesty": 4.5
+        }
+      },
+      "rationales": [
+        "Both are thorough, well-sourced, and structurally similar. First includes paroxetine explicitly and a clearer washout comparison table per drug, plus dedicated highlight of fluoxetine's longer washout; second omits paroxetine and has slightly less or",
+        "Both are well-cited and structured similarly, but second covers more SSRIs (adds paroxetine), uses a clear washout comparison table aiding actionability, and better highlights fluoxetine's distinct 5-week washout adjacent to the claim, improving form"
+      ]
+    },
+    {
+      "id": "s4-low-007",
+      "stratum": "low",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "tie",
+      "better_call2": "tie",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "format_fit": 4.5,
+          "coverage": 4.5,
+          "coherence": 4.0,
+          "honesty": 4.5
+        },
+        "B": {
+          "format_fit": 4.5,
+          "coverage": 4.0,
+          "coherence": 4.5,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both well-structured, covering labels, safety, population, evidence quality, and gaps with proper caveats adjacent to claims. Second includes more statins (rosuvastatin, fluvastatin) and adverse fetal outcome data plus reassuring cohort data, slightl",
+        "Both well-structured with tables and caveats adjacent to claims. Second covers more statins (simvastatin, pitavastatin) and better balances contraindication vs. emerging counter-evidence (FDA reconsideration), slightly improving honesty and coverage "
+      ]
+    },
+    {
+      "id": "s4-med-001",
+      "stratum": "medium",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "second",
+      "better_call2": "first",
+      "winner": "B",
+      "dims": {
+        "A": {
+          "format_fit": 4.0,
+          "coverage": 4.0,
+          "coherence": 4.0,
+          "honesty": 4.0
+        },
+        "B": {
+          "format_fit": 4.5,
+          "coverage": 5.0,
+          "coherence": 4.0,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both well-organized with comparable structure and honest caveats. Second adds network meta-analysis quantifying combination regimens and quintuple therapy with HRs, a dedicated safety section (even if noting absence), and clearer guideline citations,",
+        "Both well-organized with citations. First offers more quantitative NMA data (quad/quintuple therapy HRs), clearer synthesis of the four-pillar consensus, and explicit \"not addressed\" safety gap. Second is solid but slightly less integrated on compara"
+      ]
+    },
+    {
+      "id": "s4-med-002",
+      "stratum": "medium",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "second",
+      "better_call2": "first",
+      "winner": "B",
+      "dims": {
+        "A": {
+          "format_fit": 3.0,
+          "coverage": 4.0,
+          "coherence": 4.0,
+          "honesty": 3.5
+        },
+        "B": {
+          "format_fit": 5.0,
+          "coverage": 5.0,
+          "coherence": 4.5,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Question asks about multiple therapies, demanding per-option comparison. Second provides a clear agent-by-agent table with dosing and caveats adjacent, better matching the comparative nature of the question, while first is a good prose synthesis but ",
+        "First provides a clear comparison table across therapies (antiplatelets, statins, cilostazol, semaglutide, exercise), well-suited to a multi-option question. Second is competent but lacks the table, is prose-heavy, and asserts a \"40% MALE reduction w"
+      ]
+    },
+    {
+      "id": "s4-med-003",
+      "stratum": "medium",
+      "order_call1": [
+        "B",
+        "A"
+      ],
+      "better_call1": "first",
+      "better_call2": "second",
+      "winner": "B",
+      "dims": {
+        "A": {
+          "format_fit": 3.5,
+          "coverage": 4.0,
+          "coherence": 4.0,
+          "honesty": 4.0
+        },
+        "B": {
+          "format_fit": 5.0,
+          "coverage": 5.0,
+          "coherence": 4.5,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both are well-organized, cited comparisons with appropriate caveats. First includes a clear comparison table and covers safety/adverse effects (semaglutide GI risks, SGLT2i safety) more substantively, while second explicitly admits safety data are la",
+        "Both are thorough with citations and caveats, but second adds a clear per-class comparison table matching the question's comparative demand, plus fuller safety/adverse-effect data (GI, gallbladder, discontinuation) that first admits is missing."
+      ]
+    },
+    {
+      "id": "s4-med-004",
+      "stratum": "medium",
+      "order_call1": [
+        "B",
+        "A"
+      ],
+      "better_call1": "second",
+      "better_call2": "tie",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "format_fit": 4.5,
+          "coverage": 4.5,
+          "coherence": 4.0,
+          "honesty": 4.5
+        },
+        "B": {
+          "format_fit": 4.0,
+          "coverage": 4.0,
+          "coherence": 4.0,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both well-organized with tables and citations. Second gives more granular second-line comparisons (SGLT2i vs GLP-1RA nuances, combination trial data, explicit \"no consensus\" caveat, and honest admission of unestablished long-term safety), yielding be",
+        "Both well-organized with tables, honest caveats, and clear structure. First has slightly stronger CV outcome data (meta-analysis n=90,413) and more explicit lack-of-consensus framing; second covers broader guideline geography and mechanism detail but"
+      ]
+    },
+    {
+      "id": "s4-med-006",
+      "stratum": "medium",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "second",
+      "better_call2": "second",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "format_fit": 4.5,
+          "coverage": 4.5,
+          "coherence": 4.0,
+          "honesty": 4.0
+        },
+        "B": {
+          "format_fit": 4.5,
+          "coverage": 4.5,
+          "coherence": 4.0,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both cover the three modalities well with efficacy/safety/population breakdowns. Second includes an explicit per-option comparison table (better format fit for a multi-option question), adds pediatric dosing detail and pregnancy-switch guidance, slig",
+        "Both well-organized with per-option comparison and caveats placed adjacently. Second provides concrete comparative remission/relapse figures (ATD, RAI, surgery) in a clear table, giving more actionable coverage than first's vaguer \"no modality superi"
+      ]
+    },
+    {
+      "id": "s4-med-005",
+      "stratum": "medium",
+      "order_call1": [
+        "B",
+        "A"
+      ],
+      "better_call1": "second",
+      "better_call2": "second",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "format_fit": 4.0,
+          "coverage": 4.0,
+          "coherence": 3.5,
+          "honesty": 3.5
+        },
+        "B": {
+          "format_fit": 4.5,
+          "coverage": 4.5,
+          "coherence": 4.0,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both are thorough, well-organized comparisons with citations and honest caveats about protocol-only trials. Second includes IL-23p19 class breadth (guselkumab, mirikizumab) and corticosteroid detail, slightly improving coverage; first has minor redun",
+        "Both use per-agent tables, but second integrates safety caveats adjacent to efficacy claims, clearly separates protocol-only vs results-reported evidence, and includes vedolizumab/ustekinumab safety data first omits. First has messier table entries ("
+      ]
+    },
+    {
+      "id": "s4-med-007",
+      "stratum": "medium",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "second",
+      "better_call2": "tie",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "format_fit": 4.5,
+          "coverage": 4.0,
+          "coherence": 4.0,
+          "honesty": 4.5
+        },
+        "B": {
+          "format_fit": 5.0,
+          "coverage": 4.5,
+          "coherence": 4.0,
+          "honesty": 4.5
+        }
+      },
+      "rationales": [
+        "Both use comparable structure and citations, but second integrates specific atovaquone-vs-dapsone RCT numbers, nocardiosis rechallenge data, and broader coverage caveat, giving more grounded, complete per-agent detail with safety adjacent to claims.",
+        "Both use well-organized tables covering same agents/evidence with citations. Second is slightly more honest, explicitly flagging that several \"RCTs\" are actually protocol-level ClinicalTrials.gov entries without posted results, avoiding overclaiming "
+      ]
+    },
+    {
+      "id": "s4-med-009",
+      "stratum": "medium",
+      "order_call1": [
+        "B",
+        "A"
+      ],
+      "better_call1": "first",
+      "better_call2": "second",
+      "winner": "B",
+      "dims": {
+        "A": {
+          "format_fit": 4.0,
+          "coverage": 4.0,
+          "coherence": 4.0,
+          "honesty": 4.5
+        },
+        "B": {
+          "format_fit": 5.0,
+          "coverage": 5.0,
+          "coherence": 4.5,
+          "honesty": 4.5
+        }
+      },
+      "rationales": [
+        "Both are well-sourced, honest, and organized. First offers a fuller per-option table (adds Aquablation, iTIND, PAE, TUMT, Optilume) with adjacent caveats, giving more comprehensive coverage and comparison format than second, which omits Aquablation/P",
+        "Both are well-organized with citations and appropriate caveats. Second provides a fuller per-option comparison table (adding Aquablation, PAE, TUMT, iTIND, Optilume) and clearer efficacy/safety linkage per option, better matching the multi-option com"
+      ]
+    },
+    {
+      "id": "s4-med-010",
+      "stratum": "medium",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "second",
+      "better_call2": "tie",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "format_fit": 3.5,
+          "coverage": 4.0,
+          "coherence": 4.5,
+          "honesty": 4.0
+        },
+        "B": {
+          "format_fit": 5.0,
+          "coverage": 5.0,
+          "coherence": 4.5,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "The question involves comparing multiple drug classes/agents, which the second answer addresses directly with a per-agent comparison table showing status and cautions adjacent to each other. The first answer uses prose only, requiring more effort to ",
+        "First provides a fuller per-agent comparison table covering more agents (e.g., chlorpromazine, olanzapine detail) with citations; second is more concise, well-organized, and integrates benzodiazepine caveat earlier. Both cover guidelines, NMA, and la"
+      ]
+    },
+    {
+      "id": "s4-med-008",
+      "stratum": "medium",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "tie",
+      "better_call2": "second",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "format_fit": 4.0,
+          "coverage": 4.5,
+          "coherence": 5.0,
+          "honesty": 5.0
+        },
+        "B": {
+          "format_fit": 4.5,
+          "coverage": 4.5,
+          "coherence": 4.5,
+          "honesty": 4.5
+        }
+      },
+      "rationales": [
+        "Both are thorough, well-cited, and honestly flag non-dengue-specific evidence. Second uses a clearer per-agent comparison table matching the question's implicit \"which drugs\" comparison structure, plus adds mefenamic acid coverage, giving it a slight",
+        "Both cover paracetamol preference and NSAID/aspirin avoidance with guideline citations. Second is more coherent, tying safety caveats directly to claims (e.g., platelet/bleeding data placed adjacent to preference rationale) and more clearly flags non"
+      ]
+    }
+  ]
+}

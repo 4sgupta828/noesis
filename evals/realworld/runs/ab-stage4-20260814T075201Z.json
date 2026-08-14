@@ -1,0 +1,905 @@
+{
+  "provenance": {
+    "git_sha": "130b5b9",
+    "run_a": "run-slice-stage4-ab-30-2026-08-14-env-20260814T073334Z.jsonl",
+    "run_b": "run-slice-stage4-ab-30-2026-08-14-env-20260814T075155Z.jsonl",
+    "arm_a_env": {
+      "NOESIS_EVIDENCE_IDENTITY": "1",
+      "NOESIS_CLAIM_CONGRUENCE": "1",
+      "NOESIS_QUESTION_CONTRACT": "steer",
+      "NOESIS_ANSWER_MODE_ROUTING": ""
+    },
+    "arm_b_env": {
+      "NOESIS_EVIDENCE_IDENTITY": "1",
+      "NOESIS_CLAIM_CONGRUENCE": "1",
+      "NOESIS_QUESTION_CONTRACT": "steer",
+      "NOESIS_ANSWER_MODE_ROUTING": "1"
+    },
+    "seed": 20260814,
+    "judge_model": "(default anthropic)",
+    "judge_prompt_sha": "828d53235e9a",
+    "ran_at": "2026-08-14T07:52:01.754100+00:00"
+  },
+  "summary": {
+    "per_stratum": {
+      "low": {
+        "n": 8,
+        "judged": 0,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 0,
+        "dim_delta_b_minus_a": {
+          "format_fit": null,
+          "coverage": null,
+          "coherence": null,
+          "honesty": null
+        },
+        "routing_b": {
+          "true": 0,
+          "false": 0,
+          "missed": 0,
+          "precision": null,
+          "recall": null
+        },
+        "arm_a_routed_anomaly": 0,
+        "entity_coverage": {
+          "a": null,
+          "b": null,
+          "delta": null
+        },
+        "citation_violations": {
+          "a": 0,
+          "b": 0
+        },
+        "declared_gaps": {
+          "a": 1,
+          "b": 1
+        }
+      },
+      "medium": {
+        "n": 10,
+        "judged": 0,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 0,
+        "dim_delta_b_minus_a": {
+          "format_fit": null,
+          "coverage": null,
+          "coherence": null,
+          "honesty": null
+        },
+        "routing_b": {
+          "true": 8,
+          "false": 0,
+          "missed": 0,
+          "precision": 1.0,
+          "recall": 1.0
+        },
+        "arm_a_routed_anomaly": 0,
+        "entity_coverage": {
+          "a": 0.975,
+          "b": 0.93,
+          "delta": -0.045
+        },
+        "citation_violations": {
+          "a": 210,
+          "b": 207
+        },
+        "declared_gaps": {
+          "a": 35,
+          "b": 34
+        }
+      },
+      "high": {
+        "n": 9,
+        "judged": 0,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 0,
+        "dim_delta_b_minus_a": {
+          "format_fit": null,
+          "coverage": null,
+          "coherence": null,
+          "honesty": null
+        },
+        "routing_b": {
+          "true": 4,
+          "false": 0,
+          "missed": 0,
+          "precision": 1.0,
+          "recall": 1.0
+        },
+        "arm_a_routed_anomaly": 0,
+        "entity_coverage": {
+          "a": 0.881,
+          "b": 0.743,
+          "delta": -0.138
+        },
+        "citation_violations": {
+          "a": 61,
+          "b": 73
+        },
+        "declared_gaps": {
+          "a": 18,
+          "b": 16
+        }
+      }
+    },
+    "overall": {
+      "n": 27,
+      "judged": 0,
+      "wins_b": 0,
+      "wins_a": 0,
+      "ties": 0,
+      "dim_delta_b_minus_a": {
+        "format_fit": null,
+        "coverage": null,
+        "coherence": null,
+        "honesty": null
+      },
+      "routing_b": {
+        "true": 12,
+        "false": 0,
+        "missed": 0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "arm_a_routed_anomaly": 0,
+      "entity_coverage": {
+        "a": 0.931,
+        "b": 0.841,
+        "delta": -0.09
+      },
+      "citation_violations": {
+        "a": 271,
+        "b": 280
+      },
+      "declared_gaps": {
+        "a": 54,
+        "b": 51
+      },
+      "sign_test_p": 1.0
+    },
+    "healthy_rows": {
+      "a": 30,
+      "b": 27,
+      "paired": 27
+    },
+    "judge_errors": [
+      {
+        "id": "s4-high-003",
+        "stratum": "high",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-high-002",
+        "stratum": "high",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-high-001",
+        "stratum": "high",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-high-004",
+        "stratum": "high",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-high-007",
+        "stratum": "high",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-high-006",
+        "stratum": "high",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-high-005",
+        "stratum": "high",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-high-008",
+        "stratum": "high",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-high-009",
+        "stratum": "high",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-low-001",
+        "stratum": "low",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-low-002",
+        "stratum": "low",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-low-003",
+        "stratum": "low",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-low-004",
+        "stratum": "low",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-low-005",
+        "stratum": "low",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-low-006",
+        "stratum": "low",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-low-007",
+        "stratum": "low",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-med-001",
+        "stratum": "medium",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-low-008",
+        "stratum": "low",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-med-002",
+        "stratum": "medium",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-med-003",
+        "stratum": "medium",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-med-004",
+        "stratum": "medium",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-med-005",
+        "stratum": "medium",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-med-006",
+        "stratum": "medium",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-med-007",
+        "stratum": "medium",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-med-009",
+        "stratum": "medium",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-med-008",
+        "stratum": "medium",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "s4-med-010",
+        "stratum": "medium",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      }
+    ]
+  },
+  "structural": {
+    "A": {
+      "s4-high-003": {
+        "routed": false,
+        "covered_entities": 1,
+        "routing": "ok",
+        "entity_coverage": 1.0,
+        "citation_violations": 0,
+        "declared_gaps": 5
+      },
+      "s4-high-004": {
+        "routed": false,
+        "covered_entities": 5,
+        "routing": "missed_route",
+        "entity_coverage": 0.6666666666666666,
+        "citation_violations": 13,
+        "declared_gaps": 3
+      },
+      "s4-high-005": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": 1.0,
+        "citation_violations": 3,
+        "declared_gaps": 0
+      },
+      "s4-high-006": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": 1.0,
+        "citation_violations": 6,
+        "declared_gaps": 0
+      },
+      "s4-high-007": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": 1.0,
+        "citation_violations": 1,
+        "declared_gaps": 0
+      },
+      "s4-high-008": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": 0.6666666666666666,
+        "citation_violations": 6,
+        "declared_gaps": 0
+      },
+      "s4-high-009": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": 1.0,
+        "citation_violations": 16,
+        "declared_gaps": 0
+      },
+      "s4-high-010": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": 0.3333333333333333,
+        "citation_violations": 2,
+        "declared_gaps": 1
+      },
+      "s4-high-011": {
+        "routed": false,
+        "covered_entities": 3,
+        "routing": "missed_route",
+        "entity_coverage": 0.8,
+        "citation_violations": 17,
+        "declared_gaps": 5
+      },
+      "s4-high-012": {
+        "routed": false,
+        "covered_entities": 3,
+        "routing": "missed_route",
+        "entity_coverage": 0.75,
+        "citation_violations": 10,
+        "declared_gaps": 5
+      },
+      "s4-med-003": {
+        "routed": false,
+        "covered_entities": 5,
+        "routing": "missed_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 18,
+        "declared_gaps": 3
+      },
+      "s4-med-004": {
+        "routed": false,
+        "covered_entities": 1,
+        "routing": "ok",
+        "entity_coverage": 1.0,
+        "citation_violations": 23,
+        "declared_gaps": 6
+      },
+      "s4-med-005": {
+        "routed": false,
+        "covered_entities": 6,
+        "routing": "missed_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 5,
+        "declared_gaps": 2
+      },
+      "s4-med-006": {
+        "routed": false,
+        "covered_entities": 3,
+        "routing": "missed_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 19,
+        "declared_gaps": 3
+      },
+      "s4-med-007": {
+        "routed": false,
+        "covered_entities": 3,
+        "routing": "missed_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 27,
+        "declared_gaps": 3
+      },
+      "s4-med-008": {
+        "routed": false,
+        "covered_entities": 4,
+        "routing": "missed_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 33,
+        "declared_gaps": 3
+      },
+      "s4-med-009": {
+        "routed": false,
+        "covered_entities": 3,
+        "routing": "missed_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 20,
+        "declared_gaps": 5
+      },
+      "s4-med-010": {
+        "routed": false,
+        "covered_entities": 7,
+        "routing": "missed_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 24,
+        "declared_gaps": 0
+      },
+      "s4-high-001": {
+        "routed": false,
+        "covered_entities": 4,
+        "routing": "missed_route",
+        "entity_coverage": 0.8,
+        "citation_violations": 13,
+        "declared_gaps": 5
+      },
+      "s4-high-002": {
+        "routed": false,
+        "covered_entities": 3,
+        "routing": "missed_route",
+        "entity_coverage": 0.8,
+        "citation_violations": 3,
+        "declared_gaps": 5
+      },
+      "s4-low-003": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 1
+      },
+      "s4-low-004": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-005": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-006": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-007": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-008": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-med-001": {
+        "routed": false,
+        "covered_entities": 1,
+        "routing": "ok",
+        "entity_coverage": 1.0,
+        "citation_violations": 19,
+        "declared_gaps": 7
+      },
+      "s4-med-002": {
+        "routed": false,
+        "covered_entities": 5,
+        "routing": "missed_route",
+        "entity_coverage": 0.75,
+        "citation_violations": 22,
+        "declared_gaps": 3
+      },
+      "s4-low-001": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-002": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      }
+    },
+    "B": {
+      "s4-high-003": {
+        "routed": true,
+        "covered_entities": 4,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 6,
+        "declared_gaps": 3
+      },
+      "s4-high-004": {
+        "routed": true,
+        "covered_entities": 3,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 13,
+        "declared_gaps": 4
+      },
+      "s4-high-005": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": 1.0,
+        "citation_violations": 12,
+        "declared_gaps": 0
+      },
+      "s4-high-006": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": 0.75,
+        "citation_violations": 3,
+        "declared_gaps": 0
+      },
+      "s4-high-007": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": 1.0,
+        "citation_violations": 10,
+        "declared_gaps": 0
+      },
+      "s4-high-008": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": 0.3333333333333333,
+        "citation_violations": 3,
+        "declared_gaps": 0
+      },
+      "s4-high-009": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": 0.0,
+        "citation_violations": 11,
+        "declared_gaps": 0
+      },
+      "s4-med-003": {
+        "routed": true,
+        "covered_entities": 2,
+        "routing": "true_route",
+        "entity_coverage": 0.75,
+        "citation_violations": 13,
+        "declared_gaps": 5
+      },
+      "s4-med-004": {
+        "routed": false,
+        "covered_entities": 1,
+        "routing": "ok",
+        "entity_coverage": 1.0,
+        "citation_violations": 12,
+        "declared_gaps": 6
+      },
+      "s4-med-005": {
+        "routed": true,
+        "covered_entities": 6,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 6,
+        "declared_gaps": 2
+      },
+      "s4-med-006": {
+        "routed": true,
+        "covered_entities": 3,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 26,
+        "declared_gaps": 3
+      },
+      "s4-med-007": {
+        "routed": true,
+        "covered_entities": 4,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 24,
+        "declared_gaps": 2
+      },
+      "s4-med-008": {
+        "routed": true,
+        "covered_entities": 6,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 29,
+        "declared_gaps": 1
+      },
+      "s4-med-009": {
+        "routed": true,
+        "covered_entities": 4,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 34,
+        "declared_gaps": 4
+      },
+      "s4-med-010": {
+        "routed": true,
+        "covered_entities": 7,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 22,
+        "declared_gaps": 0
+      },
+      "s4-high-001": {
+        "routed": true,
+        "covered_entities": 3,
+        "routing": "true_route",
+        "entity_coverage": 0.6,
+        "citation_violations": 9,
+        "declared_gaps": 6
+      },
+      "s4-high-002": {
+        "routed": true,
+        "covered_entities": 5,
+        "routing": "true_route",
+        "entity_coverage": 1.0,
+        "citation_violations": 6,
+        "declared_gaps": 3
+      },
+      "s4-low-003": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 1
+      },
+      "s4-low-004": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-005": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-006": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-007": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-008": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-med-001": {
+        "routed": false,
+        "covered_entities": 1,
+        "routing": "ok",
+        "entity_coverage": 0.8,
+        "citation_violations": 21,
+        "declared_gaps": 7
+      },
+      "s4-med-002": {
+        "routed": true,
+        "covered_entities": 4,
+        "routing": "true_route",
+        "entity_coverage": 0.75,
+        "citation_violations": 20,
+        "declared_gaps": 4
+      },
+      "s4-low-001": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-002": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      }
+    }
+  },
+  "judgments": [
+    {
+      "id": "s4-high-003",
+      "stratum": "high",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-high-002",
+      "stratum": "high",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-high-001",
+      "stratum": "high",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-high-004",
+      "stratum": "high",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-high-007",
+      "stratum": "high",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-high-006",
+      "stratum": "high",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-high-005",
+      "stratum": "high",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-high-008",
+      "stratum": "high",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-high-009",
+      "stratum": "high",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-low-001",
+      "stratum": "low",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-low-002",
+      "stratum": "low",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-low-003",
+      "stratum": "low",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-low-004",
+      "stratum": "low",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-low-005",
+      "stratum": "low",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-low-006",
+      "stratum": "low",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-low-007",
+      "stratum": "low",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-med-001",
+      "stratum": "medium",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-low-008",
+      "stratum": "low",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-med-002",
+      "stratum": "medium",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-med-003",
+      "stratum": "medium",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-med-004",
+      "stratum": "medium",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-med-005",
+      "stratum": "medium",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-med-006",
+      "stratum": "medium",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-med-007",
+      "stratum": "medium",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-med-009",
+      "stratum": "medium",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-med-008",
+      "stratum": "medium",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "s4-med-010",
+      "stratum": "medium",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    }
+  ]
+}

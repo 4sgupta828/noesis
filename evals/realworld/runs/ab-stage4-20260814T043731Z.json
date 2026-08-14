@@ -1,0 +1,200 @@
+{
+  "provenance": {
+    "git_sha": "130b5b9",
+    "run_a": "run-slice-stage4-ab-30-2026-08-14-env-20260814T043438Z.jsonl",
+    "run_b": "run-slice-stage4-ab-30-2026-08-14-env-20260814T043718Z.jsonl",
+    "arm_a_env": {
+      "NOESIS_EVIDENCE_IDENTITY": "1",
+      "NOESIS_CLAIM_CONGRUENCE": "1",
+      "NOESIS_QUESTION_CONTRACT": "steer",
+      "NOESIS_ANSWER_MODE_ROUTING": ""
+    },
+    "arm_b_env": {
+      "NOESIS_EVIDENCE_IDENTITY": "1",
+      "NOESIS_CLAIM_CONGRUENCE": "1",
+      "NOESIS_QUESTION_CONTRACT": "steer",
+      "NOESIS_ANSWER_MODE_ROUTING": "1"
+    },
+    "seed": 20260814,
+    "judge_model": "(default anthropic)",
+    "judge_prompt_sha": "828d53235e9a",
+    "ran_at": "2026-08-14T04:37:31.258084+00:00"
+  },
+  "summary": {
+    "per_stratum": {
+      "low": {
+        "n": 2,
+        "judged": 2,
+        "wins_b": 0,
+        "wins_a": 1,
+        "ties": 1,
+        "dim_delta_b_minus_a": {
+          "format_fit": -0.75,
+          "coverage": -1.25,
+          "coherence": -0.5,
+          "honesty": 0.0
+        },
+        "routing_b": {
+          "true": 0,
+          "false": 0,
+          "missed": 0,
+          "precision": null,
+          "recall": null
+        },
+        "arm_a_routed_anomaly": 0,
+        "entity_coverage": {
+          "a": null,
+          "b": null,
+          "delta": null
+        },
+        "citation_violations": {
+          "a": 0,
+          "b": 0
+        },
+        "declared_gaps": {
+          "a": 0,
+          "b": 0
+        }
+      }
+    },
+    "overall": {
+      "n": 2,
+      "judged": 2,
+      "wins_b": 0,
+      "wins_a": 1,
+      "ties": 1,
+      "dim_delta_b_minus_a": {
+        "format_fit": -0.75,
+        "coverage": -1.25,
+        "coherence": -0.5,
+        "honesty": 0.0
+      },
+      "routing_b": {
+        "true": 0,
+        "false": 0,
+        "missed": 0,
+        "precision": null,
+        "recall": null
+      },
+      "arm_a_routed_anomaly": 0,
+      "entity_coverage": {
+        "a": null,
+        "b": null,
+        "delta": null
+      },
+      "citation_violations": {
+        "a": 0,
+        "b": 0
+      },
+      "declared_gaps": {
+        "a": 0,
+        "b": 0
+      },
+      "sign_test_p": 1.0
+    },
+    "healthy_rows": {
+      "a": 2,
+      "b": 2,
+      "paired": 2
+    },
+    "judge_errors": []
+  },
+  "structural": {
+    "A": {
+      "s4-low-001": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-002": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      }
+    },
+    "B": {
+      "s4-low-001": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      },
+      "s4-low-002": {
+        "routed": false,
+        "covered_entities": 0,
+        "routing": "ok",
+        "entity_coverage": null,
+        "citation_violations": 0,
+        "declared_gaps": 0
+      }
+    }
+  },
+  "judgments": [
+    {
+      "id": "s4-low-001",
+      "stratum": "low",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "first",
+      "better_call2": "second",
+      "winner": "A",
+      "dims": {
+        "A": {
+          "format_fit": 4.5,
+          "coverage": 5.0,
+          "coherence": 4.5,
+          "honesty": 4.5
+        },
+        "B": {
+          "format_fit": 3.5,
+          "coverage": 3.5,
+          "coherence": 4.0,
+          "honesty": 4.5
+        }
+      },
+      "rationales": [
+        "Both are well-sourced and honest. First adds mechanism, safety (hypoglycemia/hyperinsulinemia comparison), and insulin secretion details, giving fuller coverage. Second is solid but omits mechanism/safety entirely, making it slightly thinner despite ",
+        "Both correctly state the indication and honestly flag labeling-only evidence. Second adds mechanism, comparative safety (no hypoglycemia/hyperinsulinemia), and richer efficacy detail, giving a more complete, useful answer without overreaching beyond "
+      ]
+    },
+    {
+      "id": "s4-low-002",
+      "stratum": "low",
+      "order_call1": [
+        "B",
+        "A"
+      ],
+      "better_call1": "second",
+      "better_call2": "second",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "format_fit": 4.5,
+          "coverage": 4.5,
+          "coherence": 4.5,
+          "honesty": 4.0
+        },
+        "B": {
+          "format_fit": 4.0,
+          "coverage": 3.5,
+          "coherence": 4.0,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both correctly state 4.5h with guideline citations. Second adds trial evidence (NINDS, ECASS III, pooled analysis), extended-window data with safety caveats (sICH risk), and clearer evidence hierarchy, giving stronger coverage and honesty without sac",
+        "Both well-organized and cite guidelines. First cites RCTs (ECASS III, pooled analysis) but oddly buries a 3h \"historical\" claim without clear sourcing; second draws on more diverse, current guideline sources (ESO, NICE, UpToDate, BMJ, Korean, Chinese"
+      ]
+    }
+  ]
+}

@@ -3286,6 +3286,26 @@ function voiceStopAll(){
   VOICE.listening = false; voiceUiState("idle");
 }
 function voiceOff(){ VOICE.on = false; voiceStopAll(); }
+// Voice character: warm, slow, reassuring, male. Browsers expose whatever voices the OS has,
+// so rank known warm male voices first (Apple: Daniel/Alex/Aaron; Google/Microsoft naturals),
+// then any explicitly-male voice in the user's language, else the browser default.
+let _VOICE_PICK = null, _VOICE_PICKED = false;
+function pickVoice(){
+  const vs = (speechSynthesis.getVoices && speechSynthesis.getVoices()) || [];
+  if(!vs.length) return null;
+  const lang = (navigator.language || "en").slice(0,2).toLowerCase();
+  const inLang = v => (v.lang||"").toLowerCase().startsWith(lang);
+  const PREF = ["Daniel","Alex","Aaron","Google UK English Male","Microsoft Guy",
+                "Microsoft Ryan","Microsoft Christopher","Google US English Male","Oliver","James"];
+  for(const name of PREF){
+    const v = vs.find(x=>x.name.includes(name) && inLang(x)) || vs.find(x=>x.name.includes(name));
+    if(v) return v;
+  }
+  return vs.find(x=>/male/i.test(x.name) && !/female/i.test(x.name) && inLang(x)) || null;
+}
+if("speechSynthesis" in window){
+  try{ speechSynthesis.onvoiceschanged = ()=>{ _VOICE_PICK = pickVoice(); _VOICE_PICKED = true; }; }catch(e){}
+}
 function voiceSay(text, then){
   if(!VOICE.on){ if(then) then(); return; }
   // strip markdown/citation noise for the ear; the eye still gets the full text on screen
@@ -3294,6 +3314,10 @@ function voiceSay(text, then){
   try{ speechSynthesis.cancel(); }catch(e){}
   const u = new SpeechSynthesisUtterance(clean);
   u.lang = navigator.language || "en-US";
+  if(!_VOICE_PICKED){ _VOICE_PICK = pickVoice(); _VOICE_PICKED = true; }
+  if(_VOICE_PICK) u.voice = _VOICE_PICK;
+  u.rate = 0.88;    // unhurried — a clinician who has time for you
+  u.pitch = 0.92;   // slightly lower register, warm not boomy
   u.onend = ()=>{ voiceUiState("idle"); if(VOICE.on && then) then(); };
   u.onerror = ()=>{ voiceUiState("idle"); if(VOICE.on && then) then(); };
   voiceUiState("speak");

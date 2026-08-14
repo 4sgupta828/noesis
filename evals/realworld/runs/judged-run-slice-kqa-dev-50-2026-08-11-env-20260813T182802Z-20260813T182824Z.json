@@ -1,0 +1,77 @@
+{
+  "summary": {
+    "git": "d8086dc",
+    "answers_judged": 2,
+    "must_have_recall_mean": 0.291,
+    "answers_fully_covered": 0,
+    "contradiction_answers": 0,
+    "failure_buckets": {
+      "missing_evidence": 2,
+      "wrong_evidence_selected": 0,
+      "ranking_failure": 0,
+      "reasoning_or_composition": 0,
+      "abstained_despite_evidence": 0,
+      "question_misunderstood": 0,
+      "not_a_failure": 0
+    },
+    "judge_agreement_double_grade": null
+  },
+  "judgments": [
+    {
+      "id": "kqa-99",
+      "question": "Is it common to have an abscess with no pain?",
+      "must_have": [
+        "Not experiencing pain does not exclude the presence of an abscess.",
+        " If you suspect you might have an abscess, you should consult your healthcare provider for diagnosis and treatment.",
+        " A common symptom of an abscess is pain.",
+        " Less commonly, an abscess can be painless due to its location, size, patient's characteristics and other causes."
+      ],
+      "verdicts": [
+        "missing",
+        "missing",
+        "covered",
+        "missing"
+      ],
+      "covered": 1,
+      "missing": 3,
+      "contradicted": 0,
+      "n": 4,
+      "recall": 0.25,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved sources (Radiopaedia, Merck Manual) only describe typical presentations emphasizing pain as a hallmark feature; none of the retrieved evidence addresses the possibility of painless absce"
+      }
+    },
+    {
+      "id": "kqa-45",
+      "question": "Does bronchitis turn into pneumonia?",
+      "must_have": [
+        "It's uncommon for bronchitis to turn into pneumonia, but it's possible",
+        "In cases where bronchitis does not resolve in three weeks, one should be checked by a physician for pneumonia",
+        "In cases of worsening of symptoms, one should be checked by a physician for pneumonia"
+      ],
+      "verdicts": [
+        "covered",
+        "missing",
+        "missing"
+      ],
+      "covered": 1,
+      "missing": 2,
+      "contradicted": 0,
+      "n": 3,
+      "recall": 0.333,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved evidence titles (clinical background, CDC guidance, rapid evidence review) do not contain the specific advisory that patients should see a physician if bronchitis doesn't resolve in thre"
+      }
+    }
+  ]
+}

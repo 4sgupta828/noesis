@@ -642,6 +642,18 @@ def question_contract_mode() -> str:
     return v if v in ("shadow", "steer") else ""
 
 
+def answer_mode_routing_enabled() -> bool:
+    """Flag (default OFF, Rule 20 — Evidence Contract stage 4) via NOESIS_ANSWER_MODE_ROUTING:
+    when ON, an ENUMERATIVE question routes to an enumerative compose framing — the kernel APPENDS
+    the vertical's enumerative-compose addendum (per-agent table first, safety cautions beside every
+    favorable mention, population studies as context) to the existing compose directive. It fires
+    ONLY when the QuestionContract (derived under NOESIS_QUESTION_CONTRACT shadow/steer) says
+    enumerative AND ≥2 contract entities hold slot-matched verified claims — the pre-retrieval
+    contract alone never routes compose (panel A3). The validated base directive is untouched.
+    OFF → every compose prompt byte-identical."""
+    return os.environ.get("NOESIS_ANSWER_MODE_ROUTING", "").lower() in ("1", "true", "yes")
+
+
 def diag_trace_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, each research run captures a troubleshooting trace
     (per-turn steps, tool-call breakdown, the grounding funnel, retries, failures, budget, timing)
@@ -983,6 +995,8 @@ def build_default_service() -> ResearchService:
         claim_congruence=claim_congruence_enabled(),
         question_contract=question_contract_mode(),
         contract_prompt=getattr(manifest, "contract_prompt", None),
+        answer_mode_routing=answer_mode_routing_enabled(),
+        enumerative_compose_addendum=getattr(manifest, "enumerative_compose_addendum", None),
         panel_specialists=getattr(manifest, "panel_specialists", ()),
         panel_default_ids=getattr(manifest, "panel_default_ids", ()),
         panel_synthesis_directive=getattr(manifest, "panel_synthesis_directive", None),
@@ -1657,6 +1671,11 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     turn["reasoning_conclusion"] = res.reasoning_conclusion
             if diag_trace_enabled() and getattr(res, "diagnostics", None):
                 turn["diagnostics"] = res.diagnostics   # persist the trace for later troubleshooting
+            if getattr(res, "question_contract", None):
+                # Schema-registry phase 0: persist the derived QuestionContract (mode/entities/axes)
+                # on the session turn (JSONB thread — additive field, no migration). Only present
+                # when a contract was actually derived (NOESIS_QUESTION_CONTRACT shadow/steer).
+                turn["question_contract"] = res.question_contract
             try:
                 # Audience-guarded append: only continue a thread whose audience MATCHES this turn's
                 # (mid-thread toggle → mismatch → save a fresh session instead of corrupting the thread).
@@ -1678,7 +1697,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                         confidence=(getattr(res, "confidence", None) if reasoning_read_enabled() else None),
                         reasoning_purpose=(getattr(res, "reasoning_purpose", "") if reasoning_read_enabled() else ""),
                         reasoning_conclusion=(getattr(res, "reasoning_conclusion", "") if reasoning_read_enabled() else ""),
-                        diagnostics=(getattr(res, "diagnostics", None) if diag_trace_enabled() else None))
+                        diagnostics=(getattr(res, "diagnostics", None) if diag_trace_enabled() else None),
+                        question_contract=getattr(res, "question_contract", None))
             except Exception:
                 session_id = None
         return ResearchOut(

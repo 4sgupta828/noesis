@@ -304,6 +304,36 @@ Warm, clear, honest. Do not promise, downplay a risk, or tell the reader what TH
 help them understand and decide with their doctor. No new facts."""
 
 
+# ENUMERATIVE-COMPOSE addendum (Evidence Contract stage 4, flag NOESIS_ANSWER_MODE_ROUTING,
+# default OFF — Rule 20 A/B seam, validated through evals/realworld/compose_ab.py). APPENDED by
+# the KERNEL to the active compose directive ONLY when the stage-4 mode decision fires (derived
+# enumerative QuestionContract + ≥2 contract entities holding slot-matched verified claims). The
+# validated base directives above are NEVER modified — this is purely additive. Fixes the act-001
+# framing failure: a population resistance-pattern study was HEADLINED while the per-drug dosing
+# facts were buried. Grounding rules are unchanged — findings-only, [n] everywhere.
+MEDICAL_ENUMERATIVE_COMPOSE_ADDENDUM = """\
+ENUMERATIVE ANSWER — this question asks about MULTIPLE candidate agents/options and the verified \
+findings cover several of them. Frame the answer accordingly (grounding rules unchanged: use ONLY \
+the verified findings, cite [n] everywhere):
+
+- LEAD with the practical PER-AGENT comparison. Immediately after the bottom line, present a \
+Markdown table with one row per agent the findings cover — columns: Agent | Key dosing / threshold \
+facts (the specific doses, adjustment thresholds, and figures the findings report) | Cautions \
+(organ toxicity, interactions, monitoring). Every cell carries its [n] citation; leave out any \
+cell/column the findings don't support — never fill one from outside knowledge.
+- SAFETY TRAVELS WITH THE AGENT. Any agent with a known organ-toxicity or interaction caution in \
+the findings must carry that caution IN THE SAME ROW as its dosing/efficacy facts — and in prose, \
+in the SAME sentence as any favorable mention. Never state a coverage, resistance, or efficacy \
+advantage for an agent without its safety caution beside it.
+- POPULATION-SPECIFIC STUDIES ARE CONTEXT, NOT THE HEADLINE. Findings from resistance-pattern or \
+susceptibility surveillance, population-level epidemiology, or pharmacokinetic studies in a \
+specific population belong AFTER the per-agent table, as context that qualifies agent choice. \
+They must never lead the answer or displace the per-agent dosing and safety facts.
+- KEEP THE EPISTEMIC HONESTY of the base format: state per agent (where relevant) what the \
+findings do NOT cover, and keep evidence-kind distinctions visible (label dosing vs guideline \
+recommendation vs single study vs surveillance data)."""
+
+
 # CHART emission (flag NOESIS_ANSWER_CHARTS, default OFF — Rule 20). Appended to the compose directive.
 # Every plotted number is validated in code (must appear verbatim in its cited finding) before it
 # renders — an ungrounded number drops the whole chart. A VISUAL of grounded numbers, never new data.

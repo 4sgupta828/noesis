@@ -105,6 +105,10 @@ class ResearchService:
     #                                         + slot-aware compose selection + loop coverage gaps
     contract_prompt: str | None = None      # vertical QuestionContract derivation directive
     #                                         (opaque — ALL domain vocabulary lives in the vertical)
+    answer_mode_routing: bool = False       # Evidence Contract stage 4 (flag): append the vertical's
+    #                                         enumerative-compose addendum when the derived contract
+    #                                         is enumerative AND ≥2 entities hold slot-matched claims
+    enumerative_compose_addendum: str | None = None  # vertical enumerative-compose addendum (opaque)
     graph_expander: object | None = None    # A9: async (question) -> {"legs":[{query,note}],"shadow":bool}|None
     #                                         — app-injected relationship-graph hook; None → byte-identical
     panel_specialists: tuple = ()           # Ask-Panel roster (vertical-supplied specialist configs)
@@ -447,6 +451,8 @@ class ResearchService:
             evidence_fitness=self.evidence_fitness, evidence_ranker=self.evidence_ranker,
             evidence_identity=self.evidence_identity, claim_congruence=self.claim_congruence,
             question_contract=self.question_contract, contract_prompt=self.contract_prompt,
+            answer_mode_routing=self.answer_mode_routing,
+            enumerative_compose_addendum=self.enumerative_compose_addendum,
             graph_legs=graph_legs, graph_shadow=graph_shadow, graph_late=graph_late,
         )
         res.visual_observation = visual_obs      # surface the image reading (UI panel)

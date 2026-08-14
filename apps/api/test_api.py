@@ -106,3 +106,14 @@ def test_question_contract_mode_reads_env(monkeypatch) -> None:
     assert question_contract_mode() == "steer"
     monkeypatch.setenv("NOESIS_QUESTION_CONTRACT", "1")     # bare truthy is NOT a mode
     assert question_contract_mode() == ""
+
+
+def test_answer_mode_routing_flag_reads_env(monkeypatch) -> None:
+    # Evidence Contract stage 4: the flag is wired from NOESIS_ANSWER_MODE_ROUTING (default OFF).
+    from api.app import answer_mode_routing_enabled
+    monkeypatch.delenv("NOESIS_ANSWER_MODE_ROUTING", raising=False)
+    assert answer_mode_routing_enabled() is False
+    monkeypatch.setenv("NOESIS_ANSWER_MODE_ROUTING", "1")
+    assert answer_mode_routing_enabled() is True
+    monkeypatch.setenv("NOESIS_ANSWER_MODE_ROUTING", "no")
+    assert answer_mode_routing_enabled() is False

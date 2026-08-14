@@ -508,6 +508,10 @@ class AnswerResult:
     # Troubleshooting trace (flag): per-turn steps, tool-call breakdown, the grounding funnel,
     # retries, and failures — None unless collect_diagnostics was requested (byte-identical OFF).
     diagnostics: dict | None = None
+    # The derived QuestionContract, surfaced for SESSION persistence (schema-registry phase 0):
+    # {"mode","entities","axes"} whenever a contract was derived (shadow OR steer), independent of
+    # the diagnostics flag. None when no contract was derived (flag off / derivation failed).
+    question_contract: dict | None = None
 
     @property
     def grounded(self) -> bool:
@@ -592,6 +596,21 @@ async def run_react(
     contract_prompt: str | None = None,       # vertical-supplied contract-derivation directive
     #                                           (ALL domain vocabulary lives there — kernel litmus);
     #                                           None → no contract derived (flag effectively off)
+    answer_mode_routing: bool = False,        # Evidence Contract stage 4 (flag): route ENUMERATIVE
+    #                                           questions to an enumerative compose framing. Fires
+    #                                           ONLY when (a) this flag is on, (b) the derived
+    #                                           QuestionContract says mode=enumerative, AND (c) ≥2
+    #                                           contract entities hold ≥1 slot-matched claim in the
+    #                                           FINAL verified selection (panel A3: never trust the
+    #                                           pre-retrieval contract alone for compose routing) —
+    #                                           then the vertical's addendum below is APPENDED to
+    #                                           the existing compose directive. The base directive
+    #                                           is UNTOUCHED; OFF / not fired → compose prompt is
+    #                                           byte-identical to today.
+    enumerative_compose_addendum: str | None = None,  # vertical-owned enumerative-compose addendum —
+    #                                           an OPAQUE caller-supplied string (manifest field;
+    #                                           kernel litmus: zero domain vocabulary here).
+    #                                           None/"" → stage-4 routing never fires.
 ) -> AnswerResult:
     import asyncio
     atoms = AtomStore()
@@ -877,6 +896,11 @@ async def run_react(
             _contract = await derive_contract(question, planner, contract_prompt)
         except BudgetExceeded:
             _contract = None                    # over budget → no contract → today's behavior
+        if _contract is not None:               # persistable contract record (schema-registry
+            result.question_contract = {        # phase 0) — independent of the diagnostics flag
+                "mode": _contract.mode,
+                "entities": list(_contract.entities),
+                "axes": list(_contract.axes)}
         _c_graph_qs = {(_l.get("query") or "").strip() for _l in (graph_legs or [])[:2]}
         _c_queries = build_legs(_contract, cap=12, exclude=_c_graph_qs)
         _c_diag: dict = {"mode": question_contract,
@@ -1322,6 +1346,7 @@ async def run_react(
     # debuggable without a rerun (Rule 13). In STEER mode an entity left with ZERO matching
     # claims becomes a coverage gap PRODUCED BY THE LOOP (where it is actionable), not by compose
     # (where it is a footnote). Shadow logs the grid and changes nothing else.
+    _enum_compose = False        # Evidence Contract stage 4: enumerative-compose routing decision
     if _contract is not None and _contract.mode == "enumerative" and _contract.entities:
         from noesis_kernel.research.contract import match_entities
         _grid = {e: 0 for e in _contract.entities}
@@ -1337,6 +1362,19 @@ async def run_react(
                     result.coverage_gaps.append(
                         f"No evidence retrieved for {_e}"
                         + (f" ({_axes_note})" if _axes_note else ""))
+        # EVIDENCE CONTRACT stage 4 — ANSWER-MODE ROUTING (flag; panel A3: the mode is re-derived
+        # from BOUND CLAIMS at compose time, never trusted from the pre-retrieval contract alone).
+        # Enumerative compose fires only when the flag is on, the vertical supplied an addendum,
+        # the derived contract says enumerative, AND ≥2 contract entities hold ≥1 slot-matched
+        # claim in the FINAL verified selection (the grid above — structural containment, Rule 18).
+        # A single-entity (or zero-coverage) answer keeps today's framing: there is nothing to
+        # enumerate. OFF / not fired → the compose directive below is byte-identical.
+        if answer_mode_routing and (enumerative_compose_addendum or "").strip():
+            _covered = sum(1 for _n in _grid.values() if _n > 0)
+            _enum_compose = _covered >= 2
+            if diag is not None and "question_contract" in diag:
+                diag["question_contract"]["answer_mode"] = {
+                    "routed": _enum_compose, "covered_entities": _covered}
 
     # Compose a synthesized answer FROM the verified findings only (factra "living
     # answer" model). Grounded by construction: the composer sees only the verified
@@ -1369,6 +1407,15 @@ async def run_react(
             f"[{i}] {vc.text}  (quote: \"{vc.quote}\" — source: {_finding_source(vc)})"
             f"{_finding_note(vc)}"
             for i, vc in enumerate(result.verified_claims, 1))
+
+        # EVIDENCE CONTRACT stage 4 — when the enumerative-compose decision fired, APPEND the
+        # vertical's addendum (an opaque caller-supplied string — kernel litmus) to the existing
+        # directive. The base directive is UNTOUCHED (it is the protected baseline); not fired →
+        # `_compose_directive is answer_format` and every compose prompt is byte-identical.
+        _compose_directive = answer_format
+        if _enum_compose:
+            _ad = (enumerative_compose_addendum or "").strip()
+            _compose_directive = (answer_format + "\n\n" + _ad) if answer_format else _ad
 
         async def _compose(directive: str | None) -> ComposedAnswer:
             # Base ANSWER instruction kept identical to the original (directive-free path stays a
@@ -1443,7 +1490,7 @@ async def run_react(
         text = ""
         for _attempt in range(_COMPOSE_ATTEMPTS):
             try:
-                cand = await _compose(answer_format)
+                cand = await _compose(_compose_directive)
                 text = strip_control_tags((cand.answer or "").strip())   # a malformed/empty parse raises or stays "" →
                 parsed = cand                         # counted as this attempt's outcome, inside the try
                 if text:
@@ -1459,11 +1506,11 @@ async def run_react(
             # fluke while preserving the directive's AUDIENCE/tone — a directive-free recompose would
             # replace e.g. a patient answer with a generic clinician-toned one). Best-effort: a failed
             # fallback never overwrites the answer we already have.
-            if answer_format and not _refs_valid(text, n_findings):
+            if _compose_directive and not _refs_valid(text, n_findings):
                 if diag is not None:
                     diag["retries"]["compose_ref_retry"] = True
                 try:
-                    alt = await _compose(answer_format)
+                    alt = await _compose(_compose_directive)
                     if (alt.answer or "").strip():
                         parsed, text = alt, strip_control_tags(alt.answer.strip())
                 except Exception as _e:   # noqa: BLE001
@@ -1479,7 +1526,7 @@ async def run_react(
                 if diag is not None:
                     diag["retries"]["reasoning_retry"] = True
                 try:
-                    alt = await _compose(answer_format)
+                    alt = await _compose(_compose_directive)
                     if getattr(alt, "interpretation", None) or getattr(alt, "confidence", None):
                         parsed.interpretation = alt.interpretation
                         parsed.confidence = alt.confidence

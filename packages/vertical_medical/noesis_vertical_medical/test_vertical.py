@@ -34,6 +34,16 @@ def test_entry_point_manifest() -> None:
     assert "clinicaltrials" in med.manifest.retrieval_sources
 
 
+def test_enumerative_compose_addendum_manifest_wiring() -> None:
+    # Evidence Contract stage 4: the vertical supplies the enumerative-compose addendum as an
+    # OPAQUE manifest string (all domain vocabulary vertical-side; the kernel only appends it),
+    # and the validated 092dd35-lineage base directive is untouched.
+    from noesis_vertical_medical import answer_format as af
+    assert med.manifest.enumerative_compose_addendum == af.MEDICAL_ENUMERATIVE_COMPOSE_ADDENDUM
+    assert (med.manifest.enumerative_compose_addendum or "").strip()
+    assert med.manifest.answer_format == af.MEDICAL_ANSWER_FORMAT
+
+
 def test_trial_doc_assembly_and_facets() -> None:
     s = sample_studies()[0]
     md = trial_doc.to_markdown(s)

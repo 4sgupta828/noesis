@@ -12,6 +12,7 @@ from .specialists import (SPECIALISTS, DEFAULT_PANEL_IDS, PANEL_SYNTHESIS_DIRECT
 from .answer_format import (
     MEDICAL_ANSWER_FORMAT,
     MEDICAL_CLINICAL_SYNTHESIS_FORMAT,
+    MEDICAL_ENUMERATIVE_COMPOSE_ADDENDUM,
     MEDICAL_PATIENT_FORMAT,
     MEDICAL_VISUAL_GUIDANCE,
     MEDICAL_CHART_GUIDANCE,
@@ -92,6 +93,7 @@ def build_manifest() -> VerticalManifest:
         suggest_prompt=MEDICAL_SUGGEST_PROMPT,
         refine_prompt=MEDICAL_REFINE_PROMPT,
         contract_prompt=MEDICAL_CONTRACT_PROMPT,
+        enumerative_compose_addendum=MEDICAL_ENUMERATIVE_COMPOSE_ADDENDUM,
         triage_prompt=MEDICAL_TRIAGE_PROMPT,
         reasoned_scaffold_prompt=REASONED_SCAFFOLD_PROMPT,
         reasoned_answer_format=REASONED_ANSWER_FORMAT,

@@ -181,6 +181,13 @@ class VerticalManifest:
     # lives HERE; the kernel derives, expands to retrieval legs, and slot-matches generically.
     # None → no contract is ever derived (the flag is a safe no-op for this vertical).
     contract_prompt: str | None = None
+    # Optional ENUMERATIVE-COMPOSE addendum (Evidence Contract stage 4, flag
+    # NOESIS_ANSWER_MODE_ROUTING): APPENDED by the kernel to the active compose directive ONLY when
+    # the derived QuestionContract says enumerative AND ≥2 contract entities hold slot-matched
+    # verified claims (never on the pre-retrieval contract alone — panel A3). Opaque prose — ALL
+    # domain vocabulary (per-item table shape, safety-pairing rules, what counts as "context")
+    # lives here; the kernel never parses it. None → stage-4 routing never fires for this vertical.
+    enumerative_compose_addendum: str | None = None
     # Optional STRUCTURAL evidence-tier classifier: (source_key, facets) -> evidence_kind str (Rule 18 —
     # maps computable per-source metadata onto the authority pyramid, no semantic judgment). Used to
     # stamp each verified claim's evidence tier (for evidence-fitness ranking + the eval's evidence_floor).

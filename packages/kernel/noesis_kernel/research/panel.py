@@ -106,8 +106,8 @@ _SPECIALIST_COMPOSE_ATTEMPTS = 2
 # run_react events worth streaming per specialist (the narration the Q&A trace renders). Everything
 # else (contract/graph_legs/selecting/internal diagnostics) is dropped to keep SSE volume sane —
 # with N concurrent lenses every event is multiplied by the panel size.
-_TRACE_FORWARD = frozenset({"step", "search", "found", "grounding", "verifying", "verified",
-                            "extracting", "extracted", "composing"})
+_TRACE_FORWARD = frozenset({"step", "search", "retrieving", "found", "grounding", "verifying",
+                            "verified", "extracting", "extracted", "composing"})
 
 
 def _env_int(name: str, default: int) -> int:

@@ -994,6 +994,7 @@
   .tstep b{color:var(--ink);font-weight:640;}
   .tstep .tq{color:var(--ink);font-family:var(--sans);}
   .tstep .tvar{font-size:.72rem;color:var(--muted);opacity:.75;border:1px solid var(--hair);border-radius:6px;padding:.02rem .38rem;}
+  .tstep.tsub{font-size:.72rem;opacity:.7;padding-left:1.05rem;}  /* per-source retrieval sub-line */
   .tstep.tlive{color:var(--gold);}
   .tstep.tlive::after{content:"";width:.7rem;height:.7rem;border-radius:50%;align-self:center;
     border:2px solid rgba(var(--gold-rgb),.3);border-top-color:var(--gold);animation:spin .7s linear infinite;}
@@ -2846,6 +2847,7 @@ function traceLine(ev){
   if(ev.type==="scaffold")  return `<div class="tstep">🧠 Mapping the clinical decision space — ${ev.branches} branches to cover</div>`;
   if(ev.type==="step")      return `<div class="tstep">▸ Step ${ev.step}</div>`;
   if(ev.type==="search")    return `<div class="tstep">🔎 Searching <span class="tq">${esc(ev.query||"")}</span>${(ev.variants&&ev.variants.length)?` <span class="tvar">+${ev.variants.length} reformulations</span>`:""}</div>`;
+  if(ev.type==="retrieving") return `<div class="tstep tsub">· ${esc(ev.source||"corpus")} ✓ <b>${ev.hits||0}</b> hit${ev.hits===1?"":"s"}</div>`;
   if(ev.type==="found")     return `<div class="tstep">📥 Found <b>${ev.total}</b> passage${ev.total===1?"":"s"}${(ev.sources&&ev.sources.length)?` <span class="tvar">${ev.sources.map(esc).join(" · ")}</span>`:""}</div>`;
   if(ev.type==="grounding") return `<div class="tstep">🧩 Grounding the evidence…</div>`;
   if(ev.type==="extracting") return `<div class="tstep">⛏️ Mining all evidence for supported facts…</div>`;
@@ -3577,6 +3579,7 @@ async function runPanelTurn(question){
   // a specialist row's LIVE status text from its tagged run_react narration events
   const stText = e => {
     if(e.type==="search") return "searching…";
+    if(e.type==="retrieving") return e.source==="web" ? `web ✓ ${e.hits||0}` : `${e.source||"corpus"} ✓ ${e.hits||0} · web…`;
     if(e.type==="found") return `found ${e.total}`;
     if(e.type==="grounding") return "grounding…";
     if(e.type==="verifying") return "verifying…";

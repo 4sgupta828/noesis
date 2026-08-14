@@ -1034,8 +1034,21 @@ async def run_react(
             # CONCURRENTLY with the corpus so it adds breadth without multiplying latency.
             corpus_co = (multi_query_retrieve(source, base_req, step.queries, embedder=embedder)
                          if step.queries else source.search(base_req))
+
+            # Intra-retrieval progress (additive): each leg announces the moment it lands —
+            # {"type":"retrieving","source":<leg>,"hits":N} between 'search' and 'found' — so a
+            # slow leg (e.g. a multi-minute web search) narrates instead of leaving a silent gap
+            # the user reads as "stuck". A failing leg emits nothing here and propagates to the
+            # gather below, exactly as before (Rule 13 logging unchanged).
+            async def _traced_leg(leg: str, co):
+                r = await co
+                await emit({"type": "retrieving", "source": leg, "hits": len(r)})
+                return r
+
             if aux_source is not None:
-                got = await asyncio.gather(corpus_co, aux_source.search(base_req), return_exceptions=True)
+                got = await asyncio.gather(_traced_leg("corpus", corpus_co),
+                                           _traced_leg("web", aux_source.search(base_req)),
+                                           return_exceptions=True)
                 hits = []
                 for leg, r in zip(("corpus", "web"), got):
                     if isinstance(r, Exception):
@@ -1048,7 +1061,7 @@ async def run_react(
                     else:
                         hits += r
             else:
-                hits = await corpus_co
+                hits = await _traced_leg("corpus", corpus_co)
             before = len(atoms.all())
             atoms.add_hits(hits)
             added = len(atoms.all()) - before

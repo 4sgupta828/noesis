@@ -34,7 +34,8 @@ class SpecialistPick(BaseModel):
 
 
 class PanelPlan(BaseModel):
-    specialists: list[SpecialistPick] = []
+    specialists: list[SpecialistPick] = []          # the FINAL core panel, priority order
+    eliminated: list[SpecialistPick] = []           # considered then struck in the elimination round
 
 
 async def plan_panel(*, question, roster, llm) -> list[dict]:
@@ -44,17 +45,23 @@ async def plan_panel(*, question, roster, llm) -> list[dict]:
     Fail-safe: any error → a sensible default subset so the panel still convenes."""
     by_id = {r["id"]: r for r in roster}
     catalog = "\n".join(f"- {r['id']} — {r['specialty']}: {(r.get('lens') or '')[:180]}" for r in roster)
-    system = ("You are the chair of a clinical case panel. COVERAGE FIRST: convene a lens for EVERY "
-              "clinically important dimension THIS case raises — never leave a dimension uncovered. Each "
-              "distinct organ system, condition, or safety axis the case spans needs a lens that covers it "
-              "(e.g. a case spanning heart failure + kidney disease + diabetes needs the cardiac, renal, "
-              "AND metabolic lenses — not just one). THEN MINIMAL: among panels that fully cover the case, "
-              "pick the smallest — never add a lens the case does not touch, and don't use two lenses where "
-              "one covers the dimension. Always include the evidence-quality lens for rigor. A focused "
-              "single-issue case may need only 2; a multi-system case needs one lens per system.")
-    user = (f"Case / question:\n{question}\n\nAvailable specialists:\n{catalog}\n\nReturn the specialists "
-            "that TOGETHER fully cover this case with no redundancy — every important dimension covered, no "
-            "padding. For EACH, a ONE-LINE rationale naming the specific dimension of THIS case it covers.")
+    system = ("You are the chair of a clinical case panel. Select in TWO phases inside this one "
+              "response.\n"
+              "PHASE 1 — CANDIDATES: list every lens with a plausible claim on this case.\n"
+              "PHASE 2 — ELIMINATION ROUND (mandatory): strike every candidate whose material "
+              "contribution is already ≥90% covered by a retained lens, and every long-tail lens that "
+              "would only address an edge of the case. Keep the MINIMAL CORE that would answer 90%+ of "
+              "the case on its own: the lens that owns the central problem, the lenses for genuinely "
+              "DISTINCT major dimensions (a case spanning heart failure + kidney disease + diabetes "
+              "keeps cardiac, renal, and metabolic — but a lens whose whole contribution is one drug "
+              "caution another retained lens will state gets struck), and the evidence-quality lens. "
+              "TARGET 3-5 specialists; a focused case may need 2; going above 5 requires that each "
+              "extra lens owns a major dimension nothing retained covers.\n"
+              "Return the FINAL panel in priority order in `specialists` (most central first) and the "
+              "struck candidates in `eliminated`, each with a one-line reason for the strike.")
+    user = (f"Case / question:\n{question}\n\nAvailable specialists:\n{catalog}\n\nRun both phases. "
+            "For each FINAL specialist, a ONE-LINE rationale naming the specific dimension of THIS case "
+            "it covers; for each eliminated one, the one-line strike reason.")
     try:
         comp = await llm.complete(system=system, messages=[{"role": "user", "content": user}],
                                   response_format=PanelPlan, max_tokens=1200)
@@ -68,6 +75,14 @@ async def plan_panel(*, question, roster, llm) -> list[dict]:
             continue
         seen.add(p.id)
         out.append({"id": p.id, "specialty": by_id[p.id]["specialty"], "rationale": p.rationale.strip()})
+    # HARD CAP (minimal-core directive): the model returns priority order, so trimming keeps the
+    # most central lenses. Overflow is logged — an elimination the code performed, not the model.
+    import os as _os
+    _cap = max(2, int(_os.environ.get("NOESIS_PANEL_MAX", "6")))
+    if len(out) > _cap:
+        _log.info("panel plan trimmed %d→%d (NOESIS_PANEL_MAX): dropped %s",
+                  len(out), _cap, [p["id"] for p in out[_cap:]])
+        out = out[:_cap]
     return out
 
 _REF_RE = re.compile(r"\[\d+\]")   # strip a specialist's OWN local [n] refs when feeding its prose to the chair

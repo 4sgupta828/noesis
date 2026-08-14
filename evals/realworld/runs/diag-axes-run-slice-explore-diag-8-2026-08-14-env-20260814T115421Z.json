@@ -1,8 +1,8 @@
 {
  "buckets": {
-  "covered": 20,
-  "uncovered_retrievable": 6,
-  "uncovered_absent": 9
+  "covered": 27,
+  "uncovered_retrievable": 4,
+  "uncovered_absent": 4
  },
  "detail": [
   {
@@ -13,19 +13,13 @@
   {
    "id": "xd-001-ckd-fatigue",
    "axis": "uremia and (if on dialysis) dialysis adequacy",
-   "bucket": "uncovered_absent",
-   "note": "The snippets only generically mention fatigue's prevalence and list \"uremia\" and \"hemodialysis inefficiency\" among contr",
-   "top_docs": [
-    "Effect of intra-dialytic pedaling exercise on dialysis adequ",
-    "The relationship between fatigue, pruritus, and thirst distr",
-    "The Effect of Progressive Muscle Relaxation Exercises on Dep"
-   ]
+   "bucket": "covered"
   },
   {
    "id": "xd-001-ckd-fatigue",
    "axis": "hypothyroidism as a reversible cause",
-   "bucket": "uncovered_absent",
-   "note": "None of the snippets directly establish hypothyroidism as a reversible cause of fatigue in CKD patients. The first snipp",
+   "bucket": "uncovered_retrievable",
+   "note": "Snippets confirm hypothyroidism is common in CKD patients and can cause fatigue, but none directly link fatigue as the p",
    "top_docs": [
     "Hypocalcemia Revisited: Thinking Outside the Box!",
     "Linking thyroid dysfunction with chronic kidney disease amon",
@@ -36,7 +30,7 @@
    "id": "xd-001-ckd-fatigue",
    "axis": "medication-related causes (e.g. beta-blockers, sedating agents)",
    "bucket": "uncovered_absent",
-   "note": "The snippets mention beta-blockers only tangentially: the BRASH syndrome case involves bradycardia in a CKD patient but ",
+   "note": "The BRASH syndrome case snippet is the only one touching medications (implying beta-blocker/AV-blocking drug interplay w",
    "top_docs": [
     "BRASH (Bradycardia, Renal Failure, Atrioventricular Blockage",
     "Pharmacologic Treatment of Hypertension in Older Adults.",
@@ -46,24 +40,12 @@
   {
    "id": "xd-001-ckd-fatigue",
    "axis": "depression or sleep disorders (incl. sleep apnea) in CKD",
-   "bucket": "uncovered_retrievable",
-   "note": "Snippets provide usable evidence: high prevalence of sleep disorders (up to 80% in ESRD/dialysis) including sleep apnea,",
-   "top_docs": [
-    "Common Sleep Disorders in Patients With Chronic Kidney Disea",
-    "Common Sleep Disorders in Patients With Chronic Kidney Disea",
-    "Common Sleep Disorders in Patients With Chronic Kidney Disea"
-   ]
+   "bucket": "covered"
   },
   {
    "id": "xd-002-sglt2-mechanism",
    "axis": "natriuresis / diuretic and hemodynamic (preload-afterload) effects",
-   "bucket": "uncovered_retrievable",
-   "note": "Snippets provide usable evidence: the \"Cardiorenal syndrome and diabetes\" snippet explicitly states SGLT2i produce natri",
-   "top_docs": [
-    "Evaluation of the therapeutic effect of new hypoglycemic dru",
-    "The Effect of the combination therapy of statin and dapaglif",
-    "Cardiorenal syndrome and diabetes: an evil pairing."
-   ]
+   "bucket": "covered"
   },
   {
    "id": "xd-002-sglt2-mechanism",
@@ -79,7 +61,7 @@
    "id": "xd-002-sglt2-mechanism",
    "axis": "renal protection contributing to HF outcomes",
    "bucket": "uncovered_retrievable",
-   "note": "The first snippet (Cardiorenal syndrome and diabetes) provides usable mechanistic evidence: SGLT2i cause natriuresis, re",
+   "note": "The first snippet gives mechanistic evidence usable for this aspect: SGLT2i reduce volume overload/natriuresis, decrease",
    "top_docs": [
     "Cardiorenal syndrome and diabetes: an evil pairing.",
     "Evaluation of the therapeutic effect of new hypoglycemic dru",
@@ -94,35 +76,17 @@
   {
    "id": "xd-003-abx-vs-antiviral",
    "axis": "why antibiotics are ineffective against viruses (mechanistic targets absent)",
-   "bucket": "uncovered_absent",
-   "note": "The snippets are only section headings (\"Mechanism of Antiviral Action\") from various Acyclovir drug labels, with no act",
-   "top_docs": [
-    "ACYCLOVIR TABLET [REMEDYREPACK INC.]",
-    "ACYCLOVIR TABLET [REMEDYREPACK INC.]",
-    "ACYCLOVIR CAPSULE [HERITAGE PHARMACEUTICALS INC. D/B/A AVET "
-   ]
+   "bucket": "covered"
   },
   {
    "id": "xd-003-abx-vs-antiviral",
    "axis": "concrete situations where antivirals are indicated (influenza, herpes, COVID-19)",
-   "bucket": "uncovered_absent",
-   "note": "The snippets discuss antivirals generally (COVID-19 pediatric cardiac patients, mpox indications, azvudine dosing) but d",
-   "top_docs": [
-    "Antivirals in COVID-19: A Focus on Pediatric Cardiac Patient",
-    "Antivirals in COVID-19: A Focus on Pediatric Cardiac Patient",
-    "Antivirals in COVID-19: A Focus on Pediatric Cardiac Patient"
-   ]
+   "bucket": "covered"
   },
   {
    "id": "xd-003-abx-vs-antiviral",
    "axis": "harms of inappropriate antibiotic use for viral illness",
-   "bucket": "uncovered_absent",
-   "note": "Snippets discuss that antibiotics are ineffective/harmful for viral infections and drive resistance, but none actually a",
-   "top_docs": [
-    "Early Discontinuation of Antibiotic Therapy in Elderly Patie",
-    "Antimicrobial Resistance and Causal Relationship: A Complex ",
-    "Nucleic Acid-based Testing for Noninfluenza Viral Pathogens "
-   ]
+   "bucket": "covered"
   },
   {
    "id": "xd-004-apap-hepatotox",
@@ -133,7 +97,7 @@
    "id": "xd-004-apap-hepatotox",
    "axis": "mechanism: NAPQI accumulation and glutathione depletion",
    "bucket": "uncovered_retrievable",
-   "note": "Multiple snippets directly explain the mechanism: therapeutic doses metabolized via glucuronidation/sulfation, minor CYP",
+   "note": "Snippets clearly establish the mechanism: therapeutic doses mainly cleared via glucuronidation/sulfation, small fraction",
    "top_docs": [
     "Clinical Toxicology of OTC Cough and Cold Pediatric Medicati",
     "Effects of aqueous aloe vera gel extract on acetaminophen-in",
@@ -153,13 +117,7 @@
   {
    "id": "xd-004-apap-hepatotox",
    "axis": "N-acetylcysteine as antidote and the treatment window",
-   "bucket": "uncovered_retrievable",
-   "note": "Snippets provide usable evidence for NAC as the antidote and treatment window: NAC works best within 8 hours of ingestio",
-   "top_docs": [
-    "Pharmacological Pain Treatment in Older Persons.",
-    "Acetaminophen: A Liver Killer or Thriller.",
-    "TRAMADOL HYDROCHLORIDE AND ACETAMINOPHEN TABLET, FILM COATED"
-   ]
+   "bucket": "covered"
   },
   {
    "id": "xd-005-parkinsonism-35",
@@ -174,24 +132,12 @@
   {
    "id": "xd-005-parkinsonism-35",
    "axis": "genetic early-onset Parkinson disease (e.g. PRKN/parkin)",
-   "bucket": "uncovered_absent",
-   "note": "The snippets describe genetic early-onset PD (PRKN) age ranges, clinical features (bradykinesia, rigidity, hyperreflexia",
-   "top_docs": [
-    "A rare case of adult-onset vanishing white matter leukoencep",
-    "PRKN-Related Early-Onset Parkinson Disease",
-    "Genotype-phenotype correlation in PRKN-associated Parkinson'"
-   ]
+   "bucket": "covered"
   },
   {
    "id": "xd-005-parkinsonism-35",
    "axis": "dopa-responsive dystonia and other treatable mimics",
-   "bucket": "uncovered_absent",
-   "note": "Snippets are unrelated case reports (anesthesia, psychosis management, juvenile DRD case, GCH1 mutation, sleep apnea/aty",
-   "top_docs": [
-    "Chloroprocaine 3% for anesthesia during cesarean section in ",
-    "Clinical Reasoning: Juvenile-Onset Dopa-Responsive Dystonia-",
-    "<i>De novo</i> p.Glu61Ter mutation in GCH1 in a Moroccan pat"
-   ]
+   "bucket": "covered"
   },
   {
    "id": "xd-005-parkinsonism-35",
@@ -216,7 +162,13 @@
   {
    "id": "xd-006-af-stroke-reduction",
    "axis": "distinction: rate/rhythm control does not substitute for anticoagulation in stroke prevention",
-   "bucket": "covered"
+   "bucket": "uncovered_absent",
+   "note": "The snippets establish that stroke risk in AF is reduced via anticoagulation guided by CHA2DS2-VASc score (DOACs/warfari",
+   "top_docs": [
+    "Atrial Fibrillation \u2014 Diagnosis and Management",
+    "Optimizing Anticoagulation Strategies in Patients With Atria",
+    "Subclinical atrial fibrillation: Implications of recent tria"
+   ]
   },
   {
    "id": "xd-007-pjp-prophylaxis",
@@ -237,7 +189,7 @@
    "id": "xd-007-pjp-prophylaxis",
    "axis": "when prophylaxis can be stopped (e.g. immune reconstitution)",
    "bucket": "uncovered_retrievable",
-   "note": "The snippets do give concrete stopping criteria across different contexts (CD4 >100 with undetectable VL >3 months in HI",
+   "note": "The snippets give concrete stopping criteria in specific populations (secondary PCP prophylaxis in HIV can stop at CD4>1",
    "top_docs": [
     "Major revision version 11.0 of the European AIDS Clinical So",
     "Best Practice Considerations by The American Society of Tran",
@@ -252,23 +204,29 @@
   {
    "id": "xd-008-bronchitis-pneumonia",
    "axis": "a separate secondary pneumonia can develop (distinct from progression)",
-   "bucket": "uncovered_absent",
-   "note": "None of the snippets provide evidence that bronchitis can develop into a separate secondary pneumonia. They discuss bron",
-   "top_docs": [
-    "A Prospective Observational Study Evaluating the PRogression",
-    "Real world pharmacovigilance study of FDA adverse event repo",
-    "Development and Validation of a Risk Score for Predicting Se"
-   ]
+   "bucket": "covered"
   },
   {
    "id": "xd-008-bronchitis-pneumonia",
    "axis": "warning signs that should prompt reassessment (worsening, persistence beyond ~3 weeks, high fever)",
-   "bucket": "covered"
+   "bucket": "uncovered_absent",
+   "note": "Snippets are all pneumonia diagnostic criteria (fever thresholds, cough, dyspnea, WBC counts) from clinical trial eligib",
+   "top_docs": [
+    "A Phase 4 Study Using a Test-Negative Design to Evaluate the",
+    "Efficacy and Safety of Faropenem in Bangladeshi Adult Patien",
+    "Recent updates regarding the management and treatment of pne"
+   ]
   },
   {
    "id": "xd-008-bronchitis-pneumonia",
    "axis": "higher-risk groups (elderly, immunocompromised, chronic lung disease)",
-   "bucket": "covered"
+   "bucket": "uncovered_absent",
+   "note": "The snippets only mention drug-related pneumonia risk in COPD patients (from steroid/bronchodilator inhalers) and genera",
+   "top_docs": [
+    "Real world pharmacovigilance study of FDA adverse event repo",
+    "BREZTRI (BUDESONIDE, GLYCOPYRROLATE, AND FORMOTEROL FUMARATE",
+    "The Role of Adaptive Immune Responses to Mycoplasma Pneumoni"
+   ]
   }
  ]
 }

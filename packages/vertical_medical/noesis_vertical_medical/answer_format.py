@@ -338,26 +338,37 @@ recommendation vs single study vs surveillance data)."""
 # Every plotted number is validated in code (must appear verbatim in its cited finding) before it
 # renders — an ungrounded number drops the whole chart. A VISUAL of grounded numbers, never new data.
 MEDICAL_CHART_GUIDANCE = """\
-CHART (optional, `charts` field) — add a chart ONLY when it reveals a pattern that is genuinely HARD to \
-grasp from the prose or a table: a TRADE-OFF, a DISTRIBUTION/SPREAD, or effect sizes whose CONFIDENCE \
-INTERVALS overlap or separate. Do NOT chart 2–3 values a table already shows plainly — a needless chart \
-is worse than none. If nothing qualifies, leave `charts` empty. Pick the kind that carries the insight:
+CHARTS (`charts` field) — the reader consumes numbers VISUALLY first. Whenever 3 OR MORE grounded \
+numbers form one of the patterns below, EMIT a chart of the matching kind — bias TOWARD charting a real \
+pattern; a good answer with comparable numbers and no chart is incomplete. Emit several charts when the \
+findings hold several distinct patterns (e.g. a trend AND a group comparison). But NEVER invent, \
+extrapolate, average, or unit-convert a number to complete a chart — plot only figures that appear in \
+the findings, and leave `charts` empty when no real pattern exists.
 
-- `kind:"interval"` (a forest plot — the MOST valuable when available): a point estimate WITH its \
-confidence interval / range per option — e.g. hazard/odds/risk ratios with 95% CI across trials, or an \
-effect size with CI. This shows at a glance whether intervals cross a threshold or each other, which \
-prose buries. Each bar: `label`, `value` (+ `value_str`), `low` (+ `low_str`), `high` (+ `high_str`), \
-`finding`.
-- `kind:"grouped_bar"` (a trade-off): 2+ SERIES per option — e.g. BENEFIT vs RISK (response rate vs \
-serious-adverse-event rate) or the same outcome at multiple timepoints, across options. Each bar: \
-`label` (option), `series` (e.g. "Response" / "Serious AE"), `value` (+ `value_str`), `finding`.
-- `kind:"bar"` (only if there are MANY options, ~4+, where the ranking/spread itself is the point): one \
-`value` (+ `value_str`), `finding` per `label`.
+CHOOSING THE KIND is a deliberate decision — match the pattern, not habit:
+- `kind:"line"` — a TREND: the same metric over TIME or ordered stages (years, follow-up months/weeks, \
+dose levels, disease stages). >=3 points per line, in x-order. `label` = the x-step (e.g. "Month 3"), \
+`value` (+ `value_str`), `finding`. Several metrics/arms over the same steps → one line per arm via \
+`series` (max 3 lines).
+- `kind:"bar"` — ONE metric compared ACROSS GROUPS/options (drugs, doses, subgroups, trials): one \
+`value` (+ `value_str`), `finding` per `label`. Order bars by value (largest first) UNLESS the labels \
+are ordinal (doses, age bands, stages) — then keep their natural order.
+- `kind:"grouped_bar"` — 2–3 metrics across the SAME groups (e.g. BENEFIT vs RISK: response rate vs \
+serious-adverse-event rate per drug; or an outcome at 2 timepoints per arm). `label` = group, `series` \
+= metric, `value` (+ `value_str`), `finding`. All bars in a series are the same metric.
+- `kind:"pie"` — ONLY for parts-of-a-whole: a distribution across categories that sums to ~100% (e.g. \
+"of the cases: 62% type A, 27% type B, 11% other"). 2–6 slices, none negative. NEVER a pie for values \
+that are not shares of one whole — independent rates across drugs are a bar chart, not a pie.
+- `kind:"interval"` — point estimates WITH their CI/range (a forest plot): hazard/odds/risk ratios or \
+effect sizes with 95% CI across trials/options. Each bar: `label`, `value` (+ `value_str`), `low` \
+(+ `low_str`), `high` (+ `high_str`), `finding`. When estimates carry CIs, PREFER this over a bare bar \
+— whether intervals cross 1.0 (or each other) is the insight.
 
 Hard rules — a wrong or misleading chart is a safety problem:
 - Plot ONLY directly comparable numbers (same metric/outcome/timepoint, compatible population). NEVER \
-mix units or unrelated populations on one axis. For grouped_bar, all bars in a SERIES are the same metric.
+mix units or unrelated populations on one axis.
 - Every `value_str` / `low_str` / `high_str` MUST be the figure COPIED EXACTLY as it appears in its \
-cited `finding` (e.g. "0.78", "0.65", "0.94", "53%") — if any number is not verbatim in that finding, \
-OMIT the chart. Set `unit` and a short `title`. Use 2–8 options. The prose/table is the answer; the \
-chart only sharpens a hard-to-see pattern."""
+cited `finding` (e.g. "0.78", "53%") — an unverifiable number gets the whole chart dropped in code.
+- EVERY chart carries a short `title` (what is plotted, for whom) and its `unit` (e.g. "%", "HR", \
+"mmol/L"). Keep `label`s SHORT (2–4 words — "Semaglutide 2.4 mg", not a sentence). Use 2–8 groups \
+(pie: 2–6 slices; line: <=3 series)."""

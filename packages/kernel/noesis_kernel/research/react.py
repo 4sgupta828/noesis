@@ -103,9 +103,11 @@ class AgentStep(BaseModel):
 
 class ChartBar(BaseModel):
     """One datum of a chart. `value` is plotted; `value_str` is that figure EXACTLY as it appears in the
-    cited finding (used to VERIFY it's grounded); `finding` is the 1-based finding index. `series` groups
-    bars for a grouped chart (e.g. "Efficacy" vs "Adverse events"). `low`/`high` (+ their *_str) are the
-    optional confidence-interval / range bounds for an INTERVAL (forest-plot) chart — each also grounded."""
+    cited finding (used to VERIFY it's grounded); `finding` is the 1-based finding index. `label` is the
+    option/x-category/slice name depending on kind. `series` groups bars for a grouped chart (e.g.
+    "Efficacy" vs "Adverse events") or names one line of a multi-line chart. `low`/`high` (+ their *_str)
+    are the optional confidence-interval / range bounds for an INTERVAL (forest-plot) chart — each also
+    grounded."""
     label: str
     value: float
     value_str: str = ""
@@ -120,9 +122,12 @@ class ChartBar(BaseModel):
 class ChartSpec(BaseModel):
     """A chart built ONLY from verified findings. Kinds: 'bar' (one value per option), 'grouped_bar'
     (2+ series per option — e.g. benefit vs risk), 'interval' (point estimate + CI/range per option, a
-    forest plot). EVERY plotted number (value, and low/high when present) must appear verbatim in its
-    cited finding, or the whole chart is dropped. Meant for patterns hard to read from prose/tables."""
-    kind: str = "bar"            # "bar" | "grouped_bar" | "interval"
+    forest plot), 'line' (a value over ordered x-categories — time/stages/doses; `label` is the
+    x-category, `series` names each line when there are several), 'pie' (parts-of-a-whole shares;
+    `label` is the slice name). EVERY plotted number (value, and low/high when present) must appear
+    verbatim in its cited finding, or the whole chart is dropped. Meant for patterns hard to read from
+    prose/tables."""
+    kind: str = "bar"            # "bar" | "grouped_bar" | "interval" | "line" | "pie"
     title: str = ""
     unit: str = ""
     bars: list[ChartBar] = []
@@ -173,7 +178,7 @@ class ComposedAnswer(BaseModel):
     # kernel surfaces it as a coverage gap so a "grounded-on-analogues" answer still flags the gap.
     directly_addresses: bool = True
     gap_note: str = ""
-    # Optional bar charts (only when the answer-charts flag drives the directive to emit them). Each is
+    # Optional charts (only when the answer-charts flag drives the directive to emit them). Each is
     # VALIDATED against the verified findings before it reaches the UI — an ungrounded bar drops the chart.
     charts: list[ChartSpec] = []
     # Reasoning Read (only when the reasoning-read flag drives the directive). Both are VALIDATED /
@@ -202,7 +207,9 @@ def _validate_charts(charts: list[ChartSpec], verified: list["VerifiedClaim"]) -
     """Keep only charts whose EVERY plotted number is grounded: for each bar, the finding index is valid
     AND its `value_str` (and `low_str`/`high_str` when present) appears verbatim (case-insensitive) in
     that finding's text or quote. Fail-safe — any bad number drops the WHOLE chart (a partly-verified
-    chart is worse than none). Also enforces a real comparison (>=2 groups). Returns dicts for the API."""
+    chart is worse than none). Also enforces a real comparison (>=2 groups) plus kind-specific shape
+    rules: a 'pie' needs 2–6 non-negative slices (parts of a whole); a 'line' needs >=3 points per
+    series (a trend) and <=3 series (readability). Returns dicts for the API."""
     def _grounded(s: str, finding: int) -> bool:
         s = (s or "").strip().lower()
         if not s or not (1 <= finding <= len(verified)):
@@ -213,9 +220,25 @@ def _validate_charts(charts: list[ChartSpec], verified: list["VerifiedClaim"]) -
     out: list[dict] = []
     for ch in charts or []:
         bars = ch.bars or []
+        kind = (ch.kind or "bar").strip().lower()
         # a chart needs >=2 distinct groups (labels) to be a comparison worth showing
         if len({(b.label or "").strip() for b in bars}) < 2:
             continue
+        if kind == "pie":
+            # parts-of-a-whole: 2–6 slices, none negative (a negative share is meaningless)
+            if not (2 <= len(bars) <= 6) or any(b.value < 0 for b in bars):
+                _log.warning("chart dropped: pie must have 2-6 non-negative slices (title=%r)", ch.title)
+                continue
+        elif kind == "line":
+            # a trend needs >=3 points per series; more than 3 lines is unreadable
+            by_series: dict[str, int] = {}
+            for b in bars:
+                key = (b.series or "").strip()
+                by_series[key] = by_series.get(key, 0) + 1
+            if len(by_series) > 3 or any(n < 3 for n in by_series.values()):
+                _log.warning("chart dropped: line needs >=3 points per series and <=3 series (title=%r)",
+                             ch.title)
+                continue
         ok = True
         for b in bars:
             if not _grounded(b.value_str, b.finding):

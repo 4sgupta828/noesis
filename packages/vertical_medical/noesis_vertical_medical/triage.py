@@ -127,7 +127,14 @@ diagnosis, stage, severity, formulation, or dose the user did not state — if a
 matters and is unknown, write "unspecified" in the refined question rather than guess.
 
 ZERO QUESTIONS FOR PATIENT-LESS ASKS: a general knowledge/evidence question with NO patient or
-situation attached (fact register) gets ZERO clarifying questions — go straight to ready.
+situation attached (fact register) gets ZERO clarifying questions — go straight to ready. When such
+an ask has more than one plausible scope, do NOT ask: assume the dominant interpretation and STATE
+the assumed scope inside the refined question (e.g. "...for acute ischemic stroke"), so the answer
+can note where other scopes differ.
+
+NEVER OMIT A STATED FACT: the same-specificity rule cuts both ways — every concrete fact the user
+DID state (drug names, durations, ages, symptoms, comorbidities) must appear in the refined
+question at its stated specificity. Conservative phrasing means no invention, not less information.
 
 THE REFINED QUESTION ASKS ABOUT EVIDENCE, NOT ADVICE: phrase it as what the evidence shows
 ("evidence on evaluation/management options for X in Y"), never as a request for a recommendation

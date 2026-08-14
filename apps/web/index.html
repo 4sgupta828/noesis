@@ -15,6 +15,9 @@
     --on-accent:#FFFFFF; --on-accent-rgb:255,255,255;   /* white text on the blue accent */
     --hair:#D2DEEA; --hair-soft:rgba(19,36,48,.06);
     --hl-f:17,122,84; --hl-r:176,120,40; --hl-k:37,99,175;   /* darker tints stay legible on white */
+    /* chart series colors — theme-tuned, validated (lightness band, chroma, CVD ΔE, contrast vs
+       --panel2) so series stay tellable-apart in every theme; series 2-3 also carry a hatch texture */
+    --chart1:#1568B5; --chart2:#137A54; --chart3:#A4581B;
     --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
     --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
     --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
@@ -27,6 +30,7 @@
     --on-accent:#1A1206; --on-accent-rgb:26,18,6;
     --hair:#22304A; --hair-soft:rgba(255,255,255,.06);
     --hl-f:87,184,145; --hl-r:211,179,124; --hl-k:110,160,224;
+    --chart1:#BA852B; --chart2:#2E9268; --chart3:#B5622F;
   }
   /* EDITORIAL theme — opt-in. Noesis's identity set on paper: warm parchment stock, umber ink,
      the brand gold deepened to an ink-gold that holds on paper, evidence-green kept. Serif
@@ -39,6 +43,7 @@
     --on-accent:#FDF8EA; --on-accent-rgb:253,248,234;
     --hair:#DCD4C0; --hair-soft:rgba(34,29,18,.06);
     --hl-f:46,107,79; --hl-r:138,106,31; --hl-k:63,94,150;
+    --chart1:#9A6E0E; --chart2:#1F7A52; --chart3:#A85C1E;
   }
   /* Editorial legibility for CLINICAL notation: Charter-first serif (screen-designed, LINING
      figures — Iowan/Palatino's old-style digits jar in doses and citation markers), lining +
@@ -425,16 +430,29 @@
   .chartwrap{margin:0;}
   .chart{max-width:100%;height:auto;font-family:var(--sans);display:block;}
   .chart .c-lbl{fill:var(--ink);font-size:12px;}
-  .chart .c-val{fill:var(--gold);font-size:12px;font-weight:700;}
-  .chart .c-bar{fill:var(--gold);opacity:.85;}
+  .chart .c-val{fill:var(--ink);font-size:12px;font-weight:700;}          /* values wear ink, marks wear color */
+  .chart .c-bar{fill:var(--chart1);}
+  .chart .c-grid{stroke:var(--hair);stroke-width:1;}                       /* recessive hairline gridlines */
+  .chart .c-axis{stroke:var(--muted);stroke-width:1;opacity:.55;}          /* baseline / axis line */
+  .chart .c-tick{fill:var(--muted);font-size:10.5px;}                      /* axis tick labels */
+  .chart .c-unit{fill:var(--muted);font-size:10.5px;font-style:italic;}    /* unit on the axis */
+  .chart .c-line{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round;}
+  .chart .c-pt{stroke:var(--panel2);stroke-width:2;}                       /* point marker, surface ring */
+  .chart .c-slice{stroke:var(--panel2);stroke-width:2;}                    /* pie slice, surface gap */
+  .chart .c-lead{stroke:var(--muted);stroke-width:1;fill:none;opacity:.7;} /* pie leader line */
   .chart .c-wh{stroke:var(--muted);stroke-width:1.6;}       /* forest-plot CI whisker */
-  .chart .c-dot{fill:var(--gold);stroke:var(--panel2);stroke-width:1.5;}  /* point estimate marker */
+  .chart .c-dot{fill:var(--chart1);stroke:var(--panel2);stroke-width:1.5;}  /* point estimate marker */
   .chart .c-ref{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3;opacity:.6;}  /* forest null line */
   .chartlegend{display:flex;flex-wrap:wrap;gap:.9rem;font-family:var(--mono);font-size:.66rem;color:var(--muted);margin-top:.55rem;}
-  .chartlegend .lg{display:inline-flex;align-items:center;gap:.35rem;}
-  .chartlegend .lg i{width:.7rem;height:.7rem;border-radius:2px;display:inline-block;}
-  .chartlegend .lg-dot{color:var(--gold);} .chartlegend .lg-ci{color:var(--muted);letter-spacing:-.5px;}
+  .chartlegend .lg{display:inline-flex;align-items:center;gap:.35rem;color:var(--ink);}
+  .chartlegend .lg i{width:.7rem;height:.7rem;border-radius:2px;display:inline-block;position:relative;overflow:hidden;}
+  /* hatch texture on series 2/3 legend chips — mirrors the in-chart pattern so identity is not color-alone */
+  .chartlegend .lg i.tx1::after,.chartlegend .lg i.tx2::after{content:"";position:absolute;inset:0;
+    background:repeating-linear-gradient(45deg,transparent 0 2.5px,var(--panel2) 2.5px 4px);}
+  .chartlegend .lg i.tx2::after{background:repeating-linear-gradient(135deg,transparent 0 2.5px,var(--panel2) 2.5px 4px);}
+  .chartlegend .lg-dot{color:var(--chart1);} .chartlegend .lg-ci{color:var(--muted);letter-spacing:-.5px;}
   .chartlegend .lg-refm{color:var(--muted);}
+  .chartrefs{font-family:var(--mono);font-size:.64rem;color:var(--muted);margin-top:.45rem;}  /* citation footnote */
   /* Reasoning Read — the interpretation layer (typed items) + confidence read, framed distinctly
      from the grounded prose so a reader sees "this is judgment ABOUT the evidence, not more evidence". */
   .reasoning{margin:1.35rem 0 .4rem;border:1px solid var(--hair);border-left:3px solid var(--gold);

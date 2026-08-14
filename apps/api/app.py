@@ -892,6 +892,10 @@ class TermLookupIn(BaseModel):
     context: str = ""    # the term this one was linked FROM (helps disambiguate)
 
 
+class VoiceTtsIn(BaseModel):
+    text: str
+
+
 class GapPlanIn(BaseModel):
     question: str
     answer: str = ""
@@ -1367,6 +1371,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "suggest_enabled": conversation_enabled() and bool(getattr(svc, "suggest_prompt", None)),
             "term_glossary_enabled": term_glossary_enabled() and bool(getattr(svc, "terms_prompt", None)),
             "voice_intake_enabled": voice_intake_enabled() and live_triage,
+            "voice_tts_neural": (voice_intake_enabled() and live_triage
+                                 and bool(os.environ.get("OPENAI_API_KEY"))),
             "stream_enabled": stream_enabled(),
             "country_scope_enabled": country_scope_enabled(),
             "countries": AVAILABLE_COUNTRIES if country_scope_enabled() else [],
@@ -1936,6 +1942,39 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
         return {"suggestions": qs}
+
+    @app.post("/voice/tts")
+    async def voice_tts(body: VoiceTtsIn):
+        """Neural voiceover for the guided-intake voice loop: the clarifying question as warm,
+        unhurried male speech (OpenAI gpt-4o-mini-tts, voice 'ash'). The FE falls back to the
+        browser's local voice when this endpoint is unavailable. Text in, audio/mpeg out —
+        no user audio is ever received here (STT stays entirely in the browser)."""
+        if not voice_intake_enabled():
+            raise HTTPException(status_code=404, detail="voice intake not enabled")
+        key = os.environ.get("OPENAI_API_KEY", "")
+        if not key:
+            raise HTTPException(status_code=404, detail="neural voice not configured")
+        text = (body.text or "").strip()[:1500]   # intake questions are short; cap the spend
+        if not text:
+            raise HTTPException(status_code=400, detail="empty text")
+        try:
+            if getattr(app.state, "tts_client", None) is None:
+                from openai import AsyncOpenAI
+                app.state.tts_client = AsyncOpenAI(api_key=key)
+            resp = await app.state.tts_client.audio.speech.create(
+                model="gpt-4o-mini-tts", voice="ash", input=text, response_format="mp3",
+                instructions=(
+                    "Speak as a warm, unhurried, reassuring clinician talking with a worried "
+                    "patient: calm male register, gentle pace with natural pauses, kind and "
+                    "steady. Never rushed, never chirpy, never salesy."))
+            audio = getattr(resp, "content", None)
+            if not isinstance(audio, (bytes, bytearray)):
+                audio = await resp.aread()
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"tts error: {e}") from e
+        from fastapi.responses import Response as _BinResp
+        return _BinResp(content=bytes(audio), media_type="audio/mpeg",
+                        headers={"Cache-Control": "no-store"})
 
     @app.post("/terms/explain")
     async def terms_explain(body: TermsIn) -> dict:

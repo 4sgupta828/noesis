@@ -333,3 +333,15 @@ def test_voice_intake_flag_echo(monkeypatch) -> None:
     monkeypatch.delenv("NOESIS_VOICE_INTAKE", raising=False)
     svc2 = _service(); svc2.triage_prompt = "intake"
     assert TestClient(create_app(svc2)).get("/config").json()["voice_intake_enabled"] is False
+
+
+def test_voice_tts_gating(monkeypatch) -> None:
+    monkeypatch.delenv("NOESIS_VOICE_INTAKE", raising=False)
+    client = TestClient(create_app(_service()))
+    assert client.post("/voice/tts", json={"text": "hello"}).status_code == 404   # flag off
+    monkeypatch.setenv("NOESIS_VOICE_INTAKE", "1")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    client = TestClient(create_app(_service()))
+    assert client.post("/voice/tts", json={"text": "hello"}).status_code == 404   # no key → not configured
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    assert client.post("/voice/tts", json={"text": "  "}).status_code == 400      # empty text

@@ -1580,6 +1580,7 @@ let VISION_ENABLED = false; // image/PDF/DICOM upload → visual-context researc
 let LAYMAN_ENABLED = false; // on-demand plain-language re-explanation
 let TERMS_ENABLED = false;  // on-demand key-term explanations + the accumulating All Terms glossary
 let VOICE_INTAKE_ENABLED = false; // hands-free guided intake (speak answers, hear questions)
+let VOICE_TTS_NEURAL = false;     // server neural voiceover (/voice/tts); browser voice is the fallback
 let GAP_ENABLED = false;    // self-healing: suggest + queue sources to fill evidence gaps
 let CONV_ENABLED = false;   // multi-turn conversation (follow-ups carry context)
 let SUGGEST_ENABLED = false;// suggested follow-up questions after each answer
@@ -1650,6 +1651,7 @@ async function loadConfig(){
     TERMS_ENABLED = !!c.term_glossary_enabled;
     const tb = $("#termsbtn"); if(tb && TERMS_ENABLED) tb.hidden = false;
     VOICE_INTAKE_ENABLED = !!c.voice_intake_enabled;
+    VOICE_TTS_NEURAL = !!c.voice_tts_neural;
     maybeShowVoice();
     GAP_ENABLED = !!c.gap_healing_enabled;
     CONV_ENABLED = !!c.conversation_enabled;
@@ -3269,7 +3271,7 @@ const tbody = () => $("#triagebody");
 // Everything runs in the browser — no audio ever reaches our servers (only the transcript text
 // flows through the existing /triage/step path).
 const _SRCls = window.SpeechRecognition || window.webkitSpeechRecognition;
-let VOICE = {on:false, rec:null, listening:false};
+let VOICE = {on:false, rec:null, listening:false, audio:null};
 function voiceSupported(){ return !!_SRCls && ("speechSynthesis" in window); }
 function voiceUiState(st){
   const b = $("#voicebtn"); if(!b) return;
@@ -3280,8 +3282,13 @@ function voiceUiState(st){
     : st==="listen" ? "Listening… tap to send" : st==="speak" ? "Speaking… tap to skip ahead"
     : "Voice is on — tap to turn off";
 }
-function voiceStopAll(){
+function voiceHush(){   // stop whatever is speaking, neural or browser
   try{ speechSynthesis.cancel(); }catch(e){}
+  if(VOICE.audio){ const a=VOICE.audio; VOICE.audio=null;
+    try{ a.onended=null; a.onerror=null; a.pause(); URL.revokeObjectURL(a.src); }catch(e){} }
+}
+function voiceStopAll(){
+  voiceHush();
   if(VOICE.rec){ try{ VOICE.rec.onend = null; VOICE.rec.stop(); }catch(e){} VOICE.rec = null; }
   VOICE.listening = false; voiceUiState("idle");
 }
@@ -3306,12 +3313,7 @@ function pickVoice(){
 if("speechSynthesis" in window){
   try{ speechSynthesis.onvoiceschanged = ()=>{ _VOICE_PICK = pickVoice(); _VOICE_PICKED = true; }; }catch(e){}
 }
-function voiceSay(text, then){
-  if(!VOICE.on){ if(then) then(); return; }
-  // strip markdown/citation noise for the ear; the eye still gets the full text on screen
-  const clean = (text||"").replace(/\[\d+\]/g,"").replace(/[*_#`>⚠◍✦◈]/g,"").replace(/\s+/g," ").trim();
-  if(!clean){ if(then) then(); return; }
-  try{ speechSynthesis.cancel(); }catch(e){}
+function _voiceBrowserSay(clean, then){   // local fallback voice (device-dependent quality)
   const u = new SpeechSynthesisUtterance(clean);
   u.lang = navigator.language || "en-US";
   if(!_VOICE_PICKED){ _VOICE_PICK = pickVoice(); _VOICE_PICKED = true; }
@@ -3322,6 +3324,32 @@ function voiceSay(text, then){
   u.onerror = ()=>{ voiceUiState("idle"); if(VOICE.on && then) then(); };
   voiceUiState("speak");
   speechSynthesis.speak(u);
+}
+async function voiceSay(text, then){
+  if(!VOICE.on){ if(then) then(); return; }
+  // strip markdown/citation noise for the ear; the eye still gets the full text on screen
+  const clean = (text||"").replace(/\[\d+\]/g,"").replace(/[*_#`>⚠◍✦◈]/g,"").replace(/\s+/g," ").trim();
+  if(!clean){ if(then) then(); return; }
+  voiceHush();
+  // NEURAL first: server-rendered warm clinician voice (agent-grade); local voice is the fallback.
+  if(VOICE_TTS_NEURAL){
+    voiceUiState("speak");
+    try{
+      const r = await fetch("/voice/tts",{method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({text: clean})});
+      if(!r.ok) throw new Error("tts "+r.status);
+      const blob = await r.blob();
+      if(!VOICE.on){ voiceUiState("idle"); return; }   // turned off while rendering
+      const a = new Audio(URL.createObjectURL(blob));
+      VOICE.audio = a;
+      const settle = ()=>{ if(VOICE.audio===a){ try{ URL.revokeObjectURL(a.src); }catch(e){}
+        VOICE.audio=null; voiceUiState("idle"); if(VOICE.on && then) then(); } };
+      a.onended = settle; a.onerror = settle;
+      await a.play();
+      return;
+    }catch(e){ /* endpoint down or autoplay refused → local voice below */ }
+  }
+  _voiceBrowserSay(clean, then);
 }
 function voiceListen(){
   if(!VOICE.on || VOICE.listening || !_SRCls) return;
@@ -3350,8 +3378,8 @@ function voiceToggle(){
     voiceSay(lastBot ? lastBot.text : "Tell me the clinical problem in your own words. I'll ask only what's needed.", voiceListen);
   } else if(VOICE.listening && VOICE.rec){
     try{ VOICE.rec.stop(); }catch(e){}          // send what we heard
-  } else if(speechSynthesis.speaking){
-    try{ speechSynthesis.cancel(); }catch(e){}  // skip the reading, go straight to listening
+  } else if(VOICE.audio || speechSynthesis.speaking){
+    voiceHush();                                // skip the reading, go straight to listening
     voiceListen();
   } else {
     voiceOff();
@@ -3425,7 +3453,7 @@ function handleTriageTurn(d){
 async function submitTriage(text){
   if(TRIAGE.busy) return;
   if(!text){ q.focus(); return; }
-  try{ speechSynthesis.cancel(); }catch(e){}   // a submitted answer supersedes any question being read
+  if(typeof voiceHush === "function") voiceHush();   // a submitted answer supersedes any question being read
   TRIAGE.transcript.push({role:"user", text});
   q.value = ""; autoGrow();
   renderTriage(false);

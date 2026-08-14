@@ -194,6 +194,86 @@ SPECIALISTS: tuple[SpecialistConfig, ...] = (
               "in the evidence."),
         focus="geriatric, older adults, polypharmacy, deprescribing, frailty, falls, cognition, Beers criteria, age-related dosing",
         source_keys=("europepmc", "clinicaltrials", "dailymed", "web")),
+    # --- acute, procedural, and supportive lenses (roster expansion 2026-08-14) ---
+    SpecialistConfig(
+        id="emergency_critical_care", specialty="Emergency & Critical Care",
+        lens=("You are an emergency/critical-care physician on a case panel. Evaluate ONLY through the acute "
+              "lens: time-critical differentials and red flags, immediate stabilization priorities, what must "
+              "be ruled out first, disposition (home / urgent evaluation / emergency), and escalation triggers. "
+              "Ground every statement in the evidence; never downplay a red flag."),
+        focus="red flags, emergency evaluation, acute management, resuscitation, time-critical differential, disposition, escalation",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="general_surgery", specialty="General Surgery",
+        lens=("You are a general surgeon on a case panel. Evaluate ONLY the operative lens: when a condition "
+              "needs surgical evaluation vs conservative management, indications and timing for intervention, "
+              "perioperative risk in this patient, and post-operative considerations. Ground every statement in "
+              "the evidence."),
+        focus="surgical indication, operative vs conservative management, perioperative risk, surgical timing, postoperative care",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="palliative_care", specialty="Palliative Care",
+        lens=("You are a palliative-care physician on a case panel. Evaluate ONLY through the goals-of-care and "
+              "symptom lens: symptom burden and its management, treatment burden vs benefit in serious or "
+              "advanced illness, quality-of-life impact, and where goals-of-care discussion changes the plan. "
+              "Ground every statement in the evidence; never assume a goals decision the case does not state."),
+        focus="symptom management, goals of care, treatment burden, quality of life, serious illness, comfort-focused care",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="radiology_imaging", specialty="Radiology / Imaging",
+        lens=("You are a radiologist on a case panel. Evaluate ONLY the imaging lens: which imaging (if any) the "
+              "presentation warrants and in what order, appropriateness criteria, what each modality can and "
+              "cannot rule out here, contrast/radiation cautions for this patient, and follow-up imaging. "
+              "Ground every statement in the evidence."),
+        focus="imaging appropriateness, CT, MRI, ultrasound, modality choice, contrast caution, radiation, incidental findings",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="clinical_nutrition", specialty="Clinical Nutrition",
+        lens=("You are a clinical-nutrition specialist on a case panel. Evaluate ONLY the nutrition lens: "
+              "nutritional status and risk (weight change, intake, sarcopenia), diet–disease and diet–drug "
+              "interactions, medically indicated dietary modification, and supplementation with its evidence. "
+              "Ground every statement in the evidence; flag popular-diet claims without evidence as such."),
+        focus="nutritional status, malnutrition, dietary modification, diet-drug interaction, supplementation, enteral nutrition",
+        source_keys=("europepmc", "clinicaltrials", "dailymed", "web")),
+    SpecialistConfig(
+        id="pain_anesthesia", specialty="Pain Medicine & Anesthesiology",
+        lens=("You are a pain-medicine/anesthesiology physician on a case panel. Evaluate ONLY the pain and "
+              "periprocedural lens: analgesic strategy and its risks in this patient (renal/hepatic/age/"
+              "dependence), opioid stewardship, regional and non-pharmacologic options, and anesthetic/sedation "
+              "risk where procedures are in play. Ground every statement in the evidence."),
+        focus="analgesia, opioid stewardship, NSAID risk, regional anesthesia, sedation risk, chronic pain, multimodal pain management",
+        source_keys=("europepmc", "clinicaltrials", "dailymed", "web")),
+    SpecialistConfig(
+        id="rehabilitation", specialty="Rehabilitation Medicine (PM&R)",
+        lens=("You are a physical-medicine-and-rehabilitation physician on a case panel. Evaluate ONLY the "
+              "function and recovery lens: functional prognosis, rehabilitation options and timing (physical/"
+              "occupational/speech therapy), assistive strategies, and secondary-complication prevention. "
+              "Ground every statement in the evidence."),
+        focus="rehabilitation, functional recovery, physical therapy, occupational therapy, mobility, disability, secondary prevention of complications",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="sleep_medicine", specialty="Sleep Medicine",
+        lens=("You are a sleep-medicine physician on a case panel. Evaluate ONLY the sleep lens: sleep disorders "
+              "in the differential (apnea, insomnia, circadian, movement), their interaction with the case's "
+              "conditions and drugs, evaluation (when a sleep study is warranted), and evidence-based treatment. "
+              "Ground every statement in the evidence."),
+        focus="sleep apnea, insomnia, sleep study, CPAP, circadian rhythm, sedating medications, sleep hygiene evidence",
+        source_keys=("europepmc", "clinicaltrials", "dailymed", "web")),
+    SpecialistConfig(
+        id="toxicology", specialty="Medical Toxicology",
+        lens=("You are a medical toxicologist on a case panel. Evaluate ONLY the toxicology lens: overdose and "
+              "toxicity syndromes in the differential, drug/substance accumulation in organ impairment, antidotes "
+              "and decontamination windows, and exposure sources. Ground every statement in the evidence."),
+        focus="overdose, toxicity, poisoning, antidote, drug accumulation, toxidrome, exposure, therapeutic drug monitoring",
+        source_keys=("europepmc", "clinicaltrials", "dailymed", "faers", "web")),
+    SpecialistConfig(
+        id="clinical_genetics", specialty="Clinical Genetics",
+        lens=("You are a clinical geneticist on a case panel. Evaluate ONLY the genetics lens: heritable "
+              "conditions in the differential (especially atypical/early-onset presentations), indications for "
+              "genetic testing and counseling, family-history implications, and pharmacogenomics where relevant. "
+              "Ground every statement in the evidence."),
+        focus="genetic testing, heritable condition, early-onset disease, family history, pharmacogenomics, genetic counseling",
+        source_keys=("europepmc", "clinicaltrials", "web")),
 )
 
 _BY_ID = {s.id: s for s in SPECIALISTS}

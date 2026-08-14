@@ -105,6 +105,10 @@ class ResearchService:
     #                                         + slot-aware compose selection + loop coverage gaps
     contract_prompt: str | None = None      # vertical QuestionContract derivation directive
     #                                         (opaque — ALL domain vocabulary lives in the vertical)
+    explore_legs: bool = False              # exploratory-legs extension (flag): EXPLORATORY
+    #                                         contracts' axes become axis-only retrieval legs
+    #                                         (cap 4, steer-gated, late-merged); OFF → exploratory
+    #                                         behavior byte-identical to today
     answer_mode_routing: bool = False       # Evidence Contract stage 4 (flag): append the vertical's
     #                                         enumerative-compose addendum when the derived contract
     #                                         is enumerative AND ≥2 entities hold slot-matched claims
@@ -451,6 +455,7 @@ class ResearchService:
             evidence_fitness=self.evidence_fitness, evidence_ranker=self.evidence_ranker,
             evidence_identity=self.evidence_identity, claim_congruence=self.claim_congruence,
             question_contract=self.question_contract, contract_prompt=self.contract_prompt,
+            explore_legs=self.explore_legs,
             answer_mode_routing=self.answer_mode_routing,
             enumerative_compose_addendum=self.enumerative_compose_addendum,
             graph_legs=graph_legs, graph_shadow=graph_shadow, graph_late=graph_late,

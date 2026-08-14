@@ -642,6 +642,19 @@ def question_contract_mode() -> str:
     return v if v in ("shadow", "steer") else ""
 
 
+def explore_legs_enabled() -> bool:
+    """Flag (default OFF, Rule 20 — exploratory-legs extension) via NOESIS_EXPLORE_LEGS: when ON
+    (and NOESIS_QUESTION_CONTRACT=steer), EXPLORATORY questions' contract axes — 2-4 vertical-derived
+    must-cover dimensions (the missed-axes finding: 17%+ of must-cover dimensions absent despite
+    usable corpus evidence, because exploratory contracts got no retrieval legs) — are executed as
+    AXIS-ONLY retrieval legs (cap 4, k=4 each, concurrent, late-merged post-loop like enumerative
+    contract legs; baseline retrieval unchanged). Retrieval only: no slot grid, no coverage gaps,
+    no compose-seat reservation for exploratory in this version. OFF → exploratory legs are never
+    built; every prompt/behavior byte-identical to today even though the derived contract carries
+    axes."""
+    return os.environ.get("NOESIS_EXPLORE_LEGS", "").lower() in ("1", "true", "yes")
+
+
 def answer_mode_routing_enabled() -> bool:
     """Flag (default OFF, Rule 20 — Evidence Contract stage 4) via NOESIS_ANSWER_MODE_ROUTING:
     when ON, an ENUMERATIVE question routes to an enumerative compose framing — the kernel APPENDS
@@ -995,6 +1008,7 @@ def build_default_service() -> ResearchService:
         claim_congruence=claim_congruence_enabled(),
         question_contract=question_contract_mode(),
         contract_prompt=getattr(manifest, "contract_prompt", None),
+        explore_legs=explore_legs_enabled(),
         answer_mode_routing=answer_mode_routing_enabled(),
         enumerative_compose_addendum=getattr(manifest, "enumerative_compose_addendum", None),
         panel_specialists=getattr(manifest, "panel_specialists", ()),

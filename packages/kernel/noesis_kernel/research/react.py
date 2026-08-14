@@ -596,6 +596,16 @@ async def run_react(
     contract_prompt: str | None = None,       # vertical-supplied contract-derivation directive
     #                                           (ALL domain vocabulary lives there — kernel litmus);
     #                                           None → no contract derived (flag effectively off)
+    explore_legs: bool = False,               # exploratory-legs extension (flag, default OFF):
+    #                                           EXPLORATORY contracts now carry axes (the vertical
+    #                                           derives them) and, under this flag, get AXIS-ONLY
+    #                                           retrieval legs (cap 4, each axis verbatim) executed
+    #                                           under the SAME steer gate + late-merge seam as
+    #                                           enumerative legs. OFF → exploratory legs are never
+    #                                           built (diag/SSE/retrieval byte-identical to today
+    #                                           even though the derived contract carries axes).
+    #                                           No slot grid / coverage gaps / seat reservation
+    #                                           for exploratory in this version (retrieval only).
     answer_mode_routing: bool = False,        # Evidence Contract stage 4 (flag): route ENUMERATIVE
     #                                           questions to an enumerative compose framing. Fires
     #                                           ONLY when (a) this flag is on, (b) the derived
@@ -886,6 +896,9 @@ async def run_react(
     # and silently starve most of them) and STASH the hits for the same post-loop late-merge seam
     # as graph legs, so the planner window is unaffected and claims-first mines them. Baseline
     # retrieval (the planner's own searching) is unchanged and mandatory in every mode.
+    # EXPLORATORY-LEGS extension (explore_legs flag): exploratory contracts with axes get
+    # AXIS-ONLY legs (cap 4) through the SAME build/steer-execute/late-merge path — but ONLY
+    # when explore_legs is on; OFF strips them right here so nothing downstream can consume them.
     _contract = None
     _c_stash: list[tuple[str, list]] = []       # steer: (query, hits) held back until post-loop
     if question_contract in ("shadow", "steer") and (contract_prompt or "").strip():
@@ -903,6 +916,11 @@ async def run_react(
                 "axes": list(_contract.axes)}
         _c_graph_qs = {(_l.get("query") or "").strip() for _l in (graph_legs or [])[:2]}
         _c_queries = build_legs(_contract, cap=12, exclude=_c_graph_qs)
+        if _contract is not None and _contract.mode == "exploratory" and not explore_legs:
+            _c_queries = []                     # exploratory legs exist ONLY under the
+            #                                     explore_legs flag — OFF must stay byte-identical
+            #                                     to today (no diag/SSE/retrieval trace of them),
+            #                                     even though the contract now carries axes
         _c_diag: dict = {"mode": question_contract,
                          "contract": (None if _contract is None else
                                       {"mode": _contract.mode,

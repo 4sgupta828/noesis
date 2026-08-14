@@ -69,20 +69,36 @@ async def derive_contract(question: str, llm: LLMClient, derivation_prompt: str 
 
 def build_legs(contract: Contract | None, *, cap: int = 12,
                exclude: set[str] | frozenset[str] = frozenset()) -> list[str]:
-    """Retrieval-leg queries for an ENUMERATIVE contract, capped at `cap` total, deduped
-    case-insensitively against themselves and `exclude` (the graph-leg queries — the unified
-    leg budget's other members). Structural expansion only — the meaning lives in the
-    contract. Exploratory/None → [] (today's behavior).
+    """Retrieval-leg queries for a contract, capped at `cap` total, deduped case-insensitively
+    against themselves and `exclude` (the graph-leg queries — the unified leg budget's other
+    members). Structural expansion only — the meaning lives in the contract. None, or an
+    exploratory contract without axes → [] (today's behavior).
 
-    Allocation (the act-001 starvation fix): FIRST one AXIS-ONLY leg per axis — evidence for
-    a relationship axis often lives on the OTHER side's document (the interaction section of
-    the standing treatment's label, not each candidate's), which no "<entity> <axis>" query
-    reaches; the axis is itself a retrieval-friendly phrase. THEN "<entity> <axis>" legs,
-    axis-major round-robin — with the old allocation and a small cap, axes beyond the first
-    never got a single leg (the tacrolimus-interaction axis starved in the index case)."""
-    if contract is None or contract.mode != "enumerative" or not contract.entities:
+    ENUMERATIVE allocation (the act-001 starvation fix): FIRST one AXIS-ONLY leg per axis —
+    evidence for a relationship axis often lives on the OTHER side's document (the interaction
+    section of the standing treatment's label, not each candidate's), which no
+    "<entity> <axis>" query reaches; the axis is itself a retrieval-friendly phrase. THEN
+    "<entity> <axis>" legs, axis-major round-robin — with the old allocation and a small cap,
+    axes beyond the first never got a single leg (the tacrolimus-interaction axis starved in
+    the index case).
+
+    EXPLORATORY (the missed-axes finding: 17%+ of must-cover dimensions absent from answers
+    despite usable corpus evidence, because exploratory contracts carried no axes and got no
+    legs): AXIS-ONLY legs — each axis verbatim as a query, NO entity expansion, capped at
+    min(cap, 4). Entities on an exploratory contract are ignored."""
+    if contract is None:
         return []
-    axes = contract.axes or [""]
+    if contract.mode == "exploratory":
+        if not contract.axes:
+            return []
+        cap = min(cap, 4)
+        axes: list[str] = contract.axes
+        entities: list[str] = []               # axis-only: no entity expansion for exploratory
+    elif contract.mode == "enumerative" and contract.entities:
+        axes = contract.axes or [""]
+        entities = contract.entities
+    else:
+        return []
     seen = {q.strip().lower() for q in exclude if q and q.strip()}
     out: list[str] = []
 
@@ -99,7 +115,7 @@ def build_legs(contract: Contract | None, *, cap: int = 12,
         if axis.strip() and not _add(axis):
             return out
     for axis in axes:                      # then per-entity legs, axis-major round-robin
-        for entity in contract.entities:
+        for entity in entities:
             if not _add(f"{entity} {axis}"):
                 return out
     return out

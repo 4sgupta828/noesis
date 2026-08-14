@@ -160,9 +160,11 @@ def test_build_legs_excludes_graph_queries_case_insensitive():
     assert build_legs(c, exclude={"E1 X"}) == ["x", "e2 x"]
 
 
-def test_build_legs_exploratory_or_none_is_empty():
+def test_build_legs_none_or_exploratory_without_axes_is_empty():
     assert build_legs(None) == []
-    assert build_legs(Contract(mode="exploratory", entities=["e1"], axes=["x"])) == []
+    # exploratory WITH axes now yields axis-only legs (see test_explore_legs.py) — the empty
+    # result is only for a contract with nothing to retrieve on
+    assert build_legs(Contract(mode="exploratory", entities=["e1"], axes=[])) == []
 
 
 def test_build_legs_no_axes_uses_entity_alone():

@@ -1,0 +1,274 @@
+{
+ "buckets": {
+  "covered": 20,
+  "uncovered_retrievable": 6,
+  "uncovered_absent": 9
+ },
+ "detail": [
+  {
+   "id": "xd-001-ckd-fatigue",
+   "axis": "anemia of CKD / iron deficiency as a cause",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-001-ckd-fatigue",
+   "axis": "uremia and (if on dialysis) dialysis adequacy",
+   "bucket": "uncovered_absent",
+   "note": "Snippets only tangentially mention fatigue and dialysis populations but provide no substantive evidence linking uremia/u",
+   "top_docs": [
+    "The Effect of Progressive Muscle Relaxation Exercises on Dep",
+    "The Benefit of \u041en-Line High Convection Volume Hemodiafiltrat",
+    "Biomarker Correlates of Radiologic Imaging"
+   ]
+  },
+  {
+   "id": "xd-001-ckd-fatigue",
+   "axis": "hypothyroidism as a reversible cause",
+   "bucket": "uncovered_absent",
+   "note": "None of the snippets mention hypothyroidism, thyroid dysfunction, or CKD-specific reversible causes of fatigue. They dis",
+   "top_docs": [
+    "Ten-year medication-free remission of type 2 diabetes in a S",
+    "Diagnosis and management of celiac disease.",
+    "Understanding Patterns of Fatigue in Health and Disease"
+   ]
+  },
+  {
+   "id": "xd-001-ckd-fatigue",
+   "axis": "medication-related causes (e.g. beta-blockers, sedating agents)",
+   "bucket": "uncovered_absent",
+   "note": "None of the snippets provide usable evidence specifically linking medications like beta-blockers or sedating agents to f",
+   "top_docs": [
+    "Pharmacologic Treatment of Hypertension in Older Adults.",
+    "Frailty, Cardiovascular Function and Risk of Falling in Pati",
+    "Reliability of Muscle Strength and Activation Assessment Too"
+   ]
+  },
+  {
+   "id": "xd-001-ckd-fatigue",
+   "axis": "depression or sleep disorders (incl. sleep apnea) in CKD",
+   "bucket": "uncovered_retrievable",
+   "note": "Snippets support the aspect: depression prevalence in CKD (26-50%) is linked with fatigue and low energy; sleep disturba",
+   "top_docs": [
+    "Depressive symptoms in chronic kidney disease: the hidden ro",
+    "The Effect of Progressive Muscle Relaxation Exercises on Dep",
+    "I Brazilian guideline on hypertension in dialysis of the Bra"
+   ]
+  },
+  {
+   "id": "xd-002-sglt2-mechanism",
+   "axis": "natriuresis / diuretic and hemodynamic (preload-afterload) effects",
+   "bucket": "uncovered_retrievable",
+   "note": "Snippets provide usable evidence: the cardiorenal syndrome snippet explicitly states SGLT2i mechanisms include natriures",
+   "top_docs": [
+    "Evaluation of the therapeutic effect of new hypoglycemic dru",
+    "The Effect of the combination therapy of statin and dapaglif",
+    "Cardiorenal syndrome and diabetes: an evil pairing."
+   ]
+  },
+  {
+   "id": "xd-002-sglt2-mechanism",
+   "axis": "myocardial metabolism effects (ketone utilization hypothesis)",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-002-sglt2-mechanism",
+   "axis": "trial evidence in patients without diabetes (e.g. DAPA-HF, EMPEROR-Reduced)",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-002-sglt2-mechanism",
+   "axis": "renal protection contributing to HF outcomes",
+   "bucket": "uncovered_retrievable",
+   "note": "The first snippet (Cardiorenal syndrome and diabetes) provides usable mechanistic evidence: natriuresis, reduced volume ",
+   "top_docs": [
+    "Cardiorenal syndrome and diabetes: an evil pairing.",
+    "Evaluation of the therapeutic effect of new hypoglycemic dru",
+    "Potential of Sodium-Glucose Cotransporter-2 Inhibitors in th"
+   ]
+  },
+  {
+   "id": "xd-003-abx-vs-antiviral",
+   "axis": "bacterial vs viral pathogen distinction as the deciding factor",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-003-abx-vs-antiviral",
+   "axis": "why antibiotics are ineffective against viruses (mechanistic targets absent)",
+   "bucket": "uncovered_absent",
+   "note": "The snippets are merely section headers (\"Mechanism of Antiviral Action\") from various Acyclovir drug labels, with no ac",
+   "top_docs": [
+    "ACYCLOVIR TABLET [REMEDYREPACK INC.]",
+    "ACYCLOVIR TABLET [REMEDYREPACK INC.]",
+    "ACYCLOVIR CAPSULE [HERITAGE PHARMACEUTICALS INC. D/B/A AVET "
+   ]
+  },
+  {
+   "id": "xd-003-abx-vs-antiviral",
+   "axis": "concrete situations where antivirals are indicated (influenza, herpes, COVID-19)",
+   "bucket": "uncovered_absent",
+   "note": "The snippets do not address the aspect at all. None discuss the general principle of antibiotics being ineffective again",
+   "top_docs": [
+    "Mpox and Lessons Learned in the Light of the Recent Outbreak",
+    "Influenza Antiviral Prescriptions in the US Inpatient and Ou",
+    "Severe influenza treatment guideline."
+   ]
+  },
+  {
+   "id": "xd-003-abx-vs-antiviral",
+   "axis": "harms of inappropriate antibiotic use for viral illness",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-004-apap-hepatotox",
+   "axis": "toxic dose thresholds (acute overdose vs chronic supratherapeutic use)",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-004-apap-hepatotox",
+   "axis": "mechanism: NAPQI accumulation and glutathione depletion",
+   "bucket": "uncovered_retrievable",
+   "note": "Snippets directly support the mechanism: therapeutic doses metabolized via glucuronidation/sulfation, small fraction via",
+   "top_docs": [
+    "Clinical Toxicology of OTC Cough and Cold Pediatric Medicati",
+    "Effects of aqueous aloe vera gel extract on acetaminophen-in",
+    "Ameliorated Hepatoprotective Aptitude of Novel Lignin Nanopa"
+   ]
+  },
+  {
+   "id": "xd-004-apap-hepatotox",
+   "axis": "risk factors that lower the toxic threshold (chronic alcohol use, fasting/malnutrition)",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-004-apap-hepatotox",
+   "axis": "clinical course / stages of toxicity",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-004-apap-hepatotox",
+   "axis": "N-acetylcysteine as antidote and the treatment window",
+   "bucket": "uncovered_retrievable",
+   "note": "The snippets provide usable evidence for the NAC antidote/treatment-window aspect: NAC is the antidote for acetaminophen",
+   "top_docs": [
+    "Pharmacological Pain Treatment in Older Persons.",
+    "Acetaminophen: A Liver Killer or Thriller.",
+    "TRAMADOL HYDROCHLORIDE AND ACETAMINOPHEN TABLET, FILM COATED"
+   ]
+  },
+  {
+   "id": "xd-005-parkinsonism-35",
+   "axis": "Wilson disease (must-not-miss at this age)",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-005-parkinsonism-35",
+   "axis": "drug-induced parkinsonism (antipsychotics, antiemetics)",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-005-parkinsonism-35",
+   "axis": "genetic early-onset Parkinson disease (e.g. PRKN/parkin)",
+   "bucket": "uncovered_absent",
+   "note": "The question asks specifically about atypical features to rule out in a 35-year-old with new parkinsonism (i.e., red fla",
+   "top_docs": [
+    "PRKN-Related Early-Onset Parkinson Disease",
+    "Toward Molecular Profiling of Parkinson's Disease in Easily ",
+    "Exploring Risk and Protective Factors in Parkinson's Disease"
+   ]
+  },
+  {
+   "id": "xd-005-parkinsonism-35",
+   "axis": "dopa-responsive dystonia and other treatable mimics",
+   "bucket": "uncovered_absent",
+   "note": "None of the snippets contain actual content about dopa-responsive dystonia, Wilson's disease, or other treatable young-o",
+   "top_docs": [
+    "Obstructive sleep apnea is linked to inflammatory changes an",
+    "Toward Molecular Profiling of Parkinson's Disease in Easily ",
+    "The Benchmark Clinic: An Interdisciplinary Comprehensive Car"
+   ]
+  },
+  {
+   "id": "xd-005-parkinsonism-35",
+   "axis": "red-flag features suggesting atypical parkinsonian syndromes",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-006-af-stroke-reduction",
+   "axis": "oral anticoagulation as the primary intervention (DOACs / warfarin)",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-006-af-stroke-reduction",
+   "axis": "how CHA2DS2-VASc drives the treatment decision",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-006-af-stroke-reduction",
+   "axis": "left atrial appendage occlusion for anticoagulation-contraindicated patients",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-006-af-stroke-reduction",
+   "axis": "distinction: rate/rhythm control does not substitute for anticoagulation in stroke prevention",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-007-pjp-prophylaxis",
+   "axis": "trimethoprim-sulfamethoxazole as first-line prophylaxis",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-007-pjp-prophylaxis",
+   "axis": "alternatives for sulfa-intolerant patients (dapsone, atovaquone, inhaled pentamidine)",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-007-pjp-prophylaxis",
+   "axis": "who needs prophylaxis (HIV with low CD4, transplant, prolonged corticosteroids)",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-007-pjp-prophylaxis",
+   "axis": "when prophylaxis can be stopped (e.g. immune reconstitution)",
+   "bucket": "uncovered_retrievable",
+   "note": "The snippets address discontinuation of PCP prophylaxis in specific contexts (HIV: stop when CD4>100 and VL undetectable",
+   "top_docs": [
+    "Major revision version 11.0 of the European AIDS Clinical So",
+    "Best Practice Considerations by The American Society of Tran",
+    "Antimicrobial prescribing guidelines for horses in Australia"
+   ]
+  },
+  {
+   "id": "xd-008-bronchitis-pneumonia",
+   "axis": "progression is uncommon but possible",
+   "bucket": "covered"
+  },
+  {
+   "id": "xd-008-bronchitis-pneumonia",
+   "axis": "a separate secondary pneumonia can develop (distinct from progression)",
+   "bucket": "uncovered_absent",
+   "note": "None of the snippets discuss bronchitis progressing to or being complicated by a secondary pneumonia. They cover bronchi",
+   "top_docs": [
+    "A Prospective Observational Study Evaluating the PRogression",
+    "Development and Validation of a Risk Score for Predicting Se",
+    "Severe community-acquired pneumonia: current concepts and co"
+   ]
+  },
+  {
+   "id": "xd-008-bronchitis-pneumonia",
+   "axis": "warning signs that should prompt reassessment (worsening, persistence beyond ~3 weeks, high fever)",
+   "bucket": "uncovered_absent",
+   "note": "Snippets are pneumonia diagnostic criteria from clinical trial eligibility protocols, not guidance on warning signs duri",
+   "top_docs": [
+    "A Phase 4 Study Using a Test-Negative Design to Evaluate the",
+    "Efficacy and Safety of Faropenem in Bangladeshi Adult Patien",
+    "A Multicenter, Randomized, Double-Blind, Double-Dummy Compar"
+   ]
+  },
+  {
+   "id": "xd-008-bronchitis-pneumonia",
+   "axis": "higher-risk groups (elderly, immunocompromised, chronic lung disease)",
+   "bucket": "covered"
+  }
+ ]
+}

@@ -2899,7 +2899,14 @@ async function submitTriage(text){
       triageError(why); return;
     }
     const d = await r.json();
-    if(d.status === "ready"){ renderTriageReady(d); }
+    // SAFETY on every turn, not only at ready: an emergent detail revealed mid-intake must
+    // surface immediately (the panel's code review found ask-turns silently dropped d.safety).
+    if(d.safety === "urgent" && d.status !== "ready"){
+      TRIAGE.transcript.push({role:"assistant", text: (d.message || "") +
+        "\n\n⚠ Based on what you've described, please seek urgent in-person or emergency medical evaluation now. I can keep researching the evidence meanwhile."});
+      renderTriage(false);
+    }
+    else if(d.status === "ready"){ renderTriageReady(d); }
     else {
       TRIAGE.transcript.push({role:"assistant", text: d.message || "Could you tell me a bit more about the case?"});
       renderTriage(false);

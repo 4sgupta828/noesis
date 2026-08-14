@@ -274,6 +274,68 @@ SPECIALISTS: tuple[SpecialistConfig, ...] = (
               "Ground every statement in the evidence."),
         focus="genetic testing, heritable condition, early-onset disease, family history, pharmacogenomics, genetic counseling",
         source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="transplant_medicine", specialty="Transplant Medicine",
+        lens=("You are a transplant-medicine physician on a case panel. Evaluate ONLY the transplant lens: "
+              "immunosuppression management and its interactions, graft function protection, infection risk "
+              "under immunosuppression, and drug dosing/selection specific to transplant recipients. Ground "
+              "every statement in the evidence."),
+        focus="transplant recipient, immunosuppression, tacrolimus, cyclosporine, graft function, rejection, transplant drug interactions",
+        source_keys=("europepmc", "clinicaltrials", "dailymed", "web")),
+    SpecialistConfig(
+        id="addiction_medicine", specialty="Addiction Medicine",
+        lens=("You are an addiction-medicine physician on a case panel. Evaluate ONLY the substance-use lens: "
+              "substance use in the differential and its interactions with the case's drugs, withdrawal risks, "
+              "evidence-based treatment (MOUD, tapering strategies), and harm reduction. Ground every statement "
+              "in the evidence; never moralize."),
+        focus="substance use disorder, opioid use disorder, alcohol use, withdrawal, tapering, buprenorphine, naltrexone, harm reduction",
+        source_keys=("europepmc", "clinicaltrials", "dailymed", "web")),
+    SpecialistConfig(
+        id="obesity_lifestyle", specialty="Obesity & Lifestyle Medicine",
+        lens=("You are an obesity/lifestyle-medicine physician on a case panel. Evaluate ONLY the metabolic-"
+              "lifestyle lens: weight management options and their evidence (behavioral, pharmacologic incl. "
+              "GLP-1 class, surgical), exercise and diet interventions with actual trial support, and how "
+              "weight interacts with the case's conditions and drugs. Ground every statement in the evidence."),
+        focus="obesity management, weight loss, GLP-1, semaglutide, bariatric surgery, exercise intervention, lifestyle modification",
+        source_keys=("europepmc", "clinicaltrials", "dailymed", "web")),
+    SpecialistConfig(
+        id="oral_health", specialty="Oral Health / Dental Medicine",
+        lens=("You are a dental-medicine specialist on a case panel. Evaluate ONLY the oral-health lens: dental "
+              "and oral conditions in the differential, oral-systemic disease links, dental implications of the "
+              "case's drugs (bleeding, osteonecrosis, dry mouth), and when urgent dental evaluation is needed. "
+              "Ground every statement in the evidence."),
+        focus="dental infection, oral health, periodontal disease, osteonecrosis of the jaw, dental extraction anticoagulation, oral lesions",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="vascular", specialty="Vascular Medicine & Surgery",
+        lens=("You are a vascular specialist on a case panel. Evaluate ONLY the vascular lens: arterial and "
+              "venous disease in the differential (PAD, aneurysm, DVT/PE, venous insufficiency), when imaging "
+              "or intervention is indicated vs medical management, and antithrombotic strategy trade-offs. "
+              "Ground every statement in the evidence."),
+        focus="peripheral artery disease, aneurysm, deep vein thrombosis, venous insufficiency, revascularization, claudication, antithrombotic",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="neurosurgery", specialty="Neurosurgery",
+        lens=("You are a neurosurgeon on a case panel. Evaluate ONLY the neurosurgical lens: when brain/spine "
+              "findings warrant surgical evaluation vs conservative care, operative indications and timing, "
+              "and post-neurosurgical considerations. Ground every statement in the evidence."),
+        focus="neurosurgical indication, spine surgery, decompression, hemorrhage evacuation, hydrocephalus, tumor resection, conservative vs operative",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="sports_medicine", specialty="Sports Medicine",
+        lens=("You are a sports-medicine physician on a case panel. Evaluate ONLY the activity lens: exercise-"
+              "related injury management, return-to-activity criteria, activity prescription in chronic disease, "
+              "and overuse conditions. Ground every statement in the evidence."),
+        focus="return to activity, exercise prescription, overuse injury, sprain, tendinopathy, concussion protocol, activity modification",
+        source_keys=("europepmc", "clinicaltrials", "web")),
+    SpecialistConfig(
+        id="preventive_travel", specialty="Preventive & Travel Medicine",
+        lens=("You are a preventive/travel-medicine physician on a case panel. Evaluate ONLY the prevention "
+              "lens: screening indicated for this person (with intervals and evidence grade), vaccinations, "
+              "chemoprophylaxis, and travel-specific risks and preparation. Ground every statement in the "
+              "evidence."),
+        focus="screening guidelines, vaccination schedule, prophylaxis, travel medicine, immunization, preventive care intervals",
+        source_keys=("europepmc", "clinicaltrials", "web")),
 )
 
 _BY_ID = {s.id: s for s in SPECIALISTS}

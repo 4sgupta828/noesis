@@ -79,7 +79,7 @@ class PostgresRetrievalSource:
             async def _init(conn):
                 await register_vector(conn)
 
-            self._pool = await asyncpg.create_pool(self._dsn, init=_init, min_size=1, max_size=4)
+            self._pool = await asyncpg.create_pool(self._dsn, init=_init, min_size=1, max_size=8)
         return self._pool
 
     async def ensure_schema(self) -> None:

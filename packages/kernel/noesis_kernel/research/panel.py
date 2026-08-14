@@ -93,7 +93,10 @@ _SPECIALIST_MAX_STEPS = 3       # narrower than a full answer (each lens is scop
 # batches (+1–2) are now CHARGED — previously-unmetered spend a worst-case specialist run (4 steps
 # + 3 extract-recoveries + 3 compose attempts = 10) could newly trip at 12. Same true spend.
 _SPECIALIST_MAX_CALLS = 16
-_PANEL_CONCURRENCY = 3
+import os as _os
+# All convened specialists run in parallel by default (the roster cap NOESIS_PANEL_MAX=6 bounds
+# fan-out; the retrieval pool is sized to match). Was hardcoded 3 — users watched lenses queue.
+_PANEL_CONCURRENCY = max(1, int(_os.environ.get("NOESIS_PANEL_CONCURRENCY", "6")))
 _SYNTH_MAX_TOKENS = 8000
 # Latency diet: a specialist is a scoped lens, not a full answer — bound its retries tighter than
 # run_react's defaults (extract-recovery re-asks 3→1, compose retries 3→2).

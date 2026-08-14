@@ -2111,6 +2111,7 @@ function render(data, target, opts){
     ? `<button type="button" class="copybtn fbtop" data-v="up" title="Helpful">👍</button>`
       + `<button type="button" class="copybtn fbtop" data-v="down" title="Not right — tell us why">👎</button>` : "";
   const topbtns = `${hasHl?`<button type="button" class="copybtn hltoggle" id="hltoggle" title="Show color highlights (load-bearing facts, reasoning, key context)">✦ Highlights</button>`:""}`
+    + `${(TERMS_ENABLED && data.grounded && (data.answer||"").trim())?`<button type="button" class="copybtn" id="termstop" title="Explain the key medical terms this answer used — and add them to your All Terms glossary">✦ Key terms</button>`:""}`
     + `${showLink?`<button type="button" class="copybtn" id="linkbtn">🔗 Copy link</button>`:""}`
     + `${(data.answer||n)?`<button type="button" class="copybtn" id="copybtn">⧉ Copy</button>`:""}`
     + fbTop;
@@ -2274,6 +2275,17 @@ function render(data, target, opts){
   if(pg) pg.addEventListener("click", ()=>generatePlain(target));
   const gg = target.querySelector("#gapgo");
   if(gg) gg.addEventListener("click", ()=>generateGapPlan(target, data));
+  const tt = target.querySelector("#termstop");   // top-bar ✦ Key terms — delegates to the slim-row
+  if(tt) tt.addEventListener("click", ()=>{       // affordance (generated once, then scrolls to it)
+    const scope = target.querySelector(".terms-d, #termsgo") ? target
+      : (tt.closest("section, .sessions")?.querySelector(".terms-d, #termsgo") ? tt.closest("section, .sessions") : document);
+    const done = scope.querySelector(".terms-d");
+    if(done){ done.open = true; done.scrollIntoView({behavior:"smooth", block:"start"}); return; }
+    const go = scope.querySelector("#termsgo");
+    if(go && !go.disabled){ go.click(); }
+    const row = scope.querySelector("#terms");
+    if(row) row.scrollIntoView({behavior:"smooth", block:"center"});
+  });
 }
 
 // Reusable "Fill the evidence gaps" panel — used by render() AND by the no-answer / error /

@@ -2749,9 +2749,9 @@ function vzFlow(v){
   edges.forEach(e=>{ const a=pos[e.src], b=pos[e.dst]; if(!a||!b) return;
     const sx=a.x+a.w/2, sy=a.y+a.h, tx=b.x+b.w/2, ty=b.y; const mid=(sy+ty)/2;
     ed += `<path class="vzedge" d="M${sx} ${sy} C ${sx} ${mid} ${tx} ${mid} ${tx} ${ty}" marker-end="url(#vzarr)"/>`;
-    if(e.label){ const lx=(sx+tx)/2, ly=mid; const w=Math.min(e.label.length*6+10,150);
-      lbls += `<rect class="vzedgelblbg" x="${lx-w/2}" y="${ly-9}" width="${w}" height="17" rx="8"/>`+
-              `<text class="vzedgelbl" x="${lx}" y="${ly+3}">${esc(e.label.length>24?e.label.slice(0,23)+"…":e.label)}</text>`; }
+    if(e.label){ const lx=(sx+tx)/2, ly=mid; const w=e.label.length*6+12;   // fit full text, no truncation
+      lbls += `<rect class="vzedgelblbg" x="${(lx-w/2).toFixed(1)}" y="${ly-9}" width="${w.toFixed(1)}" height="17" rx="8"/>`+
+              `<text class="vzedgelbl" x="${lx}" y="${ly+3}">${esc(e.label)}</text>`; }
   });
   let nd=""; nodes.forEach(n=>nd+=vzNodeBox(n,pos[n.id],(indeg[n.id]||0)===0));
   return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W} ${totalH}" width="${W}" height="${totalH}" role="img">${VZ_DEFS}${ed}${nd}${lbls}</svg></div>`;
@@ -2797,15 +2797,18 @@ function vzTree(v){
 }
 function vzTimeline(v){
   const ev=v.events||[]; if(ev.length<2) return "";
-  const railX=96, W=560, gap=10, textX=railX+22;
+  // dynamic left rail so the (wrapped, never-truncated) time labels always fit
+  let maxWhenChars=0; const rows0=ev.map(e=>{ const wl=vzWrap(e.when||"",16);
+    wl.forEach(l=>maxWhenChars=Math.max(maxWhenChars,l.length)); return wl; });
+  const railX=Math.max(96, Math.round(maxWhenChars*6.3)+24), textX=railX+22, W=railX+440, gap=10;
   let y=16; const rows=[];
-  ev.forEach(e=>{ const lines=vzWrap(e.label,58); const wl=vzWrap(e.when||"",15);
-    const h=Math.max(lines.length*16, wl.length*14)+16; rows.push({e,lines,wl,y,h}); y+=h+gap; });
+  ev.forEach((e,i)=>{ const lines=vzWrap(e.label,58); const wl=rows0[i];
+    const h=Math.max(lines.length*16, wl.length*15)+16; rows.push({e,lines,wl,y,h}); y+=h+gap; });
   const totalH=y+4;
   let s=`<line class="vzrail" x1="${railX}" y1="10" x2="${railX}" y2="${totalH-8}"/>`;
   rows.forEach(r=>{ const cy=r.y+10;
     s+=`<circle class="vzdot" cx="${railX}" cy="${cy}" r="5"/>`;
-    const when=(r.e.when||""); if(when) s+=`<text class="vzwhen" x="${railX-14}" y="${cy+3}">${esc(when.length>16?when.slice(0,15)+"…":when)}</text>`;
+    if((r.e.when||"") && r.wl.length) s+=vzTextLines(r.wl, railX-14, cy+3-(r.wl.length-1)*7, "vzwhen", 14);
     s+=vzTextLines(r.lines, textX, cy+3, "vzevlabel", 16);
   });
   return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W} ${totalH}" width="${W}" height="${totalH}" role="img">${s}</svg></div>`;
@@ -2862,9 +2865,9 @@ function vzMap(v){
   E.forEach((e,k)=>{ const a=vzClip(px(e.s),py(e.s),px(e.t),py(e.t),nodes[e.s]._w/2+2,nodes[e.s]._h/2+2);
     const b=vzClip(px(e.t),py(e.t),px(e.s),py(e.s),nodes[e.t]._w/2+2,nodes[e.t]._h/2+2);
     ed+=`<line class="vzedge" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" marker-end="url(#vzarr)"/>`;
-    const lbl=edges[k].label; if(lbl){ const mx=(a.x+b.x)/2, my=(a.y+b.y)/2, w=Math.min(lbl.length*5.6+10,124);
+    const lbl=edges[k].label; if(lbl){ const mx=(a.x+b.x)/2, my=(a.y+b.y)/2, w=lbl.length*5.8+12;   // fit full text
       lbls+=`<rect class="vzedgelblbg" x="${(mx-w/2).toFixed(1)}" y="${(my-8).toFixed(1)}" width="${w.toFixed(1)}" height="15" rx="7"/>`+
-            `<text class="vzedgelbl" x="${mx.toFixed(1)}" y="${(my+3).toFixed(1)}">${esc(lbl.length>20?lbl.slice(0,19)+"…":lbl)}</text>`; }
+            `<text class="vzedgelbl" x="${mx.toFixed(1)}" y="${(my+3).toFixed(1)}">${esc(lbl)}</text>`; }
   });
   let nd="";
   nodes.forEach((n,i)=>{ const x=px(i)-n._w/2, y=py(i)-n._h/2;

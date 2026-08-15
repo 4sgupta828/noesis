@@ -1644,6 +1644,7 @@ let DYN_ENGINES = false;         // dynamic engine selection on → interlock ho
 let INTEGRATIVE_ON = false;      // the per-question opt-in state (off by default)
 let MODALITY_ENABLED = false;    // therapy-modality toggle available (Modern Medicine / Alternative)
 let MODALITY = "allopathic";     // active modality; "alternative" surfaces the CAM corpus
+let PENDING_INTAKE_TRANSCRIPT = null;  // Guided-intake conversation to attach to the next answer (once)
 // Set the active therapy modality + sync the toggle UI. Called by the manual toggle AND by Guided
 // intake (which picks the modality from the framed question). No-op when modality mode is off.
 function setModality(m){
@@ -3934,6 +3935,8 @@ function routeTriage(route, refined){
     setMode("qa");                                       // Q&A intake: effort/format available, ask when ready
     // apply the modality Guided chose from the framed question (updates the toggle + the request scope)
     if(MODALITY_ENABLED) setModality(TRIAGE.modality || "allopathic");
+    // carry the intake conversation so it's saved on the resulting answer (admin-only audit view)
+    PENDING_INTAKE_TRANSCRIPT = (TRIAGE.transcript || []).map(m => ({role: m.role, text: m.text}));
     q.value = refined; autoGrow(); q.focus();
     GUIDED_REFINED = true;   // already sharpened by guided intake → don't offer "pick a sharper question"
   }
@@ -4539,6 +4542,10 @@ async function askQuestion(question, opts){
   if(ATTACHMENTS.length) payload.attachments = ATTACHMENTS.slice();
   if(INTEGRATIVE_ENABLED && INTEGRATIVE_ON) payload.integrative = true;   // per-question opt-in
   if(MODALITY_ENABLED && MODALITY === "alternative") payload.modality = "alternative";   // CAM mode
+  if(PENDING_INTAKE_TRANSCRIPT && PENDING_INTAKE_TRANSCRIPT.length && !THREAD.turns.length){
+    payload.intake_transcript = PENDING_INTAKE_TRANSCRIPT;   // save the Guided conversation onto this answer
+  }
+  PENDING_INTAKE_TRANSCRIPT = null;   // single-use: only the first answer after Guided carries it
   if(opts.engine) payload.engine = opts.engine;   // interlock hop: force a specific engine
   if(USER){ payload.user_name = USER.name; payload.user_email = USER.email; }
   if(conv){
@@ -5265,6 +5272,20 @@ function showSessionDetail(row, rowEl){
   }
   const sdbody = $("#sdbody");
   let firstAns = null, firstTurn = turns[0] || row;
+  // audit surface: evidence-mode badge (everyone) + the Guided intake transcript (admin-only)
+  if((firstTurn.modality || "") === "alternative"){
+    const qm = sdetail.querySelector(".qm");
+    if(qm) qm.insertAdjacentHTML("beforeend",
+      ` · <span class="audbadge" style="background:rgba(var(--gold-rgb),.14);color:var(--gold)">🌿 Alternative mode</span>`);
+  }
+  const _intake = firstTurn.intake_transcript || [];
+  if(_intake.length && sessionStorage.getItem("noesis_apw")){   // admin logged in → show intake conversation
+    const it = document.createElement("details"); it.className = "plain plain-d";
+    it.innerHTML = `<summary class="plain-h">◍ Guided intake transcript · admin · ${_intake.length} turns</summary>
+      <div class="plain-b" style="display:flex;flex-direction:column;gap:.4rem;padding-top:.5rem">${
+        _intake.map(m=>`<div class="tgt-msg ${m.role==='user'?'user':'bot'}">${esc(m.text||"")}</div>`).join("")}</div>`;
+    const sa = sdetail.querySelector("#sactions"); if(sa) sa.insertAdjacentElement("afterend", it);
+  }
   turns.forEach((t,i)=>{
     const block = document.createElement("div"); block.className = "turn";
     const ef = Number(t.effort) || 1;

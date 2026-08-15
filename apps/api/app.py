@@ -859,6 +859,7 @@ class ResearchIn(BaseModel):
     session_id: str | None = None         # thread to append this turn to (conversation)
     countries: list[str] | None = None    # source-country scope (e.g. ["IN"]); None/[]=all (see flag)
     modality: str = "allopathic"          # "allopathic" (default, excludes CAM) | "alternative"; ignored unless flag on
+    intake_transcript: list[dict] | None = None  # Guided-intake conversation [{role,text}] → saved for admin audit
     practice_context: str = ""            # per-question profile override: "IN" | "global" | "" (account default)
     effort: float = Field(default=1.0, ge=1.0, le=2.5)   # effort multiplier; ignored unless flag on
     audience: str = "clinician"           # "clinician" (default) | "patient"; ignored unless flag on
@@ -1888,6 +1889,16 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 # on the session turn (JSONB thread — additive field, no migration). Only present
                 # when a contract was actually derived (NOESIS_QUESTION_CONTRACT shadow/steer).
                 turn["question_contract"] = res.question_contract
+            # Audit fields (additive JSONB): the evidence MODALITY this ran in, and — when the question
+            # came from Guided intake — the intake CONVERSATION transcript (shown only to a logged-in admin).
+            _extra = {}
+            if modality_mode_enabled() and (getattr(body, "modality", "") or "").strip().lower() == "alternative":
+                _extra["modality"] = "alternative"
+            if getattr(body, "intake_transcript", None):
+                _extra["intake_transcript"] = [
+                    {"role": (m.get("role") or "")[:12], "text": (m.get("text") or "")[:2000]}
+                    for m in (body.intake_transcript or [])[:40] if isinstance(m, dict) and m.get("text")]
+            turn.update(_extra)
             try:
                 # Audience-guarded append: only continue a thread whose audience MATCHES this turn's
                 # (mid-thread toggle → mismatch → save a fresh session instead of corrupting the thread).
@@ -1910,7 +1921,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                         reasoning_purpose=(getattr(res, "reasoning_purpose", "") if reasoning_read_enabled() else ""),
                         reasoning_conclusion=(getattr(res, "reasoning_conclusion", "") if reasoning_read_enabled() else ""),
                         diagnostics=(getattr(res, "diagnostics", None) if diag_trace_enabled() else None),
-                        question_contract=getattr(res, "question_contract", None))
+                        question_contract=getattr(res, "question_contract", None),
+                        extra=(_extra or None))
             except Exception:
                 session_id = None
         # perf metrics (best-effort): distill a compact row from the diagnostics for the admin dashboard

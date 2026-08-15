@@ -1340,7 +1340,7 @@
     <button type="button" class="histbtn" id="pplbtn" style="margin-left:0;"
             title="Find the right specialist for a situation" aria-label="People">⧉ People</button>
     <button type="button" class="histbtn" id="termsbtn" style="margin-left:0;" hidden
-            title="Every medical term Noesis has explained — searchable, each linking to its related terms" aria-label="All Terms">✦ Terms</button>
+            title="Every medical concept Noesis has explained — searchable, each linking to its related concepts" aria-label="Key Concepts">✦ Concepts</button>
   </header>
 
   <h1 id="heading">What does the evidence show?</h1>
@@ -1455,10 +1455,10 @@
 </section>
 
 <!-- ✦ All Terms: full-page glossary — the accumulating, navigable web of explained medical terms -->
-<section class="termspage" id="termspage" hidden aria-label="All Terms">
+<section class="termspage" id="termspage" hidden aria-label="Key Concepts">
   <div class="tphead">
     <button type="button" class="sback" id="tpback">← Back</button>
-    <span class="pptitle">✦ All Terms</span>
+    <span class="pptitle">✦ Key Concepts</span>
     <span class="ppsub" id="tpcount"></span>
     <input type="search" class="tpsearch" id="tpsearch" placeholder="Search terms…" aria-label="Search terms">
   </div>
@@ -2207,7 +2207,7 @@ function render(data, target, opts){
     ? `<button type="button" class="copybtn fbtop" data-v="up" title="Helpful">👍</button>`
       + `<button type="button" class="copybtn fbtop" data-v="down" title="Not right — tell us why">👎</button>` : "";
   const topbtns = `${hasHl?`<button type="button" class="copybtn hltoggle" id="hltoggle" title="Show color highlights (load-bearing facts, reasoning, key context)">✦ Highlights</button>`:""}`
-    + `${(TERMS_ENABLED && data.grounded && (data.answer||"").trim())?`<button type="button" class="copybtn" id="termstop" title="Explain the key medical terms this answer used — and add them to your All Terms glossary">✦ Key terms</button>`:""}`
+    + `${(TERMS_ENABLED && data.grounded && (data.answer||"").trim())?`<button type="button" class="copybtn" id="termstop" title="Explain the key medical concepts this answer used — and add them to your Concepts glossary">✦ Explain concepts</button>`:""}`
     + `${(VISUAL_ENABLED && data.grounded && (data.answer||"").trim())?`<button type="button" class="copybtn" id="visualstop" title="Add grounded visuals — mechanism flows, decision trees, timelines — built only from this answer">◫ Add visuals</button>`:""}`
     + `${showLink?`<button type="button" class="copybtn" id="linkbtn">🔗 Copy link</button>`:""}`
     + `${(data.answer||n)?`<button type="button" class="copybtn" id="copybtn">⧉ Copy</button>`:""}`
@@ -2509,9 +2509,9 @@ function convoActionsMarkup(data){
   }
   if(data.terms && data.terms.length){
     // saved with the session — re-render collapsed on reopen (same pattern as layman_answer)
-    boxes.push(`<details class="plain plain-d terms-d"><summary class="plain-h">✦ Key terms in this answer (${data.terms.length})</summary>
+    boxes.push(`<details class="plain plain-d terms-d"><summary class="plain-h">✦ Key concepts in this answer (${data.terms.length})</summary>
       <div class="termgrid">${data.terms.map(termCardHtml).join("")}</div>
-      <div class="termfoot"><a href="#" class="tall">Browse All Terms →</a></div></details>`);
+      <div class="termfoot"><a href="#" class="tall">Browse concepts →</a></div></details>`);
   } else if(TERMS_ENABLED && data.grounded && (data.answer||"").trim()){
     slim.push(termsActionHtml());
   }
@@ -2697,23 +2697,23 @@ async function generateTerms(root, data){
     if(!terms || !terms.length) throw new Error("no key terms found in this answer");
     const d = document.createElement("details");
     d.className = "plain plain-d terms-d"; d.open = true;
-    d.innerHTML = `<summary class="plain-h">✦ Key terms in this answer (${terms.length})</summary>
+    d.innerHTML = `<summary class="plain-h">✦ Key concepts in this answer (${terms.length})</summary>
       <div class="termgrid">${terms.map(termCardHtml).join("")}</div>
-      <div class="termfoot">${glossary_total?`Saved — your glossary now holds <b>${glossary_total}</b> term${glossary_total===1?"":"s"}. `:""}<a href="#" class="tall">Browse All Terms →</a></div>`;
+      <div class="termfoot">${glossary_total?`Saved — your glossary now holds <b>${glossary_total}</b> concept${glossary_total===1?"":"s"}. `:""}<a href="#" class="tall">Browse concepts →</a></div>`;
     item.replaceWith(d);
     wireTermChips(d);
     const ta = d.querySelector(".tall"); if(ta) ta.addEventListener("click", e=>{e.preventDefault(); openTermsPage();});
     if(data.panel && typeof PANEL_THREAD!=="undefined" && PANEL_THREAD.turns && PANEL_THREAD.turns[ti] && PANEL_THREAD.turns[ti].result)
       PANEL_THREAD.turns[ti].result.terms = terms;   // keep in-memory turn state consistent
   }catch(e){
-    btn.disabled = false; btn.textContent = "✦ Key terms";
+    btn.disabled = false; btn.textContent = "✦ Explain concepts";
     if(hint){ hint.hidden = false; hint.textContent = "Couldn't explain: "+(e.message||e); }
   }
 }
 // The one slim-row affordance, shared by Q&A (convoActionsMarkup) and Panel (renderPanelSynth).
 function termsActionHtml(){
   return `<span class="xitem" id="terms"><button type="button" class="xbtn" id="termsgo"
-    title="Explain the key medical terms this answer used — what each is, why it matters, how it's applied — and add them to your All Terms glossary.">✦ Key terms</button>
+    title="Explain the key medical concepts this answer used — what each is, why it matters, how it's applied — and add them to your Concepts glossary.">✦ Explain concepts</button>
     <span class="xhint terms-hint" hidden></span></span>`;
 }
 
@@ -3007,7 +3007,7 @@ async function tpRender(){
       letters.querySelectorAll(".tpl").forEach(b=>b.addEventListener("click",()=>{ TP_LETTER=b.dataset.l; tpRender(); }));
     }
     if(!(g.terms||[]).length){
-      list.innerHTML = `<div class="pitem-empty">${(TP_Q||TP_LETTER)?"No terms match.":"No terms yet — ask a question, then use “✦ Key terms” under the answer to start building your glossary."}</div>`;
+      list.innerHTML = `<div class="pitem-empty">${(TP_Q||TP_LETTER)?"No concepts match.":"No concepts yet — ask a question, then use “✦ Explain concepts” under the answer to start building your glossary."}</div>`;
       return;
     }
     list.innerHTML = `<div class="termgrid">${g.terms.map(termCardHtml).join("")}</div>`;
@@ -4311,9 +4311,9 @@ function renderPanelSynth(data, el){
   // ✦ Key terms — persisted onto this panel turn (like visuals) so a reopened discussion re-renders them.
   if(data.terms && data.terms.length){
     const tw = document.createElement("div");
-    tw.innerHTML = `<details class="plain plain-d terms-d" open><summary class="plain-h">✦ Key terms in this answer (${data.terms.length})</summary>
+    tw.innerHTML = `<details class="plain plain-d terms-d" open><summary class="plain-h">✦ Key concepts in this answer (${data.terms.length})</summary>
       <div class="termgrid">${data.terms.map(termCardHtml).join("")}</div>
-      <div class="termfoot"><a href="#" class="tall">Browse All Terms →</a></div></details>`;
+      <div class="termfoot"><a href="#" class="tall">Browse concepts →</a></div></details>`;
     el.appendChild(tw); wireTermChips(tw);
     const ta = tw.querySelector(".tall"); if(ta) ta.addEventListener("click", e=>{e.preventDefault(); openTermsPage();});
   } else if(TERMS_ENABLED && (answer||"").trim()){

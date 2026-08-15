@@ -250,6 +250,25 @@ class AccountStore:
                 "by_day": by_day, "recent": recent,
                 "users": {"registered": n_users, "npi_verified": n_verified}}
 
+    async def list_users(self, *, limit: int = 500) -> list[dict]:
+        """All registered users (newest first) — name, email, profession, country, NPI-verified,
+        registered + last-seen timestamps. Admin-only (PII); the caller gates access."""
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT name, email, profession, country, npi_verified,
+                          created_at, last_seen
+                   FROM noesis_user WHERE vertical=$1 ORDER BY created_at DESC LIMIT $2""",
+                self._vertical, int(limit))
+        out = []
+        for r in rows:
+            d = dict(r)
+            for k in ("created_at", "last_seen"):
+                if d.get(k) is not None:
+                    d[k] = d[k].isoformat()
+            out.append(d)
+        return out
+
     # ---- per-user preferences (Noesis IN D-7: the server-authoritative profile substrate) ----
 
     async def get_pref(self, user_id: str, key: str) -> str:

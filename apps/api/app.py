@@ -3657,6 +3657,21 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     def admin_page(accept_encoding: str = Header(default="")):
         return _html_response("admin.html", accept_encoding)
 
+    @app.get("/admin/users")
+    async def admin_users(limit: int = 500, x_admin_password: str = Header(default="")) -> dict:
+        """Registered users (name/email/profession/country/verified/registered/last-seen). PII →
+        admin-password gated."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        acc = _accounts()
+        if acc is None:
+            return {"users": [], "count": 0, "note": "accounts not enabled / no corpus DSN"}
+        try:
+            users = await acc.list_users(limit=max(1, min(int(limit), 5000)))
+            return {"users": users, "count": len(users)}
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"users query failed: {e}") from e
+
     @app.get("/admin/perf", response_class=HTMLResponse)
     def perf_page(accept_encoding: str = Header(default="")):
         return _html_response("perf.html", accept_encoding)

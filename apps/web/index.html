@@ -1556,6 +1556,26 @@
   </div>
 </div>
 
+<!-- selection → "Learn more": floating popover on any highlighted text in the readable content -->
+<style>
+  #seltip{position:fixed;z-index:1200;display:none;align-items:center;gap:.1rem;background:var(--panel);
+    border:1px solid var(--hair);border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.2);padding:.2rem .25rem;
+    font-family:var(--sans);animation:seltipin .12s ease;}
+  #seltip.on{display:inline-flex;}
+  @keyframes seltipin{from{opacity:0;transform:translateY(3px);}}
+  #seltip button{font-size:.76rem;background:transparent;border:0;color:var(--ink);cursor:pointer;
+    padding:.3rem .62rem;border-radius:999px;white-space:nowrap;line-height:1;}
+  #seltip button:hover{background:var(--panel2);color:var(--gold);}
+  #seltip .stsep{width:1px;height:15px;background:var(--hair);}
+  @media (prefers-reduced-motion:reduce){#seltip{animation:none;}}
+</style>
+<div id="seltip" role="menu" aria-label="Learn more about the selection">
+  <button type="button" data-act="explain" id="seltip-explain" hidden title="Explain this in Noesis — grounded definition">✦ Explain</button>
+  <span class="stsep" id="seltip-sep" hidden></span>
+  <button type="button" data-act="google" title="Deep-dive on Google (free, opens a new tab)">🔍 Learn more</button>
+  <button type="button" data-act="perplexity" title="Ask Perplexity — free AI search (opens a new tab)">Perplexity ↗</button>
+</div>
+
 <!-- relationship-graph console (admin, password-gated, READ-ONLY) -->
 <div class="idmodal" id="graphmodal" hidden>
   <div class="idcard grcard">
@@ -5972,6 +5992,58 @@ window.addEventListener("hashchange", ()=>{
   // navigated away from a mode hash (e.g. browser Back) → return to Quick Q&A
   if(APP_MODE !== "qa") setMode("qa");
 });
+
+// ---- selection → "Learn more" — grounded explain (Noesis) or a free AI deep-dive (Google / Perplexity)
+// A floating popover on any highlighted text in the readable content. No backend, no cost: the external
+// options open a free web AI search in a new tab; ✦ Explain reuses our own grounded glossary lookup.
+(function(){
+  const LEARN_MORE_ENABLED = true;                       // one-line off-switch
+  const tip = document.getElementById("seltip");
+  if(!LEARN_MORE_ENABLED || !tip) return;
+  const openers = {
+    google:     q => "https://www.google.com/search?q=" + encodeURIComponent(q),   // AI Overviews appear inline
+    perplexity: q => "https://www.perplexity.ai/search?q=" + encodeURIComponent(q),
+  };
+  // only offer it inside readable answer/term/diagram content — never over the composer or controls
+  const CONTENT = ".answer,.md,.plain-b,.termcard,.term-plain,.term-row,.tgt-refined,.tgt-understood,.tgt-msg,.spec,.panel-delib,.vzcard,.vzcap,.wn-follow,#out,#sdetail,#termspage,#pulsepage";
+  let selText = "";
+  function inContent(sel){
+    if(!sel.rangeCount) return false;
+    let n = sel.getRangeAt(0).commonAncestorContainer;
+    if(n && n.nodeType === 3) n = n.parentElement;
+    if(!n || !n.closest) return false;
+    if(n.closest("input,textarea,button,select,#seltip,form#ask")) return false;
+    return !!n.closest(CONTENT);
+  }
+  function place(){
+    const sel = window.getSelection();
+    const txt = (sel && sel.toString() || "").replace(/\s+/g, " ").trim();
+    if(txt.length < 3 || txt.length > 400 || !inContent(sel)){ tip.classList.remove("on"); return; }
+    selText = txt;
+    // ✦ Explain (our grounded glossary) only for a short, term-like selection, and only when enabled
+    const canExplain = txt.length <= 60 && (typeof TERMS_ENABLED !== "undefined" && TERMS_ENABLED) && typeof openTermsPage === "function";
+    const ex = document.getElementById("seltip-explain"), sp = document.getElementById("seltip-sep");
+    if(ex) ex.hidden = !canExplain; if(sp) sp.hidden = !canExplain;
+    tip.classList.add("on");
+    const r = sel.getRangeAt(0).getBoundingClientRect();
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let x = Math.max(8, Math.min(r.left + r.width/2 - tw/2, window.innerWidth - tw - 8));
+    let y = r.top - th - 8; if(y < 8) y = r.bottom + 8;
+    tip.style.left = x + "px"; tip.style.top = y + "px";
+  }
+  document.addEventListener("mouseup", () => setTimeout(place, 10));
+  document.addEventListener("touchend", () => setTimeout(place, 10));
+  document.addEventListener("selectionchange", () => {
+    if(((window.getSelection() && window.getSelection().toString() || "").trim()).length < 3) tip.classList.remove("on"); });
+  document.addEventListener("scroll", () => tip.classList.remove("on"), true);
+  tip.addEventListener("mousedown", e => e.preventDefault());   // keep the text selection alive on click
+  tip.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    const act = b.dataset.act;
+    tip.classList.remove("on");
+    if(act === "explain" && typeof openTermsPage === "function"){ openTermsPage(selText); return; }
+    window.open((openers[act] || openers.google)(selText), "_blank", "noopener,noreferrer");
+  }));
+})();
 </script>
 </body>
 </html>

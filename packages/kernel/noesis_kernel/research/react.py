@@ -667,7 +667,14 @@ async def run_react(
     # the loop (no extra LLM calls). None → byte-identical OFF path.
     _diag_t0 = time.monotonic() if collect_diagnostics else None
     diag = ({"trace": [], "retries": {"compose": 0, "compose_ref_retry": False, "extract_recovery": 0},
-             "failures": [], "compose_calls": 0} if collect_diagnostics else None)
+             "failures": [], "compose_calls": 0, "timing": {}} if collect_diagnostics else None)
+    # factra-style per-call latency capture: every Anthropic complete() this request appends to this
+    # list, so the diagnostics can attribute wall-clock to individual LLM calls (zero cost when off).
+    _call_log_tok = None
+    if collect_diagnostics:
+        from noesis_kernel.providers.anthropic_llm import LLM_CALL_LOG as _LLM_CALL_LOG
+        _call_log = []
+        _call_log_tok = _LLM_CALL_LOG.set(_call_log)
     # The span-verifier's block loader must cover EVERY source a claim can cite — corpus AND aux
     # (web). Since search is split (corpus multi-query + aux single-query), combine their loaders
     # so a web-cited quote is still verifiable (else all web claims would be rejected).
@@ -1724,6 +1731,19 @@ async def run_react(
                                      "detail": "unsupported figures in prose: " + ", ".join(sorted(unsupported))})
         diag["prose_unsupported_tokens"] = sorted(unsupported)
         diag["duration_ms"] = int((time.monotonic() - _diag_t0) * 1000)
+        # attribute wall-clock: per-Anthropic-call latencies + the LLM-vs-other split
+        if _call_log_tok is not None:
+            calls = list(_call_log)
+            _LLM_CALL_LOG.reset(_call_log_tok)
+            llm_ms = sum(c["ms"] for c in calls)
+            diag["llm_calls_detail"] = calls
+            diag["timing"].update({
+                "total_ms": diag["duration_ms"],
+                "anthropic_calls": len(calls),
+                "anthropic_ms": llm_ms,
+                "anthropic_slowest_ms": max((c["ms"] for c in calls), default=0),
+                "non_anthropic_ms": max(0, diag["duration_ms"] - llm_ms),   # retrieval+embed+OpenAI judges+overhead
+            })
         result.diagnostics = diag
     return result
 

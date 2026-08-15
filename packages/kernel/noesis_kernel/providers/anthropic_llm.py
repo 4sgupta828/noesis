@@ -7,8 +7,10 @@ dev/CI/eval replay for free; this only spends credits in record/live mode.
 """
 from __future__ import annotations
 
+import contextvars
 import json
 import os
+import time
 from decimal import Decimal
 
 from pydantic import BaseModel, ValidationError
@@ -16,6 +18,11 @@ from pydantic import BaseModel, ValidationError
 from .llm import LLMResult
 
 DEFAULT_MODEL = os.environ.get("NOESIS_LLM_MODEL", "claude-sonnet-5")
+
+# Request-scoped per-call latency log (factra-style diagnostics). When a caller sets this to a fresh
+# list, every complete() appends {model, max_tokens, in, out, ms} so the diagnostics trace can attribute
+# wall-clock to individual LLM calls. Unset (None) → zero overhead, nothing recorded.
+LLM_CALL_LOG: contextvars.ContextVar[list | None] = contextvars.ContextVar("llm_call_log", default=None)
 
 
 def _recover_stringified(raw, model: type[BaseModel]) -> BaseModel | None:
@@ -109,6 +116,7 @@ class AnthropicLLM:
         import asyncio
         # The Anthropic SDK client here is SYNCHRONOUS; run it off the event loop so a research
         # request's LLM round-trip doesn't block the whole API (and SSE heartbeats can flush).
+        _t0 = time.perf_counter()
         resp = await asyncio.to_thread(
             lambda: self._client.messages.create(
                 model=self._model,
@@ -119,6 +127,7 @@ class AnthropicLLM:
                 tool_choice={"type": "tool", "name": "emit"},
                 **({"temperature": temperature} if temperature is not None else {}),
             ))
+        _ms = int((time.perf_counter() - _t0) * 1000)   # per-call wall-clock (includes SDK retries/backoff)
         # A max_tokens cutoff truncates the emit tool-call mid-JSON, so block.input is a partial dict
         # that fails schema validation with an opaque pydantic error. Surface the REAL cause instead
         # (Rule 13) so the fix is "raise max_tokens", not a wild goose chase.
@@ -141,10 +150,15 @@ class AnthropicLLM:
         if parsed is None:
             raise RuntimeError("Anthropic response contained no 'emit' tool_use block")
 
+        _log = LLM_CALL_LOG.get()
+        if _log is not None:
+            _log.append({"model": self._model, "max_tokens": max_tokens, "ms": _ms,
+                         "in": resp.usage.input_tokens, "out": resp.usage.output_tokens})
         return LLMResult(
             parsed=parsed,
             input_tokens=resp.usage.input_tokens,
             output_tokens=resp.usage.output_tokens,
             cost_usd=Decimal(0),   # priced by the caller's cost governor if needed
+            latency_ms=_ms,
             model=self._model,
         )

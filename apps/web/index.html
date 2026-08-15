@@ -1707,18 +1707,10 @@ async function loadConfig(){
     TRIAGE_ENABLED = !!c.triage_enabled;
     ACCOUNTS_ENABLED = !!c.accounts_enabled;
     DUEL_ENABLED = !!c.duel_enabled;
-    INTEGRATIVE_ENABLED = !!c.integrative_enabled;
+    INTEGRATIVE_ENABLED = false;   // integrative toggle removed from the UI (Alternative mode supersedes it)
     PULSE_ENABLED = !!c.pulse_enabled;
     maybeShowPulseBell();
     DYN_ENGINES = !!c.dynamic_engines_enabled;
-    if(INTEGRATIVE_ENABLED){
-      const isel = $("#integsel"), ib = $("#integbtn");
-      if(isel) isel.hidden = false;
-      if(ib) ib.addEventListener("click", () => {
-        INTEGRATIVE_ON = !INTEGRATIVE_ON;
-        ib.setAttribute("aria-pressed", INTEGRATIVE_ON ? "true" : "false");
-      });
-    }
     MODALITY_ENABLED = !!c.modality_mode_enabled;
     if(MODALITY_ENABLED){
       const ms = $("#modsel"); if(ms){ ms.hidden = false;

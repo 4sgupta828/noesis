@@ -38,6 +38,10 @@ WHEN YOU'RE READY (status="ready"):
                 trade-offs, or conflicting considerations that need several specialist lenses
                 (e.g. an elderly multimorbid patient on many drugs; competing risks across systems).
   Prefer "qa" for a clean single question; reserve "panel" for genuinely multi-dimensional cases.
+- `modality`: "allopathic" (DEFAULT — conventional/modern medicine, for essentially all questions) or
+  "alternative" (ONLY when the request is CENTERED on complementary & alternative medicine as the
+  subject — acupuncture, herbal/traditional medicine, homeopathy, Ayurveda, etc.). When in doubt,
+  "allopathic". Set on the "ready" turn; it selects the evidence scope, not the route.
 - `rationale`: one line on why that route.
 - `message`: one short sentence handing off (e.g. "Here's what I'll search — running it now.").
 
@@ -105,6 +109,16 @@ WHEN YOU'RE READY (status="ready"):
     • "panel" — a complex case spanning MULTIPLE organ systems, comorbidities, drug-safety/interaction
                 trade-offs, or conflicting considerations that need several specialist lenses.
   Prefer "qa" for a clean single question; reserve "panel" for genuinely multi-dimensional cases.
+- `modality`: choose which evidence base best fits the user's INTENT (you own this judgment):
+    • "allopathic" — the DEFAULT. Conventional / modern medicine. Use for essentially all questions,
+                     INCLUDING ones that merely mention a complementary therapy in passing or ask
+                     "what are ALL my options" (mainstream guidelines already cover integrative options).
+    • "alternative" — ONLY when the user's request is CENTERED on complementary & alternative medicine:
+                      they explicitly want to explore acupuncture, acupressure, herbal/traditional
+                      medicine, homeopathy, Ayurveda, naturopathy, TCM, or similar as the SUBJECT of the
+                      question (e.g. "does acupuncture help my migraines", "natural remedies for anxiety",
+                      "what does the evidence say about cupping"). When in doubt, choose "allopathic".
+  Set this on the "ready" turn. It selects the answer's evidence scope; it does not change the routing.
 - `rationale`: one line on why that route.
 - `message`: one short sentence handing off (e.g. "Here's what I'll search — running it now.").
 

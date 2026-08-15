@@ -35,6 +35,10 @@ class TriageTurn(BaseModel):
     understood_problem: str = ""             # cumulative crisp restatement of the case / intent
     refined_question: str = ""               # standalone question to run (required when ready)
     recommended_mode: Literal["qa", "panel"] = "qa"
+    # Generic answer-MODALITY hint, kernel-opaque, meaning supplied by the vertical prompt (like
+    # `register`). The vertical decides values (e.g. medical: "allopathic" | "alternative"); the caller
+    # applies it to the routed question's retrieval scope. "" → the caller's default.
+    modality: str = ""
     rationale: str = ""                      # one line: why this route
     # Generic, non-diagnostic urgency flag — the FE can surface a "seek urgent evaluation" notice.
     # NOT a diagnosis; the model is told to set this only for plainly emergent presentations.

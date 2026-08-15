@@ -586,6 +586,8 @@
   .tgt-ready-h{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.5rem;}
   .tgt-understood{font-size:.86rem;color:var(--muted);line-height:1.55;margin-bottom:.7rem;}
   .tgt-refined{font-family:var(--serif);font-size:1.12rem;line-height:1.4;color:var(--ink);margin-bottom:1rem;}
+  .tgt-modality{font-size:.82rem;line-height:1.5;color:var(--ink);background:rgba(var(--gold-rgb),.08);
+    border:1px solid rgba(var(--gold-rgb),.35);border-radius:10px;padding:.6rem .8rem;margin-bottom:1rem;}
   .tgt-routes{display:flex;flex-wrap:wrap;gap:.6rem;}
   .tgt-route{flex:1;min-width:200px;text-align:left;cursor:pointer;background:var(--panel);border:1px solid var(--hair);
     border-radius:11px;padding:.7rem .85rem;transition:border-color .15s,box-shadow .15s;color:var(--ink);font:inherit;}
@@ -1642,6 +1644,15 @@ let DYN_ENGINES = false;         // dynamic engine selection on → interlock ho
 let INTEGRATIVE_ON = false;      // the per-question opt-in state (off by default)
 let MODALITY_ENABLED = false;    // therapy-modality toggle available (Modern Medicine / Alternative)
 let MODALITY = "allopathic";     // active modality; "alternative" surfaces the CAM corpus
+// Set the active therapy modality + sync the toggle UI. Called by the manual toggle AND by Guided
+// intake (which picks the modality from the framed question). No-op when modality mode is off.
+function setModality(m){
+  MODALITY = (m === "alternative") ? "alternative" : "allopathic";
+  const ms = document.getElementById("modsel");
+  if(ms) ms.querySelectorAll(".modbtn").forEach(x=>{ const on = x.dataset.mod === MODALITY;
+    x.classList.toggle("on", on); x.setAttribute("aria-selected", on ? "true" : "false"); });
+  document.body.classList.toggle("altmode", MODALITY === "alternative");
+}
 let PANEL_SPECIALISTS = [];      // roster from /config [{id, specialty, default}]
 let PANEL_EXAMPLES = [];         // sample multi-specialty cases seeded into the panel intake
 let THREAD = {session_id:null, turns:[]};   // the active conversation
@@ -1714,12 +1725,7 @@ async function loadConfig(){
     MODALITY_ENABLED = !!c.modality_mode_enabled;
     if(MODALITY_ENABLED){
       const ms = $("#modsel"); if(ms){ ms.hidden = false;
-        ms.querySelectorAll(".modbtn").forEach(b=>b.addEventListener("click", ()=>{
-          MODALITY = b.dataset.mod || "allopathic";
-          ms.querySelectorAll(".modbtn").forEach(x=>{ const on=x===b;
-            x.classList.toggle("on", on); x.setAttribute("aria-selected", on?"true":"false"); });
-          document.body.classList.toggle("altmode", MODALITY==="alternative");
-        }));
+        ms.querySelectorAll(".modbtn").forEach(b=>b.addEventListener("click", ()=>setModality(b.dataset.mod)));
       }
     }
     if(ACCOUNTS_ENABLED){
@@ -3875,7 +3881,11 @@ function renderTriageReady(d){
   document.body.classList.add("triage-live");   // keep the composer docked on the hand-off card too
   const refined = d.refined_question || d.understood_problem || "";
   TRIAGE.refined = refined;
+  // Guided picks the evidence base from the framed question (semantic — the intake LLM decides).
+  TRIAGE.modality = (MODALITY_ENABLED && (d.modality||"").toLowerCase()==="alternative") ? "alternative" : "allopathic";
   const rec = d.recommended_mode === "panel" ? "panel" : "qa";
+  const altNote = TRIAGE.modality === "alternative"
+    ? `<div class="tgt-modality">🌿 This looks like an <b>Alternative therapy</b> question — I'll search complementary &amp; alternative medicine evidence (with conventional context and evidence-strength labels).</div>` : "";
   const urgent = d.safety === "urgent"
     ? `<div class="tgt-urgent">${esc(d.message || "This may need urgent in-person evaluation — please use emergency/local care pathways.")}</div>` : "";
   const panelBtn = ASK_PANEL_ENABLED ? `<button type="button" class="tgt-route ${rec==='panel'?'rec':''}" data-route="panel">
@@ -3900,6 +3910,7 @@ function renderTriageReady(d){
     <div class="tgt-ready">
       <div class="tgt-ready-h">Here's your refined question — where should it go?</div>
       ${bodyHtml}
+      ${altNote}
       <div class="tgt-routes">
         <button type="button" class="tgt-route ${rec==='qa'?'rec':''}" data-route="qa">
           <div class="tgt-route-t">⚡ Quick Q&amp;A ${rec==='qa'?'<span class="rec-badge">Recommended</span>':''}</div>
@@ -3921,6 +3932,8 @@ function routeTriage(route, refined){
     setMode("panel", {fresh:true, prefill: refined});   // panel landing: question filled, roster to adjust, Convene when ready
   } else {
     setMode("qa");                                       // Q&A intake: effort/format available, ask when ready
+    // apply the modality Guided chose from the framed question (updates the toggle + the request scope)
+    if(MODALITY_ENABLED) setModality(TRIAGE.modality || "allopathic");
     q.value = refined; autoGrow(); q.focus();
     GUIDED_REFINED = true;   // already sharpened by guided intake → don't offer "pick a sharper question"
   }

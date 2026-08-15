@@ -69,6 +69,51 @@ def test_unknown_kind_dropped():
     assert _clean_visual(Visual(kind="sankey", title="x"), ANSWER) is None
 
 
+MAPANS = ("Obesity drives insulin resistance, which raises blood glucose. Insulin resistance also "
+          "promotes hypertension, and hypertension worsens kidney function. High blood glucose "
+          "further damages the kidneys.")
+
+
+def test_map_keeps_grounded_web_and_drops_isolated_node():
+    v = Visual(kind="map", title="web",
+        nodes=[VNode(id="ob", label="Obesity", quote="Obesity drives insulin resistance"),
+               VNode(id="ir", label="Insulin resistance", quote="Obesity drives insulin resistance"),
+               VNode(id="glu", label="Blood glucose", quote="which raises blood glucose"),
+               VNode(id="htn", label="Hypertension", quote="promotes hypertension"),
+               VNode(id="iso", label="Statins", quote="patient takes a high-dose statin")],  # not in answer
+        edges=[
+            VEdge(src="ob", dst="ir", label="drives", quote="Obesity drives insulin resistance"),
+            VEdge(src="ir", dst="glu", label="raises", quote="which raises blood glucose"),
+            VEdge(src="ir", dst="htn", label="promotes", quote="Insulin resistance also promotes hypertension"),
+        ])
+    out = _clean_visual(v, MAPANS)
+    assert out is not None and out["kind"] == "map"
+    assert {n["id"] for n in out["nodes"]} == {"ob", "ir", "glu", "htn"}   # ungrounded 'iso' dropped
+    assert len(out["edges"]) == 3
+
+
+def test_map_drops_ungrounded_edge_relationship():
+    v = Visual(kind="map", title="web",
+        nodes=[VNode(id="ob", label="Obesity", quote="Obesity drives insulin resistance"),
+               VNode(id="ir", label="Insulin resistance", quote="Obesity drives insulin resistance"),
+               VNode(id="htn", label="Hypertension", quote="promotes hypertension")],
+        edges=[
+            VEdge(src="ob", dst="ir", label="drives", quote="Obesity drives insulin resistance"),
+            VEdge(src="ob", dst="htn", label="cures", quote="obesity cures hypertension"),   # fabricated relation
+        ])
+    # only 1 grounded edge survives → below the map edge floor (2) → whole map dropped
+    assert _clean_visual(v, MAPANS) is None
+
+
+def test_map_below_web_floor_dropped():
+    # 2 nodes, 1 edge — a single link is a flow, not a map
+    v = Visual(kind="map", title="thin",
+        nodes=[VNode(id="ob", label="Obesity", quote="Obesity drives insulin resistance"),
+               VNode(id="ir", label="Insulin resistance", quote="Obesity drives insulin resistance")],
+        edges=[VEdge(src="ob", dst="ir", label="drives", quote="Obesity drives insulin resistance")])
+    assert _clean_visual(v, MAPANS) is None
+
+
 class _LLM:
     def __init__(self, parsed): self._p = parsed
     async def complete(self, *, system, messages, response_format, max_tokens=2048, temperature=None):

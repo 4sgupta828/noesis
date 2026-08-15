@@ -18,8 +18,13 @@ DESIGN (validated by a 3-model design panel + 3 SOTA-research sweeps, 2026-08-14
   that falls below its minimum after validation is dropped; if nothing survives, return [] (abstain,
   never a decorative filler — meaningful-or-empty).
 
-v1 primitives: `flow`, `tree`, `timeline`. (`map`/concept-graph is the planned v2 extension — highest
-value for exploratory answers but needs a real graph-layout engine + edge-entailment gate.)
+Primitives: `flow`, `tree`, `timeline`, and `map` — a concept-relationship graph (Novak-style) for
+exploratory "how do these relate" answers, where nodes are concepts/entities and the LABELED edges
+carry the relationship (causes/inhibits/treated-by/associated-with). `map` is the highest-value but
+highest-risk primitive: the labeled edge IS the relationship claim, so each edge carries its own
+verbatim basis quote and isolated (edgeless) nodes are dropped; it must survive as an interconnected
+web or it is discarded. Layout is a dependency-free force simulation on the frontend (node counts are
+small and capped). Planned hardening: a per-edge LLM entailment gate on top of the quote anchor.
 """
 from __future__ import annotations
 
@@ -34,7 +39,9 @@ _MAX_NODES = 10
 _MAX_EDGES = 16
 _MAX_EVENTS = 10
 _MAX_VISUALS = 4
-KINDS = ("flow", "tree", "timeline")
+KINDS = ("flow", "tree", "timeline", "map")
+_MAP_MIN_NODES = 3    # a concept map must show a WEB (else it's a flow) — floor on nodes AND edges
+_MAP_MIN_EDGES = 2
 
 # Numeric/dose/%/date tokens (Rule 18: STRUCTURAL check, not a semantic heuristic — only verifies a
 # number the model wrote into a LABEL also exists in the answer it is restructuring).
@@ -122,7 +129,7 @@ def _clean_visual(v: Visual, answer: str) -> dict | None:
             return None
         return {"kind": "timeline", "title": title, "caption": caption, "events": events}
 
-    # flow / tree share node grounding
+    # flow / tree / map share node grounding
     nodes, ok_ids = [], set()
     for n in v.nodes[:_MAX_NODES]:
         if _grounded(n.quote, hay_norm) and _label_numbers_ok(n.label, hay_raw):
@@ -143,11 +150,22 @@ def _clean_visual(v: Visual, answer: str) -> dict | None:
                 nd["parent"] = ""
         return {"kind": "tree", "title": title, "caption": caption, "nodes": nodes}
 
-    # flow: edges need their OWN grounded basis AND both endpoints must have survived
+    # flow / map: an EDGE needs its OWN grounded basis (the labeled relationship is the diagram's
+    # hallucination surface — the "invented arrow"), AND both endpoints must have survived.
     edges = []
     for e in v.edges[:_MAX_EDGES]:
         if e.src in ok_ids and e.dst in ok_ids and _grounded(e.quote, hay_norm):
             edges.append({"src": e.src, "dst": e.dst, "label": (e.label or "").strip()})
+
+    if v.kind == "map":
+        # a concept map earns its place only as an interconnected WEB — drop isolated nodes (no
+        # grounded edge touches them), then require a real graph, else it's a flow/list in disguise.
+        linked = {e["src"] for e in edges} | {e["dst"] for e in edges}
+        nodes = [n for n in nodes if n["id"] in linked]
+        if len(nodes) < _MAP_MIN_NODES or len(edges) < _MAP_MIN_EDGES:
+            return None
+        return {"kind": "map", "title": title, "caption": caption, "nodes": nodes, "edges": edges}
+
     if not edges:
         return None
     return {"kind": "flow", "title": title, "caption": caption, "nodes": nodes, "edges": edges}

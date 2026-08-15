@@ -888,6 +888,28 @@
   .termfoot{font-size:.76rem;color:var(--muted);margin-top:.7rem;}
   .termfoot a{color:var(--gold);}
   @media (max-width:640px){ .tpsearch{min-width:0;width:100%;margin-left:0;} }
+  /* ◫ Add Visuals — grounded conceptual diagrams rendered as themed SVG */
+  .visuals-d .vzgrid{display:flex;flex-direction:column;gap:1rem;margin-top:.6rem;}
+  .vzcard{margin:0;border:1px solid var(--hair);border-radius:12px;background:var(--panel2);padding:.7rem .8rem 0.9rem;}
+  .vzhead{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem;}
+  .vzhead b{font-size:.9rem;color:var(--ink);}
+  .vzkind{font-family:var(--mono);font-size:.58rem;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--gold);border:1px solid var(--hair);border-radius:999px;padding:.08rem .5rem;}
+  .vzcap{font-size:.78rem;color:var(--muted);margin-top:.55rem;line-height:1.4;font-style:italic;}
+  .vzscroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;}
+  .vzsvg{display:block;max-width:100%;height:auto;font-family:var(--sans);}
+  .vznode{fill:var(--bg);stroke:var(--hair);stroke-width:1.2;}
+  .vznode.root{stroke:var(--gold);stroke-width:1.6;}
+  .vzlabel{fill:var(--ink);font-size:12px;font-weight:600;text-anchor:middle;}
+  .vznote{fill:var(--muted);font-size:11px;text-anchor:middle;}
+  .vzedge{fill:none;stroke:var(--muted);stroke-width:1.4;opacity:.75;}
+  .vzarrfill{fill:var(--muted);opacity:.85;}
+  .vzedgelblbg{fill:var(--panel2);stroke:var(--hair);stroke-width:1;}
+  .vzedgelbl{fill:var(--muted);font-size:10px;text-anchor:middle;}
+  .vzrail{stroke:var(--gold);stroke-width:2;opacity:.55;}
+  .vzdot{fill:var(--gold);stroke:var(--bg);stroke-width:2;}
+  .vzwhen{fill:var(--gold);font-size:11px;font-weight:600;text-anchor:end;}
+  .vzevlabel{fill:var(--ink);font-size:12.5px;}
   .pphead{display:flex;align-items:center;gap:.9rem;padding:.4rem 0 .9rem;border-bottom:1px solid var(--hair);flex-wrap:wrap;}
   .pptitle{font-family:var(--mono);font-size:1rem;letter-spacing:.06em;color:var(--gold);font-weight:700;}
   .ppsub{font-size:.78rem;color:var(--muted);}
@@ -1580,6 +1602,7 @@ let VISION_ENABLED = false; // image/PDF/DICOM upload → visual-context researc
 let LAYMAN_ENABLED = false; // on-demand plain-language re-explanation
 let TERMS_ENABLED = false;  // on-demand key-term explanations + the accumulating All Terms glossary
 let VOICE_INTAKE_ENABLED = false; // hands-free guided intake (speak answers, hear questions)
+let VISUAL_ENABLED = false;       // on-demand "Add visuals" — grounded conceptual diagrams below an answer
 let VOICE_TTS_NEURAL = false;     // server neural voiceover (/voice/tts); browser voice is the fallback
 let GAP_ENABLED = false;    // self-healing: suggest + queue sources to fill evidence gaps
 let CONV_ENABLED = false;   // multi-turn conversation (follow-ups carry context)
@@ -1649,6 +1672,7 @@ async function loadConfig(){
     STRUCTURED = !!c.structured_answers;
     LAYMAN_ENABLED = !!c.layman_enabled;
     TERMS_ENABLED = !!c.term_glossary_enabled;
+    VISUAL_ENABLED = !!c.visual_augment_enabled;
     const tb = $("#termsbtn"); if(tb && TERMS_ENABLED) tb.hidden = false;
     VOICE_INTAKE_ENABLED = !!c.voice_intake_enabled;
     VOICE_TTS_NEURAL = !!c.voice_tts_neural;
@@ -2132,6 +2156,7 @@ function render(data, target, opts){
       + `<button type="button" class="copybtn fbtop" data-v="down" title="Not right — tell us why">👎</button>` : "";
   const topbtns = `${hasHl?`<button type="button" class="copybtn hltoggle" id="hltoggle" title="Show color highlights (load-bearing facts, reasoning, key context)">✦ Highlights</button>`:""}`
     + `${(TERMS_ENABLED && data.grounded && (data.answer||"").trim())?`<button type="button" class="copybtn" id="termstop" title="Explain the key medical terms this answer used — and add them to your All Terms glossary">✦ Key terms</button>`:""}`
+    + `${(VISUAL_ENABLED && data.grounded && (data.answer||"").trim())?`<button type="button" class="copybtn" id="visualstop" title="Add grounded visuals — mechanism flows, decision trees, timelines — built only from this answer">◫ Add visuals</button>`:""}`
     + `${showLink?`<button type="button" class="copybtn" id="linkbtn">🔗 Copy link</button>`:""}`
     + `${(data.answer||n)?`<button type="button" class="copybtn" id="copybtn">⧉ Copy</button>`:""}`
     + fbTop;
@@ -2306,6 +2331,17 @@ function render(data, target, opts){
     const row = scope.querySelector("#terms");
     if(row) row.scrollIntoView({behavior:"smooth", block:"center"});
   });
+  const vt = target.querySelector("#visualstop");   // top-bar ◫ Add visuals — delegates to the slim row
+  if(vt) vt.addEventListener("click", ()=>{
+    const scope = target.querySelector(".visuals-d, #visualsgo") ? target
+      : (vt.closest("section, .sessions")?.querySelector(".visuals-d, #visualsgo") ? vt.closest("section, .sessions") : document);
+    const done = scope.querySelector(".visuals-d");
+    if(done){ done.open = true; done.scrollIntoView({behavior:"smooth", block:"start"}); return; }
+    const go = scope.querySelector("#visualsgo");
+    if(go && !go.disabled){ go.click(); }
+    const row = scope.querySelector("#visuals");
+    if(row) row.scrollIntoView({behavior:"smooth", block:"center"});
+  });
 }
 
 // Reusable "Fill the evidence gaps" panel — used by render() AND by the no-answer / error /
@@ -2427,6 +2463,13 @@ function convoActionsMarkup(data){
   } else if(TERMS_ENABLED && data.grounded && (data.answer||"").trim()){
     slim.push(termsActionHtml());
   }
+  if(data.visuals && data.visuals.length){
+    // saved with the turn — re-render on reopen (each element was quote-grounded server-side)
+    boxes.push(`<details class="plain plain-d visuals-d" open><summary class="plain-h">◫ Visuals (${data.visuals.length})</summary>
+      <div class="vzgrid">${data.visuals.map(visualCardHtml).join("")}</div></details>`);
+  } else if(VISUAL_ENABLED && data.grounded && (data.answer||"").trim()){
+    slim.push(visualsActionHtml());
+  }
   const out = [];
   if(boxes.length) out.push(`<div class="addons convobox">${boxes.join("")}</div>`);
   if(slim.length) out.push(`<div class="xformrow"><span class="xlbl">This answer, another format</span>${slim.join("")}</div>`);
@@ -2439,6 +2482,7 @@ function wireConvo(target, data){
   const td = target.querySelector(".terms-d");   // saved terms re-rendered from the session
   if(td){ wireTermChips(td);
     const ta = td.querySelector(".tall"); if(ta) ta.addEventListener("click", e=>{e.preventDefault(); openTermsPage();}); }
+  const vg = target.querySelector("#visualsgo"); if(vg) vg.addEventListener("click", ()=>generateVisuals(target, data));
 }
 
 // Self-healing: ask the backend which sources would fill this question's gaps, render them
@@ -2610,6 +2654,154 @@ function termsActionHtml(){
   return `<span class="xitem" id="terms"><button type="button" class="xbtn" id="termsgo"
     title="Explain the key medical terms this answer used — what each is, why it matters, how it's applied — and add them to your All Terms glossary.">✦ Key terms</button>
     <span class="xhint terms-hint" hidden></span></span>`;
+}
+
+// ================= ◫ Add Visuals: grounded conceptual diagrams (flow / tree / timeline) =================
+// The server returns quote-grounded JSON primitives; the FE renders each as hand-built, theme-aware SVG
+// (no external lib, no model-authored markup — every string is escaped). Mirrors the chartSvg pattern.
+function visualsActionHtml(){
+  return `<span class="xitem" id="visuals"><button type="button" class="xbtn" id="visualsgo"
+    title="Add grounded visuals to this answer — mechanism flows, decision trees, timelines — built only from what the answer already says.">◫ Add visuals</button>
+    <span class="xhint visuals-hint" hidden></span></span>`;
+}
+// greedy word-wrap into ≤maxChars lines (SVG has no auto-wrap)
+function vzWrap(text, maxChars){
+  const words = (text||"").trim().split(/\s+/); const lines=[]; let cur="";
+  for(const w of words){
+    if(!cur) cur=w;
+    else if((cur+" "+w).length<=maxChars) cur+=" "+w;
+    else { lines.push(cur); cur=w; }
+  }
+  if(cur) lines.push(cur);
+  return lines.length?lines:[""];
+}
+function vzTextLines(lines, x, y, cls, lh){
+  return `<text class="${cls}" x="${x}" y="${y}">`+
+    lines.map((l,i)=>`<tspan x="${x}" dy="${i?lh:0}">${esc(l)}</tspan>`).join("")+`</text>`;
+}
+const VZ_DEFS = `<defs><marker id="vzarr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="vzarrfill"/></marker></defs>`;
+function vzNodeBox(n, p, rootish){
+  const cls = "vznode"+(rootish?" root":"");
+  let s = `<rect class="${cls}" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="7"/>`;
+  s += vzTextLines(n._lines, p.x+p.w/2, p.y+18, "vzlabel", 15);
+  if(n._nlines && n.note) s += vzTextLines(n._nlines, p.x+p.w/2, p.y+18+n._lines.length*15+2, "vznote", 13);
+  return s;
+}
+function vzFlow(v){
+  const nodes=v.nodes||[], edges=v.edges||[]; if(nodes.length<2) return "";
+  const byId={}; nodes.forEach(n=>byId[n.id]=n);
+  const indeg={}; nodes.forEach(n=>indeg[n.id]=0);
+  edges.forEach(e=>{ if(byId[e.src]&&byId[e.dst]) indeg[e.dst]=(indeg[e.dst]||0)+1; });
+  const layer={}; nodes.forEach(n=>layer[n.id]=0);
+  for(let it=0; it<nodes.length; it++){ let ch=false;
+    edges.forEach(e=>{ if(byId[e.src]&&byId[e.dst] && layer[e.dst]<layer[e.src]+1){ layer[e.dst]=layer[e.src]+1; ch=true; } });
+    if(!ch) break; }
+  const layers={}; nodes.forEach(n=>{ const L=layer[n.id]||0; (layers[L]=layers[L]||[]).push(n); });
+  const Ls=Object.keys(layers).map(Number).sort((a,b)=>a-b);
+  const NW=168, LH=15, PAD=10, colGap=26, rowGap=54;
+  const H={}; nodes.forEach(n=>{ n._lines=vzWrap(n.label,25); n._nlines=vzWrap(n.note||"",27);
+    H[n.id]=PAD*2+n._lines.length*LH+(n.note?n._nlines.length*13+2:0); });
+  let maxRowW=0; const rowH={};
+  Ls.forEach(L=>{ const r=layers[L]; rowH[L]=Math.max(...r.map(n=>H[n.id]));
+    maxRowW=Math.max(maxRowW, r.length*NW+(r.length-1)*colGap); });
+  const W=Math.max(maxRowW,220)+20; const pos={}; let y=12;
+  Ls.forEach(L=>{ const r=layers[L]; const rw=r.length*NW+(r.length-1)*colGap; let x=(W-rw)/2;
+    r.forEach(n=>{ pos[n.id]={x,y,w:NW,h:H[n.id]}; x+=NW+colGap; }); y+=rowH[L]+rowGap; });
+  const totalH=y-rowGap+12;
+  let ed="";
+  edges.forEach(e=>{ const a=pos[e.src], b=pos[e.dst]; if(!a||!b) return;
+    const sx=a.x+a.w/2, sy=a.y+a.h, tx=b.x+b.w/2, ty=b.y; const mid=(sy+ty)/2;
+    ed += `<path class="vzedge" d="M${sx} ${sy} C ${sx} ${mid} ${tx} ${mid} ${tx} ${ty}" marker-end="url(#vzarr)"/>`;
+    if(e.label){ const lx=(sx+tx)/2, ly=mid; const w=Math.min(e.label.length*6+10,150);
+      ed += `<rect class="vzedgelblbg" x="${lx-w/2}" y="${ly-9}" width="${w}" height="17" rx="8"/>`+
+            `<text class="vzedgelbl" x="${lx}" y="${ly+3}">${esc(e.label.length>24?e.label.slice(0,23)+"…":e.label)}</text>`; }
+  });
+  let nd=""; nodes.forEach(n=>nd+=vzNodeBox(n,pos[n.id],(indeg[n.id]||0)===0));
+  return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W} ${totalH}" width="${W}" height="${totalH}" role="img">${VZ_DEFS}${ed}${nd}</svg></div>`;
+}
+function vzTree(v){
+  const nodes=v.nodes||[]; if(nodes.length<2) return "";
+  const byId={}; nodes.forEach(n=>byId[n.id]=n);
+  const kids={}; nodes.forEach(n=>kids[n.id]=[]); const roots=[];
+  nodes.forEach(n=>{ const p=(n.parent&&byId[n.parent]&&n.parent!==n.id)?n.parent:null; if(p) kids[p].push(n.id); else roots.push(n.id); });
+  const depth={}; const seen=new Set();
+  (function walk(id,d){ if(seen.has(id))return; seen.add(id); depth[id]=d; kids[id].forEach(c=>walk(c,d+1)); });
+  roots.forEach(r=>{ (function w(id,d){ if(seen.has(id))return; seen.add(id); depth[id]=d; kids[id].forEach(c=>w(c,d+1)); })(r,0); });
+  nodes.forEach(n=>{ if(depth[n.id]===undefined) depth[n.id]=0; });
+  const NW=152, LH=15, PAD=9, xGap=22, rowGap=52;
+  const H={}; nodes.forEach(n=>{ n._lines=vzWrap(n.label,22); n._nlines=[]; H[n.id]=PAD*2+n._lines.length*LH; });
+  const rowH={}; Object.values(depth).forEach(()=>{}); nodes.forEach(n=>{ rowH[depth[n.id]]=Math.max(rowH[depth[n.id]]||0,H[n.id]); });
+  const cx={}; let cursor=0; const pseen=new Set();
+  (function place(id){ if(pseen.has(id)){ return cx[id]; } pseen.add(id);
+    const ch=kids[id].filter(c=>!pseen.has(c));
+    if(!ch.length){ cx[id]=cursor*(NW+xGap)+NW/2; cursor++; }
+    else { const xs=ch.map(c=>place(c)); cx[id]=(Math.min(...xs)+Math.max(...xs))/2; }
+    return cx[id];
+  });
+  roots.forEach(r=>(function place(id){ if(pseen.has(id))return cx[id]; pseen.add(id);
+    const ch=kids[id].filter(c=>!pseen.has(c));
+    if(!ch.length){ cx[id]=cursor*(NW+xGap)+NW/2; cursor++; } else { const xs=ch.map(c=>place(c)); cx[id]=(Math.min(...xs)+Math.max(...xs))/2; }
+    return cx[id]; })(r));
+  const depths=Object.keys(rowH).map(Number).sort((a,b)=>a-b);
+  const yOf={}; let yy=12; depths.forEach(d=>{ yOf[d]=yy; yy+=rowH[d]+rowGap; });
+  const pos={}; nodes.forEach(n=>{ pos[n.id]={x:(cx[n.id]||NW/2)-NW/2, y:yOf[depth[n.id]]||12, w:NW, h:H[n.id]}; });
+  const W=Math.max(cursor*(NW+xGap),220)+10, totalH=yy-rowGap+12;
+  let ed=""; nodes.forEach(n=>{ kids[n.id].forEach(cid=>{ const a=pos[n.id], b=pos[cid]; if(!a||!b)return;
+    const sx=a.x+a.w/2, sy=a.y+a.h, tx=b.x+b.w/2, ty=b.y, mid=(sy+ty)/2;
+    ed+=`<path class="vzedge" d="M${sx} ${sy} C ${sx} ${mid} ${tx} ${mid} ${tx} ${ty}" marker-end="url(#vzarr)"/>`; }); });
+  let nd=""; nodes.forEach(n=>nd+=vzNodeBox(n,pos[n.id],(depth[n.id]===0)));
+  return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W} ${totalH}" width="${W}" height="${totalH}" role="img">${VZ_DEFS}${ed}${nd}</svg></div>`;
+}
+function vzTimeline(v){
+  const ev=v.events||[]; if(ev.length<2) return "";
+  const railX=96, W=560, gap=10, textX=railX+22;
+  let y=16; const rows=[];
+  ev.forEach(e=>{ const lines=vzWrap(e.label,58); const wl=vzWrap(e.when||"",15);
+    const h=Math.max(lines.length*16, wl.length*14)+16; rows.push({e,lines,wl,y,h}); y+=h+gap; });
+  const totalH=y+4;
+  let s=`<line class="vzrail" x1="${railX}" y1="10" x2="${railX}" y2="${totalH-8}"/>`;
+  rows.forEach(r=>{ const cy=r.y+10;
+    s+=`<circle class="vzdot" cx="${railX}" cy="${cy}" r="5"/>`;
+    const when=(r.e.when||""); if(when) s+=`<text class="vzwhen" x="${railX-14}" y="${cy+3}">${esc(when.length>16?when.slice(0,15)+"…":when)}</text>`;
+    s+=vzTextLines(r.lines, textX, cy+3, "vzevlabel", 16);
+  });
+  return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W} ${totalH}" width="${W}" height="${totalH}" role="img">${s}</svg></div>`;
+}
+function visualCardHtml(v){
+  const body = v.kind==="flow" ? vzFlow(v) : v.kind==="tree" ? vzTree(v) : v.kind==="timeline" ? vzTimeline(v) : "";
+  if(!body) return "";
+  const kindLbl = v.kind==="flow"?"Process":v.kind==="tree"?"Decision":"Timeline";
+  return `<figure class="vzcard">
+    <figcaption class="vzhead"><span class="vzkind">${kindLbl}</span><b>${esc(v.title||"")}</b></figcaption>
+    ${body}
+    ${v.caption?`<figcaption class="vzcap">${esc(v.caption)}</figcaption>`:""}</figure>`;
+}
+async function generateVisuals(root, data){
+  const item = root.querySelector("#visuals");
+  const btn = root.querySelector("#visualsgo");
+  const hint = item ? item.querySelector(".visuals-hint") : null;
+  if(!btn) return;
+  btn.disabled = true; btn.textContent = "Building visuals…";
+  try{
+    const ti = (typeof data.turn_index === "number") ? data.turn_index
+             : (typeof THREAD!=="undefined" && THREAD.turns ? Math.max(0, THREAD.turns.length-1) : 0);
+    const r = await fetch("/visuals/augment",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({question:(data.question||CURRENT_Q||""), answer:(data.answer||""),
+        session_id:(data.session_id || (typeof THREAD!=="undefined" && THREAD.session_id) || null),
+        turn_index: ti})});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+    const {visuals} = await r.json();
+    if(!visuals || !visuals.length) throw new Error("no visual added meaningful structure to this answer");
+    const cards = visuals.map(visualCardHtml).filter(Boolean).join("");
+    if(!cards) throw new Error("no visual could be grounded in the answer");
+    const d = document.createElement("details");
+    d.className = "plain plain-d visuals-d"; d.open = true;
+    d.innerHTML = `<summary class="plain-h">◫ Visuals (${visuals.length})</summary><div class="vzgrid">${cards}</div>`;
+    item.replaceWith(d);
+  }catch(e){
+    btn.disabled = false; btn.textContent = "◫ Add visuals";
+    if(hint){ hint.hidden = false; hint.textContent = "Couldn't add visuals: "+(e.message||e); }
+  }
 }
 
 // ---- ✦ All Terms: the full-page navigable glossary ----
@@ -3955,6 +4147,15 @@ function renderPanelSynth(data, el){
     if(tg) tg.addEventListener("click", ()=>generateTerms(tw,
       {question: data.question||"", answer: answer + (delib ? "\n\n" + delib : "")}));
   }
+  // ◫ Add visuals — same affordance as Q&A, fed the panel's synthesis (grounded against it)
+  if(VISUAL_ENABLED && (answer||"").trim()){
+    const vw = document.createElement("div");
+    vw.innerHTML = `<div class="xformrow"><span class="xlbl">See the structure</span>${visualsActionHtml()}</div>`;
+    el.appendChild(vw);
+    const vg = vw.querySelector("#visualsgo");
+    if(vg) vg.addEventListener("click", ()=>generateVisuals(vw,
+      {question: data.question||"", answer: answer + (delib ? "\n\n" + delib : "")}));
+  }
 }
 // Run ONE turn (first or follow-up): stream each specialist's live trace into #panellive, then commit the
 // completed conference into the thread. Prior turns are sent as `history` (context only, never re-cited).
@@ -4938,7 +5139,9 @@ function showSessionDetail(row, rowEl){
   const lastTurn = turns[turns.length-1] || row;
   const actData = Object.assign({}, lastTurn, {
     video_filename: row.video_filename, video_title: row.video_title, video_duration: row.video_duration,
-    layman_answer: row.layman_answer, terms: row.terms||[], session_id: row.id, id: row.id});
+    layman_answer: row.layman_answer, terms: row.terms||[],
+    visuals: lastTurn.visuals||[], turn_index: Math.max(0, turns.length-1),   // per-turn visuals
+    session_id: row.id, id: row.id});
   LAST = {question: row.question, answer: (lastTurn.answer||row.answer||""), session_id: row.id};
   const act = document.createElement("div"); act.innerHTML = convoActionsMarkup(actData);
   if(act.firstChild){ sdbody.appendChild(act); wireConvo(act, actData); }

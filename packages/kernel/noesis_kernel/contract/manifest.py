@@ -128,6 +128,12 @@ class VerticalManifest:
     # claims about the user's case. Opaque prose; the kernel only threads it into the terms
     # call. None → the term-glossary feature is unavailable.
     terms_prompt: str | None = None
+    # Optional vertical-supplied instruction for POST-HOC answer VISUALIZATION: restructure a finished
+    # grounded answer into conceptual/structural visual primitives (flow/tree/timeline), every element
+    # carrying a verbatim quote from the answer (no new facts). Spatial/structural only — never numeric
+    # charts (the inline path) or prose tables (visual_guidance). Opaque prose; the kernel owns the
+    # schema + grounding validation. None → the add-visuals feature is unavailable.
+    visuals_prompt: str | None = None
     # Optional whitelist of TRUSTED web-search domains (peer-reviewed journals, guideline bodies,
     # authoritative gov/db sources). When set, web search is restricted to these — the corpus is
     # augmented only with high-quality sources, never the open web. Empty → open web.

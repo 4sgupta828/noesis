@@ -70,6 +70,7 @@ class ResearchService:
     gap_prompt: str | None = None           # vertical gap-fill-planner directive (opaque)
     suggest_prompt: str | None = None       # vertical suggested-follow-ups directive (opaque)
     terms_prompt: str | None = None         # vertical key-term-explanation directive (opaque)
+    visuals_prompt: str | None = None        # vertical post-hoc answer-visualization directive (opaque)
     refine_prompt: str | None = None         # vertical pre-answer question-refinement directive (opaque)
     triage_prompt: str | None = None         # vertical guided-intake/triage directive (opaque)
     triage_prompt_v2: str | None = None      # vertical intake-v2 directive (opaque; None → v2 falls back to v1)
@@ -717,6 +718,16 @@ class ResearchService:
         from noesis_kernel.research.terms import explain_key_terms
         return await explain_key_terms(
             llm=self.llm, terms_prompt=self.terms_prompt, question=question, answer=answer)
+
+    async def visualize(self, *, question: str, answer: str) -> list:
+        """On-demand conceptual visuals (flow/tree/timeline) restructuring a grounded answer, every
+        element quote-anchored to the answer. [] when the vertical supplies no visuals directive or
+        nothing qualifies."""
+        if not self.visuals_prompt:
+            return []
+        from noesis_kernel.research.visuals import visualize_answer
+        return await visualize_answer(
+            llm=self.llm, visuals_prompt=self.visuals_prompt, question=question, answer=answer)
 
     async def explain_term(self, *, term: str, context: str = ""):
         """On-demand single-term explanation (glossary navigation). None when unavailable."""

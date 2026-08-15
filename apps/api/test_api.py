@@ -345,3 +345,45 @@ def test_voice_tts_gating(monkeypatch) -> None:
     assert client.post("/voice/tts", json={"text": "hello"}).status_code == 404   # no key → not configured
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     assert client.post("/voice/tts", json={"text": "  "}).status_code == 400      # empty text
+
+
+# ---- ◫ add-visuals (NOESIS_VISUAL_AUGMENT) ----
+
+def _visuals_service(parsed):
+    from noesis_kernel.research.visuals import VisualSet
+    class _LLM2:
+        async def complete(self, *, system, messages, response_format, max_tokens=2048, temperature=None):
+            return LLMResult(parsed=parsed, output_tokens=5)
+    svc = _service(); svc.llm = _LLM2(); svc.visuals_prompt = "make visuals"
+    return svc
+
+
+def test_visuals_404_when_flag_off(monkeypatch) -> None:
+    monkeypatch.delenv("NOESIS_VISUAL_AUGMENT", raising=False)
+    client = TestClient(create_app(_service()))
+    assert client.post("/visuals/augment", json={"answer": "x"}).status_code == 404
+    assert client.get("/config").json()["visual_augment_enabled"] is False
+
+
+def test_visuals_augment_returns_grounded_flow(monkeypatch) -> None:
+    from noesis_kernel.research.visuals import Visual, VNode, VEdge, VisualSet
+    monkeypatch.setenv("NOESIS_VISUAL_AUGMENT", "1")
+    monkeypatch.delenv("NOESIS_CORPUS_DSN", raising=False)
+    ans = "Metformin lowers hepatic glucose production, which reduces blood glucose."
+    good = Visual(kind="flow", title="MoA",
+        nodes=[VNode(id="a", label="Metformin", quote="Metformin lowers hepatic glucose production"),
+               VNode(id="b", label="Glucose down", quote="which reduces blood glucose")],
+        edges=[VEdge(src="a", dst="b", quote="Metformin lowers hepatic glucose production, which reduces blood glucose")])
+    client = TestClient(create_app(_visuals_service(VisualSet(visuals=[good]))))
+    assert client.get("/config").json()["visual_augment_enabled"] is True
+    r = client.post("/visuals/augment", json={"question": "how does metformin work?", "answer": ans})
+    assert r.status_code == 200
+    vs = r.json()["visuals"]
+    assert len(vs) == 1 and vs[0]["kind"] == "flow" and len(vs[0]["nodes"]) == 2
+
+
+def test_visuals_augment_404_without_vertical_prompt(monkeypatch) -> None:
+    monkeypatch.setenv("NOESIS_VISUAL_AUGMENT", "1")
+    client = TestClient(create_app(_service()))   # no visuals_prompt on the service
+    assert client.post("/visuals/augment", json={"answer": "x"}).status_code == 404
+    assert client.get("/config").json()["visual_augment_enabled"] is False

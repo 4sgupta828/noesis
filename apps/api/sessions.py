@@ -181,6 +181,22 @@ class SessionStore:
                 session_id, self._vertical, json.dumps(terms))
         return res.endswith("1")
 
+    async def save_turn_visuals(self, session_id: str, turn_index: int, visuals: list[dict]) -> bool:
+        """Persist post-hoc conceptual visuals onto a SPECIFIC thread turn (not session-level), so a
+        reopened multi-turn conversation re-renders them on the right answer. No-op if the turn index
+        is out of range (jsonb_set only touches an existing element)."""
+        await self._ensure()
+        pool = await self._get_pool()
+        idx = max(0, int(turn_index or 0))
+        async with pool.acquire() as conn:
+            res = await conn.execute(
+                "UPDATE noesis_research_session "
+                "SET thread = jsonb_set(thread, ARRAY[$3::text, 'visuals'], $4::jsonb, true) "
+                "WHERE id=$1 AND vertical=$2 AND NOT deleted "
+                "AND jsonb_array_length(thread) > $5",
+                session_id, self._vertical, str(idx), json.dumps(visuals), idx)
+        return res.endswith("1")
+
     async def soft_delete(self, session_id: str) -> bool:
         await self._ensure()
         pool = await self._get_pool()

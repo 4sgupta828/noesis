@@ -528,6 +528,16 @@ def answer_charts_enabled() -> bool:
     return os.environ.get("NOESIS_ANSWER_CHARTS", "").lower() in ("1", "true", "yes")
 
 
+def visual_augment_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, each answer offers on-demand "Add visuals" — POST
+    /visuals/augment restructures the finished answer into grounded conceptual visuals (flow/tree/
+    timeline), every element quote-anchored to the answer. OFF → the endpoint 404s and the UI
+    affordance is hidden (byte-identical to today). User-triggered — never adds answer latency.
+    Distinct from NOESIS_ANSWER_CHARTS (inline numeric charts) and NOESIS_ANSWER_VISUALS (prose
+    tables): this owns spatial/structural visuals only."""
+    return os.environ.get("NOESIS_VISUAL_AUGMENT", "").lower() in ("1", "true", "yes")
+
+
 def voice_intake_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, Guided Intake offers a hands-free voice conversation —
     browser-native SpeechRecognition dictates the user's answers and SpeechSynthesis speaks each
@@ -892,6 +902,13 @@ class TermLookupIn(BaseModel):
     context: str = ""    # the term this one was linked FROM (helps disambiguate)
 
 
+class VisualsIn(BaseModel):
+    question: str = ""
+    answer: str
+    session_id: str | None = None
+    turn_index: int | None = None    # which thread turn this answer is (per-turn persistence)
+
+
 class VoiceTtsIn(BaseModel):
     text: str
 
@@ -1106,6 +1123,7 @@ def build_default_service() -> ResearchService:
         vision_prompt=vision_prompt, report_prompt=report_prompt,
         layman_prompt=manifest.layman_prompt, gap_prompt=gap_prompt,
         suggest_prompt=suggest_prompt, terms_prompt=getattr(manifest, "terms_prompt", None),
+        visuals_prompt=getattr(manifest, "visuals_prompt", None),
         refine_prompt=refine_prompt, triage_prompt=triage_prompt,
         triage_prompt_v2=triage_prompt_v2,
         reasoned_scaffold_prompt=reasoned_scaffold, reasoned_answer_format=reasoned_format,
@@ -1370,6 +1388,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "conversation_enabled": conversation_enabled(),
             "suggest_enabled": conversation_enabled() and bool(getattr(svc, "suggest_prompt", None)),
             "term_glossary_enabled": term_glossary_enabled() and bool(getattr(svc, "terms_prompt", None)),
+            "visual_augment_enabled": visual_augment_enabled() and bool(getattr(svc, "visuals_prompt", None)),
             "voice_intake_enabled": voice_intake_enabled() and live_triage,
             "voice_tts_neural": (voice_intake_enabled() and live_triage
                                  and bool(os.environ.get("OPENAI_API_KEY"))),
@@ -2011,6 +2030,33 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 except Exception:
                     pass
         return {"terms": out, "glossary_total": total}
+
+    @app.post("/visuals/augment")
+    async def visuals_augment(body: VisualsIn) -> dict:
+        """On-demand conceptual visuals (flow/tree/timeline) restructuring a grounded answer, every
+        element quote-anchored to the answer. User-triggered after the answer renders; persisted onto
+        the specific thread TURN so a reopened session re-renders them on the right answer."""
+        if not visual_augment_enabled():
+            raise HTTPException(status_code=404, detail="add-visuals not enabled")
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        if not getattr(svc, "visuals_prompt", None):
+            raise HTTPException(status_code=404, detail="visuals not available for this vertical")
+        try:
+            visuals = await svc.visualize(question=body.question, answer=body.answer)
+        except CassetteMiss as e:
+            raise HTTPException(status_code=503, detail="No model available in replay mode.") from e
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
+        if body.session_id and visuals:
+            store = _store()
+            if store is not None:
+                try:                       # attach to the exact turn (multi-turn correctness)
+                    await store.save_turn_visuals(body.session_id, body.turn_index or 0, visuals)
+                except Exception:
+                    pass
+        return {"visuals": visuals}
 
     @app.post("/glossary/lookup")
     async def glossary_lookup(body: TermLookupIn) -> dict:

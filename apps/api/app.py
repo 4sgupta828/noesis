@@ -932,6 +932,7 @@ class TermsIn(BaseModel):
     question: str = ""
     answer: str
     session_id: str | None = None
+    turn_index: int | None = None    # which thread turn this answer is (per-turn persistence, like visuals)
 
 
 class TermLookupIn(BaseModel):
@@ -2089,7 +2090,10 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             store = _store()
             if store is not None:
                 try:
-                    await store.save_terms(body.session_id, out)   # reopening the session re-renders them
+                    # persist per-TURN (like visuals) so the right answer re-renders them on reopen,
+                    # in Q&A AND Panel; also keep the session-level column for back-compat.
+                    await store.save_turn_terms(body.session_id, body.turn_index or 0, out)
+                    await store.save_terms(body.session_id, out)
                 except Exception:
                     pass
         return {"terms": out, "glossary_total": total}

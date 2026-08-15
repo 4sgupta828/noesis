@@ -2664,9 +2664,15 @@ async function generateTerms(root, data){
   const hint = item ? item.querySelector(".terms-hint") : null;
   btn.disabled = true; btn.textContent = "Explaining terms…";
   try{
+    const ti = (typeof data.turn_index === "number") ? data.turn_index
+             : (typeof THREAD!=="undefined" && THREAD.turns ? Math.max(0, THREAD.turns.length-1) : 0);
+    const sid = data.session_id
+             || (data.panel ? (typeof PANEL_THREAD!=="undefined" && PANEL_THREAD.session_id)   // panel-safe
+                            : ((typeof THREAD!=="undefined" && THREAD.session_id) || (typeof LAST!=="undefined" && LAST && LAST.session_id)))
+             || null;
     const r = await fetch("/terms/explain",{method:"POST",headers:{"content-type":"application/json"},
       body:JSON.stringify({question:(data.question||CURRENT_Q||""), answer:(data.answer||""),
-        session_id:(data.session_id || (typeof THREAD!=="undefined" && THREAD.session_id) || (typeof LAST!=="undefined" && LAST && LAST.session_id) || null)})});
+        session_id: sid, turn_index: ti})});
     if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
     const {terms, glossary_total} = await r.json();
     if(!terms || !terms.length) throw new Error("no key terms found in this answer");
@@ -2678,6 +2684,8 @@ async function generateTerms(root, data){
     item.replaceWith(d);
     wireTermChips(d);
     const ta = d.querySelector(".tall"); if(ta) ta.addEventListener("click", e=>{e.preventDefault(); openTermsPage();});
+    if(data.panel && typeof PANEL_THREAD!=="undefined" && PANEL_THREAD.turns && PANEL_THREAD.turns[ti] && PANEL_THREAD.turns[ti].result)
+      PANEL_THREAD.turns[ti].result.terms = terms;   // keep in-memory turn state consistent
   }catch(e){
     btn.disabled = false; btn.textContent = "✦ Key terms";
     if(hint){ hint.hidden = false; hint.textContent = "Couldn't explain: "+(e.message||e); }
@@ -4112,7 +4120,8 @@ function renderPanelConversation(){
   PANEL_THREAD.turns.forEach((t,i)=>{
     const el = $("#psynth-"+i);
     if(el) renderPanelSynth(Object.assign({}, t.result,
-      {panel:true, session_id:PANEL_THREAD.session_id||null, turn_index:i, visuals:t.result.visuals||[]}), el);
+      {panel:true, session_id:PANEL_THREAD.session_id||null, turn_index:i,
+       visuals:t.result.visuals||[], terms:t.result.terms||[]}), el);
   });
   const pfq = $("#pfq"), pfgo = $("#pfgo");
   if(pfq){
@@ -4169,7 +4178,7 @@ function openPanelSession(row){
     question: t.question, synthesis: t.answer||t.synthesis||"", claims: t.claims||[], takes: t.takes||[],
     n_specialists: t.n_specialists||(t.takes||[]).length, interpretation: t.interpretation||[],
     confidence: t.confidence||null, reasoning_purpose: t.reasoning_purpose||"",
-    reasoning_conclusion: t.reasoning_conclusion||"", visuals: t.visuals||[]}}));
+    reasoning_conclusion: t.reasoning_conclusion||"", visuals: t.visuals||[], terms: t.terms||[]}}));
   const lastTakes = turns.length ? (turns[turns.length-1].result.takes||[]) : [];
   const rationales = {}; lastTakes.forEach(t=>{ if(t.rationale) rationales[t.id]=t.rationale; });
   PANEL_THREAD = {ids: lastTakes.map(t=>t.id), turns, session_id: row.id, rationales};
@@ -4208,7 +4217,8 @@ function renderPanelSessionDetail(row){
     if(el) renderPanelSynth({synthesis: t.answer||t.synthesis||"", claims: t.claims||[],
       interpretation: t.interpretation||[], confidence: t.confidence||null,
       reasoning_purpose: t.reasoning_purpose||"", reasoning_conclusion: t.reasoning_conclusion||"",
-      question: t.question, panel:true, session_id:row.id, turn_index:i, visuals:t.visuals||[]}, el); });
+      question: t.question, panel:true, session_id:row.id, turn_index:i,
+      visuals:t.visuals||[], terms:t.terms||[]}, el); });
   buildPanelSessionActions($("#pd-actions"), row);
   sdetail.scrollTop = 0;
   if(isMobileSess()){ sessionsEl.dataset.view = "detail"; setSback("← Sessions"); }
@@ -4266,17 +4276,26 @@ function renderPanelSynth(data, el){
     }));
   }
   // ✦ Key terms — same affordance as Q&A, fed the panel's full text (synthesis + deliberation)
-  if(TERMS_ENABLED && (answer||"").trim()){
+  const vAnswer = answer + (delib ? "\n\n" + delib : "");
+  // ✦ Key terms — persisted onto this panel turn (like visuals) so a reopened discussion re-renders them.
+  if(data.terms && data.terms.length){
+    const tw = document.createElement("div");
+    tw.innerHTML = `<details class="plain plain-d terms-d" open><summary class="plain-h">✦ Key terms in this answer (${data.terms.length})</summary>
+      <div class="termgrid">${data.terms.map(termCardHtml).join("")}</div>
+      <div class="termfoot"><a href="#" class="tall">Browse All Terms →</a></div></details>`;
+    el.appendChild(tw); wireTermChips(tw);
+    const ta = tw.querySelector(".tall"); if(ta) ta.addEventListener("click", e=>{e.preventDefault(); openTermsPage();});
+  } else if(TERMS_ENABLED && (answer||"").trim()){
     const tw = document.createElement("div");
     tw.innerHTML = `<div class="xformrow"><span class="xlbl">Understand the vocabulary</span>${termsActionHtml()}</div>`;
     el.appendChild(tw);
+    const tdata = {question: data.question||"", answer: vAnswer, panel:true,
+       session_id: data.session_id||null, turn_index: (typeof data.turn_index==="number"?data.turn_index:0)};
     const tg = tw.querySelector("#termsgo");
-    if(tg) tg.addEventListener("click", ()=>generateTerms(tw,
-      {question: data.question||"", answer: answer + (delib ? "\n\n" + delib : "")}));
+    if(tg) tg.addEventListener("click", ()=>generateTerms(tw, tdata));
   }
   // ◫ Add visuals — same affordance as Q&A, fed the panel's synthesis (grounded against it), and
   // persisted onto this panel turn (session_id + turn_index) so a reopened discussion re-renders them.
-  const vAnswer = answer + (delib ? "\n\n" + delib : "");
   if(data.visuals && data.visuals.length){
     const vw = document.createElement("div");
     vw.innerHTML = `<details class="plain plain-d visuals-d" open><summary class="plain-h">◫ Visuals (${data.visuals.length})</summary>
@@ -5278,7 +5297,7 @@ function showSessionDetail(row, rowEl){
   const lastTurn = turns[turns.length-1] || row;
   const actData = Object.assign({}, lastTurn, {
     video_filename: row.video_filename, video_title: row.video_title, video_duration: row.video_duration,
-    layman_answer: row.layman_answer, terms: row.terms||[],
+    layman_answer: row.layman_answer, terms: (lastTurn.terms||row.terms||[]),
     visuals: lastTurn.visuals||[], turn_index: Math.max(0, turns.length-1),   // per-turn visuals
     session_id: row.id, id: row.id});
   LAST = {question: row.question, answer: (lastTurn.answer||row.answer||""), session_id: row.id};

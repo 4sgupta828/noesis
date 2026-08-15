@@ -162,6 +162,40 @@ class GlossaryStore:
                 "related": [{"term": s, "known": _norm(s) in known} for s in rel],
                 "times_seen": r["times_seen"]}
 
+    async def sanitize_markup(self) -> dict[str, int]:
+        """One-time repair: strip stray XML/HTML-ish tags (e.g. `<r>metformin</r>`) that older
+        writes let leak into `term`/`related` before the kernel cleaned them. Structural cleanup of
+        markup, not a semantic edit (Rule 18). Idempotent — a clean row is left untouched."""
+        from noesis_kernel.research.terms import strip_markup
+        await self._ensure()
+        pool = await self._get_pool()
+        scanned = changed = 0
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id, term, related FROM noesis_glossary_term WHERE vertical = $1",
+                self._vertical)
+            for r in rows:
+                scanned += 1
+                rel = r["related"]
+                rel = json.loads(rel) if isinstance(rel, str) else (rel or [])
+                new_term = strip_markup(r["term"])
+                seen: set[str] = set()
+                new_rel: list[str] = []
+                for s in rel:
+                    c = strip_markup(s)
+                    k = c.lower()
+                    if c and k not in seen:
+                        seen.add(k)
+                        new_rel.append(c)
+                if new_term == r["term"] and new_rel == rel:
+                    continue
+                await conn.execute(
+                    "UPDATE noesis_glossary_term SET term = $2, related = $3::jsonb, "
+                    "updated_at = now() WHERE id = $1",
+                    r["id"], new_term, json.dumps(new_rel))
+                changed += 1
+        return {"scanned": scanned, "changed": changed}
+
     async def count(self) -> int:
         await self._ensure()
         pool = await self._get_pool()

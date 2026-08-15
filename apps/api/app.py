@@ -2433,6 +2433,21 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"tag error: {e}") from e
 
+    @app.post("/admin/glossary/sanitize")
+    async def admin_glossary_sanitize(x_admin_token: str = Header(default="")) -> dict:
+        """One-time repair: strip stray XML/HTML-ish tags (`<r>metformin</r>`) that older writes let
+        leak into stored glossary term/related edges. Idempotent structural cleanup (Rule 18)."""
+        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
+        if want and x_admin_token != want:
+            raise HTTPException(status_code=401, detail="admin token required")
+        g = _glossary()
+        if g is None:
+            raise HTTPException(status_code=404, detail="glossary unavailable")
+        try:
+            return await g.sanitize_markup()
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"sanitize error: {e}") from e
+
     # ---- Evidence Pulse P0 admin surface (spec A4/A5): scan · list · approve/retract -----------
     def _pulse_admin_gate(x_admin_token: str):
         cur = _currency()

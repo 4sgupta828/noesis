@@ -48,9 +48,18 @@ class TermExplanations(BaseModel):
     terms: list[TermExplanation] = Field(default_factory=list)
 
 
+_TAG_RE = _re.compile(r"</?[A-Za-z][^>]*>")
+
+
+def strip_markup(s: str) -> str:
+    """Remove stray XML/HTML-ish tags the model sometimes wraps values in (e.g. `<r>metformin</r>`)
+    and collapse whitespace. Purely structural cleaning of markup — not a semantic decision (Rule 18)."""
+    return " ".join(_TAG_RE.sub("", s or "").split())
+
+
 def normalize_term(term: str) -> str:
-    """Stable dedup key: lowercase, collapsed whitespace. Structural, not semantic (Rule 18)."""
-    return " ".join((term or "").lower().split())
+    """Stable dedup key: lowercase, collapsed whitespace, tags stripped. Structural, not semantic (Rule 18)."""
+    return strip_markup(term).lower()
 
 
 def _clean(items: list[TermExplanation], max_terms: int) -> list[TermExplanation]:
@@ -62,13 +71,14 @@ def _clean(items: list[TermExplanation], max_terms: int) -> list[TermExplanation
         if not key or key in seen or not (t.plain or "").strip():
             continue
         seen.add(key)
+        t.term = strip_markup(t.term)
         rseen: set[str] = {key}
         rel: list[str] = []
         for r in (t.related or []):
             rk = normalize_term(r)
             if rk and rk not in rseen:
                 rseen.add(rk)
-                rel.append(" ".join((r or "").split()))
+                rel.append(strip_markup(r))
         t.related = rel[:6]
         out.append(t)
     return out[:max_terms]

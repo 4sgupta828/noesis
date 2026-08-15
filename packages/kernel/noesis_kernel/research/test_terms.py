@@ -36,6 +36,18 @@ def test_normalize_term_collapses_case_and_whitespace():
     assert normalize_term("") == ""
 
 
+def test_clean_strips_stray_markup_tags():
+    # the model sometimes wraps each value in an XML-ish tag (<r>metformin</r>) — must not leak to UI
+    llm = ScriptedLLM(TermExplanations(terms=[
+        TermExplanation(term="<t>Pioglitazone</t>", category="drug", plain="A TZD antidiabetic.",
+                        related=["<r>Rosiglitazone</r>", "<r>PPAR-gamma</r>", "Insulin resistance"]),
+    ]))
+    out = asyncio.run(explain_key_terms(
+        llm=llm, terms_prompt=PROMPT, question="q", answer="Pioglitazone lowers glucose"))
+    assert out[0].term == "Pioglitazone"
+    assert out[0].related == ["Rosiglitazone", "PPAR-gamma", "Insulin resistance"]
+
+
 def test_explain_key_terms_dedups_and_cleans():
     llm = ScriptedLLM(TermExplanations(terms=[
         TermExplanation(term="eGFR", category="measure", plain="Kidney filtration estimate.",

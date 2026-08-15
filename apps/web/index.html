@@ -3271,7 +3271,7 @@ const tbody = () => $("#triagebody");
 // Everything runs in the browser — no audio ever reaches our servers (only the transcript text
 // flows through the existing /triage/step path).
 const _SRCls = window.SpeechRecognition || window.webkitSpeechRecognition;
-let VOICE = {on:false, rec:null, listening:false, audio:null};
+let VOICE = {on:false, rec:null, listening:false, audio:null, sendNow:null, cancelListen:null};
 function voiceSupported(){ return !!_SRCls && ("speechSynthesis" in window); }
 function voiceUiState(st){
   const b = $("#voicebtn"); if(!b) return;
@@ -3279,7 +3279,8 @@ function voiceUiState(st){
   b.classList.toggle("listening", st==="listen");
   b.classList.toggle("speaking", st==="speak");
   b.title = !VOICE.on ? "Voice conversation — speak your answers, hear the questions"
-    : st==="listen" ? "Listening… tap to send" : st==="speak" ? "Speaking… tap to skip ahead"
+    : st==="listen" ? "Listening — take your time, pauses are fine. Tap to send now."
+    : st==="speak" ? "Speaking… tap to skip ahead"
     : "Voice is on — tap to turn off";
 }
 function voiceHush(){   // stop whatever is speaking, neural or browser
@@ -3289,6 +3290,7 @@ function voiceHush(){   // stop whatever is speaking, neural or browser
 }
 function voiceStopAll(){
   voiceHush();
+  if(VOICE.cancelListen){ try{ VOICE.cancelListen(); }catch(e){} }
   if(VOICE.rec){ try{ VOICE.rec.onend = null; VOICE.rec.stop(); }catch(e){} VOICE.rec = null; }
   VOICE.listening = false; voiceUiState("idle");
 }
@@ -3351,33 +3353,78 @@ async function voiceSay(text, then){
   }
   _voiceBrowserSay(clean, then);
 }
+// End-of-THOUGHT detection, not end-of-speech: people pause mid-answer, so the recognizer's own
+// silence cutoff (~1s) must never be the send trigger. We listen continuously (restarting the
+// engine whenever it gives up) and run our own completion timer over the live transcript:
+//   · sounds finished → short confirming pause (2.6s) then send
+//   · trails off on a connective ("and…", "but…", "because…", a comma) → they're mid-thought, wait 5.5s
+//   · only a few words so far → still forming it, wait 4.5s
+//   · any new speech (even interim) resets the clock; tap the mic to send instantly
+//   · said nothing at all for 8s → stand down quietly without sending
+const _V_TRAILING = /(?:\b(?:and|but|or|so|because|also|then|with|plus|except|although|um|uh|erm|like)|i mean|you know|,|-)\s*$/i;
+function _thoughtWaitMs(text){
+  if(!text) return 8000;
+  const t = text.trim().toLowerCase();
+  if(_V_TRAILING.test(t)) return 5500;
+  if(t.split(/\s+/).length <= 3) return 4500;
+  return 2600;
+}
 function voiceListen(){
   if(!VOICE.on || VOICE.listening || !_SRCls) return;
-  let final = "";
-  const rec = new _SRCls();
-  rec.lang = navigator.language || "en-US";
-  rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
-  rec.onresult = ev=>{
-    let interim = "";
-    for(const r of ev.results){ if(r.isFinal) final += r[0].transcript; else interim += r[0].transcript; }
-    q.value = (final + " " + interim).replace(/\s+/g," ").trim(); autoGrow();
+  let finals = "", timer = null, stopped = false, lastStart = 0, fastFails = 0;
+  const currentText = ()=> q.value.trim();
+  const teardown = ()=>{
+    stopped = true; clearTimeout(timer); VOICE.sendNow = null; VOICE.cancelListen = null;
+    if(VOICE.rec){ try{ VOICE.rec.onend = null; VOICE.rec.stop(); }catch(e){} VOICE.rec = null; }
+    VOICE.listening = false; voiceUiState("idle");
   };
-  rec.onend = ()=>{
-    VOICE.rec = null; VOICE.listening = false; voiceUiState("idle");
-    const text = q.value.trim();
+  const send = ()=>{
+    if(stopped) return;
+    const text = currentText();
+    teardown();
     if(VOICE.on && text && APP_MODE === "triage" && !TRIAGE.busy) submitTriage(text);
   };
-  rec.onerror = ()=>{};   // onend still fires and settles state
-  VOICE.rec = rec; VOICE.listening = true; voiceUiState("listen");
-  try{ rec.start(); }catch(e){ VOICE.rec = null; VOICE.listening = false; voiceUiState("idle"); }
+  const arm = ()=>{
+    clearTimeout(timer);
+    const text = currentText();
+    timer = setTimeout(()=>{ if(text || currentText()) send(); else teardown(); }, _thoughtWaitMs(text));
+  };
+  const startRec = ()=>{
+    if(stopped || !VOICE.on) return;
+    const rec = new _SRCls();
+    rec.lang = navigator.language || "en-US";
+    rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
+    rec.onresult = ev=>{
+      let fin = "", interim = "";
+      for(const r of ev.results){ if(r.isFinal) fin += r[0].transcript; else interim += r[0].transcript; }
+      q.value = (finals + " " + fin + " " + interim).replace(/\s+/g," ").trim(); autoGrow();
+      fastFails = 0;
+      arm();                       // speech (even interim) resets the thought clock
+    };
+    rec.onend = ()=>{              // the engine's silence cutoff is NOT our decision point —
+      if(stopped || !VOICE.on) return;
+      if(Date.now() - lastStart < 400){ if(++fastFails > 3){ teardown(); return; } }  // mic denied etc.
+      finals = currentText();      // bank what's confirmed, keep the floor open
+      VOICE.rec = null;
+      startRec();                  // seamless re-listen; OUR armed timer still governs completion
+    };
+    rec.onerror = ()=>{};          // onend follows and handles it
+    VOICE.rec = rec; lastStart = Date.now();
+    try{ rec.start(); }catch(e){}  // start collision — the restart loop recovers
+  };
+  VOICE.listening = true; voiceUiState("listen");
+  VOICE.sendNow = send;            // mic tap = "I'm done" — instant send
+  VOICE.cancelListen = teardown;
+  arm();
+  startRec();
 }
 function voiceToggle(){
   if(!VOICE.on){
     VOICE.on = true; voiceUiState("idle");
     const lastBot = [...TRIAGE.transcript].reverse().find(m=>m.role !== "user");
     voiceSay(lastBot ? lastBot.text : "Tell me the clinical problem in your own words. I'll ask only what's needed.", voiceListen);
-  } else if(VOICE.listening && VOICE.rec){
-    try{ VOICE.rec.stop(); }catch(e){}          // send what we heard
+  } else if(VOICE.listening){
+    if(VOICE.sendNow) VOICE.sendNow();          // "I'm done" — send what we heard, now
   } else if(VOICE.audio || speechSynthesis.speaking){
     voiceHush();                                // skip the reading, go straight to listening
     voiceListen();

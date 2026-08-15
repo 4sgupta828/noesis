@@ -266,5 +266,17 @@ def test_range_band_without_any_bound_dropped():
 def test_range_band_ungrounded_bound_dropped():
     ch = ChartSpec(kind="range_band", bars=[
         _bar(label="Potassium", value=5.5, value_str="5.5",
-             low=3.0, low_str="3.0", high=5.0, high_str="5.0", finding=1)])  # 3.0 not in finding
+             low=3.0, low_str="3.0", high=5.0, high_str="5.0", finding=1)])  # 3.0 in NO finding
     assert _validate_charts([ch], VB) == []
+
+
+def test_range_band_value_and_bounds_from_different_findings():
+    # the observed value and the reference range legitimately cite DIFFERENT sources — must survive
+    v = [VerifiedClaim(text="the patient's serum potassium was 5.5 mmol/L", atom_id="v1",
+                       quote="potassium was 5.5 mmol/L"),
+         VerifiedClaim(text="the normal adult range is 3.5-5.0 mmol/L", atom_id="v2",
+                       quote="normal adult range is 3.5-5.0 mmol/L")]
+    ch = ChartSpec(kind="range_band", unit="mmol/L", bars=[
+        _bar(label="Potassium", value=5.5, value_str="5.5",
+             low=3.5, low_str="3.5", high=5.0, high_str="5.0", finding=1)])  # value in f1, band in f2
+    assert len(_validate_charts([ch], v)) == 1

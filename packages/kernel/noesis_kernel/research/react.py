@@ -219,13 +219,25 @@ def _validate_charts(charts: list[ChartSpec], verified: list["VerifiedClaim"]) -
     series (a trend) and <=3 series (readability). The clinical-numeracy kinds are EXEMPT from the
     >=2-groups rule (a single absolute risk / a single lab-vs-range is meaningful): 'icon_array' needs
     1–4 counts each in [0, scale] (a non-default scale is grounded too); 'range_band' needs 1–6 rows,
-    each with a grounded observed value AND at least one grounded reference bound. Returns dicts for the API."""
+    each with a grounded observed value AND at least one grounded reference bound (its figures may be
+    grounded in DIFFERENT findings, since value and reference range often cite different sources).
+    Returns dicts for the API."""
     def _grounded(s: str, finding: int) -> bool:
         s = (s or "").strip().lower()
         if not s or not (1 <= finding <= len(verified)):
             return False
         src = (verified[finding - 1].text + " " + verified[finding - 1].quote).lower()
         return s in src
+
+    def _grounded_any(s: str) -> bool:
+        # a figure is grounded if it appears verbatim in ANY verified finding. Used for range_band,
+        # where the observed value and its reference range legitimately come from DIFFERENT findings
+        # (the value from a clinical/case source, the normal range from a reference source) — unlike an
+        # interval/forest CI where the point + bounds share one trial.
+        s = (s or "").strip().lower()
+        if not s:
+            return False
+        return any(s in (v.text + " " + v.quote).lower() for v in verified)
 
     out: list[dict] = []
     for ch in charts or []:
@@ -258,11 +270,12 @@ def _validate_charts(charts: list[ChartSpec], verified: list["VerifiedClaim"]) -
             for b in bars:
                 has_low = (b.low is not None) or bool(b.low_str)
                 has_high = (b.high is not None) or bool(b.high_str)
-                if not _grounded(b.value_str, b.finding) or not (has_low or has_high):
+                # value + bounds each grounded in ANY finding (they often come from different sources)
+                if not _grounded_any(b.value_str) or not (has_low or has_high):
                     ok = False; break                       # a band needs the value AND at least one bound
-                if has_low and not _grounded(b.low_str, b.finding):
+                if has_low and not _grounded_any(b.low_str):
                     ok = False; break
-                if has_high and not _grounded(b.high_str, b.finding):
+                if has_high and not _grounded_any(b.high_str):
                     ok = False; break
             if ok:
                 out.append(ch.model_dump())

@@ -391,12 +391,14 @@ out of the denominator (e.g. 12), `value_str` = that figure exactly as the findi
 Put the denominator in `scale` (default 100; set it — with a grounded `scale_str` — only when the finding
 uses a different one like 1000). 1–4 outcomes. Do NOT compute NNT/NNH or convert a percent to a count
 yourself unless that exact figure is already in a finding — plot only what is written.
-- `kind:"range_band"` — a value-vs-REFERENCE-RANGE bullet chart ("is this value normal?"). Use it when
-the answer gives a measured/observed value together with its normal or target range (labs, vitals,
-scores): each row is one `ChartBar` with `value` = the observed reading (+ `value_str`), and `low`/`high`
-(+ `low_str`/`high_str`) = the normal reference band. The value MAY sit outside the band — that abnormal
-position is exactly the point. 1–6 rows; every figure (value and each bound) must be quoted from a
-finding. Give the `unit` (e.g. "mmol/L", "mg/dL").
+- `kind:"range_band"` — a value-vs-REFERENCE-RANGE bullet chart ("is this value normal?"). WHENEVER the
+answer states a specific measured/observed value AND a normal / reference / target range for it (labs,
+vitals, scores — e.g. "potassium 5.5 mmol/L, normal 3.5–5.0" or "HbA1c 8.5% vs a target < 7%"), EMIT a
+range_band — it is the right visual for that question, far better than leaving it in prose. Each row is
+one `ChartBar`: `value` = the observed reading (+ `value_str`), `low`/`high` (+ `low_str`/`high_str`) =
+the normal/target band (a one-sided target like "< 7%" sets just `high`). The value MAY sit outside the
+band — that abnormal position is exactly the point. The value and the range MAY be quoted from different
+findings. 1–6 rows; every figure must appear verbatim in some finding. Give the `unit` (e.g. "mmol/L").
 
 Reach for these two before a plain bar whenever the answer is really about "how likely / how common"
 (icon_array) or "is my value in range" (range_band)."""

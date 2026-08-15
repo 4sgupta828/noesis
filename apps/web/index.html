@@ -1332,7 +1332,6 @@
     <svg class="logo" viewBox="0 0 220 132" role="img" aria-label="Noesis"><use href="#noesis-logo"/></svg>
     <button type="button" class="histbtn newbtn" id="newbtn" style="margin-left:auto;">＋ New chat</button>
     <a class="histbtn" href="/admin" style="margin-left:0;text-decoration:none;">Coverage</a>
-    <a class="histbtn" href="/admin/perf" style="margin-left:0;text-decoration:none;" title="Performance metrics (admin)">Perf</a>
     <button type="button" class="histbtn" id="vidbtn" style="margin-left:0;">Videos</button>
     <button type="button" class="histbtn" id="histbtn" style="margin-left:0;">Past Sessions</button>
     <button type="button" class="histbtn setbtn" id="setbtn" style="margin-left:0;" title="Product settings (admin)" aria-label="Product settings">⚙</button>
@@ -5606,11 +5605,17 @@ function renderSettingsUI(d){
     `<div class="setrow"><b>⬡ Relationship graph</b><button type="button" class="idgo" id="setgraph" style="width:auto;padding:.3rem .8rem;font-size:.78rem;">Open console</button>
      <span class="sethint">Curated clinical edges powering retrieval expansion + the is-it-helping quality watch.</span></div>` +
     `<div class="setrow"><b>⇪ Ingestion</b><button type="button" class="idgo" id="seting" style="width:auto;padding:.3rem .8rem;font-size:.78rem;">Open console</button>
-     <span class="sethint">All corpus sources, their live footprint, and push-ingestion controls.</span></div>`;
+     <span class="sethint">All corpus sources, their live footprint, and push-ingestion controls.</span></div>` +
+    `<div class="setrow"><b>◷ Performance</b><button type="button" class="idgo" id="setperf" style="width:auto;padding:.3rem .8rem;font-size:.78rem;">Open dashboard</button>
+     <span class="sethint">Latency (avg / P95 / P99), phase breakdown, failure types &amp; stop reasons across all Q&amp;A runs.</span></div>`;
   const gbtn = body.querySelector("#setgraph");
   if(gbtn) gbtn.addEventListener("click", () => { $("#setmodal").hidden = true; openGraphConsole(); });
   const ibtn = body.querySelector("#seting");
   if(ibtn) ibtn.addEventListener("click", () => { $("#setmodal").hidden = true; openIngest(); });
+  const pbtn = body.querySelector("#setperf");
+  if(pbtn) pbtn.addEventListener("click", () => {   // pass the unlocked admin pw so /admin/perf opens directly
+    try{ sessionStorage.setItem("noesis-admin-pw", sessionStorage.getItem("noesis_apw") || ""); }catch(e){}
+    location.href = "/admin/perf"; });
   body.querySelectorAll("select[data-k]").forEach(sel => sel.addEventListener("change", async () => {
     const r = await fetch("/admin/settings", {method: "POST",
       headers: {"content-type": "application/json", "x-admin-password": sessionStorage.getItem("noesis_apw") || ""},

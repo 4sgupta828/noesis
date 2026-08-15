@@ -183,3 +183,88 @@ def test_pie_slice_count_bounds_inclusive():
         _bar(label=f"S{i}", value=p, value_str=f"{p}%", finding=1)
         for i, p in enumerate((10, 11, 12, 13, 14, 40))])
     assert len(_validate_charts([two, six], v)) == 2
+
+
+# ---- icon_array (absolute-risk pictograph) — EXEMPT from the >=2-groups rule ----------------------
+VR = [
+    VerifiedClaim(text="12 out of 100 patients on the drug had a stroke", atom_id="r1",
+                  quote="12 out of 100 patients"),
+    VerifiedClaim(text="only 4 in 100 in the placebo arm had a stroke", atom_id="r2",
+                  quote="4 in 100"),
+    VerifiedClaim(text="the annual risk was 3 per 1000 person-years", atom_id="r3",
+                  quote="3 per 1000"),
+]
+
+
+def test_icon_array_single_group_survives():
+    # a single absolute risk is meaningful — it must NOT be dropped for lacking a 2nd group
+    ch = ChartSpec(kind="icon_array", title="Stroke risk on drug", bars=[
+        _bar(label="Stroke", value=12, value_str="12", finding=1)])
+    out = _validate_charts([ch], VR)
+    assert len(out) == 1 and out[0]["kind"] == "icon_array"
+
+
+def test_icon_array_two_arm_comparison_survives():
+    ch = ChartSpec(kind="icon_array", title="Stroke: drug vs placebo", bars=[
+        _bar(label="Drug", value=12, value_str="12", finding=1),
+        _bar(label="Placebo", value=4, value_str="4", finding=2)])
+    assert len(_validate_charts([ch], VR)) == 1
+
+
+def test_icon_array_ungrounded_count_dropped():
+    ch = ChartSpec(kind="icon_array", bars=[
+        _bar(label="Stroke", value=9, value_str="9", finding=1)])  # finding says 12, not 9
+    assert _validate_charts([ch], VR) == []
+
+
+def test_icon_array_count_over_scale_dropped():
+    ch = ChartSpec(kind="icon_array", scale=100, bars=[
+        _bar(label="X", value=120, value_str="12", finding=1)])   # 120 > scale 100
+    assert _validate_charts([ch], VR) == []
+
+
+def test_icon_array_nondefault_scale_must_be_grounded():
+    ok = ChartSpec(kind="icon_array", scale=1000, scale_str="1000", bars=[
+        _bar(label="Event", value=3, value_str="3", finding=3)])
+    bad = ChartSpec(kind="icon_array", scale=1000, scale_str="500", bars=[  # 500 not in finding
+        _bar(label="Event", value=3, value_str="3", finding=3)])
+    assert len(_validate_charts([ok], VR)) == 1
+    assert _validate_charts([bad], VR) == []
+
+
+# ---- range_band (observed value vs reference range) — EXEMPT from the >=2-groups rule -------------
+VB = [
+    VerifiedClaim(text="the patient's potassium was 5.5 mmol/L (normal 3.5-5.0)", atom_id="b1",
+                  quote="potassium was 5.5 mmol/L (normal 3.5-5.0)"),
+    VerifiedClaim(text="fasting glucose 132 mg/dL against a reference of 70 to 99", atom_id="b2",
+                  quote="glucose 132 mg/dL against a reference of 70 to 99"),
+]
+
+
+def test_range_band_single_row_survives():
+    ch = ChartSpec(kind="range_band", unit="mmol/L", bars=[
+        _bar(label="Potassium", value=5.5, value_str="5.5",
+             low=3.5, low_str="3.5", high=5.0, high_str="5.0", finding=1)])
+    out = _validate_charts([ch], VB)
+    assert len(out) == 1 and out[0]["kind"] == "range_band"
+
+
+def test_range_band_value_out_of_band_is_kept():
+    # 132 is ABOVE the 70-99 band — that's the whole point; must be kept, not dropped
+    ch = ChartSpec(kind="range_band", bars=[
+        _bar(label="Glucose", value=132, value_str="132",
+             low=70, low_str="70", high=99, high_str="99", finding=2)])
+    assert len(_validate_charts([ch], VB)) == 1
+
+
+def test_range_band_without_any_bound_dropped():
+    ch = ChartSpec(kind="range_band", bars=[
+        _bar(label="Potassium", value=5.5, value_str="5.5", finding=1)])  # no low/high
+    assert _validate_charts([ch], VB) == []
+
+
+def test_range_band_ungrounded_bound_dropped():
+    ch = ChartSpec(kind="range_band", bars=[
+        _bar(label="Potassium", value=5.5, value_str="5.5",
+             low=3.0, low_str="3.0", high=5.0, high_str="5.0", finding=1)])  # 3.0 not in finding
+    assert _validate_charts([ch], VB) == []

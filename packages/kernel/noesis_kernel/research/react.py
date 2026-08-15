@@ -124,13 +124,20 @@ class ChartSpec(BaseModel):
     (2+ series per option — e.g. benefit vs risk), 'interval' (point estimate + CI/range per option, a
     forest plot), 'line' (a value over ordered x-categories — time/stages/doses; `label` is the
     x-category, `series` names each line when there are several), 'pie' (parts-of-a-whole shares;
-    `label` is the slice name). EVERY plotted number (value, and low/high when present) must appear
-    verbatim in its cited finding, or the whole chart is dropped. Meant for patterns hard to read from
-    prose/tables."""
-    kind: str = "bar"            # "bar" | "grouped_bar" | "interval" | "line" | "pie"
+    `label` is the slice name). Clinical-numeracy kinds (flag-gated): 'icon_array' (a pictograph /
+    Cates plot for ABSOLUTE risk — each `value` is a count out of `scale`, default per-100; 1–4
+    outcomes) and 'range_band' (a bullet/reference-range chart for "is my value normal" — each bar's
+    `value` is the observed reading and `low`/`high` are the normal reference band; 1–6 rows). EVERY
+    plotted number (value, low/high, and a non-default scale) must appear verbatim in its cited finding,
+    or the whole chart is dropped. Meant for patterns hard to read from prose/tables."""
+    kind: str = "bar"            # "bar"|"grouped_bar"|"interval"|"line"|"pie"|"icon_array"|"range_band"
     title: str = ""
     unit: str = ""
     bars: list[ChartBar] = []
+    # icon_array ONLY: the denominator ("X out of N"). Default per-100; when != 100 the figure must be
+    # grounded via `scale_str` just like any other plotted number. Ignored by every other kind.
+    scale: int = 100
+    scale_str: str = ""
 
 
 # ---- Reasoning Read: the interpretation layer (factra "Executive Read" discipline) -----------
@@ -209,7 +216,10 @@ def _validate_charts(charts: list[ChartSpec], verified: list["VerifiedClaim"]) -
     that finding's text or quote. Fail-safe — any bad number drops the WHOLE chart (a partly-verified
     chart is worse than none). Also enforces a real comparison (>=2 groups) plus kind-specific shape
     rules: a 'pie' needs 2–6 non-negative slices (parts of a whole); a 'line' needs >=3 points per
-    series (a trend) and <=3 series (readability). Returns dicts for the API."""
+    series (a trend) and <=3 series (readability). The clinical-numeracy kinds are EXEMPT from the
+    >=2-groups rule (a single absolute risk / a single lab-vs-range is meaningful): 'icon_array' needs
+    1–4 counts each in [0, scale] (a non-default scale is grounded too); 'range_band' needs 1–6 rows,
+    each with a grounded observed value AND at least one grounded reference bound. Returns dicts for the API."""
     def _grounded(s: str, finding: int) -> bool:
         s = (s or "").strip().lower()
         if not s or not (1 <= finding <= len(verified)):
@@ -221,6 +231,45 @@ def _validate_charts(charts: list[ChartSpec], verified: list["VerifiedClaim"]) -
     for ch in charts or []:
         bars = ch.bars or []
         kind = (ch.kind or "bar").strip().lower()
+
+        # --- clinical-numeracy kinds: these are MEANINGFUL with a single row (an absolute risk / a
+        # single lab-vs-range), so they are EXEMPT from the >=2-groups comparison rule below. ---
+        if kind == "icon_array":
+            # pictograph of ABSOLUTE risk: 1–4 outcomes, each a count out of `scale` (default per-100).
+            scale = ch.scale if (ch.scale or 0) >= 2 else 100
+            if not (1 <= len(bars) <= 4):
+                continue
+            # a non-default denominator is itself a plotted figure — it must be grounded too
+            if scale != 100 and not _grounded(ch.scale_str, bars[0].finding if bars else 0):
+                _log.warning("chart dropped: icon_array denominator %r not in its finding (title=%r)",
+                             ch.scale_str, ch.title)
+                continue
+            if all(_grounded(b.value_str, b.finding) and 0 <= b.value <= scale for b in bars):
+                out.append(ch.model_dump())
+            else:
+                _log.warning("chart dropped: icon_array count not grounded / out of range (title=%r)", ch.title)
+            continue
+        if kind == "range_band":
+            # observed value vs a normal reference band: 1–6 rows. `value` may fall OUTSIDE the band —
+            # that's the insight — so no in-range constraint; only grounding is enforced.
+            if not (1 <= len(bars) <= 6):
+                continue
+            ok = True
+            for b in bars:
+                has_low = (b.low is not None) or bool(b.low_str)
+                has_high = (b.high is not None) or bool(b.high_str)
+                if not _grounded(b.value_str, b.finding) or not (has_low or has_high):
+                    ok = False; break                       # a band needs the value AND at least one bound
+                if has_low and not _grounded(b.low_str, b.finding):
+                    ok = False; break
+                if has_high and not _grounded(b.high_str, b.finding):
+                    ok = False; break
+            if ok:
+                out.append(ch.model_dump())
+            else:
+                _log.warning("chart dropped: range_band value/bound not in its finding (title=%r)", ch.title)
+            continue
+
         # a chart needs >=2 distinct groups (labels) to be a comparison worth showing
         if len({(b.label or "").strip() for b in bars}) < 2:
             continue

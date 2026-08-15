@@ -556,6 +556,15 @@ def answer_charts_enabled() -> bool:
     return os.environ.get("NOESIS_ANSWER_CHARTS", "").lower() in ("1", "true", "yes")
 
 
+def clinical_charts_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON (and NOESIS_ANSWER_CHARTS is ON), the compose directive also
+    offers the two clinical-numeracy chart kinds — `icon_array` (absolute-risk pictograph) and
+    `range_band` (value-vs-reference-range bullet). Both are grounded in code exactly like the other
+    chart kinds. OFF → the directive never mentions them and the model won't emit them (byte-identical to
+    the existing charts behavior); a stray one would still fail the shape/grounding gate."""
+    return os.environ.get("NOESIS_CLINICAL_CHARTS", "").lower() in ("1", "true", "yes")
+
+
 def visual_augment_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, each answer offers on-demand "Add visuals" — POST
     /visuals/augment restructures the finished answer into grounded conceptual visuals (flow/tree/
@@ -1097,6 +1106,10 @@ def build_default_service() -> ResearchService:
     # Chart emission (flag): compose may populate a grounded bar chart, validated in the kernel.
     if answer_format and answer_charts_enabled() and getattr(manifest, "chart_guidance", None):
         answer_format = answer_format + "\n\n" + manifest.chart_guidance
+        # Clinical-numeracy kinds (icon_array / range_band) — a second, independently-gated flag layered
+        # on top of the chart guidance (requires answer-charts, since they're chart kinds).
+        if clinical_charts_enabled() and getattr(manifest, "clinical_chart_guidance", None):
+            answer_format = answer_format + "\n" + manifest.clinical_chart_guidance
     # Reasoning Read (flag): append the interpretation-layer directive so compose emits typed
     # interpretation + a confidence read (both validated in the kernel). Requires structured answers.
     if answer_format and reasoning_read_enabled() and getattr(manifest, "reasoning_format", None):
@@ -1465,6 +1478,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "followup_clarify_enabled": followup_clarify_enabled(),
             "answer_visuals_enabled": answer_visuals_enabled(),
             "answer_charts_enabled": answer_charts_enabled(),
+            "clinical_charts_enabled": clinical_charts_enabled(),
             "reasoning_read_enabled": reasoning_read_enabled() and structured_answers(),
             "diag_trace_enabled": diag_trace_enabled(),
             "evidence_fitness_enabled": evidence_fitness_enabled(),

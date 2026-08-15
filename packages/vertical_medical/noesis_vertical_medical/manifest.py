@@ -16,6 +16,7 @@ from .answer_format import (
     MEDICAL_PATIENT_FORMAT,
     MEDICAL_VISUAL_GUIDANCE,
     MEDICAL_CHART_GUIDANCE,
+    MEDICAL_CLINICAL_CHART_GUIDANCE,
     MEDICAL_REASONING_FORMAT,
     MEDICAL_PATIENT_REASONING_FORMAT,
 )
@@ -84,6 +85,7 @@ def build_manifest() -> VerticalManifest:
         patient_answer_format=MEDICAL_PATIENT_FORMAT,
         visual_guidance=MEDICAL_VISUAL_GUIDANCE,
         chart_guidance=MEDICAL_CHART_GUIDANCE,
+        clinical_chart_guidance=MEDICAL_CLINICAL_CHART_GUIDANCE,
         reasoning_format=MEDICAL_REASONING_FORMAT,
         patient_reasoning_format=MEDICAL_PATIENT_REASONING_FORMAT,
         evidence_classifier=evidence_kind.classify,   # structural facets → evidence tier (Rule 18)

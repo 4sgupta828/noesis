@@ -75,6 +75,9 @@ class VerticalManifest:
     # Optional CHART-emission guidance appended to the compose directive when the answer-charts flag is
     # on — lets compose populate a grounded bar chart (validated in code). Opaque prose.
     chart_guidance: str | None = None
+    # Optional CLINICAL-NUMERACY chart guidance (icon_array / range_band) appended AFTER chart_guidance
+    # when the clinical-charts flag is on (requires answer-charts). Same in-code grounding. Opaque prose.
+    clinical_chart_guidance: str | None = None
     # Optional REASONING-READ guidance appended to the compose directive when the reasoning-read flag is
     # on — lets compose emit a typed interpretation layer (tension/gap/assumption/implication/what-would-
     # change) + a 3-dimension confidence read, both validated in code (no new facts). Opaque prose.

@@ -451,6 +451,14 @@
   .chart .c-wh{stroke:var(--muted);stroke-width:1.6;}       /* forest-plot CI whisker */
   .chart .c-dot{fill:var(--chart1);stroke:var(--panel2);stroke-width:1.5;}  /* point estimate marker */
   .chart .c-ref{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3;opacity:.6;}  /* forest null line */
+  /* icon_array (absolute-risk pictograph) + range_band (value-vs-reference bullet) */
+  .chart .c-ico-e{fill:var(--muted);opacity:.16;}                    /* unaffected pictograph icon */
+  .chart .c-icocap{fill:var(--ink);font-size:14px;font-weight:800;}   /* the big "12 / 100" count */
+  .chart .c-band{fill:var(--chart1);opacity:.16;}                    /* normal reference band */
+  .chart .c-band-e{stroke:var(--muted);stroke-width:1;opacity:.55;}  /* band-edge ticks */
+  .chart .c-mk{stroke:var(--ink);stroke-width:2;}                    /* observed-value marker stem */
+  .chart .c-ok{fill:#3a9d5d;}   /* observed value inside the reference band (green) */
+  .chart .c-hi{fill:#d98324;}   /* observed value outside the reference band (amber) */
   .chartlegend{display:flex;flex-wrap:wrap;gap:.9rem;font-family:var(--mono);font-size:.66rem;color:var(--muted);margin-top:.55rem;}
   .chartlegend .lg{display:inline-flex;align-items:center;gap:.35rem;color:var(--ink);}
   .chartlegend .lg i{width:.7rem;height:.7rem;border-radius:2px;display:inline-block;position:relative;overflow:hidden;}
@@ -1956,8 +1964,9 @@ const _fmtTick = v => Math.abs(v) >= 1000 ? v.toLocaleString("en-US") : String(+
 function chartSvg(chart){
   const bars = ((chart && (chart.bars || chart.points)) || [])
     .filter(b => typeof b.value === "number" && isFinite(b.value));
-  if(bars.length < 2) return "";
   const kind = (chart.kind || "bar");
+  const single = (kind === "icon_array" || kind === "range_band");   // meaningful with a single row
+  if(bars.length < (single ? 1 : 2)) return "";
   const E = s => esc(String(s == null ? "" : s));
   const uid = ++_CHART_UID;
   // hatch textures (45°/135°, surface-colored, tone-on-tone) laid OVER series-2/3 fills
@@ -1982,7 +1991,55 @@ function chartSvg(chart){
   };
   let W, H, body = "", legend = "";
 
-  if(kind === "interval"){                     // forest plot: whisker low..high + marker at value
+  if(kind === "icon_array"){                   // absolute-risk pictograph: N of `scale` icons filled
+    const scale = (chart.scale && chart.scale >= 2) ? Math.round(chart.scale) : 100;
+    const cols = 10, cell = 15, r = 4.6;
+    const rows = Math.ceil(scale/cols), gridW = cols*cell, gridH = rows*cell;
+    const capH = 34, blockW = Math.max(gridW, 128) + 26;
+    W = Math.max(340, bars.length*blockW); H = capH + gridH + 30;
+    const col = _CHART_COLS[0];                 // one hue (Cates-plot style): compare filled AREA across arms
+    body = bars.map((b, bi) => {
+      const bx = bi*blockW + (blockW - gridW)/2;
+      const filled = Math.max(0, Math.min(scale, Math.round(b.value)));
+      let g = `<text x="${(bx+gridW/2).toFixed(1)}" y="22" text-anchor="middle" class="c-icocap">${E(b.value_str||b.value)}<tspan class="c-tick" dx="2">of ${scale}</tspan></text>`;
+      for(let k=0;k<scale;k++){
+        const cx = bx + (k%cols)*cell + cell/2, cy = capH + Math.floor(k/cols)*cell + cell/2;
+        g += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r}"${k<filled?` fill="${col}"`:` class="c-ico-e"`}></circle>`;
+      }
+      const t = String(b.label==null?"":b.label), shown = t.length>18 ? t.slice(0,17)+"…" : t;
+      g += `<text x="${(bx+gridW/2).toFixed(1)}" y="${capH+gridH+18}" text-anchor="middle" class="c-lbl">${E(shown)}<title>${E(t)}</title></text>`;
+      return g;
+    }).join("");
+    legend = `<span class="lg"><i style="background:${col}"></i>affected</span>`
+      + `<span class="lg"><i style="background:var(--muted);opacity:.3"></i>unaffected</span>`;
+  } else if(kind === "range_band"){            // bullet: observed value vs its normal reference band
+    W = barX + plotW + 90;
+    const rowH = 48; H = bars.length*rowH + 14;
+    body = bars.map((b, i) => {
+      const yTop = 14 + i*rowH, yMid = yTop + 16;
+      const lo0 = Math.min(b.value, b.low ?? b.value), hi0 = Math.max(b.value, b.high ?? b.value);
+      let span = hi0 - lo0; if(!(span > 0)) span = Math.abs(hi0) || 1;
+      const lo = lo0 - span*0.35, hi = hi0 + span*0.35;
+      const X = v => barX + Math.round((v - lo)/(hi - lo) * plotW);
+      const bx1 = (b.low != null) ? X(b.low) : barX, bx2 = (b.high != null) ? X(b.high) : barX+plotW;
+      const vx = X(b.value);
+      const inBand = (b.low == null || b.value >= b.low) && (b.high == null || b.value <= b.high);
+      let s = lbl(b.label, yMid+4)
+        + `<line x1="${barX}" y1="${yMid}" x2="${barX+plotW}" y2="${yMid}" class="c-axis"></line>`
+        + `<rect x="${bx1}" y="${yMid-9}" width="${Math.max(1, bx2-bx1)}" height="18" rx="2" class="c-band"></rect>`;
+      if(b.low != null) s += `<line x1="${X(b.low)}" y1="${yMid-9}" x2="${X(b.low)}" y2="${yMid+9}" class="c-band-e"></line>`
+        + `<text x="${X(b.low)}" y="${yMid+23}" text-anchor="middle" class="c-tick">${E(b.low_str||b.low)}</text>`;
+      if(b.high != null) s += `<line x1="${X(b.high)}" y1="${yMid-9}" x2="${X(b.high)}" y2="${yMid+9}" class="c-band-e"></line>`
+        + `<text x="${X(b.high)}" y="${yMid+23}" text-anchor="middle" class="c-tick">${E(b.high_str||b.high)}</text>`;
+      s += `<line x1="${vx}" y1="${yMid-13}" x2="${vx}" y2="${yMid+13}" class="c-mk"></line>`
+        + `<circle cx="${vx}" cy="${yMid}" r="5" class="${inBand?"c-ok":"c-hi"}" stroke="var(--panel)" stroke-width="1.5"></circle>`
+        + `<text x="${vx}" y="${yTop+7}" text-anchor="middle" class="c-val">${E(b.value_str||b.value)}${chart.unit?" "+E(chart.unit):""}</text>`;
+      return s;
+    }).join("");
+    legend = `<span class="lg"><i style="background:var(--chart1);opacity:.3"></i>normal range</span>`
+      + `<span class="lg"><span style="color:#3a9d5d">●</span> in range</span>`
+      + `<span class="lg"><span style="color:#d98324">●</span> out of range</span>`;
+  } else if(kind === "interval"){                     // forest plot: whisker low..high + marker at value
     W = barX + plotW + 150;
     let lo = Infinity, hi = -Infinity;
     bars.forEach(b => { lo = Math.min(lo, b.low ?? b.value, b.value); hi = Math.max(hi, b.high ?? b.value, b.value); });

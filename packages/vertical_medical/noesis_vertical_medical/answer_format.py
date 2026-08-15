@@ -372,3 +372,31 @@ cited `finding` (e.g. "0.78", "53%") — an unverifiable number gets the whole c
 - EVERY chart carries a short `title` (what is plotted, for whom) and its `unit` (e.g. "%", "HR", \
 "mmol/L"). Keep `label`s SHORT (2–4 words — "Semaglutide 2.4 mg", not a sentence). Use 2–8 groups \
 (pie: 2–6 slices; line: <=3 series)."""
+
+
+# CLINICAL-NUMERACY charts (flag NOESIS_CLINICAL_CHARTS, default OFF — Rule 20). APPENDED to the chart
+# guidance above only when the flag is on (and requires NOESIS_ANSWER_CHARTS). These two kinds are the
+# EBM/shared-decision-making visuals that ordinary bars/pies can't do; both are grounded in code exactly
+# like the other chart kinds (a figure absent from its cited finding drops the whole chart).
+MEDICAL_CLINICAL_CHART_GUIDANCE = """\
+
+TWO MORE CHART KINDS are available for clinical numeracy — use them when the pattern fits (they beat a
+bar/pie for these specific jobs, and unlike the kinds above they are meaningful with a SINGLE row):
+
+- `kind:"icon_array"` — an ABSOLUTE-RISK pictograph ("X out of 100"). Use it whenever the answer states
+an absolute risk, event rate, or benefit/harm as a count-per-denominator ("12 out of 100", "4 in 100",
+"3 per 1000") — this is how a patient actually grasps risk, far better than a percentage in prose. Each
+outcome/arm is one `ChartBar`: `label` (the outcome or arm — "On drug", "Placebo"), `value` = the COUNT
+out of the denominator (e.g. 12), `value_str` = that figure exactly as the finding writes it, `finding`.
+Put the denominator in `scale` (default 100; set it — with a grounded `scale_str` — only when the finding
+uses a different one like 1000). 1–4 outcomes. Do NOT compute NNT/NNH or convert a percent to a count
+yourself unless that exact figure is already in a finding — plot only what is written.
+- `kind:"range_band"` — a value-vs-REFERENCE-RANGE bullet chart ("is this value normal?"). Use it when
+the answer gives a measured/observed value together with its normal or target range (labs, vitals,
+scores): each row is one `ChartBar` with `value` = the observed reading (+ `value_str`), and `low`/`high`
+(+ `low_str`/`high_str`) = the normal reference band. The value MAY sit outside the band — that abnormal
+position is exactly the point. 1–6 rows; every figure (value and each bound) must be quoted from a
+finding. Give the `unit` (e.g. "mmol/L", "mg/dL").
+
+Reach for these two before a plain bar whenever the answer is really about "how likely / how common"
+(icon_array) or "is my value in range" (range_band)."""

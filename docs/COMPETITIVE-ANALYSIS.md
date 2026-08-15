@@ -198,7 +198,7 @@ specifics as directionally current, not contractual — re-verify before externa
 
 Perplexity isn't a clinical product, but it's the research UX bar and informally used by clinicians —
 so it belongs in the comparison. Research as of mid-2026, sources in the research log.
-
+                
 **What it is.** Deep Research (Feb 2025): agentic multi-search (~20–50 queries, hundreds of sources),
 2–4-minute cited reports; by 2026 folded into "Perplexity Computer" routing subtasks across 20+ models.
 Free/Pro($20)/Max($200)/Enterprise tiers. Self-reported evals: 21.1% Humanity's Last Exam, 93.9%

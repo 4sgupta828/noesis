@@ -1640,7 +1640,11 @@ let ACCOUNTS_ENABLED = false;   // accounts + verified-clinician tier + per-answ
 let DUEL_ENABLED = false;       // A/B duel: fresh questions run standard + reasoned engines, user votes
 let INTEGRATIVE_ENABLED = false;
 let PULSE_ENABLED = false;      // Evidence Pulse: watches, inbox, answer-integrity banners // feature flag: the per-question integrative opt-in is offered
-let DYN_ENGINES = false;         // dynamic engine selection on → interlock hop chips render
+let DYN_ENGINES = false;         // dynamic engine selection on (powers AUTOMATIC engine routing)
+// The manual "Same question, another lens" hop chips (🧠 Understand why / ⚡ What should I do / 📚 Just
+// the evidence) are RETIRED: automatic engine routing + the reasoning-read layer already give the
+// user the right engine/interpretation, and each hop was a full ~90s re-run. Flip to true to restore.
+const LENS_HOPS_ENABLED = false;
 let INTEGRATIVE_ON = false;      // the per-question opt-in state (off by default)
 let MODALITY_ENABLED = false;    // therapy-modality toggle available (Modern Medicine / Alternative)
 let MODALITY = "allopathic";     // active modality; "alternative" surfaces the CAM corpus
@@ -5026,7 +5030,7 @@ function renderActivityInto(body, d, containerForClose){
 // replaces the two separate stacked boxes that made the bottom feel cluttered.
 function whereNextMarkup(t){
   const lens = (()=>{
-    if(!DYN_ENGINES || !t || t._pending || !t.answer) return "";
+    if(!LENS_HOPS_ENABLED || !DYN_ENGINES || !t || t._pending || !t.answer) return "";
     const cur = t._engine || "standard";
     const hops = Object.entries(ENGINE_HOPS).filter(([k]) => k !== cur);
     return `<div class="wn-lens"><span class="wn-lenslbl">Same question, another lens</span>` +

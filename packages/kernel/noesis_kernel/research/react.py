@@ -675,6 +675,20 @@ async def run_react(
         from noesis_kernel.providers.anthropic_llm import LLM_CALL_LOG as _LLM_CALL_LOG
         _call_log = []
         _call_log_tok = _LLM_CALL_LOG.set(_call_log)
+
+    def _timed(name, coro):
+        """Accumulate an awaitable's wall-clock into diag['timing'][name] (factra-style phase timing).
+        No-op passthrough when diagnostics are off. Splits the non-LLM time (retrieval/embed/OpenAI
+        judge) that the per-Anthropic-call log can't see."""
+        if diag is None:
+            return coro
+        async def _run():
+            _pt = time.perf_counter()
+            try:
+                return await coro
+            finally:
+                diag["timing"][name] = diag["timing"].get(name, 0) + int((time.perf_counter() - _pt) * 1000)
+        return _run()
     # The span-verifier's block loader must cover EVERY source a claim can cite — corpus AND aux
     # (web). Since search is split (corpus multi-query + aux single-query), combine their loaders
     # so a web-cited quote is still verifiable (else all web claims would be rejected).
@@ -887,11 +901,11 @@ async def run_react(
             if not _gq:
                 continue
             try:
-                _gvec = await asyncio.to_thread(lambda q=_gq: list(embedder.embed([q])[0]))
-                _g_hits = await source.search(RetrievalRequest(
+                _gvec = await _timed("embed_ms", asyncio.to_thread(lambda q=_gq: list(embedder.embed([q])[0])))
+                _g_hits = await _timed("graph_legs_ms", source.search(RetrievalRequest(
                     query=_gq, tenant_id=tenant_id, workspace_id=workspace_id,
                     query_embedding=_gvec, k=max(4, k // 2), facets=dict(facets or {}),
-                    exclude_facets=dict(exclude_facets or {})))
+                    exclude_facets=dict(exclude_facets or {}))))
             except Exception as _ge:   # noqa: BLE001 — a dead leg never breaks the answer
                 _log.warning("graph leg failed on %r: %s", _gq, _ge)
                 _g_hits = []
@@ -973,7 +987,7 @@ async def run_react(
                 except Exception as _ce:   # noqa: BLE001 — a dead leg never breaks the answer
                     _log.warning("contract leg failed on %r: %s", q, _ce)
                     return []
-            _c_results = await asyncio.gather(*(_c_fetch(q) for q in _c_queries))
+            _c_results = await _timed("contract_legs_ms", asyncio.gather(*(_c_fetch(q) for q in _c_queries)))
             for _cd, _cq, _c_hits in zip(_c_diag["legs"], _c_queries, _c_results):
                 _cd["hits"] = len(_c_hits)
                 if _c_hits:
@@ -1034,7 +1048,7 @@ async def run_react(
             # rather than always echoing the original question, so the trace isn't misleadingly "duplicated".
             display_q = step.query or (step.queries[0] if step.queries else question)
             await emit({"type": "search", "query": display_q, "variants": list(step.queries or [])})
-            qvec = await asyncio.to_thread(lambda: list(embedder.embed([q])[0]))  # off the loop
+            qvec = await _timed("embed_ms", asyncio.to_thread(lambda: list(embedder.embed([q])[0])))  # off the loop
             base_req = RetrievalRequest(
                 query=q, tenant_id=tenant_id, workspace_id=workspace_id,
                 query_embedding=qvec, k=k, facets=dict(facets or {}),
@@ -1057,9 +1071,9 @@ async def run_react(
                 return r
 
             if aux_source is not None:
-                got = await asyncio.gather(_traced_leg("corpus", corpus_co),
+                got = await _timed("retrieval_ms", asyncio.gather(_traced_leg("corpus", corpus_co),
                                            _traced_leg("web", aux_source.search(base_req)),
-                                           return_exceptions=True)
+                                           return_exceptions=True))
                 hits = []
                 for leg, r in zip(("corpus", "web"), got):
                     if isinstance(r, Exception):
@@ -1072,7 +1086,7 @@ async def run_react(
                     else:
                         hits += r
             else:
-                hits = await _traced_leg("corpus", corpus_co)
+                hits = await _timed("retrieval_ms", _traced_leg("corpus", corpus_co))
             before = len(atoms.all())
             atoms.add_hits(hits)
             added = len(atoms.all()) - before
@@ -1211,11 +1225,11 @@ async def run_react(
                 _n_bind = -(-len(_pre) // _ENTAIL_CHUNK)     # ceil — mirrors the judge's chunking
                 budget.reserve(calls=_n_bind)                # BudgetExceeded → degrade to "unjudged"
                 budget.charge(calls=_n_bind)
-                _verdicts = await entail_claims(
+                _verdicts = await _timed("judge_ms", entail_claims(
                     claims=[{"text": vc.text, "atom_id": vc.atom_id, "quote": vc.quote}
                             for vc in _pre],
                     tags=[identity_tag(vc) for vc in _pre],
-                    congruence=True, kinds=[vc.evidence_kind for vc in _pre])
+                    congruence=True, kinds=[vc.evidence_kind for vc in _pre]))
             except Exception as _be:   # noqa: BLE001 — incl. BudgetExceeded: annotate, never drop
                 _log.warning("binding judge unavailable for loop/fallback claims: %r", _be)
                 _verdicts = [None] * len(_pre)
@@ -1737,13 +1751,26 @@ async def run_react(
             _LLM_CALL_LOG.reset(_call_log_tok)
             llm_ms = sum(c["ms"] for c in calls)
             diag["llm_calls_detail"] = calls
-            diag["timing"].update({
+            _tm = diag["timing"]
+            _measured = (_tm.get("judge_ms", 0) + _tm.get("retrieval_ms", 0)
+                         + _tm.get("contract_legs_ms", 0) + _tm.get("graph_legs_ms", 0) + _tm.get("embed_ms", 0))
+            _tm.update({
                 "total_ms": diag["duration_ms"],
                 "anthropic_calls": len(calls),
                 "anthropic_ms": llm_ms,
                 "anthropic_slowest_ms": max((c["ms"] for c in calls), default=0),
                 "non_anthropic_ms": max(0, diag["duration_ms"] - llm_ms),   # retrieval+embed+OpenAI judges+overhead
+                # residual = non-Anthropic wall-clock not attributed to a measured phase (overlap/overhead)
+                "unattributed_ms": max(0, diag["duration_ms"] - llm_ms - _measured),
             })
+            # one-line human-readable breakdown for quick reading in logs / the diag payload
+            _parts = [f"total={diag['duration_ms']/1000:.1f}s",
+                      f"anthropic={llm_ms/1000:.1f}s({len(calls)} calls)"]
+            for _k in ("judge_ms", "retrieval_ms", "embed_ms", "contract_legs_ms", "graph_legs_ms"):
+                if _tm.get(_k):
+                    _parts.append(f"{_k[:-3]}={_tm[_k]/1000:.1f}s")
+            _tm["summary"] = " · ".join(_parts)
+            _log.info("Q&A latency breakdown: %s", _tm["summary"])
         result.diagnostics = diag
     return result
 

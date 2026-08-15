@@ -130,6 +130,16 @@ COVERED_CONDITIONS = [
     {"group": "India programme", "name": "childhood diarrhoea (ORS + zinc)", "depth": "deep"},
     {"group": "India programme", "name": "anemia in pregnancy", "depth": "deep"},
     {"group": "India programme", "name": "TB preventive treatment", "depth": "deep"},
+    # Complementary & Alternative Medicine (2026-08-15): CAM-journal + Cochrane CAM literature via
+    # Europe PMC, tagged modality=alternative (surfaced ONLY in Alternative mode, with evidence-tier +
+    # safety labeling). Pre-existing CAM-journal blocks retro-tagged; broad first tranche ingested.
+    {"group": "Complementary / Alternative", "name": "acupuncture & acupressure", "depth": "deep"},
+    {"group": "Complementary / Alternative", "name": "moxibustion & cupping", "depth": "medium"},
+    {"group": "Complementary / Alternative", "name": "traditional Chinese & herbal medicine", "depth": "deep"},
+    {"group": "Complementary / Alternative", "name": "mind-body (tai chi, yoga, meditation)", "depth": "deep"},
+    {"group": "Complementary / Alternative", "name": "manual therapies (chiropractic, massage)", "depth": "medium"},
+    {"group": "Complementary / Alternative", "name": "ayurveda & naturopathy", "depth": "medium"},
+    {"group": "Complementary / Alternative", "name": "homeopathy (contested — flagged not-supported)", "depth": "medium"},
 ]
 
 # Remaining work. Every roadmap CONDITION is now covered deep; what's left is cross-cutting DEPTH

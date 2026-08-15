@@ -2837,8 +2837,11 @@ async function generateVisuals(root, data){
   try{
     const ti = (typeof data.turn_index === "number") ? data.turn_index
              : (typeof THREAD!=="undefined" && THREAD.turns ? Math.max(0, THREAD.turns.length-1) : 0);
-    const sid = data.session_id || (typeof THREAD!=="undefined" && THREAD.session_id)
-             || (typeof LAST!=="undefined" && LAST && LAST.session_id) || null;   // single-answer path uses LAST
+    // panel visuals persist to the PANEL session/turn; Q&A visuals use the Q&A thread/LAST session.
+    const sid = data.session_id
+             || (data.panel ? (typeof PANEL_THREAD!=="undefined" && PANEL_THREAD.session_id)   // resolved live
+                            : ((typeof THREAD!=="undefined" && THREAD.session_id) || (typeof LAST!=="undefined" && LAST && LAST.session_id)))
+             || null;
     const r = await fetch("/visuals/augment",{method:"POST",headers:{"content-type":"application/json"},
       body:JSON.stringify({question:(data.question||CURRENT_Q||""), answer:(data.answer||""),
         session_id: sid, turn_index: ti})});
@@ -2851,6 +2854,9 @@ async function generateVisuals(root, data){
     d.className = "plain plain-d visuals-d"; d.open = true;
     d.innerHTML = `<summary class="plain-h">◫ Visuals (${visuals.length})</summary><div class="vzgrid">${cards}</div>`;
     item.replaceWith(d);
+    // keep in-memory turn state consistent so a mid-session re-render (e.g. after a follow-up) keeps them
+    if(data.panel && typeof PANEL_THREAD!=="undefined" && PANEL_THREAD.turns && PANEL_THREAD.turns[ti] && PANEL_THREAD.turns[ti].result)
+      PANEL_THREAD.turns[ti].result.visuals = visuals;
   }catch(e){
     btn.disabled = false; btn.textContent = "◫ Add visuals";
     if(hint){ hint.hidden = false; hint.textContent = "Couldn't add visuals: "+(e.message||e); }
@@ -4038,7 +4044,9 @@ function renderPanelConversation(){
     </div>`;
   // render each completed turn's deliberation with the full machinery (reasoning read + evidence panel)
   PANEL_THREAD.turns.forEach((t,i)=>{
-    const el = $("#psynth-"+i); if(el) renderPanelSynth(t.result, el);
+    const el = $("#psynth-"+i);
+    if(el) renderPanelSynth(Object.assign({}, t.result,
+      {panel:true, session_id:PANEL_THREAD.session_id||null, turn_index:i, visuals:t.result.visuals||[]}), el);
   });
   const pfq = $("#pfq"), pfgo = $("#pfgo");
   if(pfq){
@@ -4095,7 +4103,7 @@ function openPanelSession(row){
     question: t.question, synthesis: t.answer||t.synthesis||"", claims: t.claims||[], takes: t.takes||[],
     n_specialists: t.n_specialists||(t.takes||[]).length, interpretation: t.interpretation||[],
     confidence: t.confidence||null, reasoning_purpose: t.reasoning_purpose||"",
-    reasoning_conclusion: t.reasoning_conclusion||""}}));
+    reasoning_conclusion: t.reasoning_conclusion||"", visuals: t.visuals||[]}}));
   const lastTakes = turns.length ? (turns[turns.length-1].result.takes||[]) : [];
   const rationales = {}; lastTakes.forEach(t=>{ if(t.rationale) rationales[t.id]=t.rationale; });
   PANEL_THREAD = {ids: lastTakes.map(t=>t.id), turns, session_id: row.id, rationales};
@@ -4134,7 +4142,7 @@ function renderPanelSessionDetail(row){
     if(el) renderPanelSynth({synthesis: t.answer||t.synthesis||"", claims: t.claims||[],
       interpretation: t.interpretation||[], confidence: t.confidence||null,
       reasoning_purpose: t.reasoning_purpose||"", reasoning_conclusion: t.reasoning_conclusion||"",
-      question: t.question}, el); });
+      question: t.question, panel:true, session_id:row.id, turn_index:i, visuals:t.visuals||[]}, el); });
   buildPanelSessionActions($("#pd-actions"), row);
   sdetail.scrollTop = 0;
   if(isMobileSess()){ sessionsEl.dataset.view = "detail"; setSback("← Sessions"); }
@@ -4200,14 +4208,22 @@ function renderPanelSynth(data, el){
     if(tg) tg.addEventListener("click", ()=>generateTerms(tw,
       {question: data.question||"", answer: answer + (delib ? "\n\n" + delib : "")}));
   }
-  // ◫ Add visuals — same affordance as Q&A, fed the panel's synthesis (grounded against it)
-  if(VISUAL_ENABLED && (answer||"").trim()){
+  // ◫ Add visuals — same affordance as Q&A, fed the panel's synthesis (grounded against it), and
+  // persisted onto this panel turn (session_id + turn_index) so a reopened discussion re-renders them.
+  const vAnswer = answer + (delib ? "\n\n" + delib : "");
+  if(data.visuals && data.visuals.length){
+    const vw = document.createElement("div");
+    vw.innerHTML = `<details class="plain plain-d visuals-d" open><summary class="plain-h">◫ Visuals (${data.visuals.length})</summary>
+      <div class="vzgrid">${data.visuals.map(visualCardHtml).join("")}</div></details>`;
+    el.appendChild(vw);
+  } else if(VISUAL_ENABLED && (answer||"").trim()){
     const vw = document.createElement("div");
     vw.innerHTML = `<div class="xformrow"><span class="xlbl">See the structure</span>${visualsActionHtml()}</div>`;
     el.appendChild(vw);
     const vg = vw.querySelector("#visualsgo");
     if(vg) vg.addEventListener("click", ()=>generateVisuals(vw,
-      {question: data.question||"", answer: answer + (delib ? "\n\n" + delib : "")}));
+      {question: data.question||"", answer: vAnswer, panel:true,
+       session_id: data.session_id||null, turn_index: (typeof data.turn_index==="number"?data.turn_index:0)}));
   }
 }
 // Run ONE turn (first or follow-up): stream each specialist's live trace into #panellive, then commit the

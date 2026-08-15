@@ -1604,6 +1604,8 @@ let LAYMAN_ENABLED = false; // on-demand plain-language re-explanation
 let TERMS_ENABLED = false;  // on-demand key-term explanations + the accumulating All Terms glossary
 let VOICE_INTAKE_ENABLED = false; // hands-free guided intake (speak answers, hear questions)
 let VISUAL_ENABLED = false;       // on-demand "Add visuals" — grounded conceptual diagrams below an answer
+let VISUAL_AUTO = false;          // auto-generate visuals on every fresh grounded answer (default behavior)
+let _autoVisualsArm = false;      // armed only around a FRESH panel render so reopens don't re-spend
 let VOICE_TTS_NEURAL = false;     // server neural voiceover (/voice/tts); browser voice is the fallback
 let GAP_ENABLED = false;    // self-healing: suggest + queue sources to fill evidence gaps
 let CONV_ENABLED = false;   // multi-turn conversation (follow-ups carry context)
@@ -1674,6 +1676,7 @@ async function loadConfig(){
     LAYMAN_ENABLED = !!c.layman_enabled;
     TERMS_ENABLED = !!c.term_glossary_enabled;
     VISUAL_ENABLED = !!c.visual_augment_enabled;
+    VISUAL_AUTO = !!c.visual_auto_enabled;
     const tb = $("#termsbtn"); if(tb && TERMS_ENABLED) tb.hidden = false;
     VOICE_INTAKE_ENABLED = !!c.voice_intake_enabled;
     VOICE_TTS_NEURAL = !!c.voice_tts_neural;
@@ -2484,6 +2487,7 @@ function wireConvo(target, data){
   if(td){ wireTermChips(td);
     const ta = td.querySelector(".tall"); if(ta) ta.addEventListener("click", e=>{e.preventDefault(); openTermsPage();}); }
   const vg = target.querySelector("#visualsgo"); if(vg) vg.addEventListener("click", ()=>generateVisuals(target, data));
+  maybeAutoVisuals(target, data);   // by default, build visuals on a fresh answer (skips reopened sessions)
 }
 
 // Self-healing: ask the backend which sources would fill this question's gaps, render them
@@ -2709,16 +2713,16 @@ function vzFlow(v){
   Ls.forEach(L=>{ const r=layers[L]; const rw=r.length*NW+(r.length-1)*colGap; let x=(W-rw)/2;
     r.forEach(n=>{ pos[n.id]={x,y,w:NW,h:H[n.id]}; x+=NW+colGap; }); y+=rowH[L]+rowGap; });
   const totalH=y-rowGap+12;
-  let ed="";
+  let ed="", lbls="";   // lines under the nodes; labels ON TOP so they're never hidden
   edges.forEach(e=>{ const a=pos[e.src], b=pos[e.dst]; if(!a||!b) return;
     const sx=a.x+a.w/2, sy=a.y+a.h, tx=b.x+b.w/2, ty=b.y; const mid=(sy+ty)/2;
     ed += `<path class="vzedge" d="M${sx} ${sy} C ${sx} ${mid} ${tx} ${mid} ${tx} ${ty}" marker-end="url(#vzarr)"/>`;
     if(e.label){ const lx=(sx+tx)/2, ly=mid; const w=Math.min(e.label.length*6+10,150);
-      ed += `<rect class="vzedgelblbg" x="${lx-w/2}" y="${ly-9}" width="${w}" height="17" rx="8"/>`+
-            `<text class="vzedgelbl" x="${lx}" y="${ly+3}">${esc(e.label.length>24?e.label.slice(0,23)+"…":e.label)}</text>`; }
+      lbls += `<rect class="vzedgelblbg" x="${lx-w/2}" y="${ly-9}" width="${w}" height="17" rx="8"/>`+
+              `<text class="vzedgelbl" x="${lx}" y="${ly+3}">${esc(e.label.length>24?e.label.slice(0,23)+"…":e.label)}</text>`; }
   });
   let nd=""; nodes.forEach(n=>nd+=vzNodeBox(n,pos[n.id],(indeg[n.id]||0)===0));
-  return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W} ${totalH}" width="${W}" height="${totalH}" role="img">${VZ_DEFS}${ed}${nd}</svg></div>`;
+  return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W} ${totalH}" width="${W}" height="${totalH}" role="img">${VZ_DEFS}${ed}${nd}${lbls}</svg></div>`;
 }
 function vzTree(v){
   const nodes=v.nodes||[]; if(nodes.length<2) return "";
@@ -2743,10 +2747,16 @@ function vzTree(v){
     const ch=kids[id].filter(c=>!pseen.has(c));
     if(!ch.length){ cx[id]=cursor*(NW+xGap)+NW/2; cursor++; } else { const xs=ch.map(c=>place(c)); cx[id]=(Math.min(...xs)+Math.max(...xs))/2; }
     return cx[id]; })(r));
+  // separation pass: within each depth, enforce a minimum horizontal gap so same-level nodes
+  // (whose centered positions could collide when subtrees are unbalanced) never overlap.
+  const byDepth={}; nodes.forEach(n=>{ (byDepth[depth[n.id]]=byDepth[depth[n.id]]||[]).push(n.id); });
+  Object.values(byDepth).forEach(ids=>{ ids.sort((a,b)=>(cx[a]||0)-(cx[b]||0));
+    for(let i=1;i<ids.length;i++){ const min=(cx[ids[i-1]]||0)+NW+xGap; if((cx[ids[i]]||0)<min) cx[ids[i]]=min; } });
   const depths=Object.keys(rowH).map(Number).sort((a,b)=>a-b);
   const yOf={}; let yy=12; depths.forEach(d=>{ yOf[d]=yy; yy+=rowH[d]+rowGap; });
   const pos={}; nodes.forEach(n=>{ pos[n.id]={x:(cx[n.id]||NW/2)-NW/2, y:yOf[depth[n.id]]||12, w:NW, h:H[n.id]}; });
-  const W=Math.max(cursor*(NW+xGap),220)+10, totalH=yy-rowGap+12;
+  let maxX=0; nodes.forEach(n=>maxX=Math.max(maxX,(cx[n.id]||NW/2)+NW/2));
+  const W=Math.max(maxX,220)+10, totalH=yy-rowGap+12;
   let ed=""; nodes.forEach(n=>{ kids[n.id].forEach(cid=>{ const a=pos[n.id], b=pos[cid]; if(!a||!b)return;
     const sx=a.x+a.w/2, sy=a.y+a.h, tx=b.x+b.w/2, ty=b.y, mid=(sy+ty)/2;
     ed+=`<path class="vzedge" d="M${sx} ${sy} C ${sx} ${mid} ${tx} ${mid} ${tx} ${ty}" marker-end="url(#vzarr)"/>`; }); });
@@ -2783,11 +2793,11 @@ function vzMap(v){
   const LH=14;
   nodes.forEach(n=>{ n._lines=vzWrap(n.label,16);
     n._w=Math.max(74, Math.min(154, Math.max(...n._lines.map(l=>l.length))*7+20)); n._h=n._lines.length*LH+14; });
-  const N=nodes.length, R=Math.max(120, N*26);
+  const N=nodes.length, R=Math.max(150, N*32);
   const P=nodes.map((n,i)=>({x:R*Math.cos(2*Math.PI*i/N), y:R*Math.sin(2*Math.PI*i/N)}));
   const E=edges.map(e=>({s:idx[e.src], t:idx[e.dst]})).filter(e=>e.s!=null&&e.t!=null);
-  const L=180, kRep=11000, kSpr=0.02, center=0.006;
-  for(let it=0; it<220; it++){
+  const L=210, kRep=17000, kSpr=0.02, center=0.005;
+  for(let it=0; it<300; it++){
     const fx=new Array(N).fill(0), fy=new Array(N).fill(0);
     for(let i=0;i<N;i++) for(let j=i+1;j<N;j++){
       let dx=P[i].x-P[j].x, dy=P[i].y-P[j].y, d2=dx*dx+dy*dy+0.01, d=Math.sqrt(d2), f=kRep/d2;
@@ -2796,27 +2806,40 @@ function vzMap(v){
     E.forEach(e=>{ let dx=P[e.t].x-P[e.s].x, dy=P[e.t].y-P[e.s].y, d=Math.sqrt(dx*dx+dy*dy)+0.01, f=kSpr*(d-L);
       fx[e.s]+=f*dx/d; fy[e.s]+=f*dy/d; fx[e.t]-=f*dx/d; fy[e.t]-=f*dy/d; });
     for(let i=0;i<N;i++){ fx[i]-=center*P[i].x; fy[i]-=center*P[i].y;
-      P[i].x+=Math.max(-14,Math.min(14,fx[i])); P[i].y+=Math.max(-14,Math.min(14,fy[i])); }
+      P[i].x+=Math.max(-16,Math.min(16,fx[i])); P[i].y+=Math.max(-16,Math.min(16,fy[i])); }
+  }
+  // COLLISION RESOLUTION: separate any overlapping node rectangles (with margin) by minimal
+  // translation, several passes — guarantees no node box sits on top of another.
+  const MX=16, MY=14;
+  for(let pass=0; pass<80; pass++){ let moved=false;
+    for(let i=0;i<N;i++) for(let j=i+1;j<N;j++){
+      const ox=(nodes[i]._w+nodes[j]._w)/2+MX-Math.abs(P[i].x-P[j].x);
+      const oy=(nodes[i]._h+nodes[j]._h)/2+MY-Math.abs(P[i].y-P[j].y);
+      if(ox>0 && oy>0){ moved=true;
+        if(ox<oy){ const s=(P[i].x<=P[j].x?-1:1)*ox/2; P[i].x+=s; P[j].x-=s; }
+        else { const s=(P[i].y<=P[j].y?-1:1)*oy/2; P[i].y+=s; P[j].y-=s; } }
+    }
+    if(!moved) break;
   }
   let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
   nodes.forEach((n,i)=>{ minX=Math.min(minX,P[i].x-n._w/2); maxX=Math.max(maxX,P[i].x+n._w/2);
     minY=Math.min(minY,P[i].y-n._h/2); maxY=Math.max(maxY,P[i].y+n._h/2); });
   const pad=18, W=(maxX-minX)+pad*2, H=(maxY-minY)+pad*2;
   const px=i=>P[i].x-minX+pad, py=i=>P[i].y-minY+pad;
-  let ed="";
+  let ed="", lbls="";   // lines under nodes; relationship labels ON TOP so they stay legible
   E.forEach((e,k)=>{ const a=vzClip(px(e.s),py(e.s),px(e.t),py(e.t),nodes[e.s]._w/2+2,nodes[e.s]._h/2+2);
     const b=vzClip(px(e.t),py(e.t),px(e.s),py(e.s),nodes[e.t]._w/2+2,nodes[e.t]._h/2+2);
     ed+=`<line class="vzedge" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" marker-end="url(#vzarr)"/>`;
     const lbl=edges[k].label; if(lbl){ const mx=(a.x+b.x)/2, my=(a.y+b.y)/2, w=Math.min(lbl.length*5.6+10,124);
-      ed+=`<rect class="vzedgelblbg" x="${(mx-w/2).toFixed(1)}" y="${(my-8).toFixed(1)}" width="${w.toFixed(1)}" height="15" rx="7"/>`+
-          `<text class="vzedgelbl" x="${mx.toFixed(1)}" y="${(my+3).toFixed(1)}">${esc(lbl.length>20?lbl.slice(0,19)+"…":lbl)}</text>`; }
+      lbls+=`<rect class="vzedgelblbg" x="${(mx-w/2).toFixed(1)}" y="${(my-8).toFixed(1)}" width="${w.toFixed(1)}" height="15" rx="7"/>`+
+            `<text class="vzedgelbl" x="${mx.toFixed(1)}" y="${(my+3).toFixed(1)}">${esc(lbl.length>20?lbl.slice(0,19)+"…":lbl)}</text>`; }
   });
   let nd="";
   nodes.forEach((n,i)=>{ const x=px(i)-n._w/2, y=py(i)-n._h/2;
     nd+=`<rect class="vznode map" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${n._w}" height="${n._h}" rx="${(n._h/2).toFixed(1)}"/>`;
     nd+=vzTextLines(n._lines, px(i), y+16, "vzlabel", LH);
   });
-  return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" width="${W.toFixed(0)}" height="${H.toFixed(0)}" role="img">${VZ_DEFS}${ed}${nd}</svg></div>`;
+  return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" width="${W.toFixed(0)}" height="${H.toFixed(0)}" role="img">${VZ_DEFS}${ed}${nd}${lbls}</svg></div>`;
 }
 function visualCardHtml(v){
   const body = v.kind==="flow" ? vzFlow(v) : v.kind==="tree" ? vzTree(v)
@@ -2828,12 +2851,14 @@ function visualCardHtml(v){
     ${body}
     ${v.caption?`<figcaption class="vzcap">${esc(v.caption)}</figcaption>`:""}</figure>`;
 }
-async function generateVisuals(root, data){
+async function generateVisuals(root, data, opts){
+  opts = opts || {};
   const item = root.querySelector("#visuals");
   const btn = root.querySelector("#visualsgo");
   const hint = item ? item.querySelector(".visuals-hint") : null;
-  if(!btn) return;
-  btn.disabled = true; btn.textContent = "Building visuals…";
+  if(!btn || btn.dataset.busy) return;   // guard against double-fire (auto + a stray click)
+  btn.dataset.busy = "1";
+  btn.disabled = true; btn.textContent = opts.auto ? "Adding visuals…" : "Building visuals…";
   try{
     const ti = (typeof data.turn_index === "number") ? data.turn_index
              : (typeof THREAD!=="undefined" && THREAD.turns ? Math.max(0, THREAD.turns.length-1) : 0);
@@ -2858,9 +2883,21 @@ async function generateVisuals(root, data){
     if(data.panel && typeof PANEL_THREAD!=="undefined" && PANEL_THREAD.turns && PANEL_THREAD.turns[ti] && PANEL_THREAD.turns[ti].result)
       PANEL_THREAD.turns[ti].result.visuals = visuals;
   }catch(e){
-    btn.disabled = false; btn.textContent = "◫ Add visuals";
-    if(hint){ hint.hidden = false; hint.textContent = "Couldn't add visuals: "+(e.message||e); }
+    btn.dataset.busy = ""; btn.disabled = false; btn.textContent = "◫ Add visuals";
+    // AUTO mode fails SILENTLY — the button just stays available for a manual click; no error banner
+    // for the "nothing meaningful to visualize" case, which is a normal outcome by design.
+    if(!opts.auto && hint){ hint.hidden = false; hint.textContent = "Couldn't add visuals: "+(e.message||e); }
   }
+}
+// Auto-generate on a FRESH grounded answer (default behavior when VISUAL_AUTO is on). `scope` holds the
+// affordance; skip reopened sessions (the sessions pane) so browsing history never re-spends a call.
+function maybeAutoVisuals(scope, data){
+  if(!(VISUAL_AUTO && VISUAL_ENABLED) || !scope) return;
+  if(scope.closest && scope.closest("#sdetail")) return;   // reopened Q&A/panel session pane → no auto
+  if(data && ((data.visuals && data.visuals.length) || data._autoViz)) return;  // saved, or already attempted
+  const go = scope.querySelector("#visualsgo");
+  if(go && !go.dataset.busy){ if(data) data._autoViz = true;   // once per turn — thread re-renders won't re-spend
+    generateVisuals(scope, data, {auto:true}); }
 }
 
 // ---- ✦ All Terms: the full-page navigable glossary ----
@@ -4220,10 +4257,12 @@ function renderPanelSynth(data, el){
     const vw = document.createElement("div");
     vw.innerHTML = `<div class="xformrow"><span class="xlbl">See the structure</span>${visualsActionHtml()}</div>`;
     el.appendChild(vw);
+    const vdata = {question: data.question||"", answer: vAnswer, panel:true,
+       session_id: data.session_id||null, turn_index: (typeof data.turn_index==="number"?data.turn_index:0)};
     const vg = vw.querySelector("#visualsgo");
-    if(vg) vg.addEventListener("click", ()=>generateVisuals(vw,
-      {question: data.question||"", answer: vAnswer, panel:true,
-       session_id: data.session_id||null, turn_index: (typeof data.turn_index==="number"?data.turn_index:0)}));
+    if(vg) vg.addEventListener("click", ()=>generateVisuals(vw, vdata));
+    // auto-generate only for the FRESHLY-run panel turn (armed by runPanelTurn), never on reopen
+    if(_autoVisualsArm && data.turn_index === (PANEL_THREAD.turns.length-1)) maybeAutoVisuals(vw, vdata);
   }
 }
 // Run ONE turn (first or follow-up): stream each specialist's live trace into #panellive, then commit the
@@ -4319,7 +4358,7 @@ async function runPanelTurn(question){
     if(result.session_id) PANEL_THREAD.session_id = result.session_id;   // shareable thread (permalink)
     if(attachments){ PANEL_ATTACHMENTS = []; ATTACHMENTS = []; }          // consumed by the case turn
     PANEL_THREAD.turns.push({question, result});
-    renderPanelConversation();
+    _autoVisualsArm = true; try{ renderPanelConversation(); } finally { _autoVisualsArm = false; }  // fresh turn → auto-visuals
     const ff2 = $("#panelfollow"); if(ff2) ff2.hidden = false;
     const last = pbody().querySelectorAll(".panelturn"); if(last.length) last[last.length-1].scrollIntoView({behavior:"smooth", block:"start"});
   }catch(e){

@@ -538,6 +538,14 @@ def visual_augment_enabled() -> bool:
     return os.environ.get("NOESIS_VISUAL_AUGMENT", "").lower() in ("1", "true", "yes")
 
 
+def visual_auto_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON (with NOESIS_VISUAL_AUGMENT), the frontend AUTO-generates
+    visuals on every fresh grounded answer (Q&A + Panel) instead of waiting for a click — visuals become
+    part of the answer by default. Each fresh answer spends one extra LLM call, so this is a live-flippable
+    rollback surface. OFF → visuals stay click-to-generate (byte-identical)."""
+    return os.environ.get("NOESIS_VISUAL_AUTO", "").lower() in ("1", "true", "yes")
+
+
 def voice_intake_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, Guided Intake offers a hands-free voice conversation —
     browser-native SpeechRecognition dictates the user's answers and SpeechSynthesis speaks each
@@ -1389,6 +1397,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "suggest_enabled": conversation_enabled() and bool(getattr(svc, "suggest_prompt", None)),
             "term_glossary_enabled": term_glossary_enabled() and bool(getattr(svc, "terms_prompt", None)),
             "visual_augment_enabled": visual_augment_enabled() and bool(getattr(svc, "visuals_prompt", None)),
+            "visual_auto_enabled": (visual_auto_enabled() and visual_augment_enabled()
+                                    and bool(getattr(svc, "visuals_prompt", None))),
             "voice_intake_enabled": voice_intake_enabled() and live_triage,
             "voice_tts_neural": (voice_intake_enabled() and live_triage
                                  and bool(os.environ.get("OPENAI_API_KEY"))),

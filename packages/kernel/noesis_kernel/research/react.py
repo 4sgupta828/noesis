@@ -598,6 +598,7 @@ async def run_react(
     #                                           drop on judge failure, never a keyword fallback). OFF →
     #                                           stage-1 prompts/enforcement, byte-identical.
     country_boost=None,                       # set of country codes to boost (surface region evidence, no filter)
+    exclude_facets: dict | None = None,       # EXCLUSION facet filter applied to every retrieval leg
     graph_legs: list[dict] | None = None,     # A9 graph-guided evidence legs: [{query, note}] from the
     #                                           relationship graph (caller-computed). Run ONCE before the
     #                                           loop as extra retrieval; merged atoms flow through the
@@ -882,7 +883,8 @@ async def run_react(
                 _gvec = await asyncio.to_thread(lambda q=_gq: list(embedder.embed([q])[0]))
                 _g_hits = await source.search(RetrievalRequest(
                     query=_gq, tenant_id=tenant_id, workspace_id=workspace_id,
-                    query_embedding=_gvec, k=max(4, k // 2), facets=dict(facets or {})))
+                    query_embedding=_gvec, k=max(4, k // 2), facets=dict(facets or {}),
+                    exclude_facets=dict(exclude_facets or {})))
             except Exception as _ge:   # noqa: BLE001 — a dead leg never breaks the answer
                 _log.warning("graph leg failed on %r: %s", _gq, _ge)
                 _g_hits = []
@@ -959,7 +961,8 @@ async def run_react(
                     _cv = await asyncio.to_thread(lambda _q=q: list(embedder.embed([_q])[0]))
                     return await source.search(RetrievalRequest(
                         query=q, tenant_id=tenant_id, workspace_id=workspace_id,
-                        query_embedding=_cv, k=4, facets=dict(facets or {})))
+                        query_embedding=_cv, k=4, facets=dict(facets or {}),
+                        exclude_facets=dict(exclude_facets or {})))
                 except Exception as _ce:   # noqa: BLE001 — a dead leg never breaks the answer
                     _log.warning("contract leg failed on %r: %s", q, _ce)
                     return []
@@ -1028,6 +1031,7 @@ async def run_react(
             base_req = RetrievalRequest(
                 query=q, tenant_id=tenant_id, workspace_id=workspace_id,
                 query_embedding=qvec, k=k, facets=dict(facets or {}),
+                exclude_facets=dict(exclude_facets or {}),
             )
             # Corpus: agent reformulations → multi-query fusion (recall); else a single search.
             # aux (web): ONE call per step on the ORIGINAL query (no per-variant fan-out) — runs

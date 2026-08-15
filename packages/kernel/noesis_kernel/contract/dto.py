@@ -91,6 +91,10 @@ class RetrievalRequest:
     workspace_id: str | None = None
     query_embedding: list[float] | None = None
     facets: FacetFilter = field(default_factory=dict)
+    # EXCLUSION facets: a block is dropped if it HAS the key AND its value is in the set (untagged
+    # blocks pass — no null-exclusion trap). Used e.g. to keep modality=alternative out of the
+    # default Allopathic view without re-tagging the whole corpus. Empty → no exclusion.
+    exclude_facets: FacetFilter = field(default_factory=dict)
     k: int = 20
     fetch_pool: int = 60                 # per-leg candidate pool before fusion
 

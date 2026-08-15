@@ -78,6 +78,8 @@ class ResearchService:
     reasoned_answer_format: str | None = None    # alternate-engine compose directive (decision-gated answer)
     integrative_prompt: str | None = None        # opt-in complementary/integrative answer-section directive
     integrative_query_hint: str | None = None    # retrieval-steering hint appended when the user opts in
+    alt_directive: str | None = None             # Alternative-modality compose directive (CAM-centered + labeling)
+    alt_query_hint: str | None = None            # retrieval-steering hint for Alternative mode
     understanding_answer_format: str | None = None  # UNDERSTANDING engine: causal-model compose contract
     understanding_query_hint: str | None = None     # UNDERSTANDING engine: mechanism-steering hint
     max_calls: int = 80                     # 40 → 80: stage-2 BudgetState-honesty re-plan — the
@@ -256,6 +258,7 @@ class ResearchService:
         history: list[dict] | None = None,
         on_event=None,                       # async callback(dict) for live progress (SSE)
         facets: dict | None = None,          # hard retrieval facet filter (e.g. source_country scope)
+        exclude_facets: dict | None = None,  # EXCLUSION filter (e.g. keep modality=alternative out of default)
         country_boost=None,                  # set of country codes to BOOST (surface region evidence, no filter)
         max_steps: int = 8,
         effort: float = 1.0,                 # research-effort multiplier (1.0 = baseline no-op)
@@ -456,7 +459,7 @@ class ResearchService:
             planner_llm=self.planner_llm, on_event=on_event,
             claims_first=self.claims_first, extraction_lenses=self.extraction_lenses,
             evidence_select=self.evidence_select, atom_cap=sc.atom_cap,
-            facets=facets or {},
+            facets=facets or {}, exclude_facets=exclude_facets or {},
             max_steps=sc.max_steps, k=sc.k, planner_atom_window=sc.planner_atom_window,
             compose_claim_cap=sc.compose_claim_cap, extract_collect=sc.extract_collect,
             answer_focus=answer_focus, reasoning_read=self.reasoning_read, country_boost=country_boost,

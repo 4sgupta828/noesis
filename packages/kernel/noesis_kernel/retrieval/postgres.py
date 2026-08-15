@@ -183,6 +183,13 @@ class PostgresRetrievalSource:
             key_idx = len(params)
             params.append(vals)
             preds.append(f"(facets ->> ${key_idx}) = ANY(${len(params)})")
+        # exclusion: drop a block only if it HAS the key with a listed value (untagged passes)
+        for key, banned in getattr(req, "exclude_facets", {}).items():
+            vals = [banned] if isinstance(banned, str) else list(banned)
+            params.append(key)
+            key_idx = len(params)
+            params.append(vals)
+            preds.append(f"(NOT (facets ? ${key_idx}) OR (facets ->> ${key_idx}) <> ALL(${len(params)}))")
         return " AND ".join(preds), params
 
     async def search(self, req: RetrievalRequest) -> list[BlockHit]:

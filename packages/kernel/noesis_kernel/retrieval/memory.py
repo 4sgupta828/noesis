@@ -29,6 +29,16 @@ def _facets_match(have: Facets, want: FacetFilter) -> bool:
     return True
 
 
+def _facets_excluded(have: Facets, banned: FacetFilter) -> bool:
+    """True if the block should be DROPPED: it HAS the key with a banned value (untagged blocks pass —
+    mirrors the Postgres `NOT (facets ? key) OR value <> ALL(...)` semantics)."""
+    for key, vals in (banned or {}).items():
+        banned_set = (vals,) if isinstance(vals, str) else tuple(vals)
+        if key in have and have.get(key) in banned_set:
+            return True
+    return False
+
+
 @dataclass
 class IndexedBlock:
     block_id: str
@@ -84,6 +94,8 @@ class InMemoryRetrievalSource:
             if b.workspace_id is not None and b.workspace_id != req.workspace_id:
                 continue                                     # workspace-scoped: only its own workspace
             if not _facets_match(b.facets, req.facets):
+                continue
+            if _facets_excluded(b.facets, getattr(req, "exclude_facets", {})):
                 continue
             out.append(b)
         return out

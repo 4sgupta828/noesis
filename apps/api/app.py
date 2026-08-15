@@ -502,6 +502,34 @@ def _country_boost(countries: list[str] | None):
     return valid or None
 
 
+def modality_mode_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, a request may select a therapy MODALITY — 'allopathic'
+    (default = Modern Medicine) or 'alternative' (acupuncture / complementary & alternative medicine).
+    Allopathic EXCLUDES modality=alternative blocks so CAM never leaks into the modern-medicine view;
+    Alternative surfaces the CAM corpus WITH conventional context + mandatory evidence-strength/safety
+    labeling. OFF → `modality` is ignored, no modality facet is applied (byte-identical to today).
+    Safe to flip on WITHOUT a corpus backfill: the default uses an EXCLUSION facet (untagged blocks
+    pass), so only blocks explicitly tagged modality=alternative are ever filtered."""
+    return os.environ.get("NOESIS_MODALITY_MODE", "").lower() in ("1", "true", "yes")
+
+
+# Selectable therapy modalities, echoed to /config when the flag is on (UI renders the toggle from this).
+AVAILABLE_MODALITIES = [
+    {"code": "allopathic", "label": "Modern Medicine"},
+    {"code": "alternative", "label": "Alternative"},
+]
+
+
+def _modality_exclude(modality: str | None) -> dict:
+    """Default (Allopathic) EXCLUDES CAM so the modern-medicine view never surfaces alternative-therapy
+    evidence. Alternative applies NO exclusion (CAM surfaces alongside conventional context). Off-flag →
+    {} (byte-identical). EXCLUSION-based, so no whole-corpus modality backfill is required."""
+    if not modality_mode_enabled():
+        return {}
+    m = (modality or "allopathic").strip().lower()
+    return {} if m == "alternative" else {"modality": ("alternative",)}
+
+
 def effort_scale_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, a request's `effort` multiplier (1.0..2.5) scales how
     hard the research loop works (turns, results considered, context, citations, LLM budget) on a
@@ -830,6 +858,7 @@ class ResearchIn(BaseModel):
     history: list[dict] | None = None     # prior turns [{question, answer}] → follow-up context
     session_id: str | None = None         # thread to append this turn to (conversation)
     countries: list[str] | None = None    # source-country scope (e.g. ["IN"]); None/[]=all (see flag)
+    modality: str = "allopathic"          # "allopathic" (default, excludes CAM) | "alternative"; ignored unless flag on
     practice_context: str = ""            # per-question profile override: "IN" | "global" | "" (account default)
     effort: float = Field(default=1.0, ge=1.0, le=2.5)   # effort multiplier; ignored unless flag on
     audience: str = "clinician"           # "clinician" (default) | "patient"; ignored unless flag on
@@ -942,6 +971,7 @@ class CorpusIngestIn(BaseModel):
     faers_drugs: list[str] = []            # each → a faers adverse-event job
     jobs: list[dict] = []                  # explicit passthrough {connector, query, limit, ...}
     source_country: str = ""               # stamp every block from this batch (e.g. "IN" for India sources)
+    modality: str = ""                     # stamp every block from this batch (e.g. "alternative" for CAM)
 
 
 class PulseEventIn(BaseModel):
@@ -1136,6 +1166,8 @@ def build_default_service() -> ResearchService:
         triage_prompt_v2=triage_prompt_v2,
         reasoned_scaffold_prompt=reasoned_scaffold, reasoned_answer_format=reasoned_format,
         integrative_prompt=getattr(manifest, "integrative_prompt", None),
+        alt_directive=getattr(manifest, "alt_directive", None),
+        alt_query_hint=getattr(manifest, "alt_query_hint", None),
         integrative_query_hint=getattr(manifest, "integrative_query_hint", None),
         understanding_answer_format=getattr(manifest, "understanding_answer_format", None),
         understanding_query_hint=getattr(manifest, "understanding_query_hint", None),
@@ -1223,12 +1255,18 @@ async def _gap_processor_loop(dsn: str, vertical: str) -> None:
         if conn is None:
             await q.fail(job["id"], f"unknown connector {job['connector']}"); continue
         try:
-            # a job may stamp a source_country on everything it ingests (country-specific sources)
+            # a job may stamp a source_country and/or a modality on everything it ingests
             sc = job.get("source_country")
+            mod = job.get("modality")
+            _ov = {}
+            if sc:
+                _ov["source_country"] = sc
+            if mod:
+                _ov["modality"] = mod        # e.g. "alternative" → the CAM corpus, excluded from the default view
             n = await ingest_connector_to_postgres(
                 conn, pg, tenant_id=job["tenant_id"], embedder=embedder,
                 window={"query": job["query"], "limit": job["limit"]},
-                facet_overrides={"source_country": sc} if sc else None)
+                facet_overrides=_ov or None)
             await q.complete(job["id"], n)
             if currency is not None:
                 try:
@@ -1405,6 +1443,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "stream_enabled": stream_enabled(),
             "country_scope_enabled": country_scope_enabled(),
             "countries": AVAILABLE_COUNTRIES if country_scope_enabled() else [],
+            "modality_mode_enabled": modality_mode_enabled() and bool(getattr(svc, "alt_directive", None)),
+            "modalities": AVAILABLE_MODALITIES if modality_mode_enabled() else [],
             "effort_scale_enabled": effort_scale_enabled(),
             "effort_stops": EFFORT_STOPS if effort_scale_enabled() else [],
             "patient_mode_enabled": patient_mode_enabled(),
@@ -1753,6 +1793,18 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             hint = getattr(svc_, "integrative_query_hint", None)
             if hint:
                 _q = body.question + "\n\n[" + hint + "]"
+        # per-question MODALITY (flag-gated). Allopathic (default) EXCLUDES CAM (via _exclude below);
+        # Alternative surfaces the CAM corpus WITH conventional context — steer retrieval (alt query
+        # hint) + mandate evidence-strength/safety labeling (alt directive). No persisted-question change.
+        _exclude = _modality_exclude(getattr(body, "modality", "allopathic"))
+        if modality_mode_enabled() and (getattr(body, "modality", "") or "").strip().lower() == "alternative":
+            svc_ = app.state.service
+            _alt_dir = getattr(svc_, "alt_directive", None)
+            _alt_hint = getattr(svc_, "alt_query_hint", None)
+            if _alt_hint:
+                _q = _q + "\n\n[" + _alt_hint + "]"
+            if _alt_dir:
+                _extra = (_extra + "\n\n" + _alt_dir) if _extra else _alt_dir
         # Noesis IN (D-7/D-9, dark behind NOESIS_IN_MODE): resolved profile flips —
         # IN ranking boost · structural brand-mapping planner context · conflict addendum.
         profile = await _resolve_profile(token, body)
@@ -1774,6 +1826,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             facets=({} if profile == "IN" else _country_facets(_countries)),   # D-4: never hard-filter in IN mode
             country_boost=(({"IN"} | (_country_boost(_countries) or set()))
                            if profile == "IN" else _country_boost(_countries)),
+            exclude_facets=_exclude,       # Allopathic default keeps CAM out; Alternative → {} (no exclusion)
             effort=effort, audience=audience, question_context=_qctx,
             answer_focus=focus, clarify=followup_clarify_enabled(), extra_directive=_extra)
         # Ambiguous follow-up → return the clarifying question; no research ran, nothing to persist.
@@ -2290,11 +2343,15 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                              "kind": (j.get("kind") or "")[:80], "quality": (j.get("quality") or "")[:120]})
         if not jobs:
             raise HTTPException(status_code=400, detail="no valid jobs (unknown connector or empty inputs)")
-        # a batch-level source_country stamps every job's blocks (per-job override wins if given)
+        # a batch-level source_country / modality stamps every job's blocks (per-job override wins)
         sc = (body.source_country or "").strip()
         if sc:
             for jb in jobs:
                 jb.setdefault("source_country", sc)
+        mod = (body.modality or "").strip().lower()
+        if mod:
+            for jb in jobs:
+                jb.setdefault("modality", mod)
         try:
             ids = await q.enqueue(tenant_id="demo", question="admin bulk ingest", jobs=jobs)
         except Exception as e:

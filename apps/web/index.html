@@ -198,6 +198,14 @@
   .modeseg .mbtn[aria-selected="true"]{background:var(--gold);color:var(--on-accent);}
   .modeseg .mbtn:hover:not([aria-selected="true"]){color:var(--ink);}
   .modeseg .mbtn:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+  /* therapy-modality toggle (Modern Medicine | Alternative) */
+  .modsel{margin-left:.4rem;}
+  .modsel .modbtn{font-family:var(--mono);font-size:.7rem;letter-spacing:.03em;cursor:pointer;border:0;white-space:nowrap;
+    background:transparent;color:var(--muted);padding:.32rem .95rem;transition:.12s;display:inline-flex;align-items:center;gap:.32rem;}
+  .modsel .modbtn.on{background:var(--gold);color:var(--on-accent);}
+  .modsel .modbtn:hover:not(.on){color:var(--ink);}
+  .modsel .modbtn:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+  body.altmode .modsel{border-color:rgba(var(--gold-rgb),.6);}
   /* audience badge on a saved session (row + detail) */
   .audbadge{display:inline-block;font-family:var(--mono);font-size:.62rem;letter-spacing:.03em;
     border:1px solid var(--hair);border-radius:999px;padding:.05rem .5rem;vertical-align:middle;margin-left:.4rem;color:var(--muted);}
@@ -1394,6 +1402,14 @@
                   title="Adds an evidence-based complementary/integrative section — proven &amp; adopted approaches only, with interactions. Off by default.">🌿 Integrative options</button>
         </div>
       </div>
+      <!-- therapy MODALITY toggle (flag NOESIS_MODALITY_MODE): Modern Medicine (default, excludes CAM) |
+           Alternative (acupuncture/CAM evidence with conventional context + evidence/safety labels) -->
+      <div class="modeseg modsel" id="modsel" role="tablist" aria-label="Therapy modality" hidden>
+        <button type="button" class="modbtn on" data-mod="allopathic" role="tab" aria-selected="true"
+                title="Modern (allopathic) medicine — the default. Alternative-therapy evidence is excluded.">⚕ Modern Medicine</button>
+        <button type="button" class="modbtn" data-mod="alternative" role="tab" aria-selected="false"
+                title="Acupuncture &amp; complementary/alternative medicine evidence, shown with conventional context and evidence-strength + safety labels.">🌿 Alternative</button>
+      </div>
     </div>
   </form>
 
@@ -1628,6 +1644,8 @@ let INTEGRATIVE_ENABLED = false;
 let PULSE_ENABLED = false;      // Evidence Pulse: watches, inbox, answer-integrity banners // feature flag: the per-question integrative opt-in is offered
 let DYN_ENGINES = false;         // dynamic engine selection on → interlock hop chips render
 let INTEGRATIVE_ON = false;      // the per-question opt-in state (off by default)
+let MODALITY_ENABLED = false;    // therapy-modality toggle available (Modern Medicine / Alternative)
+let MODALITY = "allopathic";     // active modality; "alternative" surfaces the CAM corpus
 let PANEL_SPECIALISTS = [];      // roster from /config [{id, specialty, default}]
 let PANEL_EXAMPLES = [];         // sample multi-specialty cases seeded into the panel intake
 let THREAD = {session_id:null, turns:[]};   // the active conversation
@@ -1704,6 +1722,17 @@ async function loadConfig(){
         INTEGRATIVE_ON = !INTEGRATIVE_ON;
         ib.setAttribute("aria-pressed", INTEGRATIVE_ON ? "true" : "false");
       });
+    }
+    MODALITY_ENABLED = !!c.modality_mode_enabled;
+    if(MODALITY_ENABLED){
+      const ms = $("#modsel"); if(ms){ ms.hidden = false;
+        ms.querySelectorAll(".modbtn").forEach(b=>b.addEventListener("click", ()=>{
+          MODALITY = b.dataset.mod || "allopathic";
+          ms.querySelectorAll(".modbtn").forEach(x=>{ const on=x===b;
+            x.classList.toggle("on", on); x.setAttribute("aria-selected", on?"true":"false"); });
+          document.body.classList.toggle("altmode", MODALITY==="alternative");
+        }));
+      }
     }
     if(ACCOUNTS_ENABLED){
       const ex = $("#idextra"); if(ex) ex.hidden = false;   // reveal profession/NPI/country in the gate
@@ -4386,6 +4415,7 @@ async function runDuel(question){
   if(PATIENT_MODE_ENABLED && AUDIENCE === "patient") base.audience = "patient";
   if(ATTACHMENTS.length) base.attachments = ATTACHMENTS.slice();
   if(INTEGRATIVE_ENABLED && INTEGRATIVE_ON) base.integrative = true;      // both duel arms get it
+  if(MODALITY_ENABLED && MODALITY === "alternative") base.modality = "alternative";
   if(USER){ base.user_name = USER.name; base.user_email = USER.email; }
   CURRENT_Q = question;
   q.value = ""; autoGrow();
@@ -4488,6 +4518,7 @@ async function askQuestion(question, opts){
   if(PATIENT_MODE_ENABLED && AUDIENCE === "patient") payload.audience = "patient";
   if(ATTACHMENTS.length) payload.attachments = ATTACHMENTS.slice();
   if(INTEGRATIVE_ENABLED && INTEGRATIVE_ON) payload.integrative = true;   // per-question opt-in
+  if(MODALITY_ENABLED && MODALITY === "alternative") payload.modality = "alternative";   // CAM mode
   if(opts.engine) payload.engine = opts.engine;   // interlock hop: force a specific engine
   if(USER){ payload.user_name = USER.name; payload.user_email = USER.email; }
   if(conv){

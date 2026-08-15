@@ -100,6 +100,12 @@ class VerticalManifest:
     # applied only when the user explicitly opts in for a question. Opaque prose.
     integrative_prompt: str | None = None
     integrative_query_hint: str | None = None
+    # Optional ALTERNATIVE-modality directive + retrieval hint (flag NOESIS_MODALITY_MODE): the
+    # compose/query layer for an answer centered on complementary & alternative medicine, with
+    # responsible per-indication evidence labeling. The app supplies the modality=alternative corpus
+    # scope; the vertical supplies this prose. None → the Alternative mode has no compose steering.
+    alt_directive: str | None = None
+    alt_query_hint: str | None = None
     # Optional UNDERSTANDING engine (Discover·Understand·Act middle): causal-model compose contract +
     # mechanism-steering retrieval hint, selected by the dynamic router for WHY/HOW questions.
     understanding_answer_format: str | None = None

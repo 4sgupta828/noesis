@@ -2837,10 +2837,11 @@ async function generateVisuals(root, data){
   try{
     const ti = (typeof data.turn_index === "number") ? data.turn_index
              : (typeof THREAD!=="undefined" && THREAD.turns ? Math.max(0, THREAD.turns.length-1) : 0);
+    const sid = data.session_id || (typeof THREAD!=="undefined" && THREAD.session_id)
+             || (typeof LAST!=="undefined" && LAST && LAST.session_id) || null;   // single-answer path uses LAST
     const r = await fetch("/visuals/augment",{method:"POST",headers:{"content-type":"application/json"},
       body:JSON.stringify({question:(data.question||CURRENT_Q||""), answer:(data.answer||""),
-        session_id:(data.session_id || (typeof THREAD!=="undefined" && THREAD.session_id) || null),
-        turn_index: ti})});
+        session_id: sid, turn_index: ti})});
     if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
     const {visuals} = await r.json();
     if(!visuals || !visuals.length) throw new Error("no visual added meaningful structure to this answer");

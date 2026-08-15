@@ -16,7 +16,9 @@ specific case.
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+import re as _re
+
+from pydantic import BaseModel, Field, field_validator
 
 from noesis_kernel.providers.llm import LLMClient
 
@@ -29,6 +31,17 @@ class TermExplanation(BaseModel):
     application: str = Field(default="", description="how it is used in practice, incl. how this answer used it")
     related: list[str] = Field(default_factory=list,
                                description="3-6 genuinely connected terms in this domain's knowledge web")
+
+    @field_validator("related", mode="before")
+    @classmethod
+    def _coerce_related(cls, v):
+        # tolerate the model returning `related` as a comma/semicolon/newline-separated STRING instead
+        # of a list (a common structured-output quirk the JSON-string recovery doesn't catch).
+        if isinstance(v, str):
+            return [s.strip() for s in _re.split(r"[,;\n]", v) if s.strip()]
+        if v is None:
+            return []
+        return v
 
 
 class TermExplanations(BaseModel):

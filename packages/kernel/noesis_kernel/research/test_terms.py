@@ -22,6 +22,15 @@ class ScriptedLLM:
         return LLMResult(parsed=self.parsed, output_tokens=5, model="scripted")
 
 
+def test_related_coerces_stringified_list():
+    # the model sometimes returns `related` as a CSV string instead of a list — must not 500
+    t = TermExplanation(term="TENS", plain="nerve stim",
+                        related="acupuncture, gate-control theory of pain; endogenous opioids")
+    assert t.related == ["acupuncture", "gate-control theory of pain", "endogenous opioids"]
+    assert TermExplanation(term="x", plain="y", related=None).related == []
+    assert TermExplanation(term="x", plain="y", related=["a", "b"]).related == ["a", "b"]
+
+
 def test_normalize_term_collapses_case_and_whitespace():
     assert normalize_term("  eGFR   Value ") == "egfr value"
     assert normalize_term("") == ""

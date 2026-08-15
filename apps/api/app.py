@@ -1306,6 +1306,17 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 app.state.glossary_store = None
         return app.state.glossary_store
 
+    def _perf():
+        """Vertical-isolated performance-metrics store. Built once when a corpus DSN is configured."""
+        if getattr(app.state, "perf_store", "unset") == "unset":
+            dsn = os.environ.get("NOESIS_CORPUS_DSN")
+            if dsn:
+                from api.perf import PerfStore
+                app.state.perf_store = PerfStore(dsn, vertical=load_active_vertical().name)
+            else:
+                app.state.perf_store = None
+        return app.state.perf_store
+
     def _settings():
         """Live product-settings store (same DSN); None without a DSN → env-only flags."""
         if getattr(app.state, "setting_store", "unset") == "unset":
@@ -1902,6 +1913,20 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                         question_contract=getattr(res, "question_contract", None))
             except Exception:
                 session_id = None
+        # perf metrics (best-effort): distill a compact row from the diagnostics for the admin dashboard
+        _pdiag = getattr(res, "diagnostics", None)
+        if _pdiag:
+            _perf_store = _perf()
+            if _perf_store is not None:
+                try:
+                    from api.perf import event_from_diagnostics
+                    await _perf_store.record(event_from_diagnostics(
+                        _pdiag, kind="qa", grounded=res.grounded, claims=len(claims),
+                        rejected=len(res.rejected_claims), stopped_reason=res.stopped_reason,
+                        effort=(res.effort if effort_scale_enabled() else None),
+                        audience=audience, modality=(getattr(body, "modality", "") or "")))
+                except Exception:
+                    pass
         return ResearchOut(
             grounded=res.grounded, answer=res.composed_answer, claims=claims,
             coverage_gaps=res.coverage_gaps, rejected=len(res.rejected_claims),
@@ -3619,5 +3644,25 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     @app.get("/admin", response_class=HTMLResponse)
     def admin_page(accept_encoding: str = Header(default="")):
         return _html_response("admin.html", accept_encoding)
+
+    @app.get("/admin/perf", response_class=HTMLResponse)
+    def perf_page(accept_encoding: str = Header(default="")):
+        return _html_response("perf.html", accept_encoding)
+
+    @app.get("/admin/perf-data")
+    async def perf_data(hours: int = 168, kind: str | None = None,
+                        x_admin_password: str = Header(default="")) -> dict:
+        """Aggregated performance metrics from the per-Q&A instrumentation (avg/P50/P95/P99 latency,
+        phase split, failure + stopped-reason distributions, recent runs). Admin-password gated."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        ps = _perf()
+        if ps is None:
+            return {"n": 0, "window_hours": hours, "note": "no perf store (no corpus DSN)"}
+        try:
+            return await ps.stats(hours=max(1, min(int(hours), 24 * 90)),
+                                  kind=(kind if kind in ("qa", "panel") else None))
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"perf stats error: {e}") from e
 
     return app

@@ -90,6 +90,12 @@ class PostgresRetrievalSource:
 
             async def _init(conn):
                 await register_vector(conn)
+                # HNSW recall knob (default 40): raised so the now index-accelerated ANN leg keeps
+                # recall close to the old exact brute-force scan. Cheap once the index is actually used.
+                try:
+                    await conn.execute("SET hnsw.ef_search = 100")
+                except Exception:   # noqa: BLE001 — pre-pgvector-0.5 / setting absent: ignore
+                    pass
 
             # lock_timeout: any statement WAITING for a lock (e.g. a concurrent ingest's brief
             # AccessExclusiveLock from a CREATE INDEX/ALTER, or an overlapping block upsert) aborts
@@ -268,30 +274,40 @@ class PostgresRetrievalSource:
         qvec = req.query_embedding
 
         # candidate generation: lexical (tsv) ∪ dense (ANN), both within the filter.
+        # PERF (2026-08-16): each candidate leg filters DIRECTLY on the base table, NOT through a
+        # `WITH f AS (SELECT * FROM t WHERE ...)` CTE. Postgres cannot use the pgvector HNSW index (nor
+        # the tsv GIN index) for an `ORDER BY embedding <=> $vec LIMIT n` that reads from a CTE — it
+        # materializes the whole filtered set and brute-force sorts it, which scaled to ~30-50s as the
+        # corpus grew past 1M blocks. Filtering inline lets the planner push the ORDER BY into the HNSW
+        # index (hnsw.ef_search set on the pool). Same distance metric + same LIMIT = same candidates,
+        # just index-accelerated. A separate JOIN back to the base table hydrates the row payload.
         legs_sql: list[str] = []
         q_terms = _tokens(req.query)
         if q_terms:
             params.append(" | ".join(q_terms))          # OR query for recall (like factra)
             q_idx = len(params)
             legs_sql.append(
-                f"SELECT block_id, document_id FROM f "
-                f"WHERE tsv @@ to_tsquery('english', ${q_idx}) "
+                f"SELECT tenant_id, document_id, block_id FROM {self._table} "
+                f"WHERE ({where}) AND tsv @@ to_tsquery('english', ${q_idx}) "
                 f"ORDER BY ts_rank_cd(tsv, to_tsquery('english', ${q_idx})) DESC LIMIT {pool_n}")
         if qvec is not None:
             params.append(qvec)
             v_idx = len(params)
             legs_sql.append(
-                f"SELECT block_id, document_id FROM f "
-                f"WHERE embedding IS NOT NULL ORDER BY embedding <=> ${v_idx} LIMIT {pool_n}")
+                f"SELECT tenant_id, document_id, block_id FROM {self._table} "
+                f"WHERE ({where}) AND embedding IS NOT NULL "
+                f"ORDER BY embedding <=> ${v_idx} LIMIT {pool_n}")
         if not legs_sql:
             return []
         cand_union = " UNION ".join(f"({s})" for s in legs_sql)
+        # JOIN on the FULL primary key (tenant_id, document_id, block_id) so hydration can never
+        # cross-match the same content-addressed block under a different tenant (the cand legs are
+        # already tenant-scoped via ({where}), but the join must not re-open that scope).
         sql = f"""
-            WITH f AS (SELECT * FROM {self._table} WHERE {where}),
-                 cand AS ({cand_union})
-            SELECT f.block_id, f.document_id, f.text, f.embedding, f.facets,
-                   f.document_title, f.content_type, f.source_key
-            FROM f JOIN cand USING (block_id, document_id)
+            WITH cand AS ({cand_union})
+            SELECT t.block_id, t.document_id, t.text, t.embedding, t.facets,
+                   t.document_title, t.content_type, t.source_key
+            FROM {self._table} t JOIN cand USING (tenant_id, document_id, block_id)
         """
         async with pool.acquire() as conn:
             rows = await conn.fetch(sql, *params)

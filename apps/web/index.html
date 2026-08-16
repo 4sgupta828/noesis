@@ -18,6 +18,9 @@
     /* chart series colors — theme-tuned, validated (lightness band, chroma, CVD ΔE, contrast vs
        --panel2) so series stay tellable-apart in every theme; series 2-3 also carry a hatch texture */
     --chart1:#1568B5; --chart2:#137A54; --chart3:#A4581B;
+    /* Add-Visuals node tones: soft tinted fill + saturated stroke, contrast-tuned on --panel2 */
+    --vz0f:#E4EEFB; --vz0s:#2563C9; --vz1f:#DCF2E9; --vz1s:#12855C; --vz2f:#FBEAD6; --vz2s:#B4671A;
+    --vz3f:#ECE5FB; --vz3s:#6D3FCF; --vz4f:#FBE3ED; --vz4s:#C42A6E; --vz5f:#DBF0F4; --vz5s:#0E7C93;
     --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
     --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
     --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
@@ -31,6 +34,8 @@
     --hair:#22304A; --hair-soft:rgba(255,255,255,.06);
     --hl-f:87,184,145; --hl-r:211,179,124; --hl-k:110,160,224;
     --chart1:#BA852B; --chart2:#2E9268; --chart3:#B5622F;
+    --vz0f:#12233E; --vz0s:#5F9BEE; --vz1f:#0F2A22; --vz1s:#4FC49A; --vz2f:#2E2114; --vz2s:#DB9B4F;
+    --vz3f:#211A38; --vz3s:#AB8DF0; --vz4f:#301525; --vz4s:#ED6BA7; --vz5f:#0C2A30; --vz5s:#4FBAD0;
   }
   /* EDITORIAL theme — opt-in. Noesis's identity set on paper: warm parchment stock, umber ink,
      the brand gold deepened to an ink-gold that holds on paper, evidence-green kept. Serif
@@ -44,6 +49,8 @@
     --hair:#DCD4C0; --hair-soft:rgba(34,29,18,.06);
     --hl-f:46,107,79; --hl-r:138,106,31; --hl-k:63,94,150;
     --chart1:#9A6E0E; --chart2:#1F7A52; --chart3:#A85C1E;
+    --vz0f:#E5DECA; --vz0s:#3F5E96; --vz1f:#E0E5D1; --vz1s:#2E6B4F; --vz2f:#EEE1CA; --vz2s:#A05C24;
+    --vz3f:#E6DDCC; --vz3s:#6E4A9A; --vz4f:#EDDBCA; --vz4s:#9A3F5E; --vz5f:#DEE7DF; --vz5s:#1F6B6B;
   }
   /* Editorial legibility for CLINICAL notation: Charter-first serif (screen-designed, LINING
      figures — Iowan/Palatino's old-style digits jar in doses and citation markers), lining +
@@ -917,17 +924,22 @@
   .vzscroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;}
   .vzsvg{display:block;max-width:100%;height:auto;font-family:var(--sans);}
   .vznode{fill:var(--bg);stroke:var(--hair);stroke-width:1.2;}
-  .vznode.root{stroke:var(--gold);stroke-width:1.6;}
-  .vznode.map{fill:var(--panel2);stroke:var(--hair);stroke-width:1.3;}
-  .vzlabel{fill:var(--ink);font-size:12px;font-weight:600;text-anchor:middle;}
+  .vznode.vzt0{fill:var(--vz0f);stroke:var(--vz0s);} .vznode.vzt1{fill:var(--vz1f);stroke:var(--vz1s);}
+  .vznode.vzt2{fill:var(--vz2f);stroke:var(--vz2s);} .vznode.vzt3{fill:var(--vz3f);stroke:var(--vz3s);}
+  .vznode.vzt4{fill:var(--vz4f);stroke:var(--vz4s);} .vznode.vzt5{fill:var(--vz5f);stroke:var(--vz5s);}
+  .vznode.vzt0,.vznode.vzt1,.vznode.vzt2,.vznode.vzt3,.vznode.vzt4,.vznode.vzt5{stroke-width:1.9;}
+  .vznode.root{stroke-width:2.6;}   /* emphasise the entry node — keep its tone colour */
+  .vzlabel{fill:var(--ink);font-size:12.5px;font-weight:650;text-anchor:middle;}
   .vznote{fill:var(--muted);font-size:11px;text-anchor:middle;}
-  .vzedge{fill:none;stroke:var(--muted);stroke-width:1.4;opacity:.75;}
-  .vzarrfill{fill:var(--muted);opacity:.85;}
+  .vzedge{fill:none;stroke:var(--muted);stroke-width:1.5;opacity:.82;}
+  .vzarrfill{fill:var(--muted);opacity:.9;}
   .vzedgelblbg{fill:var(--panel2);stroke:var(--hair);stroke-width:1;}
-  .vzedgelbl{fill:var(--muted);font-size:10px;text-anchor:middle;}
-  .vzrail{stroke:var(--gold);stroke-width:2;opacity:.55;}
-  .vzdot{fill:var(--gold);stroke:var(--bg);stroke-width:2;}
-  .vzwhen{fill:var(--gold);font-size:11px;font-weight:600;text-anchor:end;}
+  .vzedgelbl{fill:var(--ink);font-size:10.5px;text-anchor:middle;}
+  .vzrail{stroke:var(--gold);stroke-width:2.4;opacity:.6;}
+  .vzdot{fill:var(--gold);stroke:var(--panel2);stroke-width:2;}
+  .vzdot.vzt0{fill:var(--vz0s);} .vzdot.vzt1{fill:var(--vz1s);} .vzdot.vzt2{fill:var(--vz2s);}
+  .vzdot.vzt3{fill:var(--vz3s);} .vzdot.vzt4{fill:var(--vz4s);} .vzdot.vzt5{fill:var(--vz5s);}
+  .vzwhen{fill:var(--ink);font-size:11px;font-weight:650;text-anchor:end;}
   .vzevlabel{fill:var(--ink);font-size:12.5px;}
   .pphead{display:flex;align-items:center;gap:.9rem;padding:.4rem 0 .9rem;border-bottom:1px solid var(--hair);flex-wrap:wrap;}
   .pptitle{font-family:var(--mono);font-size:1rem;letter-spacing:.06em;color:var(--gold);font-weight:700;}
@@ -2791,8 +2803,8 @@ function vzTextLines(lines, x, y, cls, lh){
     lines.map((l,i)=>`<tspan x="${x}" dy="${i?lh:0}">${esc(l)}</tspan>`).join("")+`</text>`;
 }
 const VZ_DEFS = `<defs><marker id="vzarr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="vzarrfill"/></marker></defs>`;
-function vzNodeBox(n, p, rootish){
-  const cls = "vznode"+(rootish?" root":"");
+function vzNodeBox(n, p, rootish, tone){
+  const cls = "vznode "+(tone||"")+(rootish?" root":"");
   let s = `<rect class="${cls}" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="7"/>`;
   s += vzTextLines(n._lines, p.x+p.w/2, p.y+18, "vzlabel", 15);
   if(n._nlines && n.note) s += vzTextLines(n._nlines, p.x+p.w/2, p.y+18+n._lines.length*15+2, "vznote", 13);
@@ -2809,8 +2821,11 @@ function vzFlow(v){
     if(!ch) break; }
   const layers={}; nodes.forEach(n=>{ const L=layer[n.id]||0; (layers[L]=layers[L]||[]).push(n); });
   const Ls=Object.keys(layers).map(Number).sort((a,b)=>a-b);
-  const NW=168, LH=15, PAD=10, colGap=26, rowGap=54;
-  const H={}; nodes.forEach(n=>{ n._lines=vzWrap(n.label,25); n._nlines=vzWrap(n.note||"",27);
+  const LH=15, PAD=11, colGap=28, rowGap=56;
+  // uniform box width sized to the WIDEST wrapped line across all nodes → text never overflows its box
+  let NW=150; const H={}; nodes.forEach(n=>{ n._lines=vzWrap(n.label,26); n._nlines=vzWrap(n.note||"",28);
+    const wc=Math.max(...n._lines.concat(n.note?n._nlines:[]).map(l=>l.length));
+    NW=Math.max(NW, Math.min(260, Math.round(wc*7.4)+30));
     H[n.id]=PAD*2+n._lines.length*LH+(n.note?n._nlines.length*13+2:0); });
   let maxRowW=0; const rowH={};
   Ls.forEach(L=>{ const r=layers[L]; rowH[L]=Math.max(...r.map(n=>H[n.id]));
@@ -2827,7 +2842,7 @@ function vzFlow(v){
       lbls += `<rect class="vzedgelblbg" x="${(lx-w/2).toFixed(1)}" y="${ly-9}" width="${w.toFixed(1)}" height="17" rx="8"/>`+
               `<text class="vzedgelbl" x="${lx}" y="${ly+3}">${esc(e.label)}</text>`; }
   });
-  let nd=""; nodes.forEach(n=>nd+=vzNodeBox(n,pos[n.id],(indeg[n.id]||0)===0));
+  let nd=""; nodes.forEach(n=>nd+=vzNodeBox(n,pos[n.id],(indeg[n.id]||0)===0,"vzt"+((layer[n.id]||0)%6)));
   return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W} ${totalH}" width="${W}" height="${totalH}" role="img">${VZ_DEFS}${ed}${nd}${lbls}</svg></div>`;
 }
 function vzTree(v){
@@ -2839,8 +2854,11 @@ function vzTree(v){
   (function walk(id,d){ if(seen.has(id))return; seen.add(id); depth[id]=d; kids[id].forEach(c=>walk(c,d+1)); });
   roots.forEach(r=>{ (function w(id,d){ if(seen.has(id))return; seen.add(id); depth[id]=d; kids[id].forEach(c=>w(c,d+1)); })(r,0); });
   nodes.forEach(n=>{ if(depth[n.id]===undefined) depth[n.id]=0; });
-  const NW=152, LH=15, PAD=9, xGap=22, rowGap=52;
-  const H={}; nodes.forEach(n=>{ n._lines=vzWrap(n.label,22); n._nlines=[]; H[n.id]=PAD*2+n._lines.length*LH; });
+  const LH=15, PAD=10, xGap=24, rowGap=54;
+  // uniform box width sized to the widest wrapped label → no truncation, no overflow
+  let NW=142; const H={}; nodes.forEach(n=>{ n._lines=vzWrap(n.label,24);
+    NW=Math.max(NW, Math.min(248, Math.round(Math.max(...n._lines.map(l=>l.length))*7.4)+30));
+    n._nlines=[]; H[n.id]=PAD*2+n._lines.length*LH; });
   const rowH={}; Object.values(depth).forEach(()=>{}); nodes.forEach(n=>{ rowH[depth[n.id]]=Math.max(rowH[depth[n.id]]||0,H[n.id]); });
   const cx={}; let cursor=0; const pseen=new Set();
   (function place(id){ if(pseen.has(id)){ return cx[id]; } pseen.add(id);
@@ -2866,7 +2884,7 @@ function vzTree(v){
   let ed=""; nodes.forEach(n=>{ kids[n.id].forEach(cid=>{ const a=pos[n.id], b=pos[cid]; if(!a||!b)return;
     const sx=a.x+a.w/2, sy=a.y+a.h, tx=b.x+b.w/2, ty=b.y, mid=(sy+ty)/2;
     ed+=`<path class="vzedge" d="M${sx} ${sy} C ${sx} ${mid} ${tx} ${mid} ${tx} ${ty}" marker-end="url(#vzarr)"/>`; }); });
-  let nd=""; nodes.forEach(n=>nd+=vzNodeBox(n,pos[n.id],(depth[n.id]===0)));
+  let nd=""; nodes.forEach(n=>nd+=vzNodeBox(n,pos[n.id],(depth[n.id]===0),"vzt"+((depth[n.id]||0)%6)));
   return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W} ${totalH}" width="${W}" height="${totalH}" role="img">${VZ_DEFS}${ed}${nd}</svg></div>`;
 }
 function vzTimeline(v){
@@ -2880,9 +2898,9 @@ function vzTimeline(v){
     const h=Math.max(lines.length*16, wl.length*15)+16; rows.push({e,lines,wl,y,h}); y+=h+gap; });
   const totalH=y+4;
   let s=`<line class="vzrail" x1="${railX}" y1="10" x2="${railX}" y2="${totalH-8}"/>`;
-  rows.forEach(r=>{ const cy=r.y+10;
-    s+=`<circle class="vzdot" cx="${railX}" cy="${cy}" r="5"/>`;
-    if((r.e.when||"") && r.wl.length) s+=vzTextLines(r.wl, railX-14, cy+3-(r.wl.length-1)*7, "vzwhen", 14);
+  rows.forEach((r,i)=>{ const cy=r.y+10;
+    s+=`<circle class="vzdot vzt${i%6}" cx="${railX}" cy="${cy}" r="6"/>`;
+    if((r.e.when||"") && r.wl.length) s+=vzTextLines(r.wl, railX-16, cy+3-(r.wl.length-1)*7, "vzwhen", 14);
     s+=vzTextLines(r.lines, textX, cy+3, "vzevlabel", 16);
   });
   return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W} ${totalH}" width="${W}" height="${totalH}" role="img">${s}</svg></div>`;
@@ -2900,8 +2918,8 @@ function vzMap(v){
   const nodes=v.nodes||[], edges=v.edges||[]; if(nodes.length<3) return "";
   const idx={}; nodes.forEach((n,i)=>idx[n.id]=i);
   const LH=14;
-  nodes.forEach(n=>{ n._lines=vzWrap(n.label,16);
-    n._w=Math.max(74, Math.min(154, Math.max(...n._lines.map(l=>l.length))*7+20)); n._h=n._lines.length*LH+14; });
+  nodes.forEach(n=>{ n._lines=vzWrap(n.label,18);
+    n._w=Math.max(80, Math.min(186, Math.max(...n._lines.map(l=>l.length))*7.2+24)); n._h=n._lines.length*LH+16; });
   const N=nodes.length, R=Math.max(150, N*32);
   const P=nodes.map((n,i)=>({x:R*Math.cos(2*Math.PI*i/N), y:R*Math.sin(2*Math.PI*i/N)}));
   const E=edges.map(e=>({s:idx[e.src], t:idx[e.dst]})).filter(e=>e.s!=null&&e.t!=null);
@@ -2945,7 +2963,7 @@ function vzMap(v){
   });
   let nd="";
   nodes.forEach((n,i)=>{ const x=px(i)-n._w/2, y=py(i)-n._h/2;
-    nd+=`<rect class="vznode map" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${n._w}" height="${n._h}" rx="${(n._h/2).toFixed(1)}"/>`;
+    nd+=`<rect class="vznode vzt${i%6}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${n._w}" height="${n._h}" rx="${(n._h/2).toFixed(1)}"/>`;
     nd+=vzTextLines(n._lines, px(i), y+16, "vzlabel", LH);
   });
   return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" width="${W.toFixed(0)}" height="${H.toFixed(0)}" role="img">${VZ_DEFS}${ed}${nd}${lbls}</svg></div>`;

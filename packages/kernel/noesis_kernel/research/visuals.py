@@ -35,10 +35,10 @@ from pydantic import BaseModel, Field
 from noesis_kernel.providers.llm import LLMClient
 
 # --- structural caps (mirror _validate_charts discipline: a too-dense visual is dropped) ---
-_MAX_NODES = 10
-_MAX_EDGES = 16
-_MAX_EVENTS = 10
-_MAX_VISUALS = 4
+_MAX_NODES = 16     # raised (was 10) — a visual should cover ONE part of the answer COMPLETELY, so it
+_MAX_EDGES = 28     # needs room for all that part's steps/branches/relationships (the renderer wraps
+_MAX_EVENTS = 16    # labels + resolves overlap, so density is safe); the model still picks 1-2 visuals.
+_MAX_VISUALS = 3
 KINDS = ("flow", "tree", "timeline", "map")
 _MAP_MIN_NODES = 3    # a concept map must show a WEB (else it's a flow) — floor on nodes AND edges
 _MAP_MIN_EDGES = 2

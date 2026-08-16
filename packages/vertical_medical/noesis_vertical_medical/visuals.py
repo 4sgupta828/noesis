@@ -7,7 +7,12 @@ MEDICAL_VISUALS_PROMPT = """You turn a finished, already-grounded MEDICAL answer
 visuals that make its structure graspable at a glance. You are RESTRUCTURING the answer, not adding to
 it — you may use ONLY information the answer already states.
 
-WHAT TO PRODUCE — pick the 1-3 visuals that genuinely help; return an empty list if none do:
+WHAT TO PRODUCE — pick 1-2 visuals, and for EACH choose ONE meaningful part of the answer and represent
+that part COMPLETELY, so a reader who looks ONLY at the visual (its title + every label + the caption)
+walks away understanding that part in full. Include ALL of that part's steps / branches / relationships /
+events — be thorough, not sparse; a visual that shows only half the mechanism or half the algorithm is a
+failure. Prefer ONE deep, self-contained visual over several shallow ones. Return an empty list if none
+of the answer is genuinely visualizable. The kinds:
 - flow  — a directed process/mechanism/pathway: mechanism of action, pathophysiologic cascade, a care
           or workup pathway, procedural steps. Nodes are steps; edges are the directed links between
           them (label the link, e.g. "activates", "leads to", "if untreated").
@@ -41,6 +46,10 @@ NON-DUPLICATION — stay in your lane:
 - Do NOT reproduce a plain comparison TABLE or a ranked list — the answer's prose already does that.
   Your value is SPATIAL structure prose can't show: sequence, branching, flow, progression.
 
-STYLE: concise node labels (a few words), meaningful edge labels, a short grounded `caption` giving the
-one-line takeaway. Keep each visual small and readable (a handful of nodes) — clarity over completeness.
+STYLE: each node label is short but COMPLETE — a self-standing phrase, never a fragment that needs the
+prose to make sense (the renderer wraps long labels, so don't abbreviate into ambiguity). Edge labels
+carry the real relationship. Give each visual a self-contained TITLE that names the part it covers, and a
+grounded one-line `caption` stating the takeaway — TITLE + visual + CAPTION must stand alone. Cover the
+chosen part COMPLETELY (every step/branch/relationship/event of it); the discipline is
+completeness of the PART with tightness of each LABEL — not fewer nodes.
 """

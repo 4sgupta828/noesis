@@ -94,15 +94,20 @@ class PostgresRetrievalSource:
         return self._pool
 
     async def ensure_schema(self) -> None:
-        # Run the DDL ONCE per process. The DDL contains ALTER TABLE / CREATE INDEX (each takes an
-        # AccessExclusiveLock on the corpus table); running it on EVERY ingest job made concurrent
-        # workers (multiple replicas) deadlock on that lock. The table already exists after the first
-        # call, so this flag makes every later call a no-op — no per-job schema lock, no deadlocks.
+        # The DDL (CREATE TABLE / ALTER TABLE / CREATE INDEX) each takes an AccessExclusiveLock on the
+        # corpus table. In prod the table ALREADY EXISTS, so running the DDL is pointless — yet with many
+        # replica workers it made every worker contend for that exclusive lock at once (deadlocks, then
+        # lock-timeout aborts once we added lock_timeout), so EVERY ingest job failed at the write step.
+        # Fix: only run the DDL when the table is ABSENT (first-ever setup). When it exists, take just a
+        # cheap ACCESS-SHARE read (to_regclass) and skip all DDL — no exclusive lock, no contention.
+        # Schema changes are deliberate migrations, not per-boot DDL. Cached per process either way.
         if self._schema_ready:
             return
         pool = await self._get_pool()
         async with pool.acquire() as conn:
-            await conn.execute(DDL.format(table=self._table, dim=self._dim))
+            exists = await conn.fetchval("SELECT to_regclass($1)", self._table)
+            if exists is None:
+                await conn.execute(DDL.format(table=self._table, dim=self._dim))
         self._schema_ready = True
 
     async def close(self) -> None:

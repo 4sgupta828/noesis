@@ -78,5 +78,33 @@ Head-to-head = OpenEvidence, but attack ASYMMETRICALLY (subspecialty/thin-eviden
 relevance), never their distribution. Highest-leverage move is a reliability/transparency POSTURE
 (publish the benchmark, capture feedback, FDA-CDS "independently reviewable" framing), not a feature.
 
+## #2 execution — guideline full-text ingest (started 2026-08-15)
+
+Tranche 1 (5 flagship management guidelines) added to `GLOBAL_GUIDELINES` as full-text entries and
+prod-ingested. Operational learnings (durable):
+- **Society sites 403 datacenter/automated fetches** (NICE, CDC, WHO IRIS, GINA all block; WHO IRIS
+  bitstream URL form is also broken). Prod ingest runs from Railway's datacenter IP, so hand-curated
+  society PDFs are a fragile channel. GOLD's host is a permissive exception (fetched its 16 MB PDF fine).
+- **Durable channel = Europe PMC OA mirror**: `https://europepmc.org/articles/PMC<id>?pdf=render`
+  returns a real `application/pdf` from a datacenter IP for any OA guideline. Caveat: many flagship US
+  guidelines (ACC/AHA, ESC, full ADA) are PAYWALLED → OA curation yields a strong subset, not everything.
+- **content_type must be explicit**: `?pdf=render` URLs are PDFs but don't end in `.pdf`, so the
+  suffix-only check in `GlobalGuidelinesConnector.list_documents` mis-routed them to the markdown path
+  (raw PDF bytes → garbage). Fixed: entries carry `"content_type": "application/pdf"`.
+- **Ingest = `POST /admin/corpus/ingest`** (admin token) with `{"connector":"global_guidelines","query":<cond>}`;
+  the gap-queue worker (`apps/api/gap_queue.py`) drains it. Per-job status/errors at `GET /corpus/queue`;
+  per-connector block counts at `GET /admin/ingest/sources`. Transient **Postgres deadlock**
+  (AccessExclusiveLock during concurrent block insert) can fail a job — just re-queue; the retry succeeded.
+- **The corpus is TENANT-SCOPED** (block PK `(tenant_id, document_id, block_id)`; retrieval filters by
+  tenant). Admin ingest writes under `tenant_id="demo"`, so validate retrieval with `tenant_id:"demo"` —
+  a fresh tenant sees no corpus and silently falls back to web (this bit me: my first validations used
+  fresh tenants and wrongly looked like web-dominance).
+- Result: all 5 landed (COPD 218 blocks, SLE 88, ACS 22, CAP 26, ADA-abridged diabetes 4). ADA abridged
+  is thin (443 KB primary-care digest) — full ADA Standards is huge + partly paywalled; abridged is the
+  OA proxy.
+- SCALE PLAN: (a) more Europe PMC OA flagship guidelines (datacenter-safe), (b) a guideline-tagged
+  europepmc query path for breadth, (c) WHO IRIS bitstream-UUID resolver, (d) licensed contracts for the
+  paywalled flagships (Cochrane/NICE/NCCN) — the P3 "licensed" line.
+
 Related: learnings/corpusfirst.md, learnings/evidencecontract.md, learnings/noesisindia.md,
 learnings/realworldqa.md, learnings/improvementloop.md.

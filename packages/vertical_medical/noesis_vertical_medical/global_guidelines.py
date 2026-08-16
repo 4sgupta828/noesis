@@ -414,6 +414,44 @@ GLOBAL_GUIDELINES: tuple[dict, ...] = (
      "url": "https://kdigo.org/wp-content/uploads/2016/10/KDIGO-2012-Anemia-Guideline-English.pdf",
      "year": 2012},
 
+    # ---- Standard-of-care full-text tranche 1 (2026-08-15): high-volume MANAGEMENT guidelines.
+    # DATACENTER-FETCH NOTE: most society sites (NICE, CDC, WHO IRIS, GINA) 403 automated/datacenter
+    # fetches, so prod-direct ingest can't reach their PDFs. The durable channel is the Europe PMC OA
+    # mirror (`europepmc.org/articles/PMC<id>?pdf=render` — verified 200 application/pdf from a
+    # datacenter IP) for guidelines published open-access; a society's own PDF is used only when its
+    # host allows it (GOLD). Every URL below was verified fetchable + real PDF on 2026-08-15. Titles
+    # are copied verbatim from the source record (no relabeling — PMC12907536 is ACS, not heart failure).
+    {"id": "gold-copd-2025-fulltext", "issuer": "GOLD (Global Initiative for Chronic Obstructive Lung Disease)",
+     "title": "GOLD 2025 — Global Strategy for Prevention, Diagnosis and Management of COPD (FULL TEXT)",
+     "conditions": ["copd", "chronic obstructive pulmonary disease", "emphysema", "chronic bronchitis",
+                    "copd exacerbation", "bronchodilator", "laba", "lama", "inhaled corticosteroid",
+                    "inhaler therapy", "copd management"],
+     "url": "https://goldcopd.org/wp-content/uploads/2024/11/GOLD-2025-Report-v1.0-15Nov2024_WMV.pdf",
+     "year": 2025},
+    {"id": "ada-diabetes-soc-2025-fulltext", "issuer": "American Diabetes Association",
+     "title": "Standards of Care in Diabetes-2025 Abridged for Primary Care (FULL TEXT)",
+     "conditions": ["type 2 diabetes", "type 1 diabetes", "diabetes management", "hba1c", "metformin",
+                    "glp-1 receptor agonist", "sglt2 inhibitor", "insulin therapy", "glycemic target",
+                    "diabetes screening", "diabetic kidney disease"],
+     "url": "https://europepmc.org/articles/PMC12018997?pdf=render", "content_type": "application/pdf", "year": 2025},
+    {"id": "atsidsa-cap-2019-fulltext", "issuer": "American Thoracic Society / Infectious Diseases Society of America",
+     "title": "Diagnosis and Treatment of Adults with Community-acquired Pneumonia — Official ATS/IDSA Clinical Practice Guideline (FULL TEXT)",
+     "conditions": ["community acquired pneumonia", "cap", "pneumonia", "empiric antibiotics",
+                    "respiratory tract infection", "pneumonia severity", "macrolide", "beta-lactam",
+                    "pneumonia management"],
+     "url": "https://europepmc.org/articles/PMC6812437?pdf=render", "content_type": "application/pdf", "year": 2019},
+    {"id": "nhf-csanz-acs-2025-fulltext", "issuer": "National Heart Foundation of Australia / CSANZ",
+     "title": "Australian Clinical Guideline for Diagnosing and Managing Acute Coronary Syndromes 2025 (FULL TEXT)",
+     "conditions": ["acute coronary syndrome", "acs", "myocardial infarction", "nstemi", "stemi",
+                    "unstable angina", "chest pain", "troponin", "dual antiplatelet therapy",
+                    "acs management"],
+     "url": "https://europepmc.org/articles/PMC12907536?pdf=render", "content_type": "application/pdf", "year": 2025},
+    {"id": "bsr-sle-2026-fulltext", "issuer": "British Society for Rheumatology",
+     "title": "The 2026 British Society for Rheumatology guideline for the management of children, young people and adults with systemic lupus erythematosus (FULL TEXT)",
+     "conditions": ["systemic lupus erythematosus", "sle", "lupus", "lupus nephritis", "hydroxychloroquine",
+                    "immunosuppression lupus", "belimumab", "lupus management"],
+     "url": "https://europepmc.org/articles/PMC13290301?pdf=render", "content_type": "application/pdf", "year": 2026},
+
     # ---- iron-deficiency anemia workup ----
     {"id": "aga-ida-workup", "issuer": "American Gastroenterological Association",
      "title": "Gastrointestinal Evaluation of Iron-Deficiency Anemia",
@@ -505,7 +543,9 @@ class GlobalGuidelinesConnector:
         from noesis_kernel.contract.dto import DocumentRef
         g = self._reg.get(entity.native_id, {})
         url = g.get("url", "")
-        ctype = "application/pdf" if url.lower().endswith(".pdf") else "text/markdown"
+        # explicit content_type wins — OA-mirror PDF URLs (e.g. europepmc `?pdf=render`) are PDFs but
+        # don't end in `.pdf`, so a suffix-only check would mis-route them to the markdown path.
+        ctype = g.get("content_type") or ("application/pdf" if url.lower().endswith(".pdf") else "text/markdown")
         return [DocumentRef(source_key=self.key, native_id=entity.native_id, title=entity.title,
                             content_type=ctype, facets=_facets(g), entity_ids=(entity.native_id,))]
 

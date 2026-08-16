@@ -68,6 +68,7 @@ class PostgresRetrievalSource:
         self._table = table
         self._covers = covers or {}
         self._pool = None
+        self._schema_ready = False
         self._cache: dict[tuple[str, str, str], str] = {}
         # Evidence Pulse C1 (flag-fed by the app): exclude retracted / demote superseded at retrieval
         self._currency_demote = currency_demote
@@ -85,9 +86,16 @@ class PostgresRetrievalSource:
         return self._pool
 
     async def ensure_schema(self) -> None:
+        # Run the DDL ONCE per process. The DDL contains ALTER TABLE / CREATE INDEX (each takes an
+        # AccessExclusiveLock on the corpus table); running it on EVERY ingest job made concurrent
+        # workers (multiple replicas) deadlock on that lock. The table already exists after the first
+        # call, so this flag makes every later call a no-op — no per-job schema lock, no deadlocks.
+        if self._schema_ready:
+            return
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             await conn.execute(DDL.format(table=self._table, dim=self._dim))
+        self._schema_ready = True
 
     async def close(self) -> None:
         if self._pool is not None:

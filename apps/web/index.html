@@ -4036,6 +4036,9 @@ function specCard(s, on, mode, rationale){
 // Landing: the shared intake box (up in the shell, identical to Quick Q&A) is the case box; below it, the
 // full roster (each specialist + its lens) and a Convene button. Convening runs the LLM triage. The intake
 // itself — textarea, attach, camera, paste — is the Q&A #ask form, so the two modes share one intake UI.
+// Specialist-selection mode: "auto" (default) = the LLM triage picks the panel and MAY add to the
+// user's picks (convene screen to adjust); "manual" = run EXACTLY the user's picks, no auto-add.
+let PANEL_SELECT_MODE = "auto";
 function renderPanelLanding(prefill){
   setPanelState("landing");
   const roster = PANEL_SPECIALISTS || [];
@@ -4050,12 +4053,31 @@ function renderPanelLanding(prefill){
       synthesizes their verified findings into a case-conference conclusion. Every statement is grounded
       in retrieved evidence.</div>
     <div class="rosterhead"><span class="rh-h">The specialists</span>
-      <span class="rh-n">${roster.length} available · the panel is auto-selected per case</span></div>
+      <span class="modeseg modsel" id="pselmode" role="tablist" aria-label="Specialist selection mode" style="margin-left:auto">
+        <button type="button" class="modbtn${PANEL_SELECT_MODE==="auto"?" on":""}" data-sel="auto" role="tab"
+          title="The panel is auto-selected for the case; you can still add or remove specialists before running.">✨ Auto</button>
+        <button type="button" class="modbtn${PANEL_SELECT_MODE==="manual"?" on":""}" data-sel="manual" role="tab"
+          title="You choose the specialists — the agent adds none. Runs exactly your selection.">✋ Manual</button>
+      </span></div>
+    <div class="rh-n" id="pselhint"></div>
     <div class="rostergrid">${roster.map(s=>specCard(s, false, "lens")).join("")}</div>
-    <button type="button" class="panelrun" id="panelconvene" style="margin-top:1.5rem;">Convene panel ▶</button>
+    <button type="button" class="panelrun" id="panelconvene" style="margin-top:1.5rem;"></button>
   </div>`;
   const upd = () => pbody().querySelectorAll(".pcard").forEach(l=>l.classList.toggle("on", l.querySelector(".pchk").checked));
   pbody().querySelectorAll(".pchk").forEach(c=>c.addEventListener("change", upd));
+  // reflect the selection mode in the hint + the run button label
+  const syncMode = () => {
+    pbody().querySelectorAll("#pselmode .modbtn").forEach(b=>b.classList.toggle("on", b.dataset.sel===PANEL_SELECT_MODE));
+    const hint = $("#pselhint"), btn = $("#panelconvene");
+    if(hint) hint.textContent = PANEL_SELECT_MODE==="manual"
+      ? `${roster.length} available · Manual — the panel runs exactly the specialists you check below.`
+      : `${roster.length} available · Auto — the panel is picked for the case; you can add or remove any below.`;
+    if(btn) btn.textContent = PANEL_SELECT_MODE==="manual" ? "Run panel ▶" : "Convene panel ▶";
+  };
+  pbody().querySelectorAll("#pselmode .modbtn").forEach(b=>b.addEventListener("click", ()=>{
+    PANEL_SELECT_MODE = b.dataset.sel==="manual" ? "manual" : "auto"; syncMode();
+  }));
+  syncMode();
   $("#panelconvene").addEventListener("click", () => submitPanelIntake((q.value||"").trim()));
 }
 // The shared intake was submitted (Enter / Go / Convene) while in panel mode. On the landing this convenes a
@@ -4068,12 +4090,19 @@ function submitPanelIntake(question){
     const c = $("#consent"); if(c){ c.focus(); c.parentElement.style.color = "var(--gap)"; } return;
   }
   PANEL_ATTACHMENTS = ATTACHMENTS.slice();   // carry the case attachments into the run (first turn)
-  // If the user HAND-PICKED specialists on the landing, honor that set EXACTLY — skip the LLM
-  // auto-planner and the convene screen (no re-asking, no auto-added specialists to un-check). Only
-  // when the user picked NONE do we run the triage to propose a panel they can then adjust.
   const manual = [...pbody().querySelectorAll(".pcard")].filter(l=>l.querySelector(".pchk").checked).map(l=>l.dataset.id);
-  if(manual.length){ runPanel(question, manual, {}); return; }
-  askPanel(question, []);
+  if(PANEL_SELECT_MODE === "manual"){
+    // MANUAL: run EXACTLY the user's checked specialists — the agent adds none, no convene re-ask.
+    if(!manual.length){
+      const rh = pbody().querySelector(".rostergrid");
+      if(rh){ rh.classList.add("flash"); setTimeout(()=>rh.classList.remove("flash"), 900); }
+      const hint = $("#pselhint"); if(hint) hint.textContent = "Manual mode — check at least one specialist to run.";
+      return;
+    }
+    runPanel(question, manual, {}); return;
+  }
+  // AUTO (default): the triage proposes a panel (adding to any the user pre-checked); convene to adjust.
+  askPanel(question, manual);
 }
 // "＋ New case" — clear the shared intake + attachments + any prior conference, and return to a fresh landing.
 function panelNewCase(){

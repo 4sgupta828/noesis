@@ -27,6 +27,8 @@ def test_flow_drops_ungrounded_node_and_edge():
     ids = {n["id"] for n in out["nodes"]}
     assert ids == {"a", "b"}                       # ungrounded node c dropped
     assert len(out["edges"]) == 1 and out["edges"][0]["dst"] == "b"   # ungrounded edge dropped
+    # the surviving edge keeps its verbatim basis quote (parity with nodes/events)
+    assert out["edges"][0]["quote"] == "Metformin lowers hepatic glucose production, which reduces blood glucose"
 
 
 def test_flow_dropped_when_no_grounded_edges():

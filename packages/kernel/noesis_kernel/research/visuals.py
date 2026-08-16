@@ -70,7 +70,7 @@ class VEvent(BaseModel):
 
 
 class Visual(BaseModel):
-    kind: str = Field(description="one of: flow | tree | timeline")
+    kind: str = Field(description="one of: flow | tree | timeline | map")
     title: str = Field(default="", description="short title for the visual")
     caption: str = Field(default="", description="one-line takeaway; must be grounded in the answer")
     nodes: list[VNode] = Field(default_factory=list, description="flow/tree nodes")
@@ -155,7 +155,10 @@ def _clean_visual(v: Visual, answer: str) -> dict | None:
     edges = []
     for e in v.edges[:_MAX_EDGES]:
         if e.src in ok_ids and e.dst in ok_ids and _grounded(e.quote, hay_norm):
-            edges.append({"src": e.src, "dst": e.dst, "label": (e.label or "").strip()})
+            # keep the per-edge basis quote in the output (parity with nodes/events) — it's the anchor
+            # for the planned per-edge entailment gate and lets the UI surface an edge's supporting span.
+            edges.append({"src": e.src, "dst": e.dst, "label": (e.label or "").strip(),
+                          "quote": e.quote.strip()})
 
     if v.kind == "map":
         # a concept map earns its place only as an interconnected WEB — drop isolated nodes (no

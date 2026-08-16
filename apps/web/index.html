@@ -4068,9 +4068,12 @@ function submitPanelIntake(question){
     const c = $("#consent"); if(c){ c.focus(); c.parentElement.style.color = "var(--gap)"; } return;
   }
   PANEL_ATTACHMENTS = ATTACHMENTS.slice();   // carry the case attachments into the run (first turn)
-  // any specialists the user pre-selected on the landing seed the triage as a manual hint
+  // If the user HAND-PICKED specialists on the landing, honor that set EXACTLY — skip the LLM
+  // auto-planner and the convene screen (no re-asking, no auto-added specialists to un-check). Only
+  // when the user picked NONE do we run the triage to propose a panel they can then adjust.
   const manual = [...pbody().querySelectorAll(".pcard")].filter(l=>l.querySelector(".pchk").checked).map(l=>l.dataset.id);
-  askPanel(question, manual);
+  if(manual.length){ runPanel(question, manual, {}); return; }
+  askPanel(question, []);
 }
 // "＋ New case" — clear the shared intake + attachments + any prior conference, and return to a fresh landing.
 function panelNewCase(){

@@ -106,5 +106,34 @@ prod-ingested. Operational learnings (durable):
   europepmc query path for breadth, (c) WHO IRIS bitstream-UUID resolver, (d) licensed contracts for the
   paywalled flagships (Cochrane/NICE/NCCN) — the P3 "licensed" line.
 
+### Tranches 2-3 (2026-08-16) — 27 more OA flagships; the OA ceiling
+Discovery method that works: Europe PMC `TITLE:"<disease>" AND PUB_TYPE:"practice guideline" AND
+OPEN_ACCESS:y`, sort by CITED desc, then HUMAN-select the authoritative on-topic one (date-sort +
+broad-keyword returns noise: regional/niche 2026 guidelines). Verify each `?pdf=render` returns
+`200 application/pdf` (rate-limit → 429; space requests ~3s). Titles copied VERBATIM (two would have
+been mislabeled: PMC12907536 is ACS not HF; PMC11950770 is COVID-specific).
+- Tranche 2 (18): WHO hypertension, APHRS afib, ASH/ISTH VTE, Surviving Sepsis 2021, CANMAT depression,
+  European osteoporosis, EULAR RA, ascites/cirrhosis, EHF migraine, EAN dementia, hyperkalemia-CKD,
+  ACIP HBV, ATS/CDC/ERS/IDSA TB 2025, EACS HIV, C.difficile, ETA thyroid nodule, BSG anaemia, psoriasis.
+- Tranche 3 (9): AGA H.pylori, WSES diverticulitis, ACG-CAG GI-bleed, EASL-EASD-EASO MASLD, BSG IBD,
+  ATS long-term NIV, ETA levothyroxine, ASCCP cervical screening, ESO-ESMO advanced breast cancer.
+- **The OA ceiling**: many flagship US guidelines are PAYWALLED and never surfaced OA — ACC/AHA (HF,
+  stroke, lipids, full afib), ESC, ACR (gout/RA), full ADA, GINA, ACOG (preeclampsia), AASLD/EASL HCV.
+  These need the local-download+upload bridge (user first asked for it, then said IGNORE that
+  instruction — so it's NOT built; OA-only is the current ceiling) OR licensed contracts.
+
+## Integrative/CAM specialist on the panel (2026-08-16)
+Added `integrative_cam` ("Integrative & Complementary Medicine") to the medical panel roster
+(`specialists.py`). The LLM triage (`plan_panel`) convenes it ONLY for non-conventional-modality
+questions (acupuncture/acupressure/Reiki/energy-healing/TCM/herbal/homeopathy/mind-body). Its CAM-heavy
+`focus` steers retrieval into the modality=alternative corpus — and crucially **the panel path
+(`ask_panel`) applies NO modality exclusion** (unlike single Q&A `ask()` which passes
+`exclude_facets=_modality_exclude(...)`), so CAM blocks are always candidates; the focus makes them the
+top hits. Lens is EVIDENCE-FIRST + non-promotional (effect vs sham/quality/safety; states weak/contested/
+absent plainly; never endorses beyond evidence). NOT in DEFAULT_PANEL_IDS. Prod-verified selection:
+Reiki/acupuncture Q → [integrative_cam, oncology, ebm, palliative]; antibiotics Q → CAM not selected.
+(Pre-existing asymmetry noted: the panel not excluding CAM means CAM *could* surface for any panel
+question if relevant — low risk since it only ranks for CAM-relevant queries.)
+
 Related: learnings/corpusfirst.md, learnings/evidencecontract.md, learnings/noesisindia.md,
 learnings/realworldqa.md, learnings/improvementloop.md.

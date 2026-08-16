@@ -1406,16 +1406,10 @@
       </div>
       <!-- audience toggle removed: composer answers are always the clinician brief (the plain-language
            re-explain lives on the answer itself); setAudience remains for session restore -->
-      <!-- Integrative-options toggle removed: the Alternative therapy MODE (below) now owns
-           complementary/alternative evidence more comprehensively (its own corpus scope + labeling). -->
-      <!-- therapy MODALITY toggle (flag NOESIS_MODALITY_MODE): Modern Medicine (default, excludes CAM) |
-           Alternative (acupuncture/CAM evidence with conventional context + evidence/safety labels) -->
-      <div class="modeseg modsel" id="modsel" role="tablist" aria-label="Therapy modality" hidden>
-        <button type="button" class="modbtn on" data-mod="allopathic" role="tab" aria-selected="true"
-                title="Modern (allopathic) medicine — the default. Alternative-therapy evidence is excluded.">⚕ Modern Medicine</button>
-        <button type="button" class="modbtn" data-mod="alternative" role="tab" aria-selected="false"
-                title="Acupuncture &amp; complementary/alternative medicine evidence, shown with conventional context and evidence-strength + safety labels.">🌿 Alternative</button>
-      </div>
+      <!-- Modern Medicine / Alternative modality toggle RETIRED (2026-08-16): complementary/alternative
+           medicine is now handled by the Integrative & Complementary Medicine panel specialist, so the
+           Q&A-level toggle was removed. Plain Q&A stays modern-medicine-only (CAM excluded). -->
+      <span id="modsel" hidden></span>
     </div>
   </form>
 
@@ -1755,12 +1749,11 @@ async function loadConfig(){
     PULSE_ENABLED = !!c.pulse_enabled;
     maybeShowPulseBell();
     DYN_ENGINES = !!c.dynamic_engines_enabled;
-    MODALITY_ENABLED = !!c.modality_mode_enabled;
-    if(MODALITY_ENABLED){
-      const ms = $("#modsel"); if(ms){ ms.hidden = false;
-        ms.querySelectorAll(".modbtn").forEach(b=>b.addEventListener("click", ()=>setModality(b.dataset.mod)));
-      }
-    }
+    // Therapy-modality toggle RETIRED from the UI (2026-08-16): complementary/alternative medicine is
+    // now reached through the Integrative & Complementary Medicine PANEL specialist, so the Q&A toggle
+    // is redundant. The frontend stays permanently in "modern medicine" scope (MODALITY_ENABLED=false →
+    // MODALITY="allopathic"), so plain Q&A never surfaces CAM; the backend exclusion is unchanged.
+    MODALITY_ENABLED = false;
     if(ACCOUNTS_ENABLED){
       const ex = $("#idextra"); if(ex) ex.hidden = false;   // reveal profession/NPI/country in the gate
       // an existing local-only user predates accounts → ask them to register once (prefilled)

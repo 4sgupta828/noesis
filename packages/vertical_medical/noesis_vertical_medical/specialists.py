@@ -336,6 +336,29 @@ SPECIALISTS: tuple[SpecialistConfig, ...] = (
               "evidence."),
         focus="screening guidelines, vaccination schedule, prophylaxis, travel medicine, immunization, preventive care intervals",
         source_keys=("europepmc", "clinicaltrials", "web")),
+    # --- complementary / integrative lens: convened ONLY for questions about non-conventional
+    # modalities. Its CAM-heavy `focus` steers retrieval into the modality=alternative corpus (the
+    # panel applies no modality exclusion), so when the planner picks it, the CAM literature is what
+    # it draws on. The lens is EVIDENCE-FIRST and non-promotional: report what the trials actually show
+    # (effect sizes, comparators, quality, safety), and say plainly where evidence is weak, contested,
+    # or absent — never endorse a therapy the evidence doesn't support. ---
+    SpecialistConfig(
+        id="integrative_cam", specialty="Integrative & Complementary Medicine",
+        lens=("You are an integrative-medicine specialist on a case panel, convened because the question "
+              "concerns a complementary/alternative or non-conventional modality (acupuncture, acupressure, "
+              "Reiki and other energy-healing, traditional Chinese medicine, herbal/botanical medicine, "
+              "homeopathy, naturopathy, mind-body therapies — meditation, yoga, tai chi). Evaluate ONLY "
+              "through this lens and ONLY on the evidence: what the studies actually report for this "
+              "modality (effect size vs sham/placebo/usual care, trial quality and risk of bias, "
+              "consistency, and safety/interactions). Be scrupulously HONEST and non-promotional — state "
+              "plainly where the evidence is weak, contested, based on unblinded/small trials, or absent, "
+              "and flag any safety concern or interaction with conventional care. Never endorse a therapy "
+              "the evidence does not support; distinguish 'shown to help X' from 'used for X'."),
+        focus=("acupuncture, acupressure, electroacupuncture, Reiki, energy healing, therapeutic touch, "
+               "traditional Chinese medicine, herbal medicine, botanical, homeopathy, naturopathy, "
+               "mind-body therapy, meditation, mindfulness, yoga, tai chi, qigong, complementary and "
+               "alternative medicine, integrative medicine"),
+        source_keys=("europepmc", "clinicaltrials", "web")),
 )
 
 _BY_ID = {s.id: s for s in SPECIALISTS}

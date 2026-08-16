@@ -82,7 +82,15 @@ class PostgresRetrievalSource:
             async def _init(conn):
                 await register_vector(conn)
 
-            self._pool = await asyncpg.create_pool(self._dsn, init=_init, min_size=1, max_size=8)
+            # lock_timeout: any statement WAITING for a lock (e.g. a concurrent ingest's brief
+            # AccessExclusiveLock from a CREATE INDEX/ALTER, or an overlapping block upsert) aborts
+            # after 30s instead of hanging FOREVER — a plain lock-wait never self-aborts the way a
+            # deadlock does, so without this an ingest job could stay 'running' indefinitely and
+            # head-of-line-block the whole queue. Safe for retrieval: SELECTs take ACCESS SHARE and
+            # effectively never wait this long, so read paths are unaffected.
+            self._pool = await asyncpg.create_pool(
+                self._dsn, init=_init, min_size=1, max_size=8,
+                server_settings={"lock_timeout": "30000"})
         return self._pool
 
     async def ensure_schema(self) -> None:

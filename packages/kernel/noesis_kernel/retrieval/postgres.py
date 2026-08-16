@@ -58,6 +58,15 @@ CREATE INDEX IF NOT EXISTS {table}_created ON {table} (created_at DESC);
 """
 
 
+# Pooler-safe single-writer: every block write takes this TRANSACTION-level advisory lock first, so
+# concurrent ingest across replicas serializes on the write (one at a time) — eliminating the rs_block
+# row/HNSW-index lock contention that aborted jobs with "canceling statement due to lock timeout". A
+# transaction-level lock (not session-level) is REQUIRED because the corpus DSN routes through a
+# transaction pooler, which releases session advisory locks between statements; a txn lock is held for
+# the write transaction and released at commit, so it works through the pooler. Reads never take it.
+_WRITE_LOCK_KEY = 5132101
+
+
 class PostgresRetrievalSource:
     def __init__(self, dsn: str, *, key: str = "postgres", dim: int = 1536,
                  table: str = "rs_block", covers: FacetFilter | None = None,
@@ -123,18 +132,20 @@ class PostgresRetrievalSource:
         import json
         pool = await self._get_pool()
         async with pool.acquire() as conn:
-            await conn.execute(
-                f"""INSERT INTO {self._table}
-                    (tenant_id, workspace_id, document_id, block_id, text, embedding,
-                     facets, document_title, content_type, source_key)
-                    VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10)
-                    ON CONFLICT (tenant_id, document_id, block_id) DO UPDATE
-                    SET text=EXCLUDED.text, embedding=EXCLUDED.embedding,
-                        facets=EXCLUDED.facets, document_title=EXCLUDED.document_title,
-                        content_type=EXCLUDED.content_type, source_key=EXCLUDED.source_key""",
-                tenant_id, workspace_id, document_id, block_id, text, embedding,
-                json.dumps(facets or {}), document_title, content_type, source_key,
-            )
+            async with conn.transaction():   # serialize writers (pooler-safe txn advisory lock)
+                await conn.execute("SELECT pg_advisory_xact_lock($1)", _WRITE_LOCK_KEY)
+                await conn.execute(
+                    f"""INSERT INTO {self._table}
+                        (tenant_id, workspace_id, document_id, block_id, text, embedding,
+                         facets, document_title, content_type, source_key)
+                        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10)
+                        ON CONFLICT (tenant_id, document_id, block_id) DO UPDATE
+                        SET text=EXCLUDED.text, embedding=EXCLUDED.embedding,
+                            facets=EXCLUDED.facets, document_title=EXCLUDED.document_title,
+                            content_type=EXCLUDED.content_type, source_key=EXCLUDED.source_key""",
+                    tenant_id, workspace_id, document_id, block_id, text, embedding,
+                    json.dumps(facets or {}), document_title, content_type, source_key,
+                )
 
     async def upsert_blocks(self, rows: list[dict]) -> None:
         """Batch upsert many blocks in one round-trip (executemany). Each row dict:
@@ -150,17 +161,19 @@ class PostgresRetrievalSource:
             r.get("document_title", ""), r.get("content_type", ""), r.get("source_key", ""),
         ) for r in rows]
         async with pool.acquire() as conn:
-            await conn.executemany(
-                f"""INSERT INTO {self._table}
-                    (tenant_id, workspace_id, document_id, block_id, text, embedding,
-                     facets, document_title, content_type, source_key)
-                    VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10)
-                    ON CONFLICT (tenant_id, document_id, block_id) DO UPDATE
-                    SET text=EXCLUDED.text, embedding=EXCLUDED.embedding,
-                        facets=EXCLUDED.facets, document_title=EXCLUDED.document_title,
-                        content_type=EXCLUDED.content_type, source_key=EXCLUDED.source_key""",
-                args,
-            )
+            async with conn.transaction():   # serialize writers (pooler-safe txn advisory lock)
+                await conn.execute("SELECT pg_advisory_xact_lock($1)", _WRITE_LOCK_KEY)
+                await conn.executemany(
+                    f"""INSERT INTO {self._table}
+                        (tenant_id, workspace_id, document_id, block_id, text, embedding,
+                         facets, document_title, content_type, source_key)
+                        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10)
+                        ON CONFLICT (tenant_id, document_id, block_id) DO UPDATE
+                        SET text=EXCLUDED.text, embedding=EXCLUDED.embedding,
+                            facets=EXCLUDED.facets, document_title=EXCLUDED.document_title,
+                            content_type=EXCLUDED.content_type, source_key=EXCLUDED.source_key""",
+                    args,
+                )
 
     async def delete_stale_blocks(self, *, tenant_id: str, document_id: str,
                                   keep_block_ids: list[str]) -> int:
@@ -171,10 +184,12 @@ class PostgresRetrievalSource:
         Returns rows deleted."""
         pool = await self._get_pool()
         async with pool.acquire() as conn:
-            res = await conn.execute(
-                f"""DELETE FROM {self._table}
-                    WHERE tenant_id=$1 AND document_id=$2 AND NOT (block_id = ANY($3::text[]))""",
-                tenant_id, document_id, list(keep_block_ids))
+            async with conn.transaction():   # serialize writers (pooler-safe txn advisory lock)
+                await conn.execute("SELECT pg_advisory_xact_lock($1)", _WRITE_LOCK_KEY)
+                res = await conn.execute(
+                    f"""DELETE FROM {self._table}
+                        WHERE tenant_id=$1 AND document_id=$2 AND NOT (block_id = ANY($3::text[]))""",
+                    tenant_id, document_id, list(keep_block_ids))
         try:
             return int((res or "DELETE 0").split()[-1])
         except ValueError:

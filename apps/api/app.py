@@ -1219,36 +1219,14 @@ async def _gap_processor_loop(dsn: str, vertical: str) -> None:
     if pulse_enabled():
         from noesis_kernel.currency import CurrencyStore
         currency = CurrencyStore(dsn)
-    # SINGLE-WRITER ELECTION (redesign 2026-08-16): this ingest loop runs in EVERY API replica, so at
-    # ~16 replicas that was 16 workers writing rs_block concurrently — the block upserts + HNSW-index
-    # inserts contend on table/index locks, and under load every ingest job aborted with
-    # "canceling statement due to lock timeout". No lock-tuning fixes concurrent writers; the fix is to
-    # have exactly ONE writer. A Postgres session-level advisory lock elects one leader across all
-    # replicas; followers idle. If the leader dies, its connection drops, Postgres releases the lock,
-    # and a follower takes over — auto-failover, no separate worker service needed.
-    import asyncpg as _asyncpg
-    _INGEST_LOCK_KEY = 5132101            # arbitrary fixed key naming the ingest-writer role
-    _lock_conn = None
-    _leader = False
+    # Concurrent workers across replicas claim DIFFERENT jobs safely (claim_one uses FOR UPDATE SKIP
+    # LOCKED) and run fetch/parse/embed in parallel; the only thing that must not run concurrently is
+    # the rs_block WRITE, which is serialized in PostgresRetrievalSource via a pooler-safe
+    # transaction-level advisory lock (pg_advisory_xact_lock) — so no lock-contention aborts.
     while True:
         try:
-            if _lock_conn is None:
-                _lock_conn = await _asyncpg.connect(dsn)
-                _leader = False
-            if not _leader:
-                _leader = bool(await _lock_conn.fetchval(
-                    "SELECT pg_try_advisory_lock($1)", _INGEST_LOCK_KEY))
-                if not _leader:
-                    await asyncio.sleep(15); continue     # follower: stay idle, re-contest later
             job = await q.claim_one()
         except Exception:
-            # lock-conn or claim failed → surrender leadership, reset, and re-elect
-            try:
-                if _lock_conn is not None:
-                    await _lock_conn.close()
-            except Exception:   # noqa: BLE001
-                pass
-            _lock_conn = None; _leader = False
             await asyncio.sleep(10); continue
         if job is None:
             # WEEKLY retraction sweep, replica-safe via the DB clock (runs on the idle path so it
@@ -1291,16 +1269,6 @@ async def _gap_processor_loop(dsn: str, vertical: str) -> None:
                                                                 "corpus_parts", "errors")}})
                 except Exception:   # noqa: BLE001 — the admin endpoint is the manual backstop
                     pass
-            # keepalive: confirm we still hold the advisory lock connection; if it died, drop
-            # leadership so a healthy replica can take over (prevents a zombie leader).
-            try:
-                await _lock_conn.execute("SELECT 1")
-            except Exception:   # noqa: BLE001
-                try:
-                    await _lock_conn.close()
-                except Exception:   # noqa: BLE001
-                    pass
-                _lock_conn = None; _leader = False
             await asyncio.sleep(8); continue
         conn = connectors.get(job["connector"])
         if conn is None:

@@ -711,6 +711,14 @@ def triage_ask_cap(v2: bool, register: str) -> int:
     return TRIAGE_MAX_ASK if register == "fact" else TRIAGE_MAX_ASK_CASE
 
 
+def web_once_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, the research loop fires the web/aux search leg ONLY on the
+    first search step instead of every step. The web call (Tavily/Exa full-page scrape, ~10-18s) is the
+    dominant per-step retrieval cost once the corpus leg is index-fast, and one broad web search up front
+    suffices for the corpus-first design. OFF → web every step (byte-identical to today)."""
+    return os.environ.get("NOESIS_WEB_ONCE", "").lower() in ("1", "true", "yes")
+
+
 def evidence_fitness_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, the relevance-selection step additionally BOOSTS stronger
     evidence tiers (guideline/systematic-review > RCT > cohort > case report, via the medical authority
@@ -1151,6 +1159,7 @@ def build_default_service() -> ResearchService:
         collect_diagnostics=diag_trace_enabled(),
         classify_evidence=getattr(manifest, "evidence_classifier", None),
         evidence_fitness=evidence_fitness_enabled(),
+        web_first_step_only=web_once_enabled(),
         evidence_ranker=getattr(getattr(manifest, "authority_policy", None), "rank", None),
         evidence_identity=evidence_identity_enabled(),
         claim_congruence=claim_congruence_enabled(),
@@ -1486,6 +1495,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "reasoning_read_enabled": reasoning_read_enabled() and structured_answers(),
             "diag_trace_enabled": diag_trace_enabled(),
             "evidence_fitness_enabled": evidence_fitness_enabled(),
+            "web_once_enabled": web_once_enabled(),
             "ask_panel_enabled": live_panel,
             "panel_specialists": ([
                 {"id": getattr(s, "id", ""), "specialty": getattr(s, "specialty", ""),

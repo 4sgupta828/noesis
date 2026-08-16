@@ -98,6 +98,7 @@ class ResearchService:
     collect_diagnostics: bool = False       # capture a troubleshooting trace (turns/tools/retries/failures) (flag)
     classify_evidence: object | None = None # vertical structural evidence-tier classifier (source_key, facets) -> kind
     evidence_fitness: bool = False          # boost stronger evidence tiers into the compose cap (flag)
+    web_first_step_only: bool = False       # fire the web/aux leg only on the first search step (flag)
     evidence_ranker: object | None = None   # vertical authority pyramid: evidence_kind -> int rank
     evidence_identity: bool = False         # render each atom's document identity ⟨title — source⟩ on
     #                                         every LLM-visible surface (Evidence Contract stage 1, flag)
@@ -451,7 +452,7 @@ class ResearchService:
                 graph_legs = None
         res = await run_react(
             question=question, llm=self.llm, embedder=self.embedder,
-            source=corpus_src, aux_source=web_src,
+            source=corpus_src, aux_source=web_src, web_first_step_only=self.web_first_step_only,
             tenant_id=tenant_id, workspace_id=workspace_id,
             budget=budget, gating=self.gating,
             system_prompt=self.persona_prompt, answer_format=directive,
@@ -589,6 +590,7 @@ class ResearchService:
             contract_prompt=self.contract_prompt,
             panel_enumerative_addendum=self.panel_enumerative_addendum,
             panel_decision_addendum=self.panel_decision_addendum,
+            web_first_step_only=self.web_first_step_only,
             on_event=on_event)
 
     async def _resolve_followup(self, question: str, history: list[dict],

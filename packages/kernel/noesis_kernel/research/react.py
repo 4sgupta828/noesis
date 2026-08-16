@@ -627,6 +627,11 @@ async def run_react(
     planner_llm: LLMClient | None = None,     # fast model for search-planning steps (compose uses `llm`)
     on_event=None,                            # optional async callback(dict) for live progress (SSE)
     aux_source: RetrievalSource | None = None,  # e.g. web: queried ONCE per step (no variant fan-out)
+    web_first_step_only: bool = False,        # fire the web/aux leg ONLY on the first search step, not
+    #                                           every step — the web call (Tavily/Exa full-page scrape,
+    #                                           ~10-18s) is the dominant per-step retrieval cost once the
+    #                                           corpus leg is index-fast; one broad web search up front is
+    #                                           enough for the corpus-first design (flag; OFF = every step)
     claims_first: bool = False,               # run comprehensive extraction over ALL atoms (flag)
     extraction_lenses: tuple[str, ...] = (),  # vertical-supplied lenses for the extractor
     evidence_select: bool = False,            # rank claims by relevance before the cap + wider atom window
@@ -1132,7 +1137,11 @@ async def run_react(
                 await emit({"type": "retrieving", "source": leg, "hits": len(r)})
                 return r
 
-            if aux_source is not None:
+            # web leg: every step by default; first step only when web_first_step_only (cuts 3-5 slow
+            # web scrapes to 1). Later steps then retrieve corpus-only — fast, and the corpus is the
+            # primary evidence base.
+            _use_web = aux_source is not None and (step_i == 0 or not web_first_step_only)
+            if _use_web:
                 got = await _timed("retrieval_ms", asyncio.gather(_traced_leg("corpus", corpus_co),
                                            _traced_leg("web", aux_source.search(base_req)),
                                            return_exceptions=True))

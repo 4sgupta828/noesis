@@ -210,6 +210,7 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
                     evidence_identity=False, claim_congruence=False,
                     panel_dedup=False, panel_contract=False, contract_prompt=None,
                     panel_enumerative_addendum=None, panel_decision_addendum=None,
+                    web_first_step_only=False,
                     on_event=None) -> PanelResult:
     """`make_retrievers(source_keys) -> (corpus_source, aux_source)` lets each specialist scope its
     sources without this module knowing the source registry (domain-free seam). `history_context` is the
@@ -294,6 +295,7 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
                     spec_q += f"\n[{scope}]"
                 res = await asyncio.wait_for(run_react(
                     question=spec_q, llm=llm, embedder=embedder, source=corpus, aux_source=aux,
+                    web_first_step_only=web_first_step_only,
                     tenant_id=tenant_id, workspace_id=workspace_id, history_context=history_context,
                     attachment_context=attachment_context,
                     budget=BudgetState(max_calls=_SPECIALIST_MAX_CALLS),

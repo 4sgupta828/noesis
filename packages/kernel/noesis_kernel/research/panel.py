@@ -299,7 +299,9 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
                     tenant_id=tenant_id, workspace_id=workspace_id, history_context=history_context,
                     attachment_context=attachment_context,
                     budget=BudgetState(max_calls=_SPECIALIST_MAX_CALLS),
-                    system_prompt=spec.lens, answer_format=_SPECIALIST_ANSWER_FORMAT, reasoning_read=False,
+                    system_prompt=spec.lens,
+                    answer_format=(getattr(spec, "answer_format", None) or _SPECIALIST_ANSWER_FORMAT),
+                    reasoning_read=False,
                     max_steps=_SPECIALIST_MAX_STEPS,
                     max_extract_recoveries=_SPECIALIST_EXTRACT_RECOVERIES,
                     compose_attempts=_SPECIALIST_COMPOSE_ATTEMPTS,
@@ -435,8 +437,16 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
         pooled = [pooled[_i] for _i in sorted(_keep)[:synth_claim_cap]]
 
     if not pooled:
-        result.synthesis = ("_The panel could not ground an answer — no specialist found verifiable "
-                            "evidence for this question._")
+        # Graceful degradation (task #52): every convened specialist abstained (0 verified claims).
+        # Explain the likely cause (scope mismatch) and the fix, instead of a bare dead-end — and make
+        # clear nothing was fabricated (the abstention IS the safety behavior working).
+        _names = ", ".join(getattr(s, "specialty", getattr(s, "id", "")) for s in specialists) or "the panel"
+        result.synthesis = (
+            f"_No verifiable evidence was found for this question by the convened panel ({_names})._\n\n"
+            "This usually means the question falls outside the scope of the specialists on this panel — "
+            "for example, a conventional diagnostic question sent only to an out-of-scope lens. Try "
+            "**Auto** selection so the panel picks the specialists that fit the case, or rephrase toward "
+            "what you want assessed. No answer was fabricated — the panel abstained rather than guess.")
         return result
 
     verified = [vc for _, vc in pooled]

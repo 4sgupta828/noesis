@@ -719,6 +719,39 @@ def web_once_enabled() -> bool:
     return os.environ.get("NOESIS_WEB_ONCE", "").lower() in ("1", "true", "yes")
 
 
+def cam_contract_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, the Integrative & Complementary Medicine panel specialist
+    (integrative_cam) uses a CAM-appropriate evidence contract — REPORT weak evidence WITH strength/safety
+    labels + a 'not established' floor + diagnostic-deferral, instead of the conventional
+    abstain-unless-strong default. Swaps ONLY that specialist's lens + answer_format; every conventional
+    specialist stays byte-identical, and the fabrication gate (span-check + no-new-facts) is unaffected.
+    OFF → the CAM specialist uses the strict default (byte-identical to today)."""
+    return os.environ.get("NOESIS_CAM_CONTRACT", "").lower() in ("1", "true", "yes")
+
+
+def _apply_cam_contract(specialists):
+    """When cam_contract_enabled(), replace the integrative_cam specialist's lens + answer_format with the
+    CAM evidence contract; otherwise return the roster unchanged. Structural, keyed on the specialist id."""
+    if not cam_contract_enabled():
+        return specialists
+    import dataclasses
+    try:
+        from noesis_vertical_medical.specialists import (
+            INTEGRATIVE_CAM_ANSWER_FORMAT, INTEGRATIVE_CAM_CONTRACT_LENS)
+    except Exception:   # noqa: BLE001 — vertical without a CAM specialist: no-op
+        return specialists
+    out = []
+    for s in specialists:
+        if getattr(s, "id", "") == "integrative_cam":
+            try:
+                s = dataclasses.replace(s, lens=INTEGRATIVE_CAM_CONTRACT_LENS,
+                                        answer_format=INTEGRATIVE_CAM_ANSWER_FORMAT)
+            except Exception:   # noqa: BLE001 — non-dataclass specialist: leave as-is
+                pass
+        out.append(s)
+    return tuple(out)
+
+
 def evidence_fitness_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, the relevance-selection step additionally BOOSTS stronger
     evidence tiers (guideline/systematic-review > RCT > cohort > case report, via the medical authority
@@ -1168,7 +1201,7 @@ def build_default_service() -> ResearchService:
         explore_legs=explore_legs_enabled(),
         answer_mode_routing=answer_mode_routing_enabled(),
         enumerative_compose_addendum=getattr(manifest, "enumerative_compose_addendum", None),
-        panel_specialists=getattr(manifest, "panel_specialists", ()),
+        panel_specialists=_apply_cam_contract(getattr(manifest, "panel_specialists", ())),
         panel_default_ids=getattr(manifest, "panel_default_ids", ()),
         panel_synthesis_directive=getattr(manifest, "panel_synthesis_directive", None),
         panel_examples=getattr(manifest, "panel_examples", ()),
@@ -1496,6 +1529,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "diag_trace_enabled": diag_trace_enabled(),
             "evidence_fitness_enabled": evidence_fitness_enabled(),
             "web_once_enabled": web_once_enabled(),
+            "cam_contract_enabled": cam_contract_enabled(),
             "ask_panel_enabled": live_panel,
             "panel_specialists": ([
                 {"id": getattr(s, "id", ""), "specialty": getattr(s, "specialty", ""),

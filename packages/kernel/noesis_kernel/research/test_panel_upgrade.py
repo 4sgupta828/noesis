@@ -183,7 +183,8 @@ def test_coverage_gaps_live_on_panel_result_even_with_no_pooled_claims():
     empty = InMemoryRetrievalSource()                    # nothing retrievable → zero pooled claims
     llm = _LLM(contract_out=dict(mode="enumerative", entities=["alpha-drug", "beta-drug"]))
     r = _run(llm, src=empty, panel_contract=True, contract_prompt=_DERIVE)
-    assert "could not ground" in r.synthesis
+    # all-abstain graceful degradation: a scope-aware message (not a bare dead-end), no fabrication
+    assert "No verifiable evidence" in r.synthesis and "abstained" in r.synthesis
     assert r.coverage_gaps == ["No specialist retrieved evidence for alpha-drug",
                                "No specialist retrieved evidence for beta-drug"]
 

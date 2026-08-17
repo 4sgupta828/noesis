@@ -70,19 +70,60 @@ async def _run(slice_path: pathlib.Path, limit: int, expand: str, conc: int,
         print(f"patch mode: {len(banked)} healthy rows banked, re-running {len(recs)}")
     sem = asyncio.Semaphore(conc)
 
+    def _truthy(name: str) -> bool:
+        return os.environ.get(name, "").strip().lower() in ("1", "true")
+
+    def _cget(c, key, default=None):
+        """Read a claim field whether the claim is a dict (panel pooled claims) or an object."""
+        return c.get(key, default) if isinstance(c, dict) else getattr(c, key, default)
+
     async def one(r: dict) -> dict:
         async with sem:
             t0 = dt.datetime.now(dt.timezone.utc)
+            panel_mode = _truthy("NOESIS_EVAL_PANEL")
             try:
+                # PANEL mode: convene the specialist panel (auto-triage via plan_panel → the selected
+                # roster) and synthesize. NOESIS_EVAL_PANEL=1 routes this slice runner through the
+                # ask_panel path; unset (default) preserves the svc.ask / svc.ask_reasoned behavior.
+                if panel_mode:
+                    plan = await svc.plan_panel(question=r["question"])
+                    ids = [p.get("id") for p in ((plan or {}).get("selected") or [])
+                           if isinstance(p, dict) and p.get("id")]
+                    res = await svc.ask_panel(question=r["question"], tenant_id="demo",
+                                              specialist_ids=(ids or None))
                 # Prod routes clinical-decision questions through the REASONED engine, not the
                 # bare adaptive one. NOESIS_EVAL_REASONED=1 makes this slice runner prod-faithful
                 # for those sets; unset (default) preserves the original svc.ask behavior exactly.
-                if os.environ.get("NOESIS_EVAL_REASONED", "").strip().lower() in ("1", "true"):
+                elif _truthy("NOESIS_EVAL_REASONED"):
                     res = await svc.ask_reasoned(question=r["question"], tenant_id="demo")
                 else:
                     res = await svc.ask(question=r["question"], tenant_id="demo")
             except Exception as e:               # noqa: BLE001
                 return {"id": r["id"], "error": f"{type(e).__name__}: {e}"[:300]}
+            if panel_mode:
+                # Map PanelResult → the SAME result-row shape run.py already emits. Every read is
+                # guarded so a missing field can't crash (PanelResult has no `grounded`/`atoms`/
+                # `stopped_reason`; its answer is `synthesis` and its claims are pooled dicts).
+                synthesis = (getattr(res, "synthesis", "") or "")
+                claims = getattr(res, "claims", None) or []
+                return {
+                    "id": r["id"], "set": r["set"], "stratum": r["stratum"],
+                    "question": r["question"], "gold": r.get("gold"),
+                    "answer": synthesis,
+                    "grounded": bool(getattr(res, "grounded", None) or synthesis.strip()),
+                    "claims": [{"text": _cget(c, "text"), "quote": _cget(c, "quote"),
+                                "title": _cget(c, "title"), "document_id": _cget(c, "document_id"),
+                                "source": _cget(c, "source"),
+                                "evidence_kind": _cget(c, "evidence_kind", "")}
+                               for c in claims],
+                    "atoms": 0, "stopped": "answered",
+                    "coverage_gaps": getattr(res, "coverage_gaps", None) or [],
+                    "graph_legs": None, "question_contract": None,
+                    "seconds": (dt.datetime.now(dt.timezone.utc) - t0).total_seconds(),
+                    "provenance": {"git_sha": sha, "expand": os.environ.get("NOESIS_GRAPH_EXPAND", ""),
+                                   "model": os.environ.get("NOESIS_LLM_MODEL", "(default)"),
+                                   "ran_at": t0.isoformat()},
+                }
             gl = (getattr(res, "diagnostics", None) or {}).get("graph_legs")
             qc = (getattr(res, "diagnostics", None) or {}).get("question_contract")
             return {

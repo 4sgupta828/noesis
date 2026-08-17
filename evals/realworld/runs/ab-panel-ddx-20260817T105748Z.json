@@ -1,0 +1,141 @@
+{
+  "provenance": {
+    "git_sha": "9760f23",
+    "run_a": "run-slice-ddx-clinical-15-2026-08-17-env-20260817T105450Z.jsonl",
+    "run_b": "run-slice-ddx-clinical-15-2026-08-17-env-20260817T105737Z.jsonl",
+    "arm_a_env": {
+      "NOESIS_EVIDENCE_IDENTITY": "1",
+      "NOESIS_CLAIM_CONGRUENCE": "1",
+      "NOESIS_EVAL_PANEL": "1",
+      "NOESIS_PANEL_CONTRACT": "1",
+      "NOESIS_PANEL_DEDUP": "1",
+      "NOESIS_PANEL_DIFFERENTIAL": ""
+    },
+    "arm_b_env": {
+      "NOESIS_EVIDENCE_IDENTITY": "1",
+      "NOESIS_CLAIM_CONGRUENCE": "1",
+      "NOESIS_EVAL_PANEL": "1",
+      "NOESIS_PANEL_CONTRACT": "1",
+      "NOESIS_PANEL_DEDUP": "1",
+      "NOESIS_PANEL_DIFFERENTIAL": "1"
+    },
+    "seed": 20260817,
+    "judge_model": "(default anthropic)",
+    "judge_prompt_sha": "66e43906c5f2",
+    "ran_at": "2026-08-17T10:57:48.617771+00:00"
+  },
+  "summary": {
+    "per_stratum": {
+      "cardiac": {
+        "n": 1,
+        "judged": 1,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 1,
+        "dim_delta_b_minus_a": {
+          "differential_quality": 1.0,
+          "decision_framework": 0.0,
+          "evidence": 0.5,
+          "honesty": 0.0
+        },
+        "top_dx_coverage": {
+          "a": 0.0,
+          "b": 1.0,
+          "delta": 1.0
+        },
+        "cant_miss_coverage": {
+          "a": 0.333,
+          "b": 1.0,
+          "delta": 0.667
+        },
+        "discriminator_hit": {
+          "a": 1.0,
+          "b": 1.0,
+          "delta": 0.0
+        }
+      }
+    },
+    "overall": {
+      "n": 1,
+      "judged": 1,
+      "wins_b": 0,
+      "wins_a": 0,
+      "ties": 1,
+      "dim_delta_b_minus_a": {
+        "differential_quality": 1.0,
+        "decision_framework": 0.0,
+        "evidence": 0.5,
+        "honesty": 0.0
+      },
+      "top_dx_coverage": {
+        "a": 0.0,
+        "b": 1.0,
+        "delta": 1.0
+      },
+      "cant_miss_coverage": {
+        "a": 0.333,
+        "b": 1.0,
+        "delta": 0.667
+      },
+      "discriminator_hit": {
+        "a": 1.0,
+        "b": 1.0,
+        "delta": 0.0
+      },
+      "sign_test_p": 1.0
+    },
+    "healthy_rows": {
+      "a": 1,
+      "b": 1,
+      "paired": 1
+    },
+    "judge_errors": []
+  },
+  "structural": {
+    "A": {
+      "ddx-001-chest-pain": {
+        "top_dx_coverage": 0.0,
+        "cant_miss_coverage": 0.3333333333333333,
+        "discriminator_hit": true
+      }
+    },
+    "B": {
+      "ddx-001-chest-pain": {
+        "top_dx_coverage": 1.0,
+        "cant_miss_coverage": 1.0,
+        "discriminator_hit": true
+      }
+    }
+  },
+  "judgments": [
+    {
+      "id": "ddx-001-chest-pain",
+      "stratum": "cardiac",
+      "order_call1": [
+        "B",
+        "A"
+      ],
+      "better_call1": "second",
+      "better_call2": "second",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "differential_quality": 3.5,
+          "decision_framework": 4.5,
+          "evidence": 3.5,
+          "honesty": 3.5
+        },
+        "B": {
+          "differential_quality": 4.5,
+          "decision_framework": 4.5,
+          "evidence": 4.0,
+          "honesty": 3.5
+        }
+      },
+      "rationales": [
+        "Both cover ACS-first pathway with dissection/PE as can't-miss. Second is more explicit about thresholds, honestly flags assay-dependence and evidence tensions/gaps, and better distinguishes procedural vs mechanistic certainty. First is thorough but s",
+        "Second gives explicit ranked differential with can't-miss diagnoses, concrete STEMI criteria, GRACE-based thresholds, and clear reperfusion timing rules. First is a cluttered decision-grid, harder to act on, buries key thresholds, and is truncated mi"
+      ]
+    }
+  ]
+}

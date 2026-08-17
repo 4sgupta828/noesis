@@ -163,3 +163,16 @@ Provenance: runs/ab-ddx-20260817T080516Z.json.
    must also spot-check that lookup/understanding/management-non-DDx are unchanged.
 
 Related: learnings/competitive-landscape.md (#1 prove-it, DDx in-scope as CDS), reasoned.py, answer_format.py.
+
+## PANEL differential synthesis — SHIPPED (2026-08-17)
+Extends the clinical-decision benefit to the Specialist Panel (PANEL_DIFFERENTIAL_ADDENDUM, flag
+NOESIS_PANEL_DIFFERENTIAL): diagnostic panel questions get a ranked differential + workup + what-changes-
+management + specialty attribution, in place of the decision grid. Contract gains is_diagnostic.
+- 5-case A/B (v1): differential-quality +0.80, can't-miss +0.23; small evidence/honesty -0.10 (coarse
+  scoring + baseline/triage truncation, per rationales arm-B was honest).
+- Fixes: plan_panel max_tokens 1200->2500 (triage was truncating -> default specialists); addendum
+  honesty tightening (attribution only when supported; no overstated case-fit; certainty proportionate).
+- 3-case confirmation (tightened): evidence -0.10->+0.17, honesty -0.10->+0.33 (BOTH positive, bar
+  cleared), differential-quality +1.33, can't-miss +0.39 (0.11->0.50). Shipped ON.
+- Credit note: the panel A/B is very expensive (multi-specialist); it exhausted the shared pool twice.
+  Future panel eval = minimal (2-3 arm-B cases + cached baseline), never a full repeated A/B.

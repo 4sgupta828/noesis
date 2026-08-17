@@ -1,0 +1,315 @@
+{
+  "provenance": {
+    "git_sha": "d443283",
+    "run_a": "run-slice-ddx-clinical-15-2026-08-17-env-20260817T114315Z.jsonl",
+    "run_b": "run-slice-ddx-clinical-15-2026-08-17-env-20260817T114323Z.jsonl",
+    "arm_a_env": {
+      "NOESIS_EVIDENCE_IDENTITY": "1",
+      "NOESIS_CLAIM_CONGRUENCE": "1",
+      "NOESIS_EVAL_PANEL": "1",
+      "NOESIS_PANEL_CONTRACT": "1",
+      "NOESIS_PANEL_DEDUP": "1",
+      "NOESIS_PANEL_DIFFERENTIAL": ""
+    },
+    "arm_b_env": {
+      "NOESIS_EVIDENCE_IDENTITY": "1",
+      "NOESIS_CLAIM_CONGRUENCE": "1",
+      "NOESIS_EVAL_PANEL": "1",
+      "NOESIS_PANEL_CONTRACT": "1",
+      "NOESIS_PANEL_DEDUP": "1",
+      "NOESIS_PANEL_DIFFERENTIAL": "1"
+    },
+    "seed": 20260817,
+    "judge_model": "(default anthropic)",
+    "judge_prompt_sha": "66e43906c5f2",
+    "ran_at": "2026-08-17T11:43:26.145472+00:00"
+  },
+  "summary": {
+    "per_stratum": {
+      "cardiac": {
+        "n": 1,
+        "judged": 0,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 0,
+        "dim_delta_b_minus_a": {
+          "differential_quality": null,
+          "decision_framework": null,
+          "evidence": null,
+          "honesty": null
+        },
+        "top_dx_coverage": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        },
+        "cant_miss_coverage": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        },
+        "discriminator_hit": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        }
+      },
+      "cardiopulmonary": {
+        "n": 1,
+        "judged": 0,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 0,
+        "dim_delta_b_minus_a": {
+          "differential_quality": null,
+          "decision_framework": null,
+          "evidence": null,
+          "honesty": null
+        },
+        "top_dx_coverage": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        },
+        "cant_miss_coverage": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        },
+        "discriminator_hit": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        }
+      },
+      "hepatobiliary": {
+        "n": 1,
+        "judged": 0,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 0,
+        "dim_delta_b_minus_a": {
+          "differential_quality": null,
+          "decision_framework": null,
+          "evidence": null,
+          "honesty": null
+        },
+        "top_dx_coverage": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        },
+        "cant_miss_coverage": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        },
+        "discriminator_hit": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        }
+      },
+      "neurologic": {
+        "n": 1,
+        "judged": 0,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 0,
+        "dim_delta_b_minus_a": {
+          "differential_quality": null,
+          "decision_framework": null,
+          "evidence": null,
+          "honesty": null
+        },
+        "top_dx_coverage": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        },
+        "cant_miss_coverage": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        },
+        "discriminator_hit": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        }
+      },
+      "rheumatologic": {
+        "n": 1,
+        "judged": 0,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 0,
+        "dim_delta_b_minus_a": {
+          "differential_quality": null,
+          "decision_framework": null,
+          "evidence": null,
+          "honesty": null
+        },
+        "top_dx_coverage": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        },
+        "cant_miss_coverage": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        },
+        "discriminator_hit": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        }
+      }
+    },
+    "overall": {
+      "n": 5,
+      "judged": 0,
+      "wins_b": 0,
+      "wins_a": 0,
+      "ties": 0,
+      "dim_delta_b_minus_a": {
+        "differential_quality": null,
+        "decision_framework": null,
+        "evidence": null,
+        "honesty": null
+      },
+      "top_dx_coverage": {
+        "a": 0.0,
+        "b": 0.0,
+        "delta": 0.0
+      },
+      "cant_miss_coverage": {
+        "a": 0.0,
+        "b": 0.0,
+        "delta": 0.0
+      },
+      "discriminator_hit": {
+        "a": 0.0,
+        "b": 0.0,
+        "delta": 0.0
+      },
+      "sign_test_p": 1.0
+    },
+    "healthy_rows": {
+      "a": 5,
+      "b": 5,
+      "paired": 5
+    },
+    "judge_errors": [
+      {
+        "id": "ddx-004-thunderclap-headache",
+        "stratum": "neurologic",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "ddx-003-ruq-fever-jaundice",
+        "stratum": "hepatobiliary",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "ddx-001-chest-pain",
+        "stratum": "cardiac",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "ddx-002-dyspnea-edema",
+        "stratum": "cardiopulmonary",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      },
+      {
+        "id": "ddx-005-hot-swollen-knee",
+        "stratum": "rheumatologic",
+        "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+      }
+    ]
+  },
+  "structural": {
+    "A": {
+      "ddx-001-chest-pain": {
+        "top_dx_coverage": 0.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": false
+      },
+      "ddx-002-dyspnea-edema": {
+        "top_dx_coverage": 0.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": false
+      },
+      "ddx-003-ruq-fever-jaundice": {
+        "top_dx_coverage": 0.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": false
+      },
+      "ddx-004-thunderclap-headache": {
+        "top_dx_coverage": 0.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": false
+      },
+      "ddx-005-hot-swollen-knee": {
+        "top_dx_coverage": 0.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": false
+      }
+    },
+    "B": {
+      "ddx-001-chest-pain": {
+        "top_dx_coverage": 0.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": false
+      },
+      "ddx-002-dyspnea-edema": {
+        "top_dx_coverage": 0.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": false
+      },
+      "ddx-003-ruq-fever-jaundice": {
+        "top_dx_coverage": 0.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": false
+      },
+      "ddx-004-thunderclap-headache": {
+        "top_dx_coverage": 0.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": false
+      },
+      "ddx-005-hot-swollen-knee": {
+        "top_dx_coverage": 0.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": false
+      }
+    }
+  },
+  "judgments": [
+    {
+      "id": "ddx-004-thunderclap-headache",
+      "stratum": "neurologic",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "ddx-003-ruq-fever-jaundice",
+      "stratum": "hepatobiliary",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "ddx-001-chest-pain",
+      "stratum": "cardiac",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "ddx-002-dyspnea-edema",
+      "stratum": "cardiopulmonary",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    },
+    {
+      "id": "ddx-005-hot-swollen-knee",
+      "stratum": "rheumatologic",
+      "error": "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to "
+    }
+  ]
+}

@@ -1,0 +1,285 @@
+{
+  "provenance": {
+    "git_sha": "d443283",
+    "run_a": "run-slice-ddx-clinical-15-2026-08-17-env-20260817T120047Z.jsonl",
+    "run_b": "run-slice-ddx-clinical-15-2026-08-17-env-20260817T120408Z.jsonl",
+    "arm_a_env": {
+      "NOESIS_EVIDENCE_IDENTITY": "1",
+      "NOESIS_CLAIM_CONGRUENCE": "1",
+      "NOESIS_EVAL_PANEL": "1",
+      "NOESIS_PANEL_CONTRACT": "1",
+      "NOESIS_PANEL_DEDUP": "1",
+      "NOESIS_PANEL_DIFFERENTIAL": ""
+    },
+    "arm_b_env": {
+      "NOESIS_EVIDENCE_IDENTITY": "1",
+      "NOESIS_CLAIM_CONGRUENCE": "1",
+      "NOESIS_EVAL_PANEL": "1",
+      "NOESIS_PANEL_CONTRACT": "1",
+      "NOESIS_PANEL_DEDUP": "1",
+      "NOESIS_PANEL_DIFFERENTIAL": "1"
+    },
+    "seed": 20260817,
+    "judge_model": "(default anthropic)",
+    "judge_prompt_sha": "66e43906c5f2",
+    "ran_at": "2026-08-17T12:04:19.991185+00:00"
+  },
+  "summary": {
+    "per_stratum": {
+      "cardiac": {
+        "n": 1,
+        "judged": 1,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 1,
+        "dim_delta_b_minus_a": {
+          "differential_quality": 1.0,
+          "decision_framework": 0.0,
+          "evidence": 0.0,
+          "honesty": 0.5
+        },
+        "top_dx_coverage": {
+          "a": 0.0,
+          "b": 1.0,
+          "delta": 1.0
+        },
+        "cant_miss_coverage": {
+          "a": 0.333,
+          "b": 1.0,
+          "delta": 0.667
+        },
+        "discriminator_hit": {
+          "a": 1.0,
+          "b": 1.0,
+          "delta": 0.0
+        }
+      },
+      "cardiopulmonary": {
+        "n": 1,
+        "judged": 1,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 1,
+        "dim_delta_b_minus_a": {
+          "differential_quality": 1.5,
+          "decision_framework": -0.5,
+          "evidence": 0.5,
+          "honesty": 0.5
+        },
+        "top_dx_coverage": {
+          "a": 1.0,
+          "b": 1.0,
+          "delta": 0.0
+        },
+        "cant_miss_coverage": {
+          "a": 0.0,
+          "b": 0.5,
+          "delta": 0.5
+        },
+        "discriminator_hit": {
+          "a": 1.0,
+          "b": 1.0,
+          "delta": 0.0
+        }
+      },
+      "hepatobiliary": {
+        "n": 1,
+        "judged": 1,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 1,
+        "dim_delta_b_minus_a": {
+          "differential_quality": 1.5,
+          "decision_framework": 0.0,
+          "evidence": 0.0,
+          "honesty": 0.0
+        },
+        "top_dx_coverage": {
+          "a": 1.0,
+          "b": 1.0,
+          "delta": 0.0
+        },
+        "cant_miss_coverage": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        },
+        "discriminator_hit": {
+          "a": 0.0,
+          "b": 1.0,
+          "delta": 1.0
+        }
+      }
+    },
+    "overall": {
+      "n": 3,
+      "judged": 3,
+      "wins_b": 0,
+      "wins_a": 0,
+      "ties": 3,
+      "dim_delta_b_minus_a": {
+        "differential_quality": 1.333,
+        "decision_framework": -0.167,
+        "evidence": 0.167,
+        "honesty": 0.333
+      },
+      "top_dx_coverage": {
+        "a": 0.667,
+        "b": 1.0,
+        "delta": 0.333
+      },
+      "cant_miss_coverage": {
+        "a": 0.111,
+        "b": 0.5,
+        "delta": 0.389
+      },
+      "discriminator_hit": {
+        "a": 0.667,
+        "b": 1.0,
+        "delta": 0.333
+      },
+      "sign_test_p": 1.0
+    },
+    "healthy_rows": {
+      "a": 5,
+      "b": 3,
+      "paired": 3
+    },
+    "judge_errors": []
+  },
+  "structural": {
+    "A": {
+      "ddx-002-dyspnea-edema": {
+        "top_dx_coverage": 1.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": true
+      },
+      "ddx-003-ruq-fever-jaundice": {
+        "top_dx_coverage": 1.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": false
+      },
+      "ddx-004-thunderclap-headache": {
+        "top_dx_coverage": 0.3333333333333333,
+        "cant_miss_coverage": 0.5,
+        "discriminator_hit": true
+      },
+      "ddx-005-hot-swollen-knee": {
+        "top_dx_coverage": 0.6666666666666666,
+        "cant_miss_coverage": 1.0,
+        "discriminator_hit": true
+      },
+      "ddx-001-chest-pain": {
+        "top_dx_coverage": 0.0,
+        "cant_miss_coverage": 0.3333333333333333,
+        "discriminator_hit": true
+      }
+    },
+    "B": {
+      "ddx-001-chest-pain": {
+        "top_dx_coverage": 1.0,
+        "cant_miss_coverage": 1.0,
+        "discriminator_hit": true
+      },
+      "ddx-002-dyspnea-edema": {
+        "top_dx_coverage": 1.0,
+        "cant_miss_coverage": 0.5,
+        "discriminator_hit": true
+      },
+      "ddx-003-ruq-fever-jaundice": {
+        "top_dx_coverage": 1.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": true
+      }
+    }
+  },
+  "judgments": [
+    {
+      "id": "ddx-001-chest-pain",
+      "stratum": "cardiac",
+      "order_call1": [
+        "B",
+        "A"
+      ],
+      "better_call1": "tie",
+      "better_call2": "second",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "differential_quality": 3.5,
+          "decision_framework": 4.5,
+          "evidence": 4.0,
+          "honesty": 3.5
+        },
+        "B": {
+          "differential_quality": 4.5,
+          "decision_framework": 4.5,
+          "evidence": 4.0,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both anchor ACS with can't-miss dissection/PE, cite thresholds honestly with gaps flagged. Second's decision grid is more actionable (explicit empiric therapy, contrast/metformin caveats, tension reconciliation) though both cut off mid-sentence at en",
+        "Second explicitly enumerates and ranks the full differential (ACS, dissection, PE, myopericarditis, pneumothorax, esophageal spasm) with discriminators and honestly flags gaps; first buries differential in a grid without ranking and truncates mid-sen"
+      ]
+    },
+    {
+      "id": "ddx-003-ruq-fever-jaundice",
+      "stratum": "hepatobiliary",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "second",
+      "better_call2": "second",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "differential_quality": 3.5,
+          "decision_framework": 4.5,
+          "evidence": 4.0,
+          "honesty": 4.0
+        },
+        "B": {
+          "differential_quality": 5.0,
+          "decision_framework": 4.5,
+          "evidence": 4.0,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both anchor on cholangitis with similar workup/decompression logic, but second gives an explicit ranked differential (7 entries incl. malignancy, cholecystitis, pancreatitis, mimics) with per-entity thresholds, whereas first's grid focuses mainly on ",
+        "Both cover cholangitis-first differential with severity grading and imaging escalation. First has broader ranked differential (malignancy, pancreatitis, mimics) but cuts off abruptly mid-sentence. Second's grid format gives clearer actionable thresho"
+      ]
+    },
+    {
+      "id": "ddx-002-dyspnea-edema",
+      "stratum": "cardiopulmonary",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "second",
+      "better_call2": "tie",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "differential_quality": 3.5,
+          "decision_framework": 4.5,
+          "evidence": 3.5,
+          "honesty": 3.5
+        },
+        "B": {
+          "differential_quality": 5.0,
+          "decision_framework": 4.0,
+          "evidence": 4.0,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both cover HF workup well and cut off mid-sentence. Second has clearer explicit ranked differential with can't-miss PE/PH surfaced, nuanced NP caveats (obesity/AF/COPD confounders with specific numbers), and nephrotic/renal causes well-integrated; fi",
+        "Both are thorough, citation-heavy, honest about evidence gaps. First has clearer ranked differential with explicit can't-miss items; second's grid format gives sharper action-thresholds and includes cardiorenal/frailty nuance. Roughly equivalent over"
+      ]
+    }
+  ]
+}

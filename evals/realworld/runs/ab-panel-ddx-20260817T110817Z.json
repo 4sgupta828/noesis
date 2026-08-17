@@ -1,0 +1,409 @@
+{
+  "provenance": {
+    "git_sha": "9760f23",
+    "run_a": "run-slice-ddx-clinical-15-2026-08-17-env-20260817T110310Z.jsonl",
+    "run_b": "run-slice-ddx-clinical-15-2026-08-17-env-20260817T110759Z.jsonl",
+    "arm_a_env": {
+      "NOESIS_EVIDENCE_IDENTITY": "1",
+      "NOESIS_CLAIM_CONGRUENCE": "1",
+      "NOESIS_EVAL_PANEL": "1",
+      "NOESIS_PANEL_CONTRACT": "1",
+      "NOESIS_PANEL_DEDUP": "1",
+      "NOESIS_PANEL_DIFFERENTIAL": ""
+    },
+    "arm_b_env": {
+      "NOESIS_EVIDENCE_IDENTITY": "1",
+      "NOESIS_CLAIM_CONGRUENCE": "1",
+      "NOESIS_EVAL_PANEL": "1",
+      "NOESIS_PANEL_CONTRACT": "1",
+      "NOESIS_PANEL_DEDUP": "1",
+      "NOESIS_PANEL_DIFFERENTIAL": "1"
+    },
+    "seed": 20260817,
+    "judge_model": "(default anthropic)",
+    "judge_prompt_sha": "66e43906c5f2",
+    "ran_at": "2026-08-17T11:08:17.888972+00:00"
+  },
+  "summary": {
+    "per_stratum": {
+      "cardiac": {
+        "n": 1,
+        "judged": 1,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 1,
+        "dim_delta_b_minus_a": {
+          "differential_quality": 0.5,
+          "decision_framework": 0.0,
+          "evidence": 0.0,
+          "honesty": -0.5
+        },
+        "top_dx_coverage": {
+          "a": 0.0,
+          "b": 1.0,
+          "delta": 1.0
+        },
+        "cant_miss_coverage": {
+          "a": 0.333,
+          "b": 1.0,
+          "delta": 0.667
+        },
+        "discriminator_hit": {
+          "a": 1.0,
+          "b": 1.0,
+          "delta": 0.0
+        }
+      },
+      "cardiopulmonary": {
+        "n": 1,
+        "judged": 1,
+        "wins_b": 1,
+        "wins_a": 0,
+        "ties": 0,
+        "dim_delta_b_minus_a": {
+          "differential_quality": 1.0,
+          "decision_framework": 1.0,
+          "evidence": 0.5,
+          "honesty": 1.0
+        },
+        "top_dx_coverage": {
+          "a": 1.0,
+          "b": 1.0,
+          "delta": 0.0
+        },
+        "cant_miss_coverage": {
+          "a": 0.0,
+          "b": 0.5,
+          "delta": 0.5
+        },
+        "discriminator_hit": {
+          "a": 1.0,
+          "b": 1.0,
+          "delta": 0.0
+        }
+      },
+      "hepatobiliary": {
+        "n": 1,
+        "judged": 1,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 1,
+        "dim_delta_b_minus_a": {
+          "differential_quality": 1.0,
+          "decision_framework": 0.0,
+          "evidence": 0.0,
+          "honesty": 0.0
+        },
+        "top_dx_coverage": {
+          "a": 1.0,
+          "b": 1.0,
+          "delta": 0.0
+        },
+        "cant_miss_coverage": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        },
+        "discriminator_hit": {
+          "a": 0.0,
+          "b": 0.0,
+          "delta": 0.0
+        }
+      },
+      "neurologic": {
+        "n": 1,
+        "judged": 1,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 1,
+        "dim_delta_b_minus_a": {
+          "differential_quality": 0.5,
+          "decision_framework": -0.5,
+          "evidence": -0.5,
+          "honesty": -0.5
+        },
+        "top_dx_coverage": {
+          "a": 0.333,
+          "b": 0.667,
+          "delta": 0.334
+        },
+        "cant_miss_coverage": {
+          "a": 0.5,
+          "b": 0.5,
+          "delta": 0.0
+        },
+        "discriminator_hit": {
+          "a": 1.0,
+          "b": 1.0,
+          "delta": 0.0
+        }
+      },
+      "rheumatologic": {
+        "n": 1,
+        "judged": 1,
+        "wins_b": 0,
+        "wins_a": 0,
+        "ties": 1,
+        "dim_delta_b_minus_a": {
+          "differential_quality": 1.0,
+          "decision_framework": 0.0,
+          "evidence": -0.5,
+          "honesty": -0.5
+        },
+        "top_dx_coverage": {
+          "a": 0.667,
+          "b": 1.0,
+          "delta": 0.333
+        },
+        "cant_miss_coverage": {
+          "a": 1.0,
+          "b": 1.0,
+          "delta": 0.0
+        },
+        "discriminator_hit": {
+          "a": 1.0,
+          "b": 1.0,
+          "delta": 0.0
+        }
+      }
+    },
+    "overall": {
+      "n": 5,
+      "judged": 5,
+      "wins_b": 1,
+      "wins_a": 0,
+      "ties": 4,
+      "dim_delta_b_minus_a": {
+        "differential_quality": 0.8,
+        "decision_framework": 0.1,
+        "evidence": -0.1,
+        "honesty": -0.1
+      },
+      "top_dx_coverage": {
+        "a": 0.6,
+        "b": 0.933,
+        "delta": 0.333
+      },
+      "cant_miss_coverage": {
+        "a": 0.367,
+        "b": 0.6,
+        "delta": 0.233
+      },
+      "discriminator_hit": {
+        "a": 0.8,
+        "b": 0.8,
+        "delta": 0.0
+      },
+      "sign_test_p": 1.0
+    },
+    "healthy_rows": {
+      "a": 5,
+      "b": 5,
+      "paired": 5
+    },
+    "judge_errors": []
+  },
+  "structural": {
+    "A": {
+      "ddx-002-dyspnea-edema": {
+        "top_dx_coverage": 1.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": true
+      },
+      "ddx-003-ruq-fever-jaundice": {
+        "top_dx_coverage": 1.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": false
+      },
+      "ddx-004-thunderclap-headache": {
+        "top_dx_coverage": 0.3333333333333333,
+        "cant_miss_coverage": 0.5,
+        "discriminator_hit": true
+      },
+      "ddx-005-hot-swollen-knee": {
+        "top_dx_coverage": 0.6666666666666666,
+        "cant_miss_coverage": 1.0,
+        "discriminator_hit": true
+      },
+      "ddx-001-chest-pain": {
+        "top_dx_coverage": 0.0,
+        "cant_miss_coverage": 0.3333333333333333,
+        "discriminator_hit": true
+      }
+    },
+    "B": {
+      "ddx-002-dyspnea-edema": {
+        "top_dx_coverage": 1.0,
+        "cant_miss_coverage": 0.5,
+        "discriminator_hit": true
+      },
+      "ddx-003-ruq-fever-jaundice": {
+        "top_dx_coverage": 1.0,
+        "cant_miss_coverage": 0.0,
+        "discriminator_hit": false
+      },
+      "ddx-004-thunderclap-headache": {
+        "top_dx_coverage": 0.6666666666666666,
+        "cant_miss_coverage": 0.5,
+        "discriminator_hit": true
+      },
+      "ddx-005-hot-swollen-knee": {
+        "top_dx_coverage": 1.0,
+        "cant_miss_coverage": 1.0,
+        "discriminator_hit": true
+      },
+      "ddx-001-chest-pain": {
+        "top_dx_coverage": 1.0,
+        "cant_miss_coverage": 1.0,
+        "discriminator_hit": true
+      }
+    }
+  },
+  "judgments": [
+    {
+      "id": "ddx-001-chest-pain",
+      "stratum": "cardiac",
+      "order_call1": [
+        "B",
+        "A"
+      ],
+      "better_call1": "second",
+      "better_call2": "second",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "differential_quality": 4.0,
+          "decision_framework": 4.5,
+          "evidence": 4.0,
+          "honesty": 4.0
+        },
+        "B": {
+          "differential_quality": 4.5,
+          "decision_framework": 4.5,
+          "evidence": 4.0,
+          "honesty": 3.5
+        }
+      },
+      "rationales": [
+        "Both cover ACS-first workup with can't-miss mimics well. Second's decision grid is clearer with explicit thresholds/actions and honestly flags assay-dependence, contrast caveats, and reasoning-vs-fact distinctions. Both cut off mid-sentence, but seco",
+        "Both are thorough, cited, and appropriately hedge uncertainty. Second offers clearer ranked differential with explicit can't-miss flags, more granular STEMI/NSTEMI management thresholds (door-to-balloon times, GRACE tiers), and clearer actionable esc"
+      ]
+    },
+    {
+      "id": "ddx-003-ruq-fever-jaundice",
+      "stratum": "hepatobiliary",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "second",
+      "better_call2": "second",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "differential_quality": 3.5,
+          "decision_framework": 4.5,
+          "evidence": 4.0,
+          "honesty": 4.0
+        },
+        "B": {
+          "differential_quality": 4.5,
+          "decision_framework": 4.5,
+          "evidence": 4.0,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both anchor on cholangitis with sound decompression timelines. Second offers a fuller ranked differential (cholecystitis, malignancy, drug-induced jaundice, abscess, pancreatitis) with can't-miss surfaced, plus explicit imaging comparison data; first",
+        "Both cover cholangitis-first differential with cholecystitis/malignancy alternatives and cite Tokyo Guidelines/ASGE. Second gives clearer severity grading, explicit thresholds (24h vs 48h reconciled), pathogen data, and structured decision grid; firs"
+      ]
+    },
+    {
+      "id": "ddx-004-thunderclap-headache",
+      "stratum": "neurologic",
+      "order_call1": [
+        "B",
+        "A"
+      ],
+      "better_call1": "second",
+      "better_call2": "tie",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "differential_quality": 3.5,
+          "decision_framework": 5.0,
+          "evidence": 4.5,
+          "honesty": 4.5
+        },
+        "B": {
+          "differential_quality": 4.0,
+          "decision_framework": 4.5,
+          "evidence": 4.0,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both cover SAH-focused CT/LP pathway well; first oddly emphasizes nimodipine dosing irrelevant here and cuts off mid-sentence. Second gives clearer decision grid with explicit thresholds, honestly flags evidence tiers/gaps (retrospective vs prospecti",
+        "Both give strong CT-timing decision logic with citations and honest caveats; both truncated at end. Second explicitly enumerates/ranks differential (SAH plus mimics flagged as gaps, plus nimodipine management), slightly better differential completene"
+      ]
+    },
+    {
+      "id": "ddx-002-dyspnea-edema",
+      "stratum": "cardiopulmonary",
+      "order_call1": [
+        "A",
+        "B"
+      ],
+      "better_call1": "second",
+      "better_call2": "first",
+      "winner": "B",
+      "dims": {
+        "A": {
+          "differential_quality": 3.5,
+          "decision_framework": 3.5,
+          "evidence": 3.0,
+          "honesty": 3.0
+        },
+        "B": {
+          "differential_quality": 4.5,
+          "decision_framework": 4.5,
+          "evidence": 3.5,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Second gives clearer ranked differential (HF, COPD, PE, renal/hepatic, meds) with explicit action thresholds and honest caveats on evidence tiers. First is cluttered, table-heavy, harder to act on, and truncates mid-sentence without covering PE or re",
+        "Both give thorough differentials and thresholds. First is more concise, coherent, and ends with usable diuretic-dosing detail. Second is more sprawling with more speculative branches (CTEPH, invasive exercise testing) less clearly prioritized, and cu"
+      ]
+    },
+    {
+      "id": "ddx-005-hot-swollen-knee",
+      "stratum": "rheumatologic",
+      "order_call1": [
+        "B",
+        "A"
+      ],
+      "better_call1": "second",
+      "better_call2": "second",
+      "winner": "tie",
+      "dims": {
+        "A": {
+          "differential_quality": 3.5,
+          "decision_framework": 4.5,
+          "evidence": 4.5,
+          "honesty": 4.5
+        },
+        "B": {
+          "differential_quality": 4.5,
+          "decision_framework": 4.5,
+          "evidence": 4.0,
+          "honesty": 4.0
+        }
+      },
+      "rationales": [
+        "Both correctly anchor on septic arthritis and arthrocentesis before treatment. Second gives more explicit numeric thresholds with honest caveats about their unreliability, better reconciles conflicting cutoff data, and ends cleanly; first is cut off ",
+        "Second explicitly enumerates and ranks a full differential (septic arthritis first, gout, cellulitis, hemarthrosis, OA, trauma, Lyme, reactive, malignancy) with discriminators; first buries differential inside a grid without clear ranking. Both give "
+      ]
+    }
+  ]
+}

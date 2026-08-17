@@ -109,6 +109,11 @@ class VerticalManifest:
     # scope; the vertical supplies this prose. None → the Alternative mode has no compose steering.
     alt_directive: str | None = None
     alt_query_hint: str | None = None
+    # Optional CAM-intent router system prompt (flag NOESIS_CAM_AUTOSCOPE): the app runs ONE small LLM
+    # call with this to decide whether a main-Q&A question is primarily a CAM question and should
+    # auto-scope to the modality=alternative corpus. None → no auto-scope (byte-identical). Vertical
+    # vocabulary; the kernel/app owns the mechanism (Rule 18: model owns intent, code reads the boolean).
+    cam_intent_prompt: str | None = None
     # Optional UNDERSTANDING engine (Discover·Understand·Act middle): causal-model compose contract +
     # mechanism-steering retrieval hint, selected by the dynamic router for WHY/HOW questions.
     understanding_answer_format: str | None = None

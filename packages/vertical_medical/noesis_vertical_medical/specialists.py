@@ -485,6 +485,22 @@ AYURVEDA_PRACTICE = SpecialistConfig(
 # so the flag-OFF roster/triage is byte-identical to today.
 CAM_PRACTICE_SPECIALISTS: tuple[SpecialistConfig, ...] = (ACUPUNCTURE_PRACTICE, AYURVEDA_PRACTICE)
 
+# When the practitioner lenses are live, integrative_cam is NARROWED to the CAM modalities they DON'T
+# cover so the three CAM panelists are DISTINCT, not overlapping: acupuncture/acupressure →
+# acupuncture_practice, Ayurveda → ayurveda_practice, and integrative_cam owns the REST (herbal/
+# botanical & nutraceutical, naturopathy, homeopathy, mind-body & energy). The app applies these via
+# dataclasses.replace on the flag-ON roster (specialty + focus + a scope line appended to the lens);
+# OFF, integrative_cam stays the broad CAM seat (byte-identical).
+INTEGRATIVE_CAM_NARROWED_SPECIALTY = "Herbal & Mind-Body Medicine"
+INTEGRATIVE_CAM_NARROWED_FOCUS = (
+    "herbal medicine, botanical, phytotherapy, nutraceutical, dietary supplement, naturopathy, "
+    "homeopathy, mind-body therapy, meditation, mindfulness, yoga, tai chi, qigong, Reiki, energy "
+    "healing, therapeutic touch, aromatherapy, complementary and integrative medicine")
+INTEGRATIVE_CAM_NARROWED_SCOPE = (
+    " SCOPE ON THIS PANEL: acupuncture/acupressure and Ayurveda have their OWN dedicated panelists here "
+    "— do NOT cover those modalities; focus on herbal/botanical & nutraceutical medicine, naturopathy, "
+    "homeopathy, and mind-body/energy therapies.")
+
 
 _BY_ID = {s.id: s for s in SPECIALISTS}
 DEFAULT_PANEL_IDS: tuple[str, ...] = ("clinical_pharmacology", "ebm_methodologist", "primary_care")

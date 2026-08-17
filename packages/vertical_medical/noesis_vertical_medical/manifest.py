@@ -31,7 +31,8 @@ from .refine import MEDICAL_REFINE_PROMPT
 from .triage import MEDICAL_TRIAGE_PROMPT, MEDICAL_TRIAGE_PROMPT_V2
 from .reasoned import REASONED_SCAFFOLD_PROMPT, REASONED_ANSWER_FORMAT
 from .integrative import INTEGRATIVE_DIRECTIVE, INTEGRATIVE_QUERY_HINT
-from .alt_modality import MEDICAL_ALTERNATIVE_DIRECTIVE, MEDICAL_ALTERNATIVE_QUERY_HINT
+from .alt_modality import (
+    MEDICAL_ALTERNATIVE_DIRECTIVE, MEDICAL_ALTERNATIVE_QUERY_HINT, MEDICAL_CAM_INTENT_SYSTEM)
 from .understanding import UNDERSTANDING_ANSWER_FORMAT, UNDERSTANDING_QUERY_HINT
 from .web_domains import TRUSTED_WEB_DOMAINS, WEB_DOMAIN_FACETS
 from .global_guidelines import declared_lineage
@@ -111,6 +112,7 @@ def build_manifest() -> VerticalManifest:
         integrative_query_hint=INTEGRATIVE_QUERY_HINT,
         alt_directive=MEDICAL_ALTERNATIVE_DIRECTIVE,
         alt_query_hint=MEDICAL_ALTERNATIVE_QUERY_HINT,
+        cam_intent_prompt=MEDICAL_CAM_INTENT_SYSTEM,
         understanding_answer_format=UNDERSTANDING_ANSWER_FORMAT,
         understanding_query_hint=UNDERSTANDING_QUERY_HINT,
         web_domains=TRUSTED_WEB_DOMAINS,

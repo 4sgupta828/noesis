@@ -42,3 +42,25 @@ MEDICAL_ALTERNATIVE_QUERY_HINT = (
     "therapies): prioritize systematic reviews, meta-analyses, and Cochrane/NCCIH/WHO assessments, "
     "and note evidence strength and safety for the specific indication."
 )
+
+# CAM-intent router (flag NOESIS_CAM_AUTOSCOPE): ONE small LLM call on the main Q&A path decides whether
+# a question is PRIMARILY about a CAM modality, so the answer auto-scopes to the CAM corpus (modality=
+# alternative) instead of the default Allopathic view that EXCLUDES it — no mode toggle needed. Rule 18:
+# the model owns the "is this a CAM question" judgment; code only reads the boolean. Conservative by
+# design (prefer false) so a conventional question that merely mentions a supplement is NOT rerouted.
+MEDICAL_CAM_INTENT_SYSTEM = (
+    "You route a user's medical question. Decide whether it is PRIMARILY about complementary & "
+    "alternative medicine (CAM): the user is asking FROM, ABOUT, or FOR a non-conventional modality — "
+    "acupuncture / acupressure / moxibustion / cupping, Ayurveda, traditional Chinese medicine, herbal "
+    "& botanical medicine, homeopathy, naturopathy, mind-body practices (yoga, meditation, tai chi, "
+    "qigong), or energy therapies (Reiki, therapeutic touch).\n"
+    "Set is_cam=true ONLY when a CAM modality is the SUBJECT of the question — e.g. 'acupuncture points "
+    "for migraine', 'Ayurvedic management of amavata', 'which herbs help anxiety', 'is turmeric "
+    "effective for knee osteoarthritis', 'yoga for hypertension'.\n"
+    "Set is_cam=false for a conventional medical question even if it mentions a supplement, diet, or "
+    "lifestyle factor in passing — e.g. 'first-line drug for hypertension' (false), 'does metformin "
+    "cause B12 deficiency' (false), 'is vitamin D deficiency linked to fatigue' (false unless framed as "
+    "a naturopathic/CAM protocol). When genuinely unsure, prefer FALSE.\n"
+    "Also set `system` to the closest CAM system when is_cam=true: 'acupuncture' (incl. acupressure), "
+    "'ayurveda', 'herbal_mindbody' (herbal/naturopathy/homeopathy/mind-body/energy), or 'none'."
+)

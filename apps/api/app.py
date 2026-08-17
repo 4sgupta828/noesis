@@ -764,19 +764,69 @@ def cam_practice_enabled() -> bool:
 
 
 def _apply_cam_practice(specialists):
-    """When cam_practice_enabled(), APPEND the CAM practitioner specialists to the roster (so triage,
-    manual selection, and the FE roster echo all see them); otherwise return the roster unchanged.
-    Additive — never mutates or removes an existing specialist (integrative_cam stays as the
-    evidence-appraisal seat)."""
+    """When cam_practice_enabled(): (1) APPEND the CAM practitioner specialists (acupuncture_practice,
+    ayurveda_practice) so triage/manual-select/FE-echo all see them, and (2) NARROW integrative_cam to
+    the CAM modalities they don't cover (herbal/naturopathy/homeopathy/mind-body/energy) so the three CAM
+    panelists are DISTINCT, not overlapping. Otherwise return the roster unchanged (OFF is byte-identical,
+    same object). Idempotent — re-applying does not double-inject or double-narrow."""
     if not cam_practice_enabled():
         return specialists
+    import dataclasses
     try:
-        from noesis_vertical_medical.specialists import CAM_PRACTICE_SPECIALISTS
+        from noesis_vertical_medical.specialists import (
+            CAM_PRACTICE_SPECIALISTS, INTEGRATIVE_CAM_NARROWED_FOCUS,
+            INTEGRATIVE_CAM_NARROWED_SCOPE, INTEGRATIVE_CAM_NARROWED_SPECIALTY)
     except Exception:   # noqa: BLE001 — vertical without CAM practitioner lenses: no-op
         return specialists
     have = {getattr(s, "id", "") for s in specialists}
+    out = []
+    for s in specialists:
+        if getattr(s, "id", "") == "integrative_cam":
+            lens = getattr(s, "lens", "") or ""
+            if INTEGRATIVE_CAM_NARROWED_SCOPE not in lens:   # idempotent
+                try:
+                    s = dataclasses.replace(
+                        s, specialty=INTEGRATIVE_CAM_NARROWED_SPECIALTY,
+                        focus=INTEGRATIVE_CAM_NARROWED_FOCUS, lens=lens + INTEGRATIVE_CAM_NARROWED_SCOPE)
+                except Exception:   # noqa: BLE001 — non-dataclass specialist: leave as-is
+                    pass
+        out.append(s)
     extra = tuple(s for s in CAM_PRACTICE_SPECIALISTS if getattr(s, "id", "") not in have)
-    return tuple(specialists) + extra
+    return tuple(out) + extra
+
+
+def cam_autoscope_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, the MAIN Q&A path runs ONE small LLM CAM-intent call
+    (vertical's cam_intent_prompt) and, if the question is primarily a CAM question, auto-scopes it to
+    the modality=alternative corpus + alt directive — so a practitioner needn't switch modes. Requires
+    modality_mode_enabled() (that flag owns the corpus scope). OFF → no extra call, no reroute
+    (byte-identical). Rule 18: the model owns the intent judgment; code only reads the boolean."""
+    return os.environ.get("NOESIS_CAM_AUTOSCOPE", "").lower() in ("1", "true", "yes")
+
+
+async def _detect_cam_intent(svc, question: str) -> bool:
+    """One small LLM call → is this primarily a CAM question? (Rule 18). Fail-safe: any error or missing
+    prompt → False (default Allopathic scope), never a keyword guess. Uses the fast planner LLM when
+    available so the added main-Q&A latency is minimal."""
+    q = (question or "").strip()
+    prompt = getattr(load_active_vertical(), "cam_intent_prompt", None)
+    if not q or not prompt:
+        return False
+    from pydantic import BaseModel
+
+    class _CamIntent(BaseModel):
+        is_cam: bool = False
+        system: str = "none"
+
+    llm = getattr(svc, "planner_llm", None) or getattr(svc, "llm", None)
+    if llm is None:
+        return False
+    try:
+        res = await llm.complete(system=prompt, messages=[{"role": "user", "content": q}],
+                                 response_format=_CamIntent, max_tokens=60)
+        return bool(getattr(res.parsed, "is_cam", False))
+    except Exception:   # noqa: BLE001 — best-effort router; fall back to default scope
+        return False
 
 
 def evidence_fitness_enabled() -> bool:
@@ -1558,6 +1608,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "web_once_enabled": web_once_enabled(),
             "cam_contract_enabled": cam_contract_enabled(),
             "cam_practice_enabled": cam_practice_enabled(),
+            "cam_autoscope_enabled": cam_autoscope_enabled() and modality_mode_enabled(),
             "ask_panel_enabled": live_panel,
             "panel_specialists": ([
                 {"id": getattr(s, "id", ""), "specialty": getattr(s, "specialty", ""),
@@ -1896,6 +1947,15 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             hint = getattr(svc_, "integrative_query_hint", None)
             if hint:
                 _q = body.question + "\n\n[" + hint + "]"
+        # CAM AUTO-SCOPE (flag NOESIS_CAM_AUTOSCOPE): one small LLM call detects a primarily-CAM question
+        # and flips this request to the Alternative modality, so the main Q&A box auto-scopes to the CAM
+        # corpus without a mode toggle. Only when the user hasn't already chosen Alternative; fail-safe to
+        # the default scope on any error (Rule 18: model owns intent). Mutating body.modality keeps every
+        # downstream modality read (exclude, alt directive, block stamp, persisted modality) consistent.
+        if (cam_autoscope_enabled() and modality_mode_enabled()
+                and (getattr(body, "modality", "") or "").strip().lower() != "alternative"):
+            if await _detect_cam_intent(app.state.service, body.question):
+                body.modality = "alternative"
         # per-question MODALITY (flag-gated). Allopathic (default) EXCLUDES CAM (via _exclude below);
         # Alternative surfaces the CAM corpus WITH conventional context — steer retrieval (alt query
         # hint) + mandate evidence-strength/safety labeling (alt directive). No persisted-question change.

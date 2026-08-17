@@ -106,8 +106,47 @@ def test_apply_cam_practice_off_is_identity_on_appends_two(monkeypatch) -> None:
     ids = [s.id for s in on]
     assert ids[:len(SPECIALISTS)] == [s.id for s in SPECIALISTS]   # originals preserved, in order
     assert ids[len(SPECIALISTS):] == ["acupuncture_practice", "ayurveda_practice"]
-    # idempotent — never double-injects if already present
+    # idempotent — never double-injects or double-narrows if already applied
     assert [s.id for s in _apply_cam_practice(on)] == ids
+    assert _apply_cam_practice(on)[-3].lens.count("SCOPE ON THIS PANEL") == 1
+
+
+def test_apply_cam_practice_on_makes_cam_panelists_distinct(monkeypatch) -> None:
+    # Distinctness: when ON, integrative_cam is narrowed so acupuncture/Ayurveda are owned by the
+    # dedicated lenses and integrative_cam covers the REST (herbal/mind-body) — no overlap.
+    from api.app import _apply_cam_practice
+    from noesis_vertical_medical.specialists import SPECIALISTS
+    monkeypatch.setenv("NOESIS_CAM_PRACTICE", "1")
+    on = {s.id: s for s in _apply_cam_practice(SPECIALISTS)}
+    ic = on["integrative_cam"]
+    assert ic.specialty == "Herbal & Mind-Body Medicine"
+    assert "acupuncture" not in ic.focus.lower() and "ayurveda" not in ic.focus.lower()
+    assert "herbal" in ic.focus.lower()
+    assert "acupuncture point" in on["acupuncture_practice"].focus.lower()
+    assert "dosha" in on["ayurveda_practice"].focus.lower()
+
+
+def test_cam_autoscope_flag_reads_env(monkeypatch) -> None:
+    from api.app import cam_autoscope_enabled
+    monkeypatch.delenv("NOESIS_CAM_AUTOSCOPE", raising=False)
+    assert cam_autoscope_enabled() is False
+    monkeypatch.setenv("NOESIS_CAM_AUTOSCOPE", "1")
+    assert cam_autoscope_enabled() is True
+    monkeypatch.setenv("NOESIS_CAM_AUTOSCOPE", "no")
+    assert cam_autoscope_enabled() is False
+
+
+def test_detect_cam_intent_failsafe(monkeypatch) -> None:
+    # Fail-safe (Rule 18): no question or no LLM → False (default Allopathic scope), never a keyword guess.
+    import asyncio
+    from api.app import _detect_cam_intent
+
+    class _NoLLM:  # a service with no usable llm
+        planner_llm = None
+        llm = None
+    assert asyncio.run(_detect_cam_intent(_NoLLM(), "")) is False
+    assert asyncio.run(_detect_cam_intent(_NoLLM(), "acupuncture points for migraine")) is False
+    assert asyncio.run(_detect_cam_intent(None, "acupuncture points for migraine")) is False
 
 
 def test_claim_congruence_flag_reads_env(monkeypatch) -> None:

@@ -201,36 +201,10 @@ class PostgresRetrievalSource:
         except ValueError:
             return 0
 
-    async def tag_modality_by_journal(self, *, patterns: list[str], modality: str,
-                                      apply: bool = False) -> dict:
-        """Retro-tag EXISTING blocks by SOURCE (structural, not content — Rule 18): stamp
-        facets.modality=<modality> on blocks whose `journal` facet name matches a CAM-journal LIKE
-        pattern AND that have no modality yet. `apply=False` is a DRY RUN: it returns the distinct
-        matching journals + per-journal block counts so the exact sources can be reviewed before any
-        mutation. Never overwrites an existing modality, never touches non-matching journals."""
-        patterns = [p.lower() for p in (patterns or []) if p and p.strip()]
-        if not patterns:
-            return {"apply": False, "journals": {}, "total": 0}
-        like = " OR ".join(f"lower(facets->>'journal') LIKE ${i+1}" for i in range(len(patterns)))
-        pool = await self._get_pool()
-        async with pool.acquire() as conn:
-            where = (f"(facets ? 'journal') AND NOT (facets ? 'modality') AND ({like})")
-            rows = await conn.fetch(
-                f"SELECT facets->>'journal' AS j, count(*) AS n FROM {self._table} "
-                f"WHERE {where} GROUP BY 1 ORDER BY 2 DESC", *patterns)
-            journals = {r["j"]: int(r["n"]) for r in rows}
-            total = sum(journals.values())
-            if not apply or not total:
-                return {"apply": False, "journals": journals, "total": total}
-            res = await conn.execute(
-                f"UPDATE {self._table} SET facets = facets || $%d::jsonb WHERE {where}"
-                % (len(patterns) + 1),
-                *patterns, json.dumps({"modality": modality}))
-        try:
-            updated = int((res or "UPDATE 0").split()[-1])
-        except ValueError:
-            updated = 0
-        return {"apply": True, "journals": journals, "updated": updated}
+    # NOTE: `tag_modality_by_journal` (journal-name LIKE-pattern retro-tag) was RETIRED 2026-08-16 —
+    # Rule 18 forbids regex/keyword classification of meaning (it mis-caught mainstream journals like
+    # "Chinese Medical Journal"). Modality is now stamped as explicit at-ingest provenance via
+    # `facet_overrides={"modality": ...}` on the chosen source. See learnings/cam-practitioner-corpus.md.
 
     # --- port ---
     def capabilities(self) -> frozenset[Capability]:

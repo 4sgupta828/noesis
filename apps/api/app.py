@@ -2461,39 +2461,12 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=502, detail=f"queue error: {e}") from e
         return {"queued": len(ids), "jobs": len(jobs)}
 
-    # Default CAM-journal name patterns (STRUCTURAL — classifies the SOURCE journal, not article
-    # content; Rule 18). Matched case-insensitively against the block's `journal` facet.
-    _CAM_JOURNAL_PATTERNS = [
-        "%complement%", "%acupunct%", "%altern% med%", "%integr% med%", "%ethnopharmacol%",
-        "%homeopath%", "%ayurved%", "%chin% med%", "%tradit% med%", "%moxibust%", "%naturopath%",
-        "%phytother%", "%herbal%", "%holist% nurs%", "%meridian%",
-    ]
-
-    @app.post("/admin/corpus/tag-modality")
-    async def admin_tag_modality(body: dict, x_admin_token: str = Header(default="")) -> dict:
-        """Retro-tag pre-existing CAM-journal blocks so the default (Allopathic) view stops surfacing
-        them (they move to Alternative). STRUCTURAL: matches the block's `journal` facet against
-        CAM-journal NAME patterns — it classifies the source journal, never the article's meaning
-        (Rule 18). DRY RUN by default (`apply` omitted/false) — returns the matching journals + counts
-        so the sources can be reviewed BEFORE any mutation. Never overwrites an existing modality."""
-        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
-        if want and x_admin_token != want:
-            raise HTTPException(status_code=401, detail="admin token required")
-        if not modality_mode_enabled():
-            raise HTTPException(status_code=404, detail="modality mode not enabled")
-        if app.state.service is None:
-            app.state.service = build_default_service()
-        svc = app.state.service
-        corpus = svc.sources.get(getattr(svc, "corpus_source_key", "")) if svc.sources else None
-        if corpus is None or not hasattr(corpus, "tag_modality_by_journal"):
-            raise HTTPException(status_code=404, detail="no taggable corpus source")
-        patterns = body.get("patterns") or _CAM_JOURNAL_PATTERNS
-        modality = (body.get("modality") or "alternative").strip().lower()
-        apply = bool(body.get("apply"))
-        try:
-            return await corpus.tag_modality_by_journal(patterns=patterns, modality=modality, apply=apply)
-        except Exception as e:
-            raise HTTPException(status_code=502, detail=f"tag error: {e}") from e
+    # NOTE: the journal-name regex retro-tag (`/admin/corpus/tag-modality` + `_CAM_JOURNAL_PATTERNS`)
+    # was RETIRED 2026-08-16 (Rule 18: no regex/keyword classification of meaning — it mis-caught
+    # mainstream journals like "Chinese Medical Journal" via `%chin% med%`). Modality is now an EXPLICIT
+    # PROVENANCE facet stamped AT INGEST from the deliberately-chosen source (see /admin/corpus/ingest's
+    # `modality` field above), exactly as the modern-medicine corpus was never regex-classified.
+    # See learnings/cam-practitioner-corpus.md.
 
     @app.post("/admin/glossary/sanitize")
     async def admin_glossary_sanitize(x_admin_token: str = Header(default="")) -> dict:

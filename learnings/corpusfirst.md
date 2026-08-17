@@ -37,6 +37,29 @@ full text) · living pages (drug shortage notices, outbreak dashboards) · CDSCO
 - **T3 (QUEUED 2026-08-12):** NOESIS_EPMC_FULLTEXT=1 flipped in prod; 24 deep conditions re-packed at 100 papers each (full text where OA).
 - **T4 (PARTIAL 2026-08-12):** CT.gov raised to 400/condition on the 24 deep conditions (queued with T3); StatPearls EXCLUDED (NC license); WHO IRIS verified reachable — URL-discovery connector goes to T5.
 - **T5:** society full-text expansion (per-society direct PDFs, the KDIGO pattern).
+- **T-LIC (Tier-1 license-safe fallback, 2026-08-17):** past the OA ceiling. Flagship
+  guidelines (ACC/AHA, ESC, ACR, full ADA, GINA) are paywalled/bot-walled, but a large body
+  of society CPGs are OA **and commercially reusable**. Panel (Codex + code-grounded; Gemini
+  down on billing) established: "free to read" ≠ "commercially reusable" — PMC OA mixes
+  commercial-allowed (cc0/cc-by) with **cc-by-nc (NON-commercial, EXCLUDE)**. Enforcement is
+  at the **EPMC query** (`LICENSE:"cc by"` filter → NC never ingested); the `license` facet
+  (added a2b9b39) records it for audit. **cc-by guideline supply verified: 1,411** vs 691
+  cc-by-nc traps. EXCLUDE ECRI/AAFP/MAGICapp (terms), StatPearls/WHO IRIS (NC).
+  - Query template: `<topic> AND PUB_TYPE:"Guideline" AND OPEN_ACCESS:y AND LICENSE:"cc by" AND IN_EPMC:y`
+    (IN_EPMC:y guarantees full-text XML, not thin abstracts; NOESIS_EPMC_FULLTEXT=1 in prod).
+  - **Tranche-1 QUEUED 2026-08-17:** 16 core clinical topics (HF, AFib, ACS, dyslipidemia,
+    T2DM, CKD, asthma, COPD, stroke, epilepsy, sepsis, CAP, RA, VTE, MDD, osteoporosis) ×
+    15 cc-by full-text guidelines each. ~$0.20 OpenAI embeds (separate from Anthropic/Google
+    answer pools). Verified in prod: fresh docs stamp `lic='cc by'`, 40-98 blocks each.
+  - **GOTCHA (2026-08-17):** the license-facet prereq deploy from the *prior* session had
+    **silently FAILED** (Railway build 9be4716d) — prod ran old code, so the first ingest
+    landed 396 blocks with `license=None`. Always confirm `railway deployment list` shows
+    SUCCESS (not just that `railway up` returned) before trusting a facet is live. Re-ingest
+    backfills facets: block upsert is `ON CONFLICT DO UPDATE SET facets=EXCLUDED.facets`, and
+    content-addressed block_id means unchanged text isn't re-embedded (near-zero re-cost).
+  - **T-LIC next:** USPSTF (public domain — needs a connector/registry entry, not europepmc);
+    Cochrane PLS/abstracts (cc-by-nc → exclude full, abstracts case-by-case); widen topic set
+    after tranche-1 verifies retrieval improves.
 Ordering rationale: T1-T2 are unambiguous public domain; T3 multiplies span quality on
 already-proven demand; T4-T5 need per-source checks. Coverage board + improvement-loop
 `missing_evidence` findings steer which conditions deepen first.

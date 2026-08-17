@@ -3227,6 +3227,17 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         except Exception:   # noqa: BLE001
             return {}
 
+    def _corpus_source_url(document_id: str):
+        """Resolve the clickable EXTERNAL source URL for a document (the real paper/guideline), via the
+        vertical's link resolver — same one the answer citations use. None if it can't be resolved."""
+        try:
+            ui = getattr(app.state.service, "ui", None) if app.state.service else None
+            fn = getattr(ui, "source_url", None)
+            u = fn(document_id) if fn else None
+            return u or (document_id if str(document_id).startswith("http") else None)
+        except Exception:   # noqa: BLE001
+            return document_id if str(document_id).startswith("http") else None
+
     @app.post("/admin/corpus/search")
     async def admin_corpus_search(body: dict, x_admin_password: str = Header(default="")) -> dict:
         """Pure retrieval over ingested blocks: mode=keyword (tsv full-text) | semantic (pgvector),
@@ -3263,10 +3274,13 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=502, detail=f"search error: {e}") from e
         finally:
             await conn.close()
+        if app.state.service is None:
+            app.state.service = build_default_service()
         return {"mode": mode, "count": len(rows), "results": [
             {"document_id": r["document_id"], "block_id": r["block_id"], "text": r["text"],
              "title": r["document_title"], "content_type": r["content_type"],
-             "source_key": r["source_key"], "facets": _parse_facets(r["facets"])} for r in rows]}
+             "source_key": r["source_key"], "facets": _parse_facets(r["facets"]),
+             "url": _corpus_source_url(r["document_id"])} for r in rows]}
 
     @app.get("/admin/corpus/document")
     async def admin_corpus_document(document_id: str, tenant: str = "demo",
@@ -3285,9 +3299,12 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if not rows:
             raise HTTPException(status_code=404, detail="document not found for this tenant")
         r0 = rows[0]
+        if app.state.service is None:
+            app.state.service = build_default_service()
         return {"document_id": document_id, "title": r0["document_title"],
                 "content_type": r0["content_type"], "source_key": r0["source_key"],
                 "facets": _parse_facets(r0["facets"]), "n_blocks": len(rows),
+                "url": _corpus_source_url(document_id),
                 "blocks": [{"block_id": r["block_id"], "text": r["text"]} for r in rows]}
 
     @app.get("/admin/corpus/facets")
@@ -3960,6 +3977,12 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     @app.get("/admin", response_class=HTMLResponse)
     def admin_page(accept_encoding: str = Header(default="")):
         return _html_response("admin.html", accept_encoding)
+
+    @app.get("/corpus", response_class=HTMLResponse)
+    def corpus_page(accept_encoding: str = Header(default="")):
+        """Corpus Explorer — admin-password-gated, read-only source browser (served page; the data
+        endpoints under /admin/corpus/* enforce the flag + password)."""
+        return _html_response("corpus.html", accept_encoding)
 
     @app.get("/admin/users")
     async def admin_users(limit: int = 500, x_admin_password: str = Header(default="")) -> dict:

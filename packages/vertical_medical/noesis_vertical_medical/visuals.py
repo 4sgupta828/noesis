@@ -40,6 +40,23 @@ HARD GROUNDING CONTRACT (this is non-negotiable — a violation ships a fabricat
 - If you cannot ground a visual honestly, DO NOT emit it. A smaller true visual beats a fuller invented
   one. Returning an empty list is correct when the answer is not visualizable.
 
+SUBJECT, NOT META — visualize the CLINICAL CONTENT, never the evidence about it (this is the #1 rule):
+- A visual depicts the medical SUBSTANCE the answer explains — the mechanism / pathophysiologic cascade,
+  the care or workup pathway, the decision or differential, the disease course over time, or how the
+  clinical factors relate (condition ↔ mechanism ↔ organ ↔ treatment). Bring the HARD PART of the answer
+  to life so a reader GRASPS the clinical picture at a glance.
+- NEVER build a visual ABOUT THE EVIDENCE ITSELF. Do NOT diagram study types, the "evidence base",
+  evidence quality / strength / tiers, GRADE, sample sizes, "systematic review vs RCT vs registry",
+  heterogeneity, generalizability, risk of bias, or where findings came from. An "Evidence base" or
+  "Evidence quality breakdown" diagram is FORBIDDEN — it is meta-commentary about the literature, not the
+  concept, and helps no one. If the ONLY structure you can find is about the evidence/methodology/
+  provenance, return an EMPTY list — a missing visual is far better than a meta one.
+- For a `map`: every NODE must be a CLINICAL concept or entity (a condition, symptom, mechanism, organ,
+  drug, risk factor, physiologic process) and every EDGE a CLINICAL relationship (causes / worsens /
+  inhibits / treats / reduces / associated with). A node that names a STUDY TYPE, an evidence tier, a
+  methodology, or a quality caveat ("meta-analysis", "heterogeneity limits generalizability",
+  "protocol-level context") is WRONG — it does not belong in any visual.
+
 NON-DUPLICATION — stay in your lane:
 - Do NOT make numeric charts (bar/line/pie of figures) — those are produced elsewhere. A number may
   appear only as a text label, never as the point of the visual.

@@ -121,37 +121,36 @@ DECISION GATES (apply to every recommendation and every can't-miss escalation be
 """
 
 REASONED_ANSWER_FORMAT = """\
-GOVERNING RULE — a CLEAR CLINICIAN READ, not a wall of text or a literature review. This overrides the
-structure below whenever they conflict:
-- Lead with a **Bottom line**: 1–2 sentences giving the actionable clinical takeaway. A clinician should
-  get the answer from this alone.
-- Then a FEW short, scannable bullets — each ONE clinical point (an action, a recommendation, a caveat)
-  in a line or two, never a dense paragraph and never a mini-essay per item.
-- Answer as a DECISION, never a research summary — including "benefits / options / what helps" questions:
-  say what a clinician should DO with the evidence (for WHICH patients/indications to use, recommend, or
-  avoid it, HOW, and the caveat that changes it). Evidence strength is a SHORT qualifier on a point
-  ("low-quality trials"), never the organizing principle — NO "evidence quality" / "efficacy" /
-  study-cataloguing section.
-- PRIORITIZE ruthlessly. Give the highest-value clinical points, NOT comprehensive coverage — omitting a
-  minor branch to stay scannable is correct; burying the reader is the failure. Do NOT enumerate studies
-  or list every option's every effect. Keep citations light: the point leads, one or two [n] support it —
-  never a string of citations or a research narrative.
-- HARD LIMITS (a clinician grasps the whole answer in ~15 seconds): keep the WHOLE answer under ~250
-  words. At most 5–6 action bullets, each ONE line (~20 words max). At most 1–2 [n] per point — NEVER a
-  string of citations; if many sources agree, cite the best one or two. If you are writing more than this,
-  you are doing it wrong — cut to the clinical essentials.
+GOVERNING RULE — a CLEAR CLINICIAN READ that DOES JUSTICE to the question. This governs the whole answer
+and overrides the structure below where they conflict. The goal is to inform the clinician fully AND help
+them think decisively — balanced, not a wall of research and not amputated:
+- Answer as a clinical DECISION, not a literature review — even for "benefits / options / what helps"
+  questions. Say what a clinician should DO with the evidence (for WHICH patients/indications to use,
+  recommend, or avoid it, HOW, and the caveats that change it). Evidence strength is a short qualifier on
+  a recommendation, never the organizing principle — NO "evidence quality" / "efficacy" / study-
+  cataloguing section, and no running research narrative.
+- Lead with a **Bottom line**: 1–2 sentences a clinician could act on alone. Then the decision as
+  SCANNABLE points — each a distinct clinical action / recommendation / caveat, tight enough to scan yet
+  complete enough to act on.
+- LENGTH FOLLOWS CONTENT — do NOT force brevity and do NOT pad. Include everything genuinely relevant to
+  deciding well; a rich clinical question earns a fuller answer, and cutting a decision-relevant point to
+  hit a length is WRONG. Equally, every line must EARN its place by helping the clinician decide — cut
+  research cataloguing, comprehensiveness for its own sake, repetition, and citation padding. The test for
+  each sentence: does it change or sharpen what the clinician does? If not, it does not belong.
+- Keep citations in service of the point — a couple of the best [n] per point so the clinical reasoning
+  leads and the evidence supports; not a string of references that reads as research.
 
-STRUCTURE (reasoned clinical answer — decision-first; keep it TIGHT; for a benefits/overview question use
-just the Bottom line + a short recommendations list + one caveats line, and OMIT the sections that don't
-fit — never pad with headings):
+STRUCTURE (reasoned clinical answer — decision-first; use the headings that FIT the question, in a natural
+order, and omit the rest — never pad with empty headings):
 
 ## Bottom line
 1–2 sentences: the actionable clinical takeaway. (For a patient-case question you may instead open with a
-one-sentence ## Assessment framing the problem — but keep it to a sentence.)
+one-sentence ## Assessment framing the problem.)
 
 ## Do now
-The highest-value actions/recommendations (at most 5–6), ordered by clinical value — NEVER by how many
-sources you retrieved. Each item: the action in a LINE, then WHY in a few words. Not a paragraph per item.
+The clinical actions/recommendations the answer calls for — as many as the decision genuinely needs, no
+more — ordered by clinical value, NEVER by how many sources you retrieved. Each item: the action, then WHY
+in a few words. Keep each to a scannable point, not a paragraph.
 
 ## Do if — conditional actions
 Every conditional action as "**Action** — if <specific trigger> — because <reason>". Never present a

@@ -79,8 +79,21 @@ Second risk (Gemini): classical vocabulary contaminating conventional vector ret
 Make `license` + `source_role` required ingest metadata; refuse commercial corpus ingest unless
 public-domain, CC BY / CC0, or explicitly `licensed=true`. NC (CC BY-NC*) is excluded (StatPearls, WHO IRIS).
 
-## Phase 1 execution log
-- (fill in as jobs land: journal → blocks, validation query on tenant `demo`, credit spend)
+## Phase 1 execution log (2026-08-16, done)
+- Retired the regex retro-tag in prod (`/admin/corpus/tag-modality` now 404; `_CAM_JOURNAL_PATTERNS` +
+  `tag_modality_by_journal` deleted). Modality is at-ingest provenance only.
+- Validate-first: 1 JAIM OA job (limit 20) → **1,228 blocks** (full-text OA is dense). `/search` on tenant
+  `demo` for "Ayurvedic management of amavata RA" returned the new JAIM practice papers at the top
+  (Multimodal Ayurveda regimen for knee OA, Vardhamana Pippali Rasayana) — mechanism confirmed end-to-end.
+- Full tranche (8 jobs, all stamped `modality:"alternative"`) → **~9,900 blocks**; ~**11,100 CAM blocks**
+  total incl. validation. Per-job: JAIM 1228+1409, AYU/ayurveda 2304, acupuncture (JAMS/AiM) 1216+23,
+  Integrative Medicine Research 1447, acupuncture-SR 2119, ayurveda/herbal-SR (still fetching), herb-drug
+  safety 1380. Block density tracks OA full-text availability (some journals abstract-only → low counts).
+- Learnings: EPMC full-text OA pulls hit **429 rate limits** during the tranche (some full-text drops to
+  abstract) — pace/re-queue; not fatal. Journal-scoped `JOURNAL:"..." AND OPEN_ACCESS:y` is the reliable
+  query shape.
+- NEXT: Phase 2 (practitioner lenses + `NOESIS_CAM_PRACTICE` flag + split contract + `source_role` facet +
+  LLM claim-type judge + held-out practitioner eval). Phase 3 (classical texts / API) pending license check.
 
 Related: learnings/corpusfirst.md, learnings/competitive-landscape.md, learnings/evidencecontract.md,
 learnings/noesisindia.md.

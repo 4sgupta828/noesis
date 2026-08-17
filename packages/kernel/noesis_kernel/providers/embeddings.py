@@ -46,7 +46,11 @@ def _clamp_to_token_budget(text: str, max_tokens: int = _MAX_EMBED_TOKENS) -> st
             return text
         return enc.decode(toks[:max_tokens])
     except Exception:   # noqa: BLE001 — tiktoken missing/errored: conservative char cap
-        cap = max_tokens * 3        # ~3 chars/token is safe even for dense medical/numeric text
+        # Dense medical text (flattened tables, numerics, abbreviations) can tokenize at
+        # ~2 chars/token, so a 3x cap could still exceed 8192 tokens and 400 the batch (the
+        # 2026-08-17 atrial-fibrillation block). 2x is safe for any real prose; tiktoken is a
+        # `serve` dep so this fallback should rarely run.
+        cap = max_tokens * 2
         return text if len(text) <= cap else text[:cap]
 
 

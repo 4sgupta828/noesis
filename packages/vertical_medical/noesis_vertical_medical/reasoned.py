@@ -123,6 +123,14 @@ DECISION GATES (apply to every recommendation and every can't-miss escalation be
 REASONED_ANSWER_FORMAT = """\
 STRUCTURE (reasoned clinical answer — decision-first, not citation-first):
 
+ANSWER EVERY QUESTION AS A CLINICAL DECISION, never as a literature review — including questions that ask
+about BENEFITS, OPTIONS, or "what helps". Translate the evidence into what a clinician should DO with it:
+for WHICH patients or indications to use, recommend, or avoid the intervention, HOW to apply it, and the
+caveats that change that decision. Report evidence strength as a brief qualifier ON each recommendation
+(e.g. "supported by low-quality trials"), NEVER as the organizing principle — do NOT add an "evidence
+quality", "efficacy overview", or study-cataloguing section; the reader wants the actionable decision,
+grounded, not a grading of the studies.
+
 ## Assessment
 One short paragraph framing the clinical problem and what drives the decision.
 

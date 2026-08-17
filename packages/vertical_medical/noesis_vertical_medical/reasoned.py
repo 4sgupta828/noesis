@@ -24,6 +24,15 @@ FIRST, classify the question (`kind`):
   mechanism/pathophysiology, why do two conditions travel together, why did trials show a result.
   These deserve a CAUSAL-MODEL answer — set kind="understanding" and leave every list EMPTY.
 
+For a "management" question, also set `is_diagnostic`:
+- is_diagnostic = TRUE when the question is fundamentally about IDENTIFYING WHAT THE DIAGNOSIS IS — it
+  asks for a differential diagnosis, "what could be causing this / what is this", or the INITIAL WORKUP
+  of an undifferentiated presentation (a patient with symptoms/signs not yet diagnosed). A question that
+  presents a case and asks for the differential and/or workup is diagnostic.
+- is_diagnostic = FALSE when the diagnosis is already known and the question is about MANAGING it
+  (treatment choice, dosing, titration, monitoring, follow-up of an established condition).
+- Set is_diagnostic only for kind="management"; leave it false for lookup/understanding.
+
 For "management" questions ONLY, produce the decision structure a good physician would want covered —
 as short QUESTIONS or topics to investigate, NEVER as answers, conclusions, diagnoses, or
 recommendations.

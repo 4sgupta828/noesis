@@ -74,6 +74,15 @@ def test_nondiagnostic_management_uses_reasoned_format():
     assert _DIFFERENTIAL_FMT not in llm.compose_blob
 
 
+def test_medical_scaffold_prompt_instructs_is_diagnostic():
+    # Guard the real-LLM behavior gap the scripted tests can't catch: the REAL scaffold prompt must
+    # actually TELL the model to classify is_diagnostic (else it defaults false and the differential
+    # format never fires — the bug the held-out eval caught 2026-08-17).
+    from noesis_vertical_medical.reasoned import REASONED_SCAFFOLD_PROMPT
+    assert "is_diagnostic" in REASONED_SCAFFOLD_PROMPT
+    assert "differential" in REASONED_SCAFFOLD_PROMPT.lower()
+
+
 def test_flag_off_diagnostic_still_uses_reasoned_format():
     # differential_answer_format=None models the flag OFF (app wires None) → byte-identical reasoned path
     svc, llm = _service(is_diagnostic=True, differential_format=None)

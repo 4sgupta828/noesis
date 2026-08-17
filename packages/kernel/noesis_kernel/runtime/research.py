@@ -203,7 +203,12 @@ class ResearchService:
             # is_diagnostic (LLM-owned): true when a management question asks for a DIFFERENTIAL / "what
             # could this be" / the initial workup of a PRESENTATION — routes to the differential-first
             # clinical-decision format. False for a pure treatment/monitoring management question.
-            is_diagnostic: bool = False
+            is_diagnostic: bool = Field(
+                default=False,
+                description=("true ONLY for a management question that asks to IDENTIFY the diagnosis — a "
+                            "differential diagnosis, 'what could be causing this', or the initial workup "
+                            "of an undifferentiated presentation. false when the diagnosis is known and "
+                            "the question is about managing/treating it."))
             likely_causes: list[str] = Field(default_factory=list)
             cant_miss: list[str] = Field(default_factory=list)
             key_decisions: list[str] = Field(default_factory=list)

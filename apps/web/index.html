@@ -202,9 +202,10 @@
   /* engaging sub-line under the heading (answer-style modes) */
   .hsub{text-align:center;margin:-.35rem 0 1rem;color:var(--muted);font-size:.9rem;max-width:38rem;
         margin-left:auto;margin-right:auto;line-height:1.4;}
-  .dmodeswitch{display:none;justify-content:center;margin:0 0 1.1rem;}
-  .dmodeswitch.on{display:flex;}
-  body.chatting .hsub,body.triage-live .hsub,body.chatting .dmodeswitch,body.triage-live .dmodeswitch{display:none;}
+  body.chatting .hsub,body.triage-live .hsub{display:none;}
+  /* compact answer-style switch — right-aligned in the control bar, distinct from the top mode tabs */
+  .ctlbar .dmodesel{margin:0 0 0 auto;}
+  .dmodesel .lbl{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);}
   .modeseg{display:inline-flex;border:1px solid var(--hair);border-radius:999px;overflow:hidden;background:var(--panel2);}
   .modeseg .mbtn{font-family:var(--mono);font-size:.72rem;letter-spacing:.04em;cursor:pointer;border:0;white-space:nowrap;
     background:transparent;color:var(--muted);padding:.34rem 1.05rem;transition:.12s;display:inline-flex;align-items:center;gap:.35rem;}
@@ -1378,17 +1379,6 @@
       <button type="button" class="mbtn" data-mode="panel" role="tab" aria-selected="false">◈ Specialist Panel</button>
     </div>
   </div>
-  <!-- Answer-style toggle (flag decision_mode_ui_enabled): Clinical Decision (default) = differential +
-       workup + what-to-do, reasoned from the evidence; Research = a grounded synthesis of the literature.
-       Same evidence + grounding — only the framing differs. Drives ResearchIn.engine (Research→standard). -->
-  <div class="dmodeswitch" id="dmodeswitch" hidden>
-    <div class="modeseg" role="tablist" aria-label="Answer style">
-      <button type="button" class="mbtn" data-dmode="clinical" role="tab" aria-selected="true"
-              title="Reason through the case at hand: a ranked differential, the workup, and what changes management — grounded in the evidence.">🩺 Clinical Decision</button>
-      <button type="button" class="mbtn" data-dmode="research" role="tab" aria-selected="false"
-              title="A grounded synthesis of what the published evidence shows — literature-first, no clinical decision scaffolding.">📚 Research</button>
-    </div>
-  </div>
   <form id="ask">
     <div class="field">
       <textarea id="q" rows="1" placeholder="e.g. What treatments are being studied for type 2 diabetes?"
@@ -1440,6 +1430,18 @@
            medicine is now handled by the Integrative & Complementary Medicine panel specialist, so the
            Q&A-level toggle was removed. Plain Q&A stays modern-medicine-only (CAM excluded). -->
       <span id="modsel" hidden></span>
+      <!-- Answer-style switch (flag decision_mode_ui_enabled) — a compact right-aligned control, NOT a
+           top-level mode. Clinical Decision (default) = differential + workup + what-to-do reasoned from
+           the evidence; Research = a grounded synthesis of the literature. Same evidence — only framing. -->
+      <div class="audsel dmodesel" id="dmodesel" hidden>
+        <span class="lbl">Answer</span>
+        <div class="seg" role="group" aria-label="Answer style">
+          <button type="button" class="segbtn" data-dmode="clinical" aria-pressed="true"
+                  title="Clinical Decision: reason through the case — a ranked differential, the workup, and what changes management, grounded in the evidence.">Clinical Decision</button>
+          <button type="button" class="segbtn" data-dmode="research" aria-pressed="false"
+                  title="Research: a grounded synthesis of what the published evidence shows — literature-first, no decision scaffolding.">Research</button>
+        </div>
+      </div>
     </div>
   </form>
 
@@ -1842,9 +1844,9 @@ async function loadConfig(){
     DECISION_MODE_UI = !!c.decision_mode_ui_enabled;
     if(DECISION_MODE_UI){
       try{ const dm = localStorage.getItem("noesis_dmode"); if(dm === "research" || dm === "clinical") DECISION_MODE = dm; }catch(e){}
-      $("#dmodeswitch").querySelectorAll(".mbtn").forEach(b =>
+      $("#dmodesel").querySelectorAll(".segbtn").forEach(b =>
         b.addEventListener("click", () => setDecisionMode(b.dataset.dmode)));
-      applyDecisionMode();   // apply the current mode's copy + reveal the toggle in QA mode
+      applyDecisionMode();   // apply the current mode's copy + reveal the switch in QA mode
     }
     // Responsibility disclaimers (domain-owned copy): a first-use attestation gate, a persistent footer,
     // and a per-answer footnote. All optional — absent copy → nothing renders.
@@ -3713,16 +3715,16 @@ function setMode(mode, opts){
 // standard evidence synthesis. Only reshapes the composer's copy + which engine the request asks for.
 function applyDecisionMode(){
   if(!DECISION_MODE_UI) return;
-  const sw = $("#dmodeswitch"), sub = $("#hsub");
+  const sw = $("#dmodesel"), sub = $("#hsub");
   const inQA = APP_MODE === "qa";
-  if(sw) sw.classList.toggle("on", inQA);
+  if(sw) sw.hidden = !inQA;
   if(!inQA){ if(sub) sub.hidden = true; return; }
   const copy = DMODE_COPY[DECISION_MODE] || DMODE_COPY.clinical;
   $("#heading").textContent = copy.heading;
   if(sub){ sub.textContent = copy.sub; sub.hidden = false; }
   if(!THREAD.turns.length) q.setAttribute("placeholder", copy.placeholder);
-  if(sw) sw.querySelectorAll(".mbtn").forEach(b =>
-    b.setAttribute("aria-selected", b.dataset.dmode === DECISION_MODE ? "true" : "false"));
+  if(sw) sw.querySelectorAll(".segbtn").forEach(b =>
+    b.setAttribute("aria-pressed", b.dataset.dmode === DECISION_MODE ? "true" : "false"));
 }
 function setDecisionMode(m){
   DECISION_MODE = (m === "research") ? "research" : "clinical";

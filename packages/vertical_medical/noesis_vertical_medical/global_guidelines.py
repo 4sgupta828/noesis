@@ -609,10 +609,18 @@ def _facets(g: dict) -> dict:
     # pub_type=guideline → top authority tier in evidence_kind; source_country=global (never filtered).
     # conditions ride along as SUBJECT facets (Pulse A5): supersession-judge candidate generation
     # needs (issuer, subjects, year) per document — never used as a retrieval filter.
+    # license + source_role (panel 2026-08-17): a curated corpus must record REUSE rights, not just
+    # readability — "free to read" is not "commercially reusable". Every entry carries its verified
+    # license (commercial-allowed only: cc0 / cc-by / cc-by-sa / cc-by-nd / public-domain); source_role
+    # tiers full_text vs a summary so retrieval prefers full text and never treats a summary as the source.
     return {"pub_type": "guideline", "source_country": "global",
             "issuer": g.get("issuer", ""), "year": g.get("year"),
             "conditions": list(g.get("conditions", [])),
-            "source_country_label": "Global"}
+            "source_country_label": "Global",
+            "license": g.get("license", ""),
+            "source_role": g.get("source_role", "full_text"),
+            "evidence_tier": g.get("evidence_tier", "guideline"),
+            "canonical_id": g.get("canonical_id", g.get("id", ""))}
 
 
 class GlobalGuidelinesConnector:

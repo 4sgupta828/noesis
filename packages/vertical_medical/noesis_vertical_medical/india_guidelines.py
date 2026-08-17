@@ -275,9 +275,15 @@ INDIA_GUIDELINES: tuple[dict, ...] = (
 
 def _facets(g: dict) -> dict:
     # `pub_type=guideline` → guideline tier in evidence_kind; source_country=IN scopes India queries.
+    # license/source_role (panel 2026-08-17): record REUSE rights (propagate the entry's `legal` note into
+    # a queryable `license` facet) + tier full_text vs summary, so the corpus is license-filterable.
     return {"pub_type": "guideline", "source_country": "IN",
             "issuer": g.get("issuer", ""), "year": g.get("year"),
-            "source_country_label": "India"}
+            "source_country_label": "India",
+            "license": g.get("license", g.get("legal", "")),
+            "source_role": g.get("source_role", "full_text"),
+            "evidence_tier": g.get("evidence_tier", "guideline"),
+            "canonical_id": g.get("canonical_id", g.get("id", ""))}
 
 
 class IndiaGuidelinesConnector:

@@ -57,6 +57,10 @@ def _facets(r: dict) -> dict:
         "source_kind": "article", "source_country": "global",
         "source_db": (r.get("source") or "").lower(),          # MED / PMC / …
         "open_access": "yes" if r.get("isOpenAccess") == "Y" else "no",
+        # license (panel 2026-08-17): EuropePMC reports the article's reuse license (e.g. "cc by",
+        # "cc by-nc"). Stamp it so the corpus is license-filterable — "OA" alone is not "commercially
+        # reusable" (PMC OA mixes commercial-allowed and non-commercial). Empty when unknown.
+        "license": (r.get("license") or "").lower(),
     }
     if r.get("pubYear"):
         f["year"] = str(r["pubYear"])

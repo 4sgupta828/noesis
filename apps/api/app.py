@@ -2274,10 +2274,11 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
 
     @app.post("/voice/tts")
     async def voice_tts(body: VoiceTtsIn):
-        """Neural voiceover for the guided-intake voice loop: the clarifying question as warm,
-        unhurried male speech (OpenAI gpt-4o-mini-tts, voice 'ash'). The FE falls back to the
-        browser's local voice when this endpoint is unavailable. Text in, audio/mpeg out —
-        no user audio is ever received here (STT stays entirely in the browser)."""
+        """Neural voiceover for the guided-intake voice loop: the clarifying question as a warm,
+        calm, unhurried FEMALE voice — understanding and kind (OpenAI gpt-4o-mini-tts, voice
+        'shimmer'). The FE falls back to the browser's local voice when this endpoint is
+        unavailable. Text in, audio/mpeg out — no user audio is ever received here (STT stays
+        entirely in the browser)."""
         if not voice_intake_enabled():
             raise HTTPException(status_code=404, detail="voice intake not enabled")
         key = os.environ.get("OPENAI_API_KEY", "")
@@ -2291,11 +2292,11 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 from openai import AsyncOpenAI
                 app.state.tts_client = AsyncOpenAI(api_key=key)
             resp = await app.state.tts_client.audio.speech.create(
-                model="gpt-4o-mini-tts", voice="ash", input=text, response_format="mp3",
+                model="gpt-4o-mini-tts", voice="shimmer", input=text, response_format="mp3",
                 instructions=(
-                    "Speak as a warm, unhurried, reassuring clinician talking with a worried "
-                    "patient: calm male register, gentle pace with natural pauses, kind and "
-                    "steady. Never rushed, never chirpy, never salesy."))
+                    "Speak as a warm, calm, kind woman — a caring clinician talking gently with a "
+                    "worried patient. Soft, understanding female voice; slow, unhurried pace with "
+                    "natural pauses; reassuring and steady. Never rushed, never chirpy, never salesy."))
             audio = getattr(resp, "content", None)
             if not isinstance(audio, (bytes, bytearray)):
                 audio = await resp.aread()

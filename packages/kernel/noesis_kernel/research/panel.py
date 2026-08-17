@@ -65,7 +65,7 @@ async def plan_panel(*, question, roster, llm) -> list[dict]:
             "it covers; for each eliminated one, the one-line strike reason.")
     try:
         comp = await llm.complete(system=system, messages=[{"role": "user", "content": user}],
-                                  response_format=PanelPlan, max_tokens=1200)
+                                  response_format=PanelPlan, max_tokens=2500)
         picks = [p for p in (comp.parsed.specialists or []) if p.id in by_id]
     except Exception as e:   # noqa: BLE001 — triage must never block convening
         _log.warning("panel triage failed: %r", e)

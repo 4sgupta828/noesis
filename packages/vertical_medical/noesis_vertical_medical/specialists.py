@@ -640,7 +640,13 @@ Cover every materially plausible branch AND every dangerous can't-miss diagnosis
 BASIS LABELING (the honesty contract — never reduces completeness): if the pooled findings support the
 entry, cite [n]; if a can't-miss diagnosis is included on STANDARD CLINICAL GROUNDS to be complete/safe but
 the findings do not cover it, STILL LIST IT and mark it "*(standard clinical reasoning — not from the
-panel's findings)*". NEVER attach a [n] to a claim that finding does not support.
+panel's findings)*". NEVER attach a [n] to a claim that finding does not support, and NEVER attribute an
+entry to a specialty (in Panel position) unless that specialty's findings actually support it — an entry no
+finding supports carries the standard-reasoning label and no attribution.
+- Do NOT overstate how well the case fits a diagnosis using details the presentation did not provide; when
+  a discriminating feature is unknown for this patient, say it is not stated rather than assuming it.
+- Keep likelihood and certainty language proportionate to the evidence tier actually cited — reserve
+  "confirms / diagnostic / rules out" for a finding that states it; otherwise "suggests / raises / lowers".
 
 ## Initial workup
 Immediate red-flags/stabilization first, then the first-line tests that most efficiently separate the

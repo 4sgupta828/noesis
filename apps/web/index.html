@@ -876,7 +876,7 @@
   /* ◉ Pulse full page */
   .pulsepage{position:fixed;inset:0;z-index:50;background:var(--bg);overflow-y:auto;padding:1rem 1.4rem 3rem;}
   /* 🎙 voice intake — mic lives in the composer, guided mode only */
-  body:not([data-mode="triage"]) #voicebtn{display:none !important;}
+  body:not([data-mode="triage"]):not(.voice-anywhere) #voicebtn{display:none !important;}
   #voicebtn.on{color:var(--gold);}
   #voicebtn.listening{color:var(--gap);animation:vpulse 1.15s ease-in-out infinite;}
   #voicebtn.speaking{color:var(--gold);animation:vpulse 1.8s ease-in-out infinite;}
@@ -1671,6 +1671,7 @@ let VISION_ENABLED = false; // image/PDF/DICOM upload → visual-context researc
 let LAYMAN_ENABLED = false; // on-demand plain-language re-explanation
 let TERMS_ENABLED = false;  // on-demand key-term explanations + the accumulating All Terms glossary
 let VOICE_INTAKE_ENABLED = false; // hands-free guided intake (speak answers, hear questions)
+let VOICE_EVERYWHERE = false;     // mic also in Quick Q&A + Specialist Panel (voice INPUT / dictation)
 let VISUAL_ENABLED = false;       // on-demand "Add visuals" — grounded conceptual diagrams below an answer
 let VISUAL_AUTO = false;          // auto-generate visuals on every fresh grounded answer (default behavior)
 let _autoVisualsArm = false;      // armed only around a FRESH panel render so reopens don't re-spend
@@ -1774,6 +1775,8 @@ async function loadConfig(){
     VISUAL_AUTO = !!c.visual_auto_enabled;
     const tb = $("#termsbtn"); if(tb && TERMS_ENABLED) tb.hidden = false;
     VOICE_INTAKE_ENABLED = !!c.voice_intake_enabled;
+    VOICE_EVERYWHERE = !!c.voice_everywhere_enabled;
+    document.body.classList.toggle("voice-anywhere", VOICE_EVERYWHERE);   // reveal the mic in Q&A + Panel
     VOICE_TTS_NEURAL = !!c.voice_tts_neural;
     maybeShowVoice();
     GAP_ENABLED = !!c.gap_healing_enabled;
@@ -3858,7 +3861,13 @@ function voiceListen(){
     if(stopped) return;
     const text = currentText();
     teardown();
-    if(VOICE.on && text && APP_MODE === "triage" && !TRIAGE.busy) submitTriage(text);
+    if(!(VOICE.on && text)) return;
+    if(APP_MODE === "triage"){ if(!TRIAGE.busy) submitTriage(text); return; }   // guided: conversational loop
+    // Q&A / Panel: dictation is ONE-SHOT input — submit the composer, then end the voice session (no TTS).
+    VOICE.on = false; voiceUiState("idle");
+    q.value = text; autoGrow();
+    if(APP_MODE === "panel") submitPanelIntake(text);
+    else askQuestion(text, {skipRefine: true});
   };
   const arm = ()=>{
     clearTimeout(timer);
@@ -3897,8 +3906,12 @@ function voiceListen(){
 function voiceToggle(){
   if(!VOICE.on){
     VOICE.on = true; voiceUiState("idle");
-    const lastBot = [...TRIAGE.transcript].reverse().find(m=>m.role !== "user");
-    voiceSay(lastBot ? lastBot.text : "Tell me the clinical problem in your own words. I'll ask only what's needed.", voiceListen);
+    if(APP_MODE === "triage"){                       // Guided: hear the question, then answer (conversation)
+      const lastBot = [...TRIAGE.transcript].reverse().find(m=>m.role !== "user");
+      voiceSay(lastBot ? lastBot.text : "Tell me the clinical problem in your own words. I'll ask only what's needed.", voiceListen);
+    } else {
+      q.value = ""; autoGrow(); voiceListen();        // Q&A / Panel: dictate straight into the composer (no TTS)
+    }
   } else if(VOICE.listening){
     if(VOICE.sendNow) VOICE.sendNow();          // "I'm done" — send what we heard, now
   } else if(VOICE.audio || speechSynthesis.speaking){

@@ -591,6 +591,14 @@ def voice_intake_enabled() -> bool:
     return os.environ.get("NOESIS_VOICE_INTAKE", "").lower() in ("1", "true", "yes")
 
 
+def voice_everywhere_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON (and voice_intake_enabled), the mic also appears in Quick Q&A
+    and Specialist Panel as voice INPUT (dictate the question → fills the composer → submits; no TTS
+    read-back — that stays a Guided-only conversation). FE-only. OFF → the mic stays Guided-only
+    (byte-identical to today)."""
+    return os.environ.get("NOESIS_VOICE_EVERYWHERE", "").lower() in ("1", "true", "yes")
+
+
 def term_glossary_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, each answer offers on-demand key-term explanations
     (POST /terms/explain — definitional, with related-term edges) and the accumulated glossary is
@@ -1633,6 +1641,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "visual_auto_enabled": (visual_auto_enabled() and visual_augment_enabled()
                                     and bool(getattr(svc, "visuals_prompt", None))),
             "voice_intake_enabled": voice_intake_enabled() and live_triage,
+            "voice_everywhere_enabled": voice_intake_enabled() and voice_everywhere_enabled(),
             "voice_tts_neural": (voice_intake_enabled() and live_triage
                                  and bool(os.environ.get("OPENAI_API_KEY"))),
             "stream_enabled": stream_enabled(),

@@ -839,6 +839,16 @@ def differential_format_enabled() -> bool:
     return os.environ.get("NOESIS_DIFFERENTIAL_FORMAT", "").lower() in ("1", "true", "yes")
 
 
+def decision_mode_ui_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, the composer shows a user-facing 'Clinical Decision | Research'
+    mode toggle (default Clinical Decision). Clinical Decision = the reasoned engine (auto-classifies →
+    differential-first for diagnostic questions, decision framework for management, graceful synthesis for
+    pure lookups); Research = forces the standard evidence-synthesis engine. Both are the SAME grounded
+    evidence — only the answer's framing differs. The FE drives it via the existing ResearchIn.engine field
+    (Research → engine='standard'), so OFF is byte-identical (auto routing, no toggle). Echoed to /config."""
+    return os.environ.get("NOESIS_DECISION_MODE_UI", "").lower() in ("1", "true", "yes")
+
+
 def evidence_fitness_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, the relevance-selection step additionally BOOSTS stronger
     evidence tiers (guideline/systematic-review > RCT > cohort > case report, via the medical authority
@@ -1626,6 +1636,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "cam_practice_enabled": cam_practice_enabled(),
             "cam_autoscope_enabled": cam_autoscope_enabled() and modality_mode_enabled(),
             "differential_format_enabled": differential_format_enabled(),
+            "decision_mode_ui_enabled": decision_mode_ui_enabled(),
             "ask_panel_enabled": live_panel,
             "panel_specialists": ([
                 {"id": getattr(s, "id", ""), "specialty": getattr(s, "specialty", ""),

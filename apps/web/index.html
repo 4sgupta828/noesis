@@ -199,6 +199,12 @@
   /* Mode switch — Quick Q&A ⇄ Specialist Panel (one segmented control, shared look in both views) */
   .modeswitch{display:none;justify-content:center;margin:.15rem 0 1.15rem;}
   .modeswitch.on{display:flex;}
+  /* engaging sub-line under the heading (answer-style modes) */
+  .hsub{text-align:center;margin:-.35rem 0 1rem;color:var(--muted);font-size:.9rem;max-width:38rem;
+        margin-left:auto;margin-right:auto;line-height:1.4;}
+  .dmodeswitch{display:none;justify-content:center;margin:0 0 1.1rem;}
+  .dmodeswitch.on{display:flex;}
+  body.chatting .hsub,body.triage-live .hsub,body.chatting .dmodeswitch,body.triage-live .dmodeswitch{display:none;}
   .modeseg{display:inline-flex;border:1px solid var(--hair);border-radius:999px;overflow:hidden;background:var(--panel2);}
   .modeseg .mbtn{font-family:var(--mono);font-size:.72rem;letter-spacing:.04em;cursor:pointer;border:0;white-space:nowrap;
     background:transparent;color:var(--muted);padding:.34rem 1.05rem;transition:.12s;display:inline-flex;align-items:center;gap:.35rem;}
@@ -1364,11 +1370,23 @@
   </header>
 
   <h1 id="heading">What does the evidence show?</h1>
+  <p class="hsub" id="hsub" hidden></p>
   <div class="modeswitch" id="modeswitch">
     <div class="modeseg" role="tablist" aria-label="Answer mode">
       <button type="button" class="mbtn" data-mode="triage" role="tab" aria-selected="false" hidden>◍ Guided</button>
       <button type="button" class="mbtn" data-mode="qa" role="tab" aria-selected="true">Quick Q&amp;A</button>
       <button type="button" class="mbtn" data-mode="panel" role="tab" aria-selected="false">◈ Specialist Panel</button>
+    </div>
+  </div>
+  <!-- Answer-style toggle (flag decision_mode_ui_enabled): Clinical Decision (default) = differential +
+       workup + what-to-do, reasoned from the evidence; Research = a grounded synthesis of the literature.
+       Same evidence + grounding — only the framing differs. Drives ResearchIn.engine (Research→standard). -->
+  <div class="dmodeswitch" id="dmodeswitch" hidden>
+    <div class="modeseg" role="tablist" aria-label="Answer style">
+      <button type="button" class="mbtn" data-dmode="clinical" role="tab" aria-selected="true"
+              title="Reason through the case at hand: a ranked differential, the workup, and what changes management — grounded in the evidence.">🩺 Clinical Decision</button>
+      <button type="button" class="mbtn" data-dmode="research" role="tab" aria-selected="false"
+              title="A grounded synthesis of what the published evidence shows — literature-first, no clinical decision scaffolding.">📚 Research</button>
     </div>
   </div>
   <form id="ask">
@@ -1659,6 +1677,17 @@ let GAP_ENABLED = false;    // self-healing: suggest + queue sources to fill evi
 let CONV_ENABLED = false;   // multi-turn conversation (follow-ups carry context)
 let SUGGEST_ENABLED = false;// suggested follow-up questions after each answer
 let STREAM_ENABLED = false; // live agent trace via SSE (/research/stream)
+let DECISION_MODE_UI = false;   // show the Clinical Decision | Research answer-style toggle
+let DECISION_MODE = "clinical"; // "clinical" (default → reasoned/differential engine) | "research" (standard synthesis)
+// per-mode composer copy (engaging top lines + placeholder). Clinical Decision is the default the clinician sees first.
+const DMODE_COPY = {
+  clinical: {heading:"What's the case in front of you?",
+             sub:"Get the differential, the workup, and what changes management — reasoned from the evidence for the case at hand.",
+             placeholder:"e.g. 68-year-old with new exertional dyspnea and bilateral leg edema — differential and initial workup?"},
+  research: {heading:"What does the evidence show?",
+             sub:"A grounded synthesis of what the published evidence actually says — literature-first.",
+             placeholder:"e.g. What treatments are being studied for type 2 diabetes?"},
+};
 let EFFORT_ENABLED = false; // effort multiplier available (scales turns/results/depth/budget)
 let EFFORT = 1;             // current effort multiplier (1 = Standard); only sent when >1
 let PATIENT_MODE_ENABLED = false; // audience switch available (clinician vs patient answer)
@@ -1808,6 +1837,15 @@ async function loadConfig(){
     EXAMPLES = Array.isArray(con.examples) ? con.examples : [];
     BASE_PLACEHOLDER = con.placeholder || "Ask a research question…";
     q.setAttribute("placeholder", pickPlaceholder());
+    // Clinical Decision | Research answer-style toggle (flag). Default Clinical Decision — the clinician
+    // sees the engaging case-first line first. OFF → toggle hidden, heading unchanged (byte-identical).
+    DECISION_MODE_UI = !!c.decision_mode_ui_enabled;
+    if(DECISION_MODE_UI){
+      try{ const dm = localStorage.getItem("noesis_dmode"); if(dm === "research" || dm === "clinical") DECISION_MODE = dm; }catch(e){}
+      $("#dmodeswitch").querySelectorAll(".mbtn").forEach(b =>
+        b.addEventListener("click", () => setDecisionMode(b.dataset.dmode)));
+      applyDecisionMode();   // apply the current mode's copy + reveal the toggle in QA mode
+    }
     // Responsibility disclaimers (domain-owned copy): a first-use attestation gate, a persistent footer,
     // and a per-answer footnote. All optional — absent copy → nothing renders.
     DISCLAIMER = con.disclaimer || {};
@@ -3669,6 +3707,27 @@ function setMode(mode, opts){
     clearModeHash();
     q.focus();
   }
+  applyDecisionMode();   // Clinical Decision | Research: reveal + apply the engaging line in QA, hide elsewhere
+}
+// Answer-style toggle. Clinical Decision → reasoned/differential engine (case-first framing); Research →
+// standard evidence synthesis. Only reshapes the composer's copy + which engine the request asks for.
+function applyDecisionMode(){
+  if(!DECISION_MODE_UI) return;
+  const sw = $("#dmodeswitch"), sub = $("#hsub");
+  const inQA = APP_MODE === "qa";
+  if(sw) sw.classList.toggle("on", inQA);
+  if(!inQA){ if(sub) sub.hidden = true; return; }
+  const copy = DMODE_COPY[DECISION_MODE] || DMODE_COPY.clinical;
+  $("#heading").textContent = copy.heading;
+  if(sub){ sub.textContent = copy.sub; sub.hidden = false; }
+  if(!THREAD.turns.length) q.setAttribute("placeholder", copy.placeholder);
+  if(sw) sw.querySelectorAll(".mbtn").forEach(b =>
+    b.setAttribute("aria-selected", b.dataset.dmode === DECISION_MODE ? "true" : "false"));
+}
+function setDecisionMode(m){
+  DECISION_MODE = (m === "research") ? "research" : "clinical";
+  try{ localStorage.setItem("noesis_dmode", DECISION_MODE); }catch(e){}
+  applyDecisionMode();
 }
 function openPanel(prefill){ setMode("panel", {prefill: prefill || PANEL_CASE || ""}); }
 function closePanel(){ setMode("qa"); }
@@ -4674,6 +4733,9 @@ async function askQuestion(question, opts){
   }
   PENDING_INTAKE_TRANSCRIPT = null;   // single-use: only the first answer after Guided carries it
   if(opts.engine) payload.engine = opts.engine;   // interlock hop: force a specific engine
+  // Answer-style toggle: Research forces the standard synthesis engine; Clinical Decision leaves engine
+  // unset → the reasoned/differential engine auto-routes. Never overrides an explicit opts.engine (retry/duel).
+  else if(DECISION_MODE_UI && DECISION_MODE === "research") payload.engine = "standard";
   if(USER){ payload.user_name = USER.name; payload.user_email = USER.email; }
   if(conv){
     if(THREAD.turns.length) payload.history = threadHistoryPayload();

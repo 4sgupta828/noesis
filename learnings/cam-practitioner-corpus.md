@@ -118,5 +118,28 @@ public-domain, CC BY / CC0, or explicitly `licensed=true`. NC (CC BY-NC*) is exc
   efficacy-laundering); (2) the structural guard (source_role/evidence_kind facet + LLM claim-type judge)
   — lands with Phase 3 classical texts, until then the split-ontology contract is the guard.
 
+## Phase 2b — main-Q&A CAM auto-scope + distinct CAM panelists (2026-08-16, LIVE)
+Answering the "do I have to pick the panel + manual mode?" gap: plain Q&A defaulted to Allopathic which
+EXCLUDES `modality:alternative`, and the modality toggle was removed → CAM was unreachable in the main box.
+- **CAM auto-scope** (flag `NOESIS_CAM_AUTOSCOPE`, default OFF; requires `NOESIS_MODALITY_MODE`): the shared
+  `_do_research` helper runs ONE small LLM CAM-intent call (`MEDICAL_CAM_INTENT_SYSTEM`, wired via manifest
+  `cam_intent_prompt`, Rule 18, conservative/prefer-false) and, for a primarily-CAM question, sets
+  `body.modality="alternative"` → the existing exclusion-off + alt-directive machinery scopes to the CAM
+  corpus. Covers `/research` AND `/research/stream` (one injection in the shared helper). Fail-safe: no
+  LLM/prompt/error → default Allopathic scope, never a keyword guess. Echoed `cam_autoscope_enabled`.
+- **Distinct CAM panelists**: `_apply_cam_practice` (flag ON) now also NARROWS `integrative_cam` →
+  specialty "Herbal & Mind-Body Medicine", focus = herbal/naturopathy/homeopathy/mind-body/energy, +a
+  scope line on the lens, so the three CAM seats don't overlap (acu→acupuncture_practice, ayurveda→
+  ayurveda_practice, rest→integrative_cam). Idempotent; OFF byte-identical.
+- Tests: autoscope flag, `_detect_cam_intent` fail-safe, panelist distinctness, practice OFF=identity/
+  ON=append+idempotent — all pass.
+- PROD-VERIFIED (both flags ON): main-Q&A "acupuncture points for chronic LBP" → grounded, europepmc 31
+  retrieved/11 cited (CAM corpus reached), answer names BL23/GV3/BL20/BL40/BL25 + evidence — auto-scope
+  works. Conventional "first-line antihypertensive, T2DM+CKD3" → NOT rerouted (ACE/ARB, dailymed-cited) —
+  no over-trigger. `/config` shows `cam_autoscope_enabled:true` + integrative_cam as "Herbal & Mind-Body
+  Medicine".
+- Same eval caveat as Phase 2: on for users without the held-out eval yet; behavior is safe (span-gated,
+  conservative router) but unmeasured.
+
 Related: learnings/corpusfirst.md, learnings/competitive-landscape.md, learnings/evidencecontract.md,
 learnings/noesisindia.md.

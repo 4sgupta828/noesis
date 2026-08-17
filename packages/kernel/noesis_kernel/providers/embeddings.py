@@ -20,6 +20,35 @@ from .cassette import Cassette, hash_request
 OPENAI_EMBED_MODEL = "text-embedding-3-small"
 OPENAI_EMBED_DIM = 1536
 
+# text-embedding-3-* reject any single input over 8192 tokens with a 400 that fails the
+# WHOLE batch — so one oversized block (a flattened table, an unsplit guideline paragraph)
+# drops every block in the ingest job (the 2026-08-17 atrial-fibrillation job: input[175]
+# > 8192 tokens → 0 blocks landed). Clamp each input to a safe token budget before the call.
+# This is a pure LENGTH guard (Rule 18-safe: no semantic decision) and a last-resort safety
+# net for every connector; the principled source fix — capping block size in the splitter —
+# needs a SPLITTER_VERSION bump + corpus-wide re-split, tracked separately. The tail of a
+# >8k-token block is dropped, but such a block is far larger than any useful retrieval unit.
+_MAX_EMBED_TOKENS = 8000        # 192-token headroom under the 8192 hard limit
+_EMBED_ENCODING = "cl100k_base"  # text-embedding-3-small/large + ada-002 all use this
+_ENC_CACHE: object | None = None
+
+
+def _clamp_to_token_budget(text: str, max_tokens: int = _MAX_EMBED_TOKENS) -> str:
+    """Truncate `text` to at most `max_tokens` tokens (tiktoken precise; char-cap fallback)."""
+    global _ENC_CACHE
+    try:
+        if _ENC_CACHE is None:
+            import tiktoken
+            _ENC_CACHE = tiktoken.get_encoding(_EMBED_ENCODING)
+        enc = _ENC_CACHE
+        toks = enc.encode(text)
+        if len(toks) <= max_tokens:
+            return text
+        return enc.decode(toks[:max_tokens])
+    except Exception:   # noqa: BLE001 — tiktoken missing/errored: conservative char cap
+        cap = max_tokens * 3        # ~3 chars/token is safe even for dense medical/numeric text
+        return text if len(text) <= cap else text[:cap]
+
 
 @runtime_checkable
 class Embedder(Protocol):
@@ -119,6 +148,7 @@ class OpenAIEmbedder:
     def embed(self, texts: list[str]) -> list[list[float]]:
         self._ensure()
         assert self._client is not None
+        texts = [_clamp_to_token_budget(t) for t in texts]   # never let one long block 400 the batch
         resp = self._client.embeddings.create(model=self._model, input=texts)
         out: list[list[float]] = []
         for item in resp.data:

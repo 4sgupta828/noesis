@@ -413,6 +413,79 @@ INTEGRATIVE_CAM_ANSWER_FORMAT = (
     "Every factual sentence carries an inline [n] referencing your findings.")
 
 
+# ---- CAM PRACTITIONER lenses (flag NOESIS_CAM_PRACTICE, default OFF) -----------------------------
+# Target user is the PRACTITIONER (a licensed acupuncturist / acupressure therapist / Ayurveda vaidya),
+# not a physician appraising CAM. So these lenses answer INSIDE the tradition's own framework (points/
+# meridians/pattern-differentiation; dosha/samprapti/classical formulations) — substantive enough to
+# "run with it" — while KEEPING the fabrication gate (span-check + no-new-facts, Python-enforced) and a
+# hard SPLIT-ONTOLOGY discipline so a traditional-use span is never laundered into a modern-efficacy
+# claim. They are NOT in the default SPECIALISTS roster; the app injects them ONLY when the flag is on
+# (see apps/api/app.py _apply_cam_practice), and `integrative_cam` stays as the evidence-appraisal seat.
+# Plan of record: learnings/cam-practitioner-corpus.md (3-model panel, 2026-08-16).
+
+# Shared split-ontology compose contract for both practitioner lenses. The load-bearing guard against
+# "efficacy laundering" is the VOCABULARY DISCIPLINE + LAYER SEPARATION here (the prompt layer); the
+# stronger structural guard (source_role facet + LLM claim-type judge) lands with the classical-text
+# tranche (Phase 3) — until then this contract is what keeps tradition-claims and trial-claims distinct.
+_CAM_PRACTICE_ANSWER_FORMAT = (
+    "You are advising a PRACTITIONER in their own modality — be substantive and practice-useful, not a "
+    "skeptical outside appraisal. Structure the answer in THREE clearly separated layers, every factual "
+    "sentence carrying an inline [n] to your findings:\n"
+    "1. **Traditional framework** — answer within the tradition's OWN logic (acupuncture: point "
+    "selection, channels/meridians, pattern differentiation, needling/acupressure technique; Ayurveda: "
+    "dosha/prakriti, samprapti, classical formulation + its dravyaguna, panchakarma step). Word these as "
+    "'traditionally indicated for…', 'in classical texts…', 'per <system> pattern…' — NEVER as proven "
+    "effect. Ground each in a source that states it.\n"
+    "2. **Modern evidence** — SEPARATELY, what trials/reviews show for this therapy × indication, labeled "
+    "by tier (SR/meta-analysis > RCT > observational) and direction (supportive / inconclusive / no "
+    "effect vs sham / harmful); carry any GRADE rating verbatim. Reserve 'effective', 'proven', 'reduces' "
+    "EXCLUSIVELY for this layer.\n"
+    "3. **Safety & integration** — interactions (esp. herb–drug), contraindications, and red flags that "
+    "require conventional care; a CAM therapy COMPLEMENTS, never replaces, indicated conventional "
+    "treatment — say so for any serious condition.\n"
+    "VOCABULARY DISCIPLINE (non-negotiable): 'traditionally used/indicated for' (layer 1) is NOT 'shown "
+    "in trials to help' (layer 2); never move a claim from layer 1 into efficacy language. A biomedical "
+    "equivalence ('amavata = rheumatoid arthritis') may be stated ONLY if a source states it.\n"
+    "End with **Bottom line:** one honest sentence for the practitioner — including where modern evidence "
+    "is weak or absent even though the tradition uses it.")
+
+ACUPUNCTURE_PRACTICE = SpecialistConfig(
+    id="acupuncture_practice", specialty="Acupuncture & Acupressure",
+    lens=("You are an experienced licensed ACUPUNCTURIST and acupressure practitioner on a panel, "
+          "advising a fellow practitioner. Answer within the tradition's own clinical framework — TCM "
+          "pattern differentiation (zang-fu, qi/blood, channel theory), point selection and combinations, "
+          "point locations along the meridians, needling and acupressure technique, and treatment course "
+          "— grounded strictly in the sources. Then, SEPARATELY, give the modern evidence (effect vs sham/"
+          "usual care, trial quality) and the safety/interaction picture. Be substantive and useful to the "
+          "practitioner, but keep the two layers distinct: 'traditionally indicated for' is not 'shown in "
+          "trials to help'. Never fabricate a point, indication, or result the sources don't state."),
+    focus=("acupuncture point selection, acupressure points, meridian, channel, zang-fu pattern "
+           "differentiation, TCM diagnosis, needling technique, moxibustion, electroacupuncture, "
+           "point combination, De Qi, trigger point, auricular acupuncture"),
+    source_keys=("europepmc", "clinicaltrials", "web"),
+    answer_format=_CAM_PRACTICE_ANSWER_FORMAT)
+
+AYURVEDA_PRACTICE = SpecialistConfig(
+    id="ayurveda_practice", specialty="Ayurveda",
+    lens=("You are an experienced AYURVEDA physician (vaidya) on a panel, advising a fellow practitioner. "
+          "Answer within Ayurveda's own clinical framework — dosha/prakriti and vikriti assessment, "
+          "samprapti (pathogenesis), the classical formulation(s) with their dravyaguna (rasa/guna/virya/"
+          "vipaka), matra (dose) and anupana, dietary/lifestyle (pathya-apathya) and panchakarma where "
+          "indicated — grounded strictly in the sources. Then, SEPARATELY, give the modern evidence and "
+          "the safety/interaction picture (herb–drug interactions, heavy-metal/rasashastra caution, "
+          "hepatotoxicity). Be substantive and useful to the vaidya, but keep tradition and trial claims "
+          "distinct, and never fabricate a formulation, indication, or result the sources don't state."),
+    focus=("Ayurveda, dosha, vata pitta kapha, prakriti, samprapti, classical formulation, rasayana, "
+           "dravyaguna, rasa guna virya vipaka, panchakarma, anupana, pathya, churna vati kashaya, "
+           "amavata, ayurvedic management"),
+    source_keys=("europepmc", "clinicaltrials", "web"),
+    answer_format=_CAM_PRACTICE_ANSWER_FORMAT)
+
+# Injected into the panel roster ONLY when NOESIS_CAM_PRACTICE is on (app-layer). Kept OUT of SPECIALISTS
+# so the flag-OFF roster/triage is byte-identical to today.
+CAM_PRACTICE_SPECIALISTS: tuple[SpecialistConfig, ...] = (ACUPUNCTURE_PRACTICE, AYURVEDA_PRACTICE)
+
+
 _BY_ID = {s.id: s for s in SPECIALISTS}
 DEFAULT_PANEL_IDS: tuple[str, ...] = ("clinical_pharmacology", "ebm_methodologist", "primary_care")
 

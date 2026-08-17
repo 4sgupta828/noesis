@@ -752,6 +752,33 @@ def _apply_cam_contract(specialists):
     return tuple(out)
 
 
+def cam_practice_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, the panel gains two PRACTITIONER specialist lenses —
+    acupuncture_practice (acupuncture + acupressure) and ayurveda_practice — that answer INSIDE the
+    tradition's own framework (points/meridians/pattern-differentiation; dosha/formulations) for a
+    practitioner audience, with a hard split-ontology contract (tradition vs modern-evidence layers) so
+    the fabrication gate and vocabulary discipline stay intact. OFF → the roster/triage is byte-identical
+    to today (the two lenses are NOT in the default SPECIALISTS set). See
+    learnings/cam-practitioner-corpus.md."""
+    return os.environ.get("NOESIS_CAM_PRACTICE", "").lower() in ("1", "true", "yes")
+
+
+def _apply_cam_practice(specialists):
+    """When cam_practice_enabled(), APPEND the CAM practitioner specialists to the roster (so triage,
+    manual selection, and the FE roster echo all see them); otherwise return the roster unchanged.
+    Additive — never mutates or removes an existing specialist (integrative_cam stays as the
+    evidence-appraisal seat)."""
+    if not cam_practice_enabled():
+        return specialists
+    try:
+        from noesis_vertical_medical.specialists import CAM_PRACTICE_SPECIALISTS
+    except Exception:   # noqa: BLE001 — vertical without CAM practitioner lenses: no-op
+        return specialists
+    have = {getattr(s, "id", "") for s in specialists}
+    extra = tuple(s for s in CAM_PRACTICE_SPECIALISTS if getattr(s, "id", "") not in have)
+    return tuple(specialists) + extra
+
+
 def evidence_fitness_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, the relevance-selection step additionally BOOSTS stronger
     evidence tiers (guideline/systematic-review > RCT > cohort > case report, via the medical authority
@@ -1201,7 +1228,7 @@ def build_default_service() -> ResearchService:
         explore_legs=explore_legs_enabled(),
         answer_mode_routing=answer_mode_routing_enabled(),
         enumerative_compose_addendum=getattr(manifest, "enumerative_compose_addendum", None),
-        panel_specialists=_apply_cam_contract(getattr(manifest, "panel_specialists", ())),
+        panel_specialists=_apply_cam_practice(_apply_cam_contract(getattr(manifest, "panel_specialists", ()))),
         panel_default_ids=getattr(manifest, "panel_default_ids", ()),
         panel_synthesis_directive=getattr(manifest, "panel_synthesis_directive", None),
         panel_examples=getattr(manifest, "panel_examples", ()),
@@ -1530,6 +1557,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "evidence_fitness_enabled": evidence_fitness_enabled(),
             "web_once_enabled": web_once_enabled(),
             "cam_contract_enabled": cam_contract_enabled(),
+            "cam_practice_enabled": cam_practice_enabled(),
             "ask_panel_enabled": live_panel,
             "panel_specialists": ([
                 {"id": getattr(s, "id", ""), "specialty": getattr(s, "specialty", ""),

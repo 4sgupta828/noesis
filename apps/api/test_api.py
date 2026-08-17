@@ -83,6 +83,33 @@ def test_evidence_identity_flag_reads_env(monkeypatch) -> None:
     assert evidence_identity_enabled() is False
 
 
+def test_cam_practice_flag_reads_env(monkeypatch) -> None:
+    # CAM practitioner lenses: flag wired from NOESIS_CAM_PRACTICE (default OFF).
+    from api.app import cam_practice_enabled
+    monkeypatch.delenv("NOESIS_CAM_PRACTICE", raising=False)
+    assert cam_practice_enabled() is False
+    monkeypatch.setenv("NOESIS_CAM_PRACTICE", "1")
+    assert cam_practice_enabled() is True
+    monkeypatch.setenv("NOESIS_CAM_PRACTICE", "false")
+    assert cam_practice_enabled() is False
+
+
+def test_apply_cam_practice_off_is_identity_on_appends_two(monkeypatch) -> None:
+    # Rule 20: OFF must be byte-identical (same object back); ON appends exactly the two practitioner
+    # lenses without mutating or removing any existing specialist.
+    from api.app import _apply_cam_practice
+    from noesis_vertical_medical.specialists import SPECIALISTS
+    monkeypatch.delenv("NOESIS_CAM_PRACTICE", raising=False)
+    assert _apply_cam_practice(SPECIALISTS) is SPECIALISTS         # OFF → unchanged, same object
+    monkeypatch.setenv("NOESIS_CAM_PRACTICE", "1")
+    on = _apply_cam_practice(SPECIALISTS)
+    ids = [s.id for s in on]
+    assert ids[:len(SPECIALISTS)] == [s.id for s in SPECIALISTS]   # originals preserved, in order
+    assert ids[len(SPECIALISTS):] == ["acupuncture_practice", "ayurveda_practice"]
+    # idempotent — never double-injects if already present
+    assert [s.id for s in _apply_cam_practice(on)] == ids
+
+
 def test_claim_congruence_flag_reads_env(monkeypatch) -> None:
     # Evidence Contract stage 2: the flag is wired from NOESIS_CLAIM_CONGRUENCE (default OFF).
     from api.app import claim_congruence_enabled

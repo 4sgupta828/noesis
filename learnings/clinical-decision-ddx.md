@@ -108,6 +108,39 @@ flag (byte-identical OFF). 5. Run A/B, prove B>A on decision dims + gold coverag
 iterate the format if it loses. 6. Deploy OFF → prod-verify OFF no-op → flip ON → prod-verify a live DDx
 answer → leave ON only if the eval win holds. 7. Log results here.
 
+## EVAL RESULTS — held-out 15-case A/B (2026-08-17)
+Harness `ab_ddx.py` on `slice-ddx-clinical-15`; arm A = reasoned (differential OFF), arm B = ON; both via
+`ask_reasoned` (`NOESIS_EVAL_REASONED=1`); local code + prod corpus (tenant demo); 14 scored (1 arm-A error).
+Provenance: runs/ab-ddx-20260817T080516Z.json.
+- **Objective gold-anchored (code-only, most trustworthy — Rule 6):** can't-miss coverage 0.45→0.66
+  (**+0.21**, the key safety metric); top_dx coverage +0.15; discriminator-hit +0.07. All favor B.
+- **LLM-judge dims (pairwise 1–5):** differential_quality **+0.89** (nearly every stratum), decision_framework
+  +0.25; evidence −0.11, honesty −0.18; overall pairwise 13 ties / 1 B-win / 0 A-win (sign-test p=1.0).
+- **Honesty/evidence "dip" is measurement noise, NOT a real regression** (verified from judge rationales):
+  half-point scoring where both ≈4/5; rationales uniformly praise B ("more complete, explicitly-ranked
+  differential", "more transparent about evidence gaps"); and arm A was frequently TRUNCATED mid-answer +
+  "over-asserts fit to unstated details" — the baseline was the overconfident/incomplete one. The
+  qualitative-likelihood guard held (no B fabrication flagged). B front-loads the differential so can't-miss
+  dx surface before any truncation — a design win.
+- **Verdict (v1):** B produces safer, more complete, better-organized clinical-decision answers on the
+  objective metrics + differential-quality; roughly tied on holistic pairwise; small evidence/honesty judge
+  dip. Pairwise NOT statistically significant (n=14, mostly ties).
+- **evidence/honesty dip — root cause + fix (owner bar: must NOT regress on evidence/honesty).** Cause: B's
+  clinical completeness lists can't-miss dx (PE/dissection) that are correct but ABSENT from the research-
+  heavy corpus → judged as evidence/honesty weakness (asserted with authority not in findings). Fix (in
+  `MEDICAL_DIFFERENTIAL_FORMAT`, committed): per-entry BASIS LABELING — cite [n] when supported, else mark
+  "standard clinical reasoning — not from the retrieved evidence"; keeps completeness AND restores honesty.
+- **STATUS: fix UNVALIDATED — BLOCKED ON CREDITS.** The frugal arm-B re-measure aborted mid-run when the
+  shared Anthropic credit pool was EXHAUSTED (9/15 arm-B compose errors → invalid; also degrades PROD
+  compose). Do NOT flip ON until: (1) credits restored, (2) a frugal arm-B-only re-run (`--patch-a
+  runs/<arm_A_file>` — path relative to evals/realworld/) shows evidence & honesty deltas ≥ 0 AND the
+  can't-miss/differential gains hold. Nothing shipped to prod; flag default OFF; feature not deployed.
+- **A real bug the eval caught (why eval-first mattered):** the differential format initially never fired —
+  `_Scaffold` gained `is_diagnostic` but the scaffold PROMPT never instructed the LLM to set it (unit test
+  passed on a scripted value). Fixed + guard-tested (`test_medical_scaffold_prompt_instructs_is_diagnostic`).
+- FRUGALITY: this was the one full answer-generation run. Future iteration = `--judge-only` on saved run
+  files (zero re-answer) or arm-B-only via `--patch-a <arm_A_file>`; validate changes on 3–4 cases first.
+
 ## Risks
 1. FDA/liability — ranked DDx reads like autonomous diagnosis. De-risk: clinician-facing CDS framing,
    transparent citations, qualitative likelihood, non-autonomous, default-OFF, eval-gated.

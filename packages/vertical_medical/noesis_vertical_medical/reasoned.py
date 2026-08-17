@@ -63,11 +63,22 @@ The plausible diagnoses for THIS presentation, ordered by a QUALITATIVE clinical
 × severity-if-missed × actionability — NEVER a fabricated percentage or likelihood ratio. For EACH:
 - **Diagnosis** — likelihood in this presentation as WORDS ONLY (most likely / worth considering /
   less likely but can't-miss). Do NOT invent a numeric pre-test probability.
-- the discriminating features PRESENT or ABSENT in this case that move it up or down, each cited [n];
+- the discriminating features PRESENT or ABSENT in this case that move it up or down — each specific
+  discriminator cited [n] when the retrieved evidence supports it;
 - the single most useful next test/finding that would confirm or refute it, and what result does so.
 Cover every materially plausible branch AND every dangerous can't-miss diagnosis. Mark can't-miss items
-clearly (**can't-miss**); a can't-miss item should rest on a guideline/systematic-review-tier citation
-where one exists.
+clearly (**can't-miss**).
+
+LABEL THE BASIS OF EACH ENTRY — this is the honesty contract, and it never reduces completeness:
+- If the retrieved findings support the entry (its discriminators, workup, or association), cite them [n].
+- If a diagnosis is included on STANDARD CLINICAL GROUNDS to be complete/safe (a can't-miss that must be
+  excluded) but the retrieved evidence does NOT directly cover it, STILL LIST IT — but mark it plainly,
+  e.g. "*(standard clinical reasoning — not from the retrieved evidence)*". NEVER attach a [n] citation to
+  a claim that citation does not support, and never imply evidence you do not have. A completely-listed,
+  honestly-labeled differential is the goal: breadth must not come at the cost of grounding, and grounding
+  must not come at the cost of omitting a dangerous diagnosis. Prefer a guideline/SR-tier citation for a
+  can't-miss item when one exists; if none is retrieved, say so rather than dressing a weaker source as one.
+- Do not overstate how well the case fits a diagnosis using details the presentation did not provide.
 
 ## Initial workup
 The immediate red-flags/stabilization first, then the first-line tests that most efficiently separate the

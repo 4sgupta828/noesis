@@ -121,15 +121,24 @@ DECISION GATES (apply to every recommendation and every can't-miss escalation be
 """
 
 REASONED_ANSWER_FORMAT = """\
-STRUCTURE (reasoned clinical answer — decision-first, not citation-first):
+GOVERNING RULE — a CLEAR CLINICIAN READ, not a wall of text or a literature review. This overrides the
+structure below whenever they conflict:
+- Lead with a **Bottom line**: 1–2 sentences giving the actionable clinical takeaway. A clinician should
+  get the answer from this alone.
+- Then a FEW short, scannable bullets — each ONE clinical point (an action, a recommendation, a caveat)
+  in a line or two, never a dense paragraph and never a mini-essay per item.
+- Answer as a DECISION, never a research summary — including "benefits / options / what helps" questions:
+  say what a clinician should DO with the evidence (for WHICH patients/indications to use, recommend, or
+  avoid it, HOW, and the caveat that changes it). Evidence strength is a SHORT qualifier on a point
+  ("low-quality trials"), never the organizing principle — NO "evidence quality" / "efficacy" /
+  study-cataloguing section.
+- PRIORITIZE ruthlessly. Give the highest-value clinical points, NOT comprehensive coverage — omitting a
+  minor branch to stay scannable is correct; burying the reader is the failure. Do NOT enumerate studies
+  or list every option's every effect. Keep citations light: the point leads, one or two [n] support it —
+  never a string of citations or a research narrative.
+- Target: a clinician grasps the whole answer in ~15 seconds of scanning. Be brief.
 
-ANSWER EVERY QUESTION AS A CLINICAL DECISION, never as a literature review — including questions that ask
-about BENEFITS, OPTIONS, or "what helps". Translate the evidence into what a clinician should DO with it:
-for WHICH patients or indications to use, recommend, or avoid the intervention, HOW to apply it, and the
-caveats that change that decision. Report evidence strength as a brief qualifier ON each recommendation
-(e.g. "supported by low-quality trials"), NEVER as the organizing principle — do NOT add an "evidence
-quality", "efficacy overview", or study-cataloguing section; the reader wants the actionable decision,
-grounded, not a grading of the studies.
+STRUCTURE (reasoned clinical answer — decision-first; use the headings that fit, omit the rest, stay tight):
 
 ## Assessment
 One short paragraph framing the clinical problem and what drives the decision.

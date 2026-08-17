@@ -839,6 +839,13 @@ def differential_format_enabled() -> bool:
     return os.environ.get("NOESIS_DIFFERENTIAL_FORMAT", "").lower() in ("1", "true", "yes")
 
 
+def corpus_explorer_enabled() -> bool:
+    """Flag (default OFF): admin-gated CORPUS EXPLORER — pure-retrieval keyword (tsv full-text) + semantic
+    (pgvector) search over ingested blocks, facet filtering, and document view, for inspecting sources
+    firsthand (no LLM, no answers). Endpoints are ALSO admin-password-gated. OFF → endpoints 404."""
+    return os.environ.get("NOESIS_CORPUS_EXPLORER", "").lower() in ("1", "true", "yes")
+
+
 def panel_differential_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, the Specialist Panel synthesis uses the DIFFERENTIAL-first
     format (ranked differential + workup + what-changes-management, with per-entry basis labeling and
@@ -1650,6 +1657,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "cam_autoscope_enabled": cam_autoscope_enabled() and modality_mode_enabled(),
             "differential_format_enabled": differential_format_enabled(),
             "panel_differential_enabled": panel_differential_enabled(),
+            "corpus_explorer_enabled": corpus_explorer_enabled(),
             "decision_mode_ui_enabled": decision_mode_ui_enabled(),
             "ask_panel_enabled": live_panel,
             "panel_specialists": ([
@@ -3185,6 +3193,122 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 "job_shape": {"connector": "one of the keys above", "query": "connector query",
                               "limit": "cap (<=400)", "kind": "label", "quality": "tag",
                               "source_country": "optional facet stamp (e.g. IN)"}}
+
+    # ---- CORPUS EXPLORER (admin-gated, READ-ONLY pure retrieval — no LLM, no answers) ----------------
+    def _corpus_gate(x_admin_password: str):
+        if not corpus_explorer_enabled():
+            raise HTTPException(status_code=404, detail="corpus explorer not enabled")
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        dsn = os.environ.get("NOESIS_CORPUS_DSN")
+        if not dsn:
+            raise HTTPException(status_code=404, detail="no corpus DSN")
+        return dsn
+
+    def _corpus_facet_clauses(filters: dict, params: list) -> list[str]:
+        """Append facet filter values to params; return SQL clauses. STRUCTURAL filtering only."""
+        spec = [("source_key", "source_key", "="), ("journal", "facets->>'journal'", "ILIKE"),
+                ("modality", "facets->>'modality'", "="), ("source_country", "facets->>'source_country'", "="),
+                ("pub_type", "facets->>'pub_type'", "="), ("content_type", "content_type", "=")]
+        clauses = []
+        for key, col, op in spec:
+            v = (str(filters.get(key) or "")).strip()
+            if v:
+                params.append(f"%{v}%" if op == "ILIKE" else v)
+                clauses.append(f"{col} {op} ${len(params)}")
+        return clauses
+
+    def _parse_facets(f):
+        import json as _json
+        if isinstance(f, dict):
+            return f
+        try:
+            return _json.loads(f) if f else {}
+        except Exception:   # noqa: BLE001
+            return {}
+
+    @app.post("/admin/corpus/search")
+    async def admin_corpus_search(body: dict, x_admin_password: str = Header(default="")) -> dict:
+        """Pure retrieval over ingested blocks: mode=keyword (tsv full-text) | semantic (pgvector),
+        with optional facet filters. NO LLM, NO answer — just the raw blocks + provenance."""
+        dsn = _corpus_gate(x_admin_password)
+        mode = (body.get("mode") or "keyword").strip().lower()
+        query = (body.get("query") or "").strip()
+        tenant = (body.get("tenant") or "demo").strip()
+        limit = max(1, min(int(body.get("limit") or 20), 100))
+        params: list = [tenant]
+        where = ["tenant_id = $1"] + _corpus_facet_clauses(body.get("filters") or {}, params)
+        if mode == "semantic":
+            if not query:
+                raise HTTPException(status_code=400, detail="semantic mode needs a query")
+            if app.state.service is None:
+                app.state.service = build_default_service()
+            vec = app.state.service.embedder.embed([query])[0]
+            params.append("[" + ",".join(f"{x:.6f}" for x in vec) + "]")
+            where.append("embedding IS NOT NULL")
+            order = f"ORDER BY embedding <=> ${len(params)}::vector"
+        elif query:
+            params.append(query)
+            where.append(f"tsv @@ plainto_tsquery('english', ${len(params)})")
+            order = f"ORDER BY ts_rank_cd(tsv, plainto_tsquery('english', ${len(params)})) DESC"
+        else:
+            order = "ORDER BY created_at DESC NULLS LAST"   # no query → browse newest under the filters
+        sql = (f"SELECT document_id, block_id, left(text, 1400) AS text, facets, document_title, "
+               f"content_type, source_key FROM rs_block WHERE {' AND '.join(where)} {order} LIMIT {limit}")
+        import asyncpg
+        conn = await asyncpg.connect(dsn)
+        try:
+            rows = await conn.fetch(sql, *params)
+        except Exception as e:   # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"search error: {e}") from e
+        finally:
+            await conn.close()
+        return {"mode": mode, "count": len(rows), "results": [
+            {"document_id": r["document_id"], "block_id": r["block_id"], "text": r["text"],
+             "title": r["document_title"], "content_type": r["content_type"],
+             "source_key": r["source_key"], "facets": _parse_facets(r["facets"])} for r in rows]}
+
+    @app.get("/admin/corpus/document")
+    async def admin_corpus_document(document_id: str, tenant: str = "demo",
+                                    x_admin_password: str = Header(default="")) -> dict:
+        """All blocks of ONE ingested document, in order — read the whole source firsthand."""
+        dsn = _corpus_gate(x_admin_password)
+        import asyncpg
+        conn = await asyncpg.connect(dsn)
+        try:
+            rows = await conn.fetch(
+                "SELECT block_id, text, facets, document_title, content_type, source_key "
+                "FROM rs_block WHERE tenant_id = $1 AND document_id = $2 ORDER BY block_id LIMIT 2000",
+                tenant, document_id)
+        finally:
+            await conn.close()
+        if not rows:
+            raise HTTPException(status_code=404, detail="document not found for this tenant")
+        r0 = rows[0]
+        return {"document_id": document_id, "title": r0["document_title"],
+                "content_type": r0["content_type"], "source_key": r0["source_key"],
+                "facets": _parse_facets(r0["facets"]), "n_blocks": len(rows),
+                "blocks": [{"block_id": r["block_id"], "text": r["text"]} for r in rows]}
+
+    @app.get("/admin/corpus/facets")
+    async def admin_corpus_facets(tenant: str = "demo",
+                                  x_admin_password: str = Header(default="")) -> dict:
+        """Distinct low-cardinality facet values (for filter dropdowns). Journal is high-cardinality —
+        typed as a free-text ILIKE filter in the UI, not enumerated here."""
+        dsn = _corpus_gate(x_admin_password)
+        import asyncpg
+        conn = await asyncpg.connect(dsn)
+        out: dict = {}
+        try:
+            for key in ("modality", "source_country", "pub_type", "content_type"):
+                col = "content_type" if key == "content_type" else f"facets->>'{key}'"
+                rows = await conn.fetch(
+                    f"SELECT {col} AS v, count(*) AS c FROM rs_block WHERE tenant_id = $1 AND {col} IS NOT NULL "
+                    f"AND {col} <> '' GROUP BY 1 ORDER BY 2 DESC LIMIT 25", tenant)
+                out[key] = [{"value": r["v"], "count": r["c"]} for r in rows]
+        finally:
+            await conn.close()
+        return {"tenant": tenant, "facets": out}
 
     @app.get("/admin/graph/view")
     async def admin_graph_view(days: int = 30,

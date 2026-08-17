@@ -57,9 +57,29 @@ full text) · living pages (drug shortage notices, outbreak dashboards) · CDSCO
     SUCCESS (not just that `railway up` returned) before trusting a facet is live. Re-ingest
     backfills facets: block upsert is `ON CONFLICT DO UPDATE SET facets=EXCLUDED.facets`, and
     content-addressed block_id means unchanged text isn't re-embedded (near-zero re-cost).
+  - **Tranche-1 DONE 2026-08-17:** all 17 topics landed, **21,846 blocks** of cc-by full-text
+    guidelines (AFib doc stamps `lic='cc by'` — the ESC AFib guideline update, exactly the
+    flagship-adjacent OA content this targets).
+  - **EMBEDDER BUG found + fixed mid-tranche (2026-08-17):** the atrial-fibrillation job kept
+    400-ing at `input[175]: maximum input length is 8192 tokens`. Root cause chain: (1)
+    `corpus/splitter.py` splits only on blank lines with **NO max block size**, so one huge
+    paragraph (a flattened table) becomes a >8192-token block; (2) `OpenAIEmbedder.embed` sent
+    `input=texts` raw, so that ONE block 400s the WHOLE batch → 0 blocks land; (3) `embed_pending`
+    scans ALL unembedded blocks corpus-wide, so the poisoned block (stored via upsert, never
+    embedded) re-trips EVERY subsequent job at the same batch index. Fix: clamp each embed input
+    to 8000 tokens in `OpenAIEmbedder.embed` — **but the first attempt relied on `tiktoken`, which
+    was NOT a declared dep**, so prod silently used a too-loose char fallback and kept failing.
+    Real fix (commit): add `tiktoken>=0.7` to `kernel[serve]` (precise clamp) + tighten the char
+    fallback to 2x. Verified in prod: AFib re-run → done, 1189 blocks. Protects EVERY connector.
+    **Follow-up (deeper source fix):** cap block size in `splitter.py` so oversized blocks never
+    form — needs a `SPLITTER_VERSION` bump + corpus re-split, tracked separately.
+  - **DEPLOY GOTCHA reinforced:** `numReplicas=2` + `drainingSeconds=300` (railway.toml) means old
+    containers drain for 5 min after a SUCCESS deploy and can claim a job with OLD code. When
+    verifying a fix via a fresh ingest, buffer ~330s past the deploy before firing, or an
+    old-replica claim yields a false "still broken".
   - **T-LIC next:** USPSTF (public domain — needs a connector/registry entry, not europepmc);
     Cochrane PLS/abstracts (cc-by-nc → exclude full, abstracts case-by-case); widen topic set
-    after tranche-1 verifies retrieval improves.
+    after tranche-1 verifies retrieval improves; the splitter max-block-size source fix.
 Ordering rationale: T1-T2 are unambiguous public domain; T3 multiplies span quality on
 already-proven demand; T4-T5 need per-source checks. Coverage board + improvement-loop
 `missing_evidence` findings steer which conditions deepen first.

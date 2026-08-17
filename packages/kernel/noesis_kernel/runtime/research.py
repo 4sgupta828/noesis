@@ -76,6 +76,8 @@ class ResearchService:
     triage_prompt_v2: str | None = None      # vertical intake-v2 directive (opaque; None → v2 falls back to v1)
     reasoned_scaffold_prompt: str | None = None  # alternate-engine scaffold directive (coverage as QUESTIONS)
     reasoned_answer_format: str | None = None    # alternate-engine compose directive (decision-gated answer)
+    differential_answer_format: str | None = None  # DIAGNOSTIC management → differential-first decision format
+                                                   # (flag-gated; None → always use reasoned_answer_format)
     integrative_prompt: str | None = None        # opt-in complementary/integrative answer-section directive
     integrative_query_hint: str | None = None    # retrieval-steering hint appended when the user opts in
     alt_directive: str | None = None             # Alternative-modality compose directive (CAM-centered + labeling)
@@ -198,6 +200,10 @@ class ResearchService:
         class _Scaffold(BaseModel):
             # kind = the routing judgment (LLM-owned, Rule 18). Lists are QUESTIONS/topics to cover.
             kind: Literal["management", "lookup", "understanding"] = "management"
+            # is_diagnostic (LLM-owned): true when a management question asks for a DIFFERENTIAL / "what
+            # could this be" / the initial workup of a PRESENTATION — routes to the differential-first
+            # clinical-decision format. False for a pure treatment/monitoring management question.
+            is_diagnostic: bool = False
             likely_causes: list[str] = Field(default_factory=list)
             cant_miss: list[str] = Field(default_factory=list)
             key_decisions: list[str] = Field(default_factory=list)
@@ -229,18 +235,31 @@ class ResearchService:
                 kw["answer_format_override"] = self.understanding_answer_format
                 await _emit({"type": "engine", "engine": "understanding", "why": "why/how question"})
                 return await self.ask(**kw)
+            # DIAGNOSTIC management question + the differential format is wired (flag on) → the
+            # differential-first clinical-decision format; else the standard reasoned decision format.
+            _diagnostic = bool(getattr(s, "is_diagnostic", False)) and bool(self.differential_answer_format)
             lines = ([f"- explicitly asked: {x}" for x in s.explicit_asks[:8]]
                      + [f"- likely/common: {x}" for x in s.likely_causes[:6]]
                      + [f"- can't-miss: {x}" for x in s.cant_miss[:6]]
                      + [f"- decision: {x}" for x in s.key_decisions[:6]])
+            if _diagnostic:
+                # steer retrieval toward decision-grade sources for the differential + thresholds
+                lines.append("- prioritize guideline / consensus / systematic-review sources for the "
+                             "workup and management thresholds")
             if lines:
                 kw = dict(kw)
                 kw["graph_question"] = question     # expander anchors on the ASKED subject, not brief branches
                 kw["question"] = (question + "\n\n[Coverage brief — clinical branches this answer must "
                                   "INVESTIGATE and address (these are questions to research, not facts):\n"
                                   + "\n".join(lines) + "\n]")
-                await _emit({"type": "engine", "engine": "reasoned", "why": "management question"})
+                await _emit({"type": "engine",
+                             "engine": ("differential" if _diagnostic else "reasoned"),
+                             "why": ("diagnostic differential question" if _diagnostic
+                                     else "management question")})
                 await _emit({"type": "scaffold", "branches": len(lines)})
+            if _diagnostic:
+                kw["answer_format_override"] = self.differential_answer_format
+                return await self.ask(**kw)
         except Exception:   # noqa: BLE001 — scaffold is an enhancer; its failure never blocks the answer
             pass
         kw["answer_format_override"] = self.reasoned_answer_format

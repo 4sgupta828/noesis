@@ -126,6 +126,16 @@ def test_apply_cam_practice_on_makes_cam_panelists_distinct(monkeypatch) -> None
     assert "dosha" in on["ayurveda_practice"].focus.lower()
 
 
+def test_differential_format_flag_reads_env(monkeypatch) -> None:
+    from api.app import differential_format_enabled
+    monkeypatch.delenv("NOESIS_DIFFERENTIAL_FORMAT", raising=False)
+    assert differential_format_enabled() is False
+    monkeypatch.setenv("NOESIS_DIFFERENTIAL_FORMAT", "1")
+    assert differential_format_enabled() is True
+    monkeypatch.setenv("NOESIS_DIFFERENTIAL_FORMAT", "off")
+    assert differential_format_enabled() is False
+
+
 def test_cam_autoscope_flag_reads_env(monkeypatch) -> None:
     from api.app import cam_autoscope_enabled
     monkeypatch.delenv("NOESIS_CAM_AUTOSCOPE", raising=False)

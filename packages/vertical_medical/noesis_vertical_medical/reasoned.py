@@ -44,6 +44,62 @@ writing a research plan, not an answer — if you find yourself stating a fact o
 action, rewrite it as the question it answers.
 """
 
+MEDICAL_DIFFERENTIAL_FORMAT = """\
+STRUCTURE (clinician-facing CLINICAL DECISION answer — differential-first, decision-grade). This is
+DECISION SUPPORT for a clinician, never an autonomous or definitive diagnosis: frame diagnoses as
+"conditions the evidence associates with this presentation", and let the clinician decide.
+
+## Ranked differential
+The plausible diagnoses for THIS presentation, ordered by a QUALITATIVE clinical judgment of probability
+× severity-if-missed × actionability — NEVER a fabricated percentage or likelihood ratio. For EACH:
+- **Diagnosis** — likelihood in this presentation as WORDS ONLY (most likely / worth considering /
+  less likely but can't-miss). Do NOT invent a numeric pre-test probability.
+- the discriminating features PRESENT or ABSENT in this case that move it up or down, each cited [n];
+- the single most useful next test/finding that would confirm or refute it, and what result does so.
+Cover every materially plausible branch AND every dangerous can't-miss diagnosis. Mark can't-miss items
+clearly (**can't-miss**); a can't-miss item should rest on a guideline/systematic-review-tier citation
+where one exists.
+
+## Initial workup
+The immediate red-flags/stabilization first, then the first-line tests that most efficiently separate the
+differential — ordered by decision value, not by how many papers mention them. Name what each test rules
+in/out.
+
+## What changes management
+Explicit decision thresholds as "**if <specific result/trigger>** → <action>" (admit / image / treat
+empirically / start therapy / consult / observe / broaden workup). Every recommendation passes the
+DECISION GATES below.
+
+## Evidence basis & uncertainty
+Lead with guideline / consensus / curated-synthesis support where the answer rests on standard of care;
+cite primary studies only where guidelines are absent, conflicting, or for diagnostic performance. If NO
+guideline-tier source is present in the findings for a load-bearing decision, SAY SO as a real gap — do
+not dress a lower-tier research finding as standard of care. Separate, one line each where real: (a)
+missing patient information, (b) genuine clinical uncertainty, (c) weak/absent evidence.
+
+GROUNDING & SAFETY (non-negotiable):
+- Every clinical claim cites [n] findings. The PATIENT'S OWN case facts (from the question) are context —
+  refer to them as given ("the patient's orthopnea"), never with a [n] citation. Citations are for
+  retrieved EVIDENCE only.
+- Likelihood is QUALITATIVE. Never emit a pre-test probability %, likelihood ratio, or sensitivity/
+  specificity figure that is not stated verbatim in a cited finding.
+- Do not invent a diagnosis, discriminating feature, test, or threshold the findings do not support; a
+  smaller true differential beats a fuller invented one.
+
+DECISION GATES (apply to every recommendation and every can't-miss escalation before it ships):
+- The cited finding must support the INFERENCE you draw, not merely mention the topic. Descriptive
+  evidence (a case, a protocol) is "has been reported/used", never "should".
+- AUTHORITY OUTRANKS SEMANTIC FIT: guideline/consensus > systematic review/RCT > observational > case
+  report/registry text — let the highest-tier DIRECTLY APPLICABLE finding carry the recommendation; a
+  mismatched-population guideline or a registry description can never carry a directive on its own
+  (demote to "may be considered", name the mismatch, name the standard-of-care step it sits behind).
+- INVASIVE OR IRREVERSIBLE steps carry the highest bar: state the supporting source's population/setting,
+  check for contradicting higher-tier evidence, and present as a conditional consideration with its
+  trigger when either is uncertain — never borrowed urgency from a different care setting.
+- POPULATION SPECIFICITY: when evidence comes from a different phenotype/setting than this patient, name
+  the extrapolation where the recommendation is made, not only in a caveats section.
+"""
+
 REASONED_ANSWER_FORMAT = """\
 STRUCTURE (reasoned clinical answer — decision-first, not citation-first):
 

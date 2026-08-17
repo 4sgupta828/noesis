@@ -829,6 +829,16 @@ async def _detect_cam_intent(svc, question: str) -> bool:
         return False
 
 
+def differential_format_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, the reasoned engine routes DIAGNOSTIC management questions
+    (differential / "what could this be" / initial workup of a presentation) to the differential-first
+    CLINICAL DECISION format (ranked differential + discriminators + what-changes-management), in place of
+    the standard reasoned decision format. LLM-owned diagnostic detection (the scaffold's is_diagnostic,
+    Rule 18). OFF → the differential format is not wired into the service, so the reasoned engine always
+    uses the reasoned format (byte-identical). See learnings/clinical-decision-ddx.md."""
+    return os.environ.get("NOESIS_DIFFERENTIAL_FORMAT", "").lower() in ("1", "true", "yes")
+
+
 def evidence_fitness_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, the relevance-selection step additionally BOOSTS stronger
     evidence tiers (guideline/systematic-review > RCT > cohort > case report, via the medical authority
@@ -1243,6 +1253,11 @@ def build_default_service() -> ResearchService:
     triage_prompt_v2 = getattr(manifest, "triage_prompt_v2", None)
     reasoned_scaffold = getattr(manifest, "reasoned_scaffold_prompt", None)
     reasoned_format = getattr(manifest, "reasoned_answer_format", None)
+    # DIFFERENTIAL-first clinical-decision format (flag NOESIS_DIFFERENTIAL_FORMAT, default OFF — Rule 20):
+    # only wired into the service when the flag is on, so OFF the reasoned engine ALWAYS uses the
+    # reasoned format (byte-identical). ON → diagnostic management questions get the differential format.
+    differential_format = (getattr(manifest, "differential_answer_format", None)
+                           if differential_format_enabled() else None)
     # Use the BEST model for EVERY research step (planning + claim extraction + compose). A cheaper
     # planner (haiku) paraphrased quotes → span-verification rejected them (grounding regression),
     # so planner_llm is left unset and run_react uses `llm` throughout. Optional explicit override.
@@ -1299,6 +1314,7 @@ def build_default_service() -> ResearchService:
         refine_prompt=refine_prompt, triage_prompt=triage_prompt,
         triage_prompt_v2=triage_prompt_v2,
         reasoned_scaffold_prompt=reasoned_scaffold, reasoned_answer_format=reasoned_format,
+        differential_answer_format=differential_format,
         integrative_prompt=getattr(manifest, "integrative_prompt", None),
         alt_directive=getattr(manifest, "alt_directive", None),
         alt_query_hint=getattr(manifest, "alt_query_hint", None),
@@ -1609,6 +1625,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "cam_contract_enabled": cam_contract_enabled(),
             "cam_practice_enabled": cam_practice_enabled(),
             "cam_autoscope_enabled": cam_autoscope_enabled() and modality_mode_enabled(),
+            "differential_format_enabled": differential_format_enabled(),
             "ask_panel_enabled": live_panel,
             "panel_specialists": ([
                 {"id": getattr(s, "id", ""), "specialty": getattr(s, "specialty", ""),

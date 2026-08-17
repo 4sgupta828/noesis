@@ -99,6 +99,10 @@ class VerticalManifest:
     # as QUESTIONS, never conclusions) + a decision-gated compose directive. Opaque prose.
     reasoned_scaffold_prompt: str | None = None
     reasoned_answer_format: str | None = None
+    # Optional DIFFERENTIAL-first clinical-decision format (flag NOESIS_DIFFERENTIAL_FORMAT): used by the
+    # reasoned engine for DIAGNOSTIC management questions (differential + workup + decision) in place of
+    # reasoned_answer_format. None → the reasoned engine always uses reasoned_answer_format (byte-identical).
+    differential_answer_format: str | None = None
     # Optional OPT-IN complementary/integrative section: a compose addendum + a retrieval-steering hint,
     # applied only when the user explicitly opts in for a question. Opaque prose.
     integrative_prompt: str | None = None

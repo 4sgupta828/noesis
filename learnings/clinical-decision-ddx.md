@@ -68,6 +68,14 @@ Leads with the differential; every clinical claim carries `[n]`; likelihood is Q
 - UX (optional, later): a "Clinical decision" vs "Research" toggle is just a FE label that forces
   is_diagnostic routing — same engine, no parallel pipeline. Not required for v1 (auto-routing suffices).
 
+## SHIPPED — prod-verified (2026-08-17)
+NOESIS_DIFFERENTIAL_FORMAT=1 LIVE in prod after v3 eval cleared the bar (evidence flat, honesty
+noise, differential-quality +1.20, can't-miss +0.18; owner approved flip-ON). Deploy verified OFF
+byte-identical first, then flipped ON. Prod-verify: a live diagnostic /research question (30yo,
+fever+headache+petechial rash) returned '## Ranked differential / ## Initial workup / ## What
+changes management / ## Evidence basis' — leading with 'Meningococcal disease — can't-miss' cited
+[1][2][3], grounded, 29 claims. Flag-gated: instant rollback via NOESIS_DIFFERENTIAL_FORMAT=0.
+
 ## Implementation status (2026-08-17)
 - BUILT + unit-tested: `MEDICAL_DIFFERENTIAL_FORMAT` (`reasoned.py`); `differential_answer_format` on
   `Manifest`, `ResearchService`, wired in vertical manifest; `_Scaffold.is_diagnostic` (LLM-owned) →

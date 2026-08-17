@@ -51,6 +51,28 @@ def test_splitter_is_deterministic() -> None:
            [b.content_key for b in splitter.split("d", text)]
 
 
+def test_splitter_normal_paragraphs_keep_v1_content_key() -> None:
+    # dedup contract: paragraphs under the cap must be byte-identical (same content_key) to v1 —
+    # a single block per paragraph, text unchanged.
+    text = "First paragraph.\n\nSecond paragraph here."
+    blocks = splitter.split("doc", text)
+    assert [b.text for b in blocks] == ["First paragraph.", "Second paragraph here."]
+    assert blocks[0].content_key == content_key(b"First paragraph.")
+
+
+def test_splitter_sub_splits_oversized_paragraph_under_cap() -> None:
+    # one paragraph far over the cap (a flattened table / wall) → multiple blocks, each <= cap,
+    # so none can exceed the embedder's 8192-token limit and 400 the batch.
+    huge = "word " * 4000                       # ~20000 chars, one paragraph, no blank lines
+    blocks = splitter.split("doc", huge)
+    assert len(blocks) > 1
+    assert all(len(b.text) <= splitter.MAX_BLOCK_CHARS for b in blocks)
+    # deterministic
+    assert [b.content_key for b in blocks] == [b.content_key for b in splitter.split("doc", huge)]
+    # coverage: the concatenated pieces reconstruct the trimmed content (word count preserved)
+    assert sum(b.text.count("word") for b in blocks) == 4000
+
+
 # ---- index stage (parse → block → embed → persist) -----------------------
 
 def _doc(doc_id: str, ct: str = "text/plain") -> Document:

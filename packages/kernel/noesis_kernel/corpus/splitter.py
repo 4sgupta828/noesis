@@ -10,7 +10,44 @@ from __future__ import annotations
 from noesis_kernel.corpus.models import Block
 from noesis_kernel.ingestion.storage import content_key
 
-SPLITTER_VERSION = "para.v1"
+# v2 (2026-08-17): sub-split any paragraph over MAX_BLOCK_CHARS. A single unsplit paragraph
+# (a flattened table, a wall of text) could exceed the embedder's 8192-token hard limit and
+# 400 the whole batch (the atrial-fibrillation ingest). This is the SOURCE fix; the embedder
+# token clamp remains the safety net. Blocks under the cap are byte-identical to v1, so their
+# content_key (sha256 of text) is unchanged and cross-document dedup is preserved — only
+# pathologically-large blocks (which failed to embed before) change.
+SPLITTER_VERSION = "para.v2"
+
+# ~8000 chars ≈ 2000-2700 tokens even for dense medical text — comfortably under the 8192-token
+# embed limit, and only pathologically-large paragraphs ever hit it (normal prose paragraphs are
+# far smaller and pass through untouched, preserving their v1 content_key).
+MAX_BLOCK_CHARS = 8000
+
+
+def _slice_oversized(text: str, max_chars: int = MAX_BLOCK_CHARS) -> list[tuple[int, str]]:
+    """Split an over-long block into <= max_chars slices at the best nearby boundary.
+
+    Returns (offset_within_text, slice_text) pairs. Deterministic (same input → same slices)
+    so the dedup contract holds. Prefers to break at a newline > sentence end > whitespace found
+    in the back half of the window; falls back to a hard cut only if no boundary exists. Pure
+    structural chunking, no semantic decision (Rule 18)."""
+    if len(text) <= max_chars:
+        return [(0, text)]
+    out: list[tuple[int, str]] = []
+    i, n = 0, len(text)
+    while i < n:
+        end = min(i + max_chars, n)
+        if end < n:
+            window = text[i:end]
+            cut = max(window.rfind("\n"), window.rfind(". "), window.rfind(" "))
+            if cut > max_chars * 0.5:        # only honor a boundary past the halfway point
+                end = i + cut + 1
+        piece = text[i:end]
+        stripped = piece.strip()
+        if stripped:
+            out.append((i + piece.find(stripped), stripped))
+        i = end
+    return out
 
 
 def _heading_level(line: str) -> int | None:
@@ -66,16 +103,20 @@ def split(document_id: str, text: str, *, min_chars: int = 1) -> list[Block]:
             continue
 
         # locate the (post-heading) block text within the original document
-        char_start = text.find(stripped, start)
-        char_end = char_start + len(stripped)
-        blocks.append(Block(
-            document_id=document_id,
-            index=index,
-            content_key=content_key(stripped.encode("utf-8")),
-            text=stripped,
-            char_start=char_start,
-            char_end=char_end,
-            section_path=tuple(section),
-        ))
-        index += 1
+        block_pos = text.find(stripped, start)
+        # sub-split pathologically-large paragraphs so no single block exceeds the embed limit;
+        # normal paragraphs yield exactly one slice with identical text (stable content_key).
+        for sub_off, sub_text in _slice_oversized(stripped):
+            char_start = block_pos + sub_off
+            char_end = char_start + len(sub_text)
+            blocks.append(Block(
+                document_id=document_id,
+                index=index,
+                content_key=content_key(sub_text.encode("utf-8")),
+                text=sub_text,
+                char_start=char_start,
+                char_end=char_end,
+                section_path=tuple(section),
+            ))
+            index += 1
     return blocks

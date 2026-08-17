@@ -95,5 +95,28 @@ public-domain, CC BY / CC0, or explicitly `licensed=true`. NC (CC BY-NC*) is exc
 - NEXT: Phase 2 (practitioner lenses + `NOESIS_CAM_PRACTICE` flag + split contract + `source_role` facet +
   LLM claim-type judge + held-out practitioner eval). Phase 3 (classical texts / API) pending license check.
 
+## Phase 2 execution log (2026-08-16, mechanism done — behind flag, OFF pending eval)
+- Two PRACTITIONER panel lenses added (`specialists.py`): `acupuncture_practice` (acupuncture+acupressure,
+  TCM pattern/point framework) and `ayurveda_practice` (dosha/samprapti/classical-formulation/dravyaguna/
+  panchakarma). Shared `_CAM_PRACTICE_ANSWER_FORMAT` = 3 separated layers (1 traditional framework, worded
+  "traditionally indicated for"; 2 modern evidence, tier+direction labeled, the ONLY layer allowed
+  "effective/proven"; 3 safety & integration) + hard vocabulary discipline = the prompt-layer
+  efficacy-laundering guard. Fabrication gate unchanged.
+- Flag `NOESIS_CAM_PRACTICE` (default OFF) + `_apply_cam_practice()` INJECTS the two lenses into the roster
+  only when ON (they are NOT in default SPECIALISTS) → triage/manual-select/FE-echo all see them; OFF
+  returns the same object (byte-identical). Echoed to /config as `cam_practice_enabled`. FE surfaces them
+  from `panel_specialists` (index.html:1778) with no FE change. `integrative_cam` kept as evidence seat.
+- Tests: `test_api.py` — flag reads env; `_apply_cam_practice` OFF=identity, ON appends exactly the two,
+  idempotent. All pass. (Pre-existing unrelated fails: test_panel.py::{no_evidence_says_so,
+  deadline_cancels_stragglers} — message-drift + 1s-timing, fail on clean tree too.)
+- PROD-VERIFIED both states: OFF → `cam_practice_enabled:false`, lenses absent. Flipped ON → lenses in
+  roster; `/panel/plan` routed acupuncture-LBP Q → [acupuncture_practice, integrative_cam, ebm,
+  primary_care], amavata Q → [ayurveda_practice, rheumatology, ebm, gastro], conventional HTN Q → NO
+  practitioner lens (clean). Flag reset to OFF pending the held-out practitioner eval (Rule 20 gate).
+- OUTSTANDING before flip-ON for users: (1) held-out practitioner eval slice (acupuncture + Ayurveda
+  practice cases, gold = correct traditional framing + correctly-separated evidence layer + no
+  efficacy-laundering); (2) the structural guard (source_role/evidence_kind facet + LLM claim-type judge)
+  — lands with Phase 3 classical texts, until then the split-ontology contract is the guard.
+
 Related: learnings/corpusfirst.md, learnings/competitive-landscape.md, learnings/evidencecontract.md,
 learnings/noesisindia.md.

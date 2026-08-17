@@ -74,7 +74,13 @@ async def _run(slice_path: pathlib.Path, limit: int, expand: str, conc: int,
         async with sem:
             t0 = dt.datetime.now(dt.timezone.utc)
             try:
-                res = await svc.ask(question=r["question"], tenant_id="demo")
+                # Prod routes clinical-decision questions through the REASONED engine, not the
+                # bare adaptive one. NOESIS_EVAL_REASONED=1 makes this slice runner prod-faithful
+                # for those sets; unset (default) preserves the original svc.ask behavior exactly.
+                if os.environ.get("NOESIS_EVAL_REASONED", "").strip().lower() in ("1", "true"):
+                    res = await svc.ask_reasoned(question=r["question"], tenant_id="demo")
+                else:
+                    res = await svc.ask(question=r["question"], tenant_id="demo")
             except Exception as e:               # noqa: BLE001
                 return {"id": r["id"], "error": f"{type(e).__name__}: {e}"[:300]}
             gl = (getattr(res, "diagnostics", None) or {}).get("graph_legs")

@@ -213,6 +213,7 @@ class VerticalManifest:
     # parses it. None → that route never fires for this vertical.
     panel_enumerative_addendum: str | None = None
     panel_decision_addendum: str | None = None
+    panel_differential_addendum: str | None = None  # differential-first panel synthesis (diagnostic; flag-gated)
 
     # Optional QUESTION-CONTRACT derivation directive (Evidence Contract stage 3, flag
     # NOESIS_QUESTION_CONTRACT): instructs ONE small LLM call to decide whether a question demands

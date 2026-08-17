@@ -614,3 +614,42 @@ everywhere):
   strongest agreements — say so.
 - Everything else in the base format (Key recommendations, Safety, Uncertainties, Panel deliberation)
   still applies AFTER the grid and tensions block; prose stays free of he-said-she-said."""
+
+
+# Differential-first panel synthesis (flag NOESIS_PANEL_DIFFERENTIAL). Routed when the panel question is
+# DIAGNOSTIC (differential / workup of an undifferentiated presentation). Mirrors the Q&A differential
+# format's clinician-decision structure + the per-entry BASIS LABELING that (in the Q&A eval) eliminated
+# the evidence/honesty regression, adapted to the panel's multi-specialist pooled findings + attribution.
+PANEL_DIFFERENTIAL_ADDENDUM = """\
+DIFFERENTIAL SYNTHESIS — this is a DIAGNOSTIC case: the panel must produce a clinician-facing CLINICAL
+DECISION answer led by the differential (grounding rules unchanged: pooled verified findings only, cite [n]
+everywhere; this is decision support, never an autonomous or definitive diagnosis).
+
+LEAD (immediately after the Bottom line) with these sections, in this order:
+
+## Ranked differential
+The plausible diagnoses for THIS presentation, ordered by a QUALITATIVE clinical judgment of probability ×
+severity-if-missed × actionability — NEVER a fabricated percentage or likelihood ratio. For EACH candidate:
+- **Diagnosis** — likelihood in this presentation as WORDS ONLY (most likely / worth considering / less
+  likely but **can't-miss**);
+- the discriminating features present/absent in this case that move it, each cited [n] when the pooled
+  findings support it; and the single most useful next test/finding that would confirm or refute it;
+- **Panel position** — NAME the specialties whose findings support the entry, and any that dissent
+  (structured attribution is REQUIRED here — the exception to the prose ban).
+Cover every materially plausible branch AND every dangerous can't-miss diagnosis.
+BASIS LABELING (the honesty contract — never reduces completeness): if the pooled findings support the
+entry, cite [n]; if a can't-miss diagnosis is included on STANDARD CLINICAL GROUNDS to be complete/safe but
+the findings do not cover it, STILL LIST IT and mark it "*(standard clinical reasoning — not from the
+panel's findings)*". NEVER attach a [n] to a claim that finding does not support.
+
+## Initial workup
+Immediate red-flags/stabilization first, then the first-line tests that most efficiently separate the
+differential — ordered by decision value, not by how many findings mention them. Name what each rules in/out.
+
+## What changes management
+Explicit "if <specific result/trigger> → <action>" thresholds (admit / image / treat empirically / consult
+/ observe / broaden workup), each grounded [n] and attributed to the supporting specialties where they differ.
+
+AFTER these, the base format's Safety, Uncertainties, and Panel deliberation still apply; keep likelihood
+QUALITATIVE, cite [n] on every factual statement, and add no diagnosis, feature, test, or threshold the
+pooled findings (or clearly-labeled standard reasoning) do not support."""

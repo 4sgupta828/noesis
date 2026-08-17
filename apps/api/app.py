@@ -839,6 +839,17 @@ def differential_format_enabled() -> bool:
     return os.environ.get("NOESIS_DIFFERENTIAL_FORMAT", "").lower() in ("1", "true", "yes")
 
 
+def panel_differential_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, the Specialist Panel synthesis uses the DIFFERENTIAL-first
+    format (ranked differential + workup + what-changes-management, with per-entry basis labeling and
+    specialty attribution) for DIAGNOSTIC panel questions, in place of the decision grid. Requires the
+    panel contract (NOESIS_PANEL_CONTRACT) so the diagnostic classification exists. OFF → the vertical's
+    panel_differential_addendum is not wired, so the panel synthesis is byte-identical to today. Held to
+    its OWN eval (the panel synthesis is a separate path from the Q&A differential). See
+    learnings/clinical-decision-ddx.md."""
+    return os.environ.get("NOESIS_PANEL_DIFFERENTIAL", "").lower() in ("1", "true", "yes")
+
+
 def decision_mode_ui_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, the composer shows a user-facing 'Clinical Decision | Research'
     mode toggle (default Clinical Decision). Clinical Decision = the reasoned engine (auto-classifies →
@@ -1311,6 +1322,8 @@ def build_default_service() -> ResearchService:
         panel_contract=panel_contract_enabled(),
         panel_enumerative_addendum=getattr(manifest, "panel_enumerative_addendum", None),
         panel_decision_addendum=getattr(manifest, "panel_decision_addendum", None),
+        panel_differential_addendum=(getattr(manifest, "panel_differential_addendum", None)
+                                     if panel_differential_enabled() else None),
         sources=sources, gating=manifest.gating_policy, persona_prompt=persona,
         answer_format=answer_format,
         # Patient directive resolved INDEPENDENTLY of structured_answers/clinical_synthesis — the
@@ -1636,6 +1649,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "cam_practice_enabled": cam_practice_enabled(),
             "cam_autoscope_enabled": cam_autoscope_enabled() and modality_mode_enabled(),
             "differential_format_enabled": differential_format_enabled(),
+            "panel_differential_enabled": panel_differential_enabled(),
             "decision_mode_ui_enabled": decision_mode_ui_enabled(),
             "ask_panel_enabled": live_panel,
             "panel_specialists": ([

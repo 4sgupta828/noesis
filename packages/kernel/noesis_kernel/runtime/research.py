@@ -134,6 +134,7 @@ class ResearchService:
     #                                         panel coverage_gaps, decision-synthesis routing
     panel_enumerative_addendum: str | None = None  # vertical panel enumerative addendum (opaque)
     panel_decision_addendum: str | None = None     # vertical panel decision-grid addendum (opaque)
+    panel_differential_addendum: str | None = None # vertical panel DIFFERENTIAL-first addendum (diagnostic; opaque)
 
     def _retriever(self, source_keys: list[str] | None) -> MultiSourceRetriever:
         chosen = {k: v for k, v in self.sources.items()
@@ -614,6 +615,7 @@ class ResearchService:
             contract_prompt=self.contract_prompt,
             panel_enumerative_addendum=self.panel_enumerative_addendum,
             panel_decision_addendum=self.panel_decision_addendum,
+            panel_differential_addendum=self.panel_differential_addendum,
             web_first_step_only=self.web_first_step_only,
             on_event=on_event)
 

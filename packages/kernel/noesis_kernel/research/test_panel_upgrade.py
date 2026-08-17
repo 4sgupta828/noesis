@@ -31,6 +31,7 @@ class _Spec:
 _DERIVE = "DERIVE THE PANEL CONTRACT"          # sentinel contract_prompt (routes the scripted LLM)
 _ENUM_ADD = "ENUM-ADDENDUM-SENTINEL"
 _DECISION_ADD = "DECISION-ADDENDUM-SENTINEL"
+_DIFF_ADD = "DIFFERENTIAL-ADDENDUM-SENTINEL"
 
 _BLOCK = "The approved dose is 5 mg once daily and the response rate was 53 percent."
 _CLAIM = dict(text="the approved dose is 5 mg once daily", atom_id="a1",
@@ -177,6 +178,29 @@ def test_exploratory_axes_two_covered_routes_decision_addendum():
     assert r.coverage_gaps == []
     assert _DECISION_ADD in llm.synth_prompts[0]         # exploratory + ≥2 covered axes → decision addendum
     assert _ENUM_ADD not in llm.synth_prompts[0]
+
+
+def test_diagnostic_contract_routes_differential_addendum():
+    # is_diagnostic contract → the DIFFERENTIAL addendum, taking precedence over the decision grid,
+    # gated only on is_diagnostic (not the ≥2-covered gate the enum/decision addenda need).
+    llm = _LLM(contract_out=dict(mode="exploratory", axes=["differential", "workup"], is_diagnostic=True))
+    r = _run(llm, panel_contract=True, contract_prompt=_DERIVE,
+             panel_decision_addendum=_DECISION_ADD, panel_differential_addendum=_DIFF_ADD)
+    assert _DIFF_ADD in llm.synth_prompts[0]          # diagnostic → differential synthesis
+    assert _DECISION_ADD not in llm.synth_prompts[0]  # decision grid does NOT also fire
+
+
+def test_differential_addendum_off_when_flag_off_addendum_none():
+    # panel_differential_addendum=None (flag OFF at app layer) → diagnostic contract falls back to the
+    # decision grid; the synthesis is unchanged from today.
+    src = _source("The recommended dose is 5 mg once daily and monitoring of renal function is required.")
+    llm = _LLM(contract_out=dict(mode="exploratory", axes=["dosing", "monitoring"], is_diagnostic=True),
+               claim=dict(text="the dosing is 5 mg and monitoring is required", atom_id="a1",
+                          quote="monitoring of renal function is required"))
+    r = _run(llm, src=src, panel_contract=True, contract_prompt=_DERIVE,
+             panel_decision_addendum=_DECISION_ADD, panel_differential_addendum=None)
+    assert _DIFF_ADD not in llm.synth_prompts[0]
+    assert _DECISION_ADD in llm.synth_prompts[0]      # ≥2 covered axes → decision grid, as before
 
 
 def test_coverage_gaps_live_on_panel_result_even_with_no_pooled_claims():

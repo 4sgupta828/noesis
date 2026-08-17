@@ -26,6 +26,8 @@ class Contract:
     mode: str                                  # "enumerative" | "exploratory"
     entities: list[str] = field(default_factory=list)   # candidate items (enumerative mode)
     axes: list[str] = field(default_factory=list)       # required evidence dimensions (short phrases)
+    is_diagnostic: bool = False                # exploratory DIAGNOSTIC question (differential / workup of
+    #                                            an undifferentiated presentation) → differential synthesis
 
 
 class _ContractOut(BaseModel):
@@ -34,6 +36,7 @@ class _ContractOut(BaseModel):
     mode: str = "exploratory"
     entities: list[str] = []
     axes: list[str] = []
+    is_diagnostic: bool = False
 
 
 async def derive_contract(question: str, llm: LLMClient, derivation_prompt: str | None,
@@ -64,7 +67,8 @@ async def derive_contract(question: str, llm: LLMClient, derivation_prompt: str 
     if mode == "enumerative" and not entities:
         mode = "exploratory"                   # nothing to enumerate → inert contract, not None,
         #                                        so the derivation verdict stays observable in diag
-    return Contract(mode=mode, entities=entities, axes=axes)
+    is_diagnostic = bool(getattr(p, "is_diagnostic", False)) and mode == "exploratory"
+    return Contract(mode=mode, entities=entities, axes=axes, is_diagnostic=is_diagnostic)
 
 
 def build_legs(contract: Contract | None, *, cap: int = 12,

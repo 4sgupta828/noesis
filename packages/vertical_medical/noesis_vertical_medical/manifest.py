@@ -8,7 +8,8 @@ from noesis_kernel.contract.manifest import VerticalManifest
 from . import entities
 from . import evidence_kind
 from .specialists import (SPECIALISTS, DEFAULT_PANEL_IDS, PANEL_SYNTHESIS_DIRECTIVE,
-                          PANEL_EXAMPLE_CASES, PANEL_ENUMERATIVE_ADDENDUM, PANEL_DECISION_ADDENDUM)
+                          PANEL_EXAMPLE_CASES, PANEL_ENUMERATIVE_ADDENDUM, PANEL_DECISION_ADDENDUM,
+                          PANEL_DIFFERENTIAL_ADDENDUM)
 from .answer_format import (
     MEDICAL_ANSWER_FORMAT,
     MEDICAL_CLINICAL_SYNTHESIS_FORMAT,
@@ -94,6 +95,7 @@ def build_manifest() -> VerticalManifest:
         panel_synthesis_directive=PANEL_SYNTHESIS_DIRECTIVE, panel_examples=PANEL_EXAMPLE_CASES,
         panel_enumerative_addendum=PANEL_ENUMERATIVE_ADDENDUM,
         panel_decision_addendum=PANEL_DECISION_ADDENDUM,
+        panel_differential_addendum=PANEL_DIFFERENTIAL_ADDENDUM,
         vision_prompt=MEDICAL_VISION_PROMPT,
         report_prompt=MEDICAL_REPORT_PROMPT,
         layman_prompt=MEDICAL_LAYMAN_PROMPT,

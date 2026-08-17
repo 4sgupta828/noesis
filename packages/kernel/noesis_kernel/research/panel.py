@@ -210,6 +210,7 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
                     evidence_identity=False, claim_congruence=False,
                     panel_dedup=False, panel_contract=False, contract_prompt=None,
                     panel_enumerative_addendum=None, panel_decision_addendum=None,
+                    panel_differential_addendum=None,
                     web_first_step_only=False,
                     on_event=None) -> PanelResult:
     """`make_retrievers(source_keys) -> (corpus_source, aux_source)` lets each specialist scope its
@@ -487,7 +488,14 @@ async def run_panel(*, question, specialists, llm, embedder, make_retrievers, te
     # exploratory contract + ≥2 covered axes → the vertical's panel_decision_addendum. Both are
     # OPAQUE vertical prose appended to the base directive — the validated base is never modified.
     directive = synthesis_directive
-    if contract is not None and _covered >= 2:
+    # DIAGNOSTIC contract → the differential-first synthesis addendum (ranked differential + workup +
+    # what-changes-management), taking precedence over the decision grid. Gated only on is_diagnostic (a
+    # differential is valuable regardless of how many slots were covered), not the ≥2 gate. Flag-gated at
+    # the app layer: panel_differential_addendum is None when the flag is off → unchanged (byte-identical).
+    if (contract is not None and getattr(contract, "is_diagnostic", False)
+            and (panel_differential_addendum or "").strip()):
+        directive = f"{directive}\n\n{panel_differential_addendum}" if directive else panel_differential_addendum
+    elif contract is not None and _covered >= 2:
         if contract.mode == "enumerative" and contract.entities and (panel_enumerative_addendum or "").strip():
             directive = f"{directive}\n\n{panel_enumerative_addendum}" if directive else panel_enumerative_addendum
         elif contract.mode == "exploratory" and (panel_decision_addendum or "").strip():

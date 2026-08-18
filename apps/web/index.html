@@ -1251,6 +1251,11 @@
   .rbsave{font-family:var(--mono);font-size:.74rem;font-weight:600;letter-spacing:.03em;cursor:pointer;background:var(--verified);
     color:#0A1F16;border:none;border-radius:8px;padding:.4rem .8rem;} .rbsave:disabled{opacity:.55;cursor:default;}
   .rbmsg{font-family:var(--mono);font-size:.68rem;color:var(--muted);}
+  /* Case Board header generate control */
+  #caseboard .shead #cbsub{font-family:var(--mono);font-size:.6rem;color:var(--muted);letter-spacing:.02em;}
+  #caseboard .shead .cbgen{margin-left:auto;display:inline-flex;align-items:center;gap:.6rem;}
+  #caseboard .shead .cbgenmsg{font-family:var(--mono);font-size:.66rem;color:var(--muted);}
+  @media (max-width:640px){ #caseboard .shead #cbsub{display:none;} }
   @media (max-width:640px){
     .sessions .shead{padding:.75rem .9rem;}
     .sessions .ssearchrow{padding:.5rem .9rem 0;}
@@ -1425,6 +1430,8 @@
             title="Find the right specialist for a situation" aria-label="People">⧉ People</button>
     <button type="button" class="histbtn" id="termsbtn" style="margin-left:0;" hidden
             title="Every medical concept Noesis has explained — searchable, each linking to its related concepts" aria-label="Key Concepts">✦ Concepts</button>
+    <button type="button" class="histbtn" id="casesbtn" style="margin-left:0;" hidden
+            title="Landmark real medical cases with a known correct decision — Noesis answers, reviewed by a clinician" aria-label="Case Board">⊞ Case Board</button>
   </header>
 
   <h1 id="heading">What does the evidence show?</h1>
@@ -1580,6 +1587,24 @@
     <div class="slist" id="slist"></div>
     <div class="sdrag" id="sdrag" role="separator" aria-label="Resize panels"></div>
     <div class="sdetail" id="sdetail"><div class="splaceholder">Select a question to view its answer.</div></div>
+  </div>
+</section>
+
+<!-- Case Board: curated landmark cases + Noesis answers + clinician rubric (its own surface) -->
+<section class="sessions" id="caseboard" hidden aria-label="Case Board">
+  <div class="shead">
+    <button type="button" class="sback" id="cbback">← Back</button>
+    <span class="stitle">⊞ Case Board</span>
+    <span class="ppsub" id="cbsub">Landmark cases · known correct decision · clinician-reviewed</span>
+    <span class="cbgen"><button type="button" class="histbtn" id="cbgen" title="Generate Noesis answers for cases that don't have one yet">▷ Generate answers</button><span class="cbgenmsg" id="cbgenmsg"></span></span>
+  </div>
+  <div class="ssearchrow">
+    <input type="search" class="ssearch" id="cbsearch" placeholder="Search cases…" aria-label="Search cases" />
+  </div>
+  <div class="sbody" id="cbbody">
+    <div class="slist" id="cbList"></div>
+    <div class="sdrag" id="cbdrag" role="separator" aria-label="Resize panels"></div>
+    <div class="sdetail" id="cbDetail"><div class="splaceholder">Select a case to view its answer.</div></div>
   </div>
 </section>
 
@@ -1832,6 +1857,7 @@ async function loadConfig(){
     VISUAL_ENABLED = !!c.visual_augment_enabled;
     VISUAL_AUTO = !!c.visual_auto_enabled;
     const tb = $("#termsbtn"); if(tb && TERMS_ENABLED) tb.hidden = false;
+    const cbb = $("#casesbtn"); if(cbb && CASES_ENABLED) cbb.hidden = false;
     VOICE_INTAKE_ENABLED = !!c.voice_intake_enabled;
     VOICE_EVERYWHERE = !!c.voice_everywhere_enabled;
     document.body.classList.toggle("voice-anywhere", VOICE_EVERYWHERE);   // reveal the mic in Q&A + Panel
@@ -5542,10 +5568,6 @@ function buildSessionTabs(){
     defs.push({key:"qa", aud:null, kind:"research", label:"Quick Q&amp;A"});
     defs.push({key:"panel", aud:null, kind:"panel", label:"◈ Specialist Panel"});
   }
-  if(CASES_ENABLED){
-    if(!defs.length) defs.push({key:"qa", aud:null, kind:"research", label:"Quick Q&amp;A"});   // ensure a base list tab
-    defs.push({key:"cases", aud:null, kind:"case", label:"Historical Cases"});
-  }
   SESS_TAB = defs[0] || null;
   if(defs.length < 2){ tabs.hidden = true; tabs.innerHTML = ""; return; }
   tabs.hidden = false;
@@ -5559,7 +5581,6 @@ function buildSessionTabs(){
   }));
 }
 async function loadSessionList(){
-  if(SESS_TAB && SESS_TAB.kind === "case") return loadCasesList();   // Historical Cases → curated list
   const q = ($("#ssearch").value||"").trim();
   slist.innerHTML = `<div class="sempty">Loading…</div>`;
   // The active tab (see buildSessionTabs) filters the list server-side by kind and/or audience.
@@ -5594,15 +5615,24 @@ async function loadSessionList(){
   }catch(e){ slist.innerHTML = `<div class="sempty">Couldn't load sessions.</div>`; }
 }
 
-// ===== Historical Cases: curated landmark cases + generated answer + doctor rubric =====
+// ===== Case Board: curated landmark cases + Noesis answer + clinician rubric (its own page) =====
 let CASES_DATA = null;
 function _clusterLabel(key){ return ((CASES_DATA&&CASES_DATA.clusters)||[]).find(c=>c.key===key)?.label || key; }
+function closeCaseBoard(){ const cb=$("#caseboard"); if(cb) cb.hidden = true; document.body.style.overflow = ""; if(location.hash==="#cases") history.replaceState(null,"",location.pathname); }
+async function openCaseBoard(){
+  const cb = $("#caseboard"); if(!cb) return;
+  try{ closeSessions(); }catch(e){} try{ closePulsePage(); }catch(e){} try{ closeTermsPage(); }catch(e){}
+  cb.hidden = false; document.body.style.overflow = "hidden";
+  if(location.hash!=="#cases") history.replaceState(null,"","#cases");
+  loadCasesList();
+}
 async function loadCasesList(){
-  slist.innerHTML = `<div class="sempty">Loading…</div>`;
-  const det = $("#sdetail"); if(det) det.innerHTML = "";
+  const list = $("#cbList"); if(!list) return;
+  list.innerHTML = `<div class="sempty">Loading…</div>`;
+  const det = $("#cbDetail"); if(det) det.innerHTML = `<div class="splaceholder">Select a case to view its answer.</div>`;
   try{
     CASES_DATA = await (await fetch("/cases")).json();
-    const q = ($("#ssearch").value||"").trim().toLowerCase();
+    const q = ($("#cbsearch").value||"").trim().toLowerCase();
     const byCluster = {}; (CASES_DATA.cases||[]).forEach(c=>{ (byCluster[c.cluster]=byCluster[c.cluster]||[]).push(c); });
     let html = "";
     (CASES_DATA.clusters||[]).forEach(cl=>{
@@ -5619,16 +5649,17 @@ async function loadCasesList(){
           <div class="sm"><span>${c.year||""}</span>${badge}</div></button>`;
       }).join("");
     });
-    slist.innerHTML = html || `<div class="sempty">No cases match.</div>`;
-    slist.querySelectorAll(".caserow").forEach(b=>b.addEventListener("click",()=>selectCase(b.dataset.id)));
-    const first = slist.querySelector(".caserow");
+    list.innerHTML = html || `<div class="sempty">No cases match.</div>`;
+    list.querySelectorAll(".caserow").forEach(b=>b.addEventListener("click",()=>selectCase(b.dataset.id)));
+    const first = list.querySelector(".caserow");
     if(first && !isMobileSess()) selectCase(first.dataset.id);
-  }catch(e){ slist.innerHTML = `<div class="sempty">Couldn't load cases.</div>`; }
+  }catch(e){ list.innerHTML = `<div class="sempty">Couldn't load cases.</div>`; }
 }
 function selectCase(id){
   const c = ((CASES_DATA&&CASES_DATA.cases)||[]).find(x=>x.id===id); if(!c) return;
-  slist.querySelectorAll(".caserow").forEach(b=>b.classList.toggle("on", b.dataset.id===id));
-  const det = $("#sdetail"); if(!det) return;
+  const list = $("#cbList");
+  if(list) list.querySelectorAll(".caserow").forEach(b=>b.classList.toggle("on", b.dataset.id===id));
+  const det = $("#cbDetail"); if(!det) return;
   const run = c.run, ev = c.eval;
   let ans;
   if(run && run.answer){
@@ -5640,13 +5671,13 @@ function selectCase(id){
   } else if(run){
     ans = `<div class="cempty">Generation failed: ${esc(run.error||"unknown error")}.</div>`;
   } else {
-    ans = `<div class="cempty">No noesis answer generated yet — generation is admin-run and deferred until credits are confirmed.</div>`;
+    ans = `<div class="cempty">No Noesis answer generated yet — use “▷ Generate answers” above.</div>`;
   }
   det.innerHTML = `<div class="casedetail">
     <div class="ccluster">${esc(_clusterLabel(c.cluster))}</div>
     <h2 class="ctitle">${esc(c.title)}</h2>
     <div class="cblurb">${esc(c.case)}</div>
-    <div class="cqa"><div class="cqa-h">Decision question posed to noesis</div><div class="cq">${esc(c.question)}</div></div>
+    <div class="cqa"><div class="cqa-h">Decision question posed to Noesis</div><div class="cq">${esc(c.question)}</div></div>
     <details class="cref"><summary>Reference — the historically-established correct decision</summary><div class="cref-b">${esc(c.reference)}</div></details>
     <div class="csec-h">◫ Noesis answer</div>
     ${ans}
@@ -5654,6 +5685,39 @@ function selectCase(id){
   </div>`;
   det.scrollTop = 0;
   wireRubric(det, c);
+}
+async function generateCaseAnswers(){
+  const btn = $("#cbgen"), msg = $("#cbgenmsg");
+  if(!btn || btn.dataset.busy) return;
+  // only cases without an answer yet (idempotent + saves credits); [] → generate all
+  const need = ((CASES_DATA&&CASES_DATA.cases)||[]).filter(c=>!(c.run&&c.run.answer)).map(c=>c.id);
+  if(CASES_DATA && !need.length){ if(msg) msg.textContent = "All cases already answered."; return; }
+  btn.dataset.busy = "1"; btn.disabled = true;
+  if(msg) msg.textContent = "Starting…";
+  try{
+    const r = await fetch("/cases/generate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({case_ids: need})});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+    const {started} = await r.json();
+    // poll status; refresh the list as answers land
+    let ticks = 0;
+    const poll = async ()=>{
+      ticks++;
+      let gen = null;
+      try{ gen = (await (await fetch("/cases/status")).json()).generating; }catch(e){}
+      if(gen){ if(msg) msg.textContent = `Generating ${gen.done||0}/${gen.total||started}…`;
+        if(ticks % 2 === 0) await loadCasesList();
+        setTimeout(poll, 6000);
+      } else {
+        if(msg) msg.textContent = "Done ✓";
+        await loadCasesList();
+        btn.dataset.busy = ""; btn.disabled = false;
+      }
+    };
+    setTimeout(poll, 4000);
+  }catch(e){
+    if(msg) msg.textContent = "Couldn't start: "+(e.message||e);
+    btn.dataset.busy = ""; btn.disabled = false;
+  }
 }
 function rubricHtml(c, ev){
   const dims = [["accuracy","Accuracy"],["completeness","Completeness"],["safety","Safety"],["decision_useful","Decision-usefulness"]];
@@ -5694,7 +5758,8 @@ function wireRubric(det, c){
       if(c) c.eval = {verdict: body.verdict, reviewer: body.reviewer, notes: body.notes,
         accuracy: body.accuracy, completeness: body.completeness, safety: body.safety,
         decision_useful: body.decision_useful, evaluated_at: new Date().toISOString()};
-      const row = slist.querySelector(`.caserow[data-id="${CSS.escape(c.id)}"] .sm`);
+      const list = $("#cbList");
+      const row = list && list.querySelector(`.caserow[data-id="${CSS.escape(c.id)}"] .sm`);
       if(row && body.verdict) row.innerHTML = `<span>${c.year||""}</span><span class="cverdict cv-${body.verdict}">${body.verdict}</span>`;
     }catch(e){ msg.textContent = "Couldn't save: "+(e.message||e); }
     finally{ save.disabled = false; }
@@ -6370,6 +6435,10 @@ async function pplProfile(id){
 $("#pplback").addEventListener("click", closePeople);
 $("#pplbtn").addEventListener("click", openPeople);
 $("#termsbtn").addEventListener("click", ()=>openTermsPage());
+$("#casesbtn").addEventListener("click", openCaseBoard);
+$("#cbback").addEventListener("click", closeCaseBoard);
+$("#cbgen").addEventListener("click", generateCaseAnswers);
+{ let _cbt; $("#cbsearch").addEventListener("input", ()=>{ clearTimeout(_cbt); _cbt=setTimeout(loadCasesList, 200); }); }
 $("#tpback").addEventListener("click", closeTermsPage);
 let _tpDeb = null;
 $("#tpsearch").addEventListener("input", e=>{
@@ -6400,6 +6469,7 @@ function routeHash(){    // #s/<id> → Q&A answer/thread · #p/<id> → panel s
   else if(location.hash === "#ingest"){ openIngest(); }
   else if(location.hash === "#people"){ openPeople(); }
   else if(location.hash === "#terms"){ openTermsPage(); }
+  else if(location.hash === "#cases" && CASES_ENABLED){ openCaseBoard(); }
 }
 // route only AFTER config loads, so CONV_ENABLED is known (shared threads render as conversations)
 loadConfig().then(routeHash);

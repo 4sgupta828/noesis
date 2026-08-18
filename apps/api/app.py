@@ -2460,15 +2460,12 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=502, detail=f"eval save error: {e}") from e
         return {"eval_id": eid, "ok": True}
 
-    @app.post("/admin/cases/generate")
-    async def cases_generate(body: CaseGenerateIn, x_admin_token: str = Header(default="")) -> dict:
-        """Admin-gated: run noesis over the curated cases and store each answer (SPENDS credits).
-        Deferred by design — nothing generates until this is explicitly called."""
+    @app.post("/cases/generate")
+    async def cases_generate(body: CaseGenerateIn) -> dict:
+        """Run noesis over the curated cases and store each answer (SPENDS credits). Gated only by the
+        feature flag (no admin token). Deferred by design — nothing generates until this is called."""
         if not cases_enabled():
             raise HTTPException(status_code=404, detail="historical cases not enabled")
-        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
-        if want and x_admin_token != want:
-            raise HTTPException(status_code=401, detail="admin token required")
         from api.historical_cases import all_cases, get_case
         store = _cases()
         if store is None:
@@ -2518,14 +2515,11 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         _asyncio.create_task(_run(ids))
         return {"started": len(ids), "case_ids": ids}
 
-    @app.get("/admin/cases/status")
-    async def cases_status(x_admin_token: str = Header(default="")) -> dict:
+    @app.get("/cases/status")
+    async def cases_status() -> dict:
         """Progress of an in-flight generation batch (None when idle)."""
         if not cases_enabled():
             raise HTTPException(status_code=404, detail="historical cases not enabled")
-        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
-        if want and x_admin_token != want:
-            raise HTTPException(status_code=401, detail="admin token required")
         return {"generating": getattr(app.state, "cases_generating", None)}
 
     @app.post("/glossary/lookup")

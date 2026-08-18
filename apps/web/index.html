@@ -2832,7 +2832,14 @@ function visualsActionHtml(){
 }
 // greedy word-wrap into ≤maxChars lines (SVG has no auto-wrap)
 function vzWrap(text, maxChars){
-  const words = (text||"").trim().split(/\s+/); const lines=[]; let cur="";
+  // hard-break any single token longer than maxChars first — box width is sized to maxChars, so an
+  // unbreakable word (a long drug name, a hyphen-less compound) would otherwise overflow / be clipped.
+  const words = [];
+  for(const w of (text||"").trim().split(/\s+/)){
+    if(w.length<=maxChars) words.push(w);
+    else for(let i=0;i<w.length;i+=maxChars) words.push(w.slice(i, i+maxChars));
+  }
+  const lines=[]; let cur="";
   for(const w of words){
     if(!cur) cur=w;
     else if((cur+" "+w).length<=maxChars) cur+=" "+w;
@@ -2840,6 +2847,18 @@ function vzWrap(text, maxChars){
   }
   if(cur) lines.push(cur);
   return lines.length?lines:[""];
+}
+// Nudge an edge-label box off any node rectangle it would cover, so relationship labels sit in
+// clear space instead of on top of a box. Tries the true edge-midpoint first, then spirals outward.
+function vzLabelPos(mx, my, w, h, rects){
+  const hits=(x,y)=> rects.some(r=> x+w/2>r.x-2 && x-w/2<r.x+r.w+2 && y+h/2>r.y-2 && y-h/2<r.y+r.h+2);
+  if(!hits(mx,my)) return {x:mx, y:my};
+  for(let d=10; d<=96; d+=11){
+    for(const [ox,oy] of [[0,-d],[0,d],[-d,0],[d,0],[-d,-d],[d,-d],[-d,d],[d,d]]){
+      if(!hits(mx+ox, my+oy)) return {x:mx+ox, y:my+oy};
+    }
+  }
+  return {x:mx, y:my};   // no clear spot found — fall back to the midpoint (still has a bg plate)
 }
 function vzTextLines(lines, x, y, cls, lh){
   return `<text class="${cls}" x="${x}" y="${y}">`+
@@ -2877,13 +2896,15 @@ function vzFlow(v){
   Ls.forEach(L=>{ const r=layers[L]; const rw=r.length*NW+(r.length-1)*colGap; let x=(W-rw)/2;
     r.forEach(n=>{ pos[n.id]={x,y,w:NW,h:H[n.id]}; x+=NW+colGap; }); y+=rowH[L]+rowGap; });
   const totalH=y-rowGap+12;
+  const rects=Object.values(pos);   // node boxes, for edge-label collision avoidance
   let ed="", lbls="";   // lines under the nodes; labels ON TOP so they're never hidden
   edges.forEach(e=>{ const a=pos[e.src], b=pos[e.dst]; if(!a||!b) return;
     const sx=a.x+a.w/2, sy=a.y+a.h, tx=b.x+b.w/2, ty=b.y; const mid=(sy+ty)/2;
     ed += `<path class="vzedge" d="M${sx} ${sy} C ${sx} ${mid} ${tx} ${mid} ${tx} ${ty}" marker-end="url(#vzarr)"/>`;
-    if(e.label){ const lx=(sx+tx)/2, ly=mid; const w=e.label.length*6+12;   // fit full text, no truncation
-      lbls += `<rect class="vzedgelblbg" x="${(lx-w/2).toFixed(1)}" y="${ly-9}" width="${w.toFixed(1)}" height="17" rx="8"/>`+
-              `<text class="vzedgelbl" x="${lx}" y="${ly+3}">${esc(e.label)}</text>`; }
+    if(e.label){ const w=e.label.length*6+12;   // fit full text, no truncation
+      const p=vzLabelPos((sx+tx)/2, mid, w, 17, rects);   // keep the label off any node box
+      lbls += `<rect class="vzedgelblbg" x="${(p.x-w/2).toFixed(1)}" y="${(p.y-9).toFixed(1)}" width="${w.toFixed(1)}" height="17" rx="8"/>`+
+              `<text class="vzedgelbl" x="${p.x.toFixed(1)}" y="${(p.y+3).toFixed(1)}">${esc(e.label)}</text>`; }
   });
   let nd=""; nodes.forEach(n=>nd+=vzNodeBox(n,pos[n.id],(indeg[n.id]||0)===0,"vzt"+((layer[n.id]||0)%6)));
   return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W} ${totalH}" width="${W}" height="${totalH}" role="img">${VZ_DEFS}${ed}${nd}${lbls}</svg></div>`;
@@ -2996,13 +3017,15 @@ function vzMap(v){
     minY=Math.min(minY,P[i].y-n._h/2); maxY=Math.max(maxY,P[i].y+n._h/2); });
   const pad=18, W=(maxX-minX)+pad*2, H=(maxY-minY)+pad*2;
   const px=i=>P[i].x-minX+pad, py=i=>P[i].y-minY+pad;
+  const rects=nodes.map((n,i)=>({x:px(i)-n._w/2, y:py(i)-n._h/2, w:n._w, h:n._h}));   // for label avoidance
   let ed="", lbls="";   // lines under nodes; relationship labels ON TOP so they stay legible
   E.forEach((e,k)=>{ const a=vzClip(px(e.s),py(e.s),px(e.t),py(e.t),nodes[e.s]._w/2+2,nodes[e.s]._h/2+2);
     const b=vzClip(px(e.t),py(e.t),px(e.s),py(e.s),nodes[e.t]._w/2+2,nodes[e.t]._h/2+2);
     ed+=`<line class="vzedge" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" marker-end="url(#vzarr)"/>`;
-    const lbl=edges[k].label; if(lbl){ const mx=(a.x+b.x)/2, my=(a.y+b.y)/2, w=lbl.length*5.8+12;   // fit full text
-      lbls+=`<rect class="vzedgelblbg" x="${(mx-w/2).toFixed(1)}" y="${(my-8).toFixed(1)}" width="${w.toFixed(1)}" height="15" rx="7"/>`+
-            `<text class="vzedgelbl" x="${mx.toFixed(1)}" y="${(my+3).toFixed(1)}">${esc(lbl)}</text>`; }
+    const lbl=edges[k].label; if(lbl){ const w=lbl.length*5.8+12;   // fit full text
+      const p=vzLabelPos((a.x+b.x)/2, (a.y+b.y)/2, w, 15, rects);   // keep the label off any node box
+      lbls+=`<rect class="vzedgelblbg" x="${(p.x-w/2).toFixed(1)}" y="${(p.y-8).toFixed(1)}" width="${w.toFixed(1)}" height="15" rx="7"/>`+
+            `<text class="vzedgelbl" x="${p.x.toFixed(1)}" y="${(p.y+3).toFixed(1)}">${esc(lbl)}</text>`; }
   });
   let nd="";
   nodes.forEach((n,i)=>{ const x=px(i)-n._w/2, y=py(i)-n._h/2;

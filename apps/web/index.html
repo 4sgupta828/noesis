@@ -1256,6 +1256,13 @@
   #caseboard .shead .cbgen{margin-left:auto;display:inline-flex;align-items:center;gap:.6rem;}
   #caseboard .shead .cbgenmsg{font-family:var(--mono);font-size:.66rem;color:var(--muted);}
   @media (max-width:640px){ #caseboard .shead #cbsub{display:none;} }
+  /* Case Board era toggle (Historical / Recent) */
+  #caseboard .cbera{display:inline-flex;border:1px solid var(--hair);border-radius:999px;overflow:hidden;margin-right:.7rem;}
+  #caseboard .cbtab{font-family:var(--mono);font-size:.66rem;letter-spacing:.03em;background:transparent;color:var(--muted);
+    border:none;padding:.3rem .7rem;cursor:pointer;transition:all .12s;}
+  #caseboard .cbtab.on{background:var(--verified);color:#0A1F16;font-weight:700;}
+  #caseboard .cbtab:not(.on):hover{color:var(--ink);}
+  #caseboard .ssearchrow{display:flex;align-items:center;gap:.2rem;flex-wrap:wrap;}
   @media (max-width:640px){
     .sessions .shead{padding:.75rem .9rem;}
     .sessions .ssearchrow{padding:.5rem .9rem 0;}
@@ -1599,6 +1606,10 @@
     <span class="cbgen"><button type="button" class="histbtn" id="cbgen" title="Generate Noesis answers for cases that don't have one yet">▷ Generate answers</button><span class="cbgenmsg" id="cbgenmsg"></span></span>
   </div>
   <div class="ssearchrow">
+    <span class="cbera" id="cbera">
+      <button type="button" class="cbtab on" data-era="historical">Historical</button>
+      <button type="button" class="cbtab" data-era="recent">Recent (1975–2025)</button>
+    </span>
     <input type="search" class="ssearch" id="cbsearch" placeholder="Search cases…" aria-label="Search cases" />
   </div>
   <div class="sbody" id="cbbody">
@@ -5619,7 +5630,7 @@ async function loadSessionList(){
 }
 
 // ===== Case Board: curated landmark cases + Noesis answer + clinician rubric (its own page) =====
-let CASES_DATA = null;
+let CASES_DATA = null, CB_ERA = "historical";
 function _clusterLabel(key){ return ((CASES_DATA&&CASES_DATA.clusters)||[]).find(c=>c.key===key)?.label || key; }
 function closeCaseBoard(){ const cb=$("#caseboard"); if(cb) cb.hidden = true; document.body.style.overflow = ""; if(location.hash==="#cases") history.replaceState(null,"",location.pathname); }
 async function openCaseBoard(){
@@ -5638,7 +5649,7 @@ async function loadCasesList(){
     const q = ($("#cbsearch").value||"").trim().toLowerCase();
     const byCluster = {}; (CASES_DATA.cases||[]).forEach(c=>{ (byCluster[c.cluster]=byCluster[c.cluster]||[]).push(c); });
     let html = "";
-    (CASES_DATA.clusters||[]).forEach(cl=>{
+    (CASES_DATA.clusters||[]).filter(cl=>(cl.era||"historical")===CB_ERA).forEach(cl=>{
       let cases = byCluster[cl.key]||[];
       if(q) cases = cases.filter(c=> (c.title+" "+c.case+" "+c.question).toLowerCase().includes(q));
       if(!cases.length) return;
@@ -5692,9 +5703,9 @@ function selectCase(id){
 async function generateCaseAnswers(){
   const btn = $("#cbgen"), msg = $("#cbgenmsg");
   if(!btn || btn.dataset.busy) return;
-  // only cases without an answer yet (idempotent + saves credits); [] → generate all
-  const need = ((CASES_DATA&&CASES_DATA.cases)||[]).filter(c=>!(c.run&&c.run.answer)).map(c=>c.id);
-  if(CASES_DATA && !need.length){ if(msg) msg.textContent = "All cases already answered."; return; }
+  // only un-answered cases IN THE CURRENT ERA (idempotent + scopes the spend to what's on screen)
+  const need = ((CASES_DATA&&CASES_DATA.cases)||[]).filter(c=>(c.era||"historical")===CB_ERA && !(c.run&&c.run.answer)).map(c=>c.id);
+  if(CASES_DATA && !need.length){ if(msg) msg.textContent = `All ${CB_ERA} cases already answered.`; return; }
   btn.dataset.busy = "1"; btn.disabled = true;
   if(msg) msg.textContent = "Starting…";
   try{
@@ -6442,6 +6453,11 @@ $("#casesbtn").addEventListener("click", openCaseBoard);
 $("#cbback").addEventListener("click", closeCaseBoard);
 $("#cbgen").addEventListener("click", generateCaseAnswers);
 { let _cbt; $("#cbsearch").addEventListener("input", ()=>{ clearTimeout(_cbt); _cbt=setTimeout(loadCasesList, 200); }); }
+$("#cbera").querySelectorAll(".cbtab").forEach(b=>b.addEventListener("click", ()=>{
+  CB_ERA = b.dataset.era;
+  $("#cbera").querySelectorAll(".cbtab").forEach(x=>x.classList.toggle("on", x===b));
+  loadCasesList();
+}));
 $("#tpback").addEventListener("click", closeTermsPage);
 let _tpDeb = null;
 $("#tpsearch").addEventListener("input", e=>{

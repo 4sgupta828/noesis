@@ -750,15 +750,16 @@ class ResearchService:
         return await explain_key_terms(
             llm=self.llm, terms_prompt=self.terms_prompt, question=question, answer=answer)
 
-    async def visualize(self, *, question: str, answer: str) -> list:
+    async def visualize(self, *, question: str, answer: str, variation: int = 0) -> list:
         """On-demand conceptual visuals (flow/tree/timeline) restructuring a grounded answer, every
         element quote-anchored to the answer. [] when the vertical supplies no visuals directive or
-        nothing qualifies."""
+        nothing qualifies. `variation` > 0 is a user regenerate retry → a cleaner, simpler alternative."""
         if not self.visuals_prompt:
             return []
         from noesis_kernel.research.visuals import visualize_answer
         return await visualize_answer(
-            llm=self.llm, visuals_prompt=self.visuals_prompt, question=question, answer=answer)
+            llm=self.llm, visuals_prompt=self.visuals_prompt, question=question, answer=answer,
+            variation=variation)
 
     async def explain_term(self, *, term: str, context: str = ""):
         """On-demand single-term explanation (glossary navigation). None when unavailable."""

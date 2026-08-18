@@ -1119,6 +1119,7 @@ class VisualsIn(BaseModel):
     answer: str
     session_id: str | None = None
     turn_index: int | None = None    # which thread turn this answer is (per-turn persistence)
+    variation: int = 0               # >0 = a user "regenerate" retry → nudge a cleaner, simpler alternative
 
 
 class VoiceTtsIn(BaseModel):
@@ -2358,7 +2359,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if not getattr(svc, "visuals_prompt", None):
             raise HTTPException(status_code=404, detail="visuals not available for this vertical")
         try:
-            visuals = await svc.visualize(question=body.question, answer=body.answer)
+            visuals = await svc.visualize(question=body.question, answer=body.answer,
+                                          variation=body.variation)
         except CassetteMiss as e:
             raise HTTPException(status_code=503, detail="No model available in replay mode.") from e
         except Exception as e:

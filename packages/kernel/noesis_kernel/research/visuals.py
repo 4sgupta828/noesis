@@ -176,18 +176,31 @@ def _clean_visual(v: Visual, answer: str) -> dict | None:
 
 async def visualize_answer(
     *, llm: LLMClient, visuals_prompt: str, question: str, answer: str,
-    max_tokens: int = 4000,
+    max_tokens: int = 4000, variation: int = 0,
 ) -> list[dict]:
-    """Generate grounded conceptual visuals for an answer. [] when nothing qualifies (abstain)."""
+    """Generate grounded conceptual visuals for an answer. [] when nothing qualifies (abstain).
+
+    `variation` > 0 is a user "regenerate" retry (the previous render looked garbled/crowded): bias
+    toward a cleaner, simpler alternative — fewer nodes, shorter labels, split anything dense — so the
+    fallback actually differs from the first attempt rather than re-emitting the same crowded diagram.
+    """
     clean = (answer or "").strip()
     if not clean:
         return []
+    retry = ""
+    if variation and variation > 0:
+        retry = (
+            "\n\nThis is a REGENERATE request — the previous diagram looked crowded or hard to read. "
+            "Produce a DIFFERENT, CLEANER version: prefer fewer nodes per diagram (split a dense diagram "
+            "into two, or drop the least essential nodes), keep every label SHORT (a few words), and pick "
+            "the single clearest diagram kind for the idea. Legibility matters more than completeness."
+        )
     user = (
         f"QUESTION:\n{question}\n\n"
         f"ANSWER TO VISUALIZE (your ONLY source — restructure it, add nothing):\n{clean}\n\n"
         "Emit only visuals that genuinely add explanatory power beyond the prose. Every node, edge, "
         "and event MUST carry a `quote` copied VERBATIM from the answer above. If nothing qualifies, "
-        "return an empty list."
+        "return an empty list." + retry
     )
     res = await llm.complete(
         system=visuals_prompt,

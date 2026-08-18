@@ -786,6 +786,14 @@
   details.plain-d[open]>summary.plain-h::after{transform:rotate(90deg);}
   details.plain-d[open]>summary.plain-h{margin-bottom:.7rem;}
   details.plain-d>summary.plain-h:hover{color:#7FD3AE;}
+  /* ↻ Regenerate control on the rendered visuals block — right-aligned, before the disclosure ▸ */
+  .plain .plain-h .vzregen{margin-left:auto;font-family:var(--mono);font-size:.62rem;font-weight:600;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:transparent;
+    border:1px solid var(--hair);border-radius:999px;padding:.16rem .55rem;cursor:pointer;
+    transition:color .15s,border-color .15s;}
+  .plain .plain-h .vzregen:hover{color:var(--verified);border-color:var(--verified);}
+  .plain .plain-h .vzregen:disabled{opacity:.55;cursor:default;}
+  .visuals-d .vzregen-note{font-size:.76rem;color:var(--muted);margin:0 0 .55rem;}
   .plain .plain-b{font-size:.98rem;line-height:1.66;color:var(--ink);}
   /* markdown inside the plain-language body — tighter than the hero answer */
   .plain .plain-b.md .mdp{margin:.55rem 0;} .plain .plain-b.md .mdp:first-child{margin-top:0;}
@@ -2622,8 +2630,7 @@ function convoActionsMarkup(data){
   }
   if(data.visuals && data.visuals.length){
     // saved with the turn — re-render on reopen (each element was quote-grounded server-side)
-    boxes.push(`<details class="plain plain-d visuals-d" open><summary class="plain-h">◫ Visuals (${data.visuals.length})</summary>
-      <div class="vzgrid">${data.visuals.map(visualCardHtml).join("")}</div></details>`);
+    boxes.push(`<details class="plain plain-d visuals-d" data-variation="0" open>${_vzInner(data.visuals.map(visualCardHtml).join(""), data.visuals.length)}</details>`);
   } else if(VISUAL_ENABLED && data.grounded && (data.answer||"").trim()){
     slim.push(visualsActionHtml());
   }
@@ -2639,6 +2646,7 @@ function wireConvo(target, data){
   const td = target.querySelector(".terms-d");   // saved terms re-rendered from the session
   if(td){ wireTermChips(td);
     const ta = td.querySelector(".tall"); if(ta) ta.addEventListener("click", e=>{e.preventDefault(); openTermsPage();}); }
+  const vd = target.querySelector(".visuals-d"); if(vd) _wireVzRegen(vd, data);   // ↻ regenerate on saved visuals
   const vg = target.querySelector("#visualsgo"); if(vg) vg.addEventListener("click", ()=>generateVisuals(target, data));
   maybeAutoVisuals(target, data);   // by default, build visuals on a fresh answer (skips reopened sessions)
 }
@@ -3044,6 +3052,41 @@ function visualCardHtml(v){
     ${body}
     ${v.caption?`<figcaption class="vzcap">${esc(v.caption)}</figcaption>`:""}</figure>`;
 }
+// which thread turn + session this answer maps to (panel visuals persist to the PANEL session/turn;
+// Q&A visuals use the Q&A thread / LAST session). Shared by first generate and regenerate.
+function _vzTurnIndex(data){
+  return (typeof data.turn_index === "number") ? data.turn_index
+       : (typeof THREAD!=="undefined" && THREAD.turns ? Math.max(0, THREAD.turns.length-1) : 0);
+}
+function _vzSid(data){
+  return data.session_id
+       || (data.panel ? (typeof PANEL_THREAD!=="undefined" && PANEL_THREAD.session_id)
+                      : ((typeof THREAD!=="undefined" && THREAD.session_id) || (typeof LAST!=="undefined" && LAST && LAST.session_id)))
+       || null;
+}
+async function _postVisuals(data, variation){   // returns {visuals, ti}; variation>0 → cleaner regenerate
+  const ti = _vzTurnIndex(data);
+  const r = await fetch("/visuals/augment",{method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({question:(data.question||CURRENT_Q||""), answer:(data.answer||""),
+      session_id: _vzSid(data), turn_index: ti, variation: variation||0})});
+  if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+  const {visuals} = await r.json();
+  return {visuals: visuals||[], ti};
+}
+function _vzPersist(data, ti, visuals){   // keep in-memory turn state consistent across re-renders
+  if(data.panel && typeof PANEL_THREAD!=="undefined" && PANEL_THREAD.turns && PANEL_THREAD.turns[ti] && PANEL_THREAD.turns[ti].result)
+    PANEL_THREAD.turns[ti].result.visuals = visuals;
+  try{ data.visuals = visuals; }catch(e){}
+}
+function _vzInner(cards, n){
+  return `<summary class="plain-h">◫ Visuals (${n})`
+       + `<button type="button" class="vzregen" title="Regenerate — build a cleaner alternative if these look garbled or crowded">↻ Regenerate</button>`
+       + `</summary><div class="vzgrid">${cards}</div>`;
+}
+function _wireVzRegen(d, data){
+  const b = d.querySelector(".vzregen");
+  if(b) b.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); regenerateVisuals(d, data); });
+}
 async function generateVisuals(root, data, opts){
   opts = opts || {};
   const item = root.querySelector("#visuals");
@@ -3053,34 +3096,46 @@ async function generateVisuals(root, data, opts){
   btn.dataset.busy = "1";
   btn.disabled = true; btn.textContent = opts.auto ? "Adding visuals…" : "Building visuals…";
   try{
-    const ti = (typeof data.turn_index === "number") ? data.turn_index
-             : (typeof THREAD!=="undefined" && THREAD.turns ? Math.max(0, THREAD.turns.length-1) : 0);
-    // panel visuals persist to the PANEL session/turn; Q&A visuals use the Q&A thread/LAST session.
-    const sid = data.session_id
-             || (data.panel ? (typeof PANEL_THREAD!=="undefined" && PANEL_THREAD.session_id)   // resolved live
-                            : ((typeof THREAD!=="undefined" && THREAD.session_id) || (typeof LAST!=="undefined" && LAST && LAST.session_id)))
-             || null;
-    const r = await fetch("/visuals/augment",{method:"POST",headers:{"content-type":"application/json"},
-      body:JSON.stringify({question:(data.question||CURRENT_Q||""), answer:(data.answer||""),
-        session_id: sid, turn_index: ti})});
-    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
-    const {visuals} = await r.json();
-    if(!visuals || !visuals.length) throw new Error("no visual added meaningful structure to this answer");
+    const {visuals, ti} = await _postVisuals(data, 0);
+    if(!visuals.length) throw new Error("no visual added meaningful structure to this answer");
     const cards = visuals.map(visualCardHtml).filter(Boolean).join("");
     if(!cards) throw new Error("no visual could be grounded in the answer");
     const d = document.createElement("details");
-    d.className = "plain plain-d visuals-d"; d.open = true;
-    d.innerHTML = `<summary class="plain-h">◫ Visuals (${visuals.length})</summary><div class="vzgrid">${cards}</div>`;
+    d.className = "plain plain-d visuals-d"; d.open = true; d.dataset.variation = "0";
+    d.innerHTML = _vzInner(cards, visuals.length);
     item.replaceWith(d);
-    // keep in-memory turn state consistent so a mid-session re-render (e.g. after a follow-up) keeps them
-    if(data.panel && typeof PANEL_THREAD!=="undefined" && PANEL_THREAD.turns && PANEL_THREAD.turns[ti] && PANEL_THREAD.turns[ti].result)
-      PANEL_THREAD.turns[ti].result.visuals = visuals;
+    _wireVzRegen(d, data);
+    _vzPersist(data, ti, visuals);
   }catch(e){
     btn.dataset.busy = ""; btn.disabled = false; btn.textContent = "◫ Add visuals";
     // AUTO mode fails SILENTLY — the button just stays available for a manual click; no error banner
     // for the "nothing meaningful to visualize" case, which is a normal outcome by design.
     if(!opts.auto && hint){ hint.hidden = false; hint.textContent = "Couldn't add visuals: "+(e.message||e); }
   }
+}
+// Fallback for garbled/crowded output: re-ask the model for a cleaner, simpler alternative (higher
+// `variation` each time) and swap the cards in place, keeping the existing set if regeneration fails.
+async function regenerateVisuals(d, data){
+  const b = d.querySelector(".vzregen"), grid = d.querySelector(".vzgrid");
+  if(!b || b.dataset.busy || !grid) return;
+  b.dataset.busy = "1"; b.disabled = true; const prev = b.textContent; b.textContent = "Regenerating…";
+  const note = d.querySelector(".vzregen-note"); if(note) note.remove();
+  const variation = (parseInt(d.dataset.variation||"0",10)||0) + 1;
+  try{
+    const {visuals, ti} = await _postVisuals(data, variation);
+    if(!visuals.length) throw new Error("no alternative could be built from this answer");
+    const cards = visuals.map(visualCardHtml).filter(Boolean).join("");
+    if(!cards) throw new Error("no alternative could be grounded in the answer");
+    grid.innerHTML = cards;
+    const sum = d.querySelector(".plain-h");
+    if(sum && sum.firstChild) sum.firstChild.nodeValue = `◫ Visuals (${visuals.length})`;   // keep the button
+    d.dataset.variation = String(variation);
+    _vzPersist(data, ti, visuals);
+  }catch(e){
+    const n = document.createElement("div"); n.className = "vzregen-note";
+    n.textContent = "Couldn't regenerate — keeping the current visuals. "+(e.message||e);
+    grid.parentNode.insertBefore(n, grid);
+  }finally{ b.dataset.busy = ""; b.disabled = false; b.textContent = prev; }
 }
 // Auto-generate on a FRESH grounded answer (default behavior when VISUAL_AUTO is on). `scope` holds the
 // affordance; skip reopened sessions (the sessions pane) so browsing history never re-spends a call.
@@ -4527,9 +4582,11 @@ function renderPanelSynth(data, el){
   // persisted onto this panel turn (session_id + turn_index) so a reopened discussion re-renders them.
   if(data.visuals && data.visuals.length){
     const vw = document.createElement("div");
-    vw.innerHTML = `<details class="plain plain-d visuals-d" open><summary class="plain-h">◫ Visuals (${data.visuals.length})</summary>
-      <div class="vzgrid">${data.visuals.map(visualCardHtml).join("")}</div></details>`;
+    vw.innerHTML = `<details class="plain plain-d visuals-d" data-variation="0" open>${_vzInner(data.visuals.map(visualCardHtml).join(""), data.visuals.length)}</details>`;
     el.appendChild(vw);
+    const vdata = {question: data.question||"", answer: vAnswer, panel:true,
+       session_id: data.session_id||null, turn_index: (typeof data.turn_index==="number"?data.turn_index:0)};
+    const vd = vw.querySelector(".visuals-d"); if(vd) _wireVzRegen(vd, vdata);   // ↻ regenerate on saved panel visuals
   } else if(VISUAL_ENABLED && (answer||"").trim()){
     const vw = document.createElement("div");
     vw.innerHTML = `<div class="xformrow"><span class="xlbl">See the structure</span>${visualsActionHtml()}</div>`;

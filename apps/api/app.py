@@ -2512,7 +2512,12 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             finally:
                 app.state.cases_generating = None
         import asyncio as _asyncio
-        _asyncio.create_task(_run(ids))
+        # KEEP A STRONG REFERENCE: the event loop only holds a weak ref to a bare create_task(), so an
+        # unreferenced task gets garbage-collected and CANCELLED mid-run (CancelledError isn't caught by
+        # `except Exception`, so it dies silently storing nothing — the 2026-08-18 empty-batch bug).
+        task = _asyncio.create_task(_run(ids))
+        app.state.cases_task = task
+        task.add_done_callback(lambda t: setattr(app.state, "cases_task", None))
         return {"started": len(ids), "case_ids": ids}
 
     @app.get("/cases/status")

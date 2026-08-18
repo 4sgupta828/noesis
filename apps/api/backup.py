@@ -23,6 +23,7 @@ CRITICAL_TABLES = (
     "noesis_change_event", "noesis_topic", "noesis_topic_edge", "noesis_edge_evidence",
     "noesis_watch", "noesis_watch_seen", "noesis_pulse_state",
     "noesis_research_session", "noesis_corpus_gap_queue",
+    "noesis_case_run", "noesis_case_eval",
 )
 _BLOCK_COLS = ("tenant_id", "workspace_id", "document_id", "block_id", "text", "facets",
                "document_title", "content_type", "source_key", "created_at")

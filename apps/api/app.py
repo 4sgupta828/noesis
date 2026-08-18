@@ -607,6 +607,15 @@ def term_glossary_enabled() -> bool:
     return os.environ.get("NOESIS_TERM_GLOSSARY", "").lower() in ("1", "true", "yes")
 
 
+def cases_enabled() -> bool:
+    """Flag (default OFF, Rule 20): when ON, a curated 'Historical Cases' review surface is exposed —
+    GET /cases (curated landmark cases + clusters + any generated answer + latest doctor eval),
+    POST /cases/{id}/eval (a clinician's structured rubric), and an admin-gated POST
+    /admin/cases/generate that runs noesis over the cases. Surfaced as a 'Historical Cases' tab under
+    Past Sessions. OFF → all three endpoints 404 and the tab is hidden (byte-identical to today)."""
+    return os.environ.get("NOESIS_HISTORICAL_CASES", "").lower() in ("1", "true", "yes")
+
+
 def refine_enabled() -> bool:
     """Flag (default OFF, Rule 20): when ON, a FRESH question (no history) is first sent to /refine,
     which proposes a few distinct sharper standalone questions to pick from (express refinement). The
@@ -1122,6 +1131,22 @@ class VisualsIn(BaseModel):
     variation: int = 0               # >0 = a user "regenerate" retry → nudge a cleaner, simpler alternative
 
 
+class CaseEvalIn(BaseModel):
+    run_id: str | None = None
+    accuracy: int | None = None          # 1..5
+    completeness: int | None = None      # 1..5
+    safety: int | None = None            # 1..5
+    decision_useful: int | None = None   # 1..5
+    verdict: str = ""                    # accept | revise | reject
+    notes: str = ""
+    reviewer: str = ""
+
+
+class CaseGenerateIn(BaseModel):
+    case_ids: list[str] | None = None    # None/empty → all curated cases
+    engine: str = "reasoned"             # clinical-decision engine (reasoned) by default
+
+
 class VoiceTtsIn(BaseModel):
     text: str
 
@@ -1486,6 +1511,18 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 app.state.session_store = None
         return app.state.session_store
 
+    def _cases():
+        """Vertical-isolated Historical-Cases store (runs + doctor evals). Built once when a
+        corpus DSN is configured; None (no persistence) against the fixture corpus."""
+        if getattr(app.state, "case_store", "unset") == "unset":
+            dsn = os.environ.get("NOESIS_CORPUS_DSN")
+            if dsn:
+                from api.cases import CaseStore
+                app.state.case_store = CaseStore(dsn, vertical=load_active_vertical().name)
+            else:
+                app.state.case_store = None
+        return app.state.case_store
+
     def _glossary():
         """Vertical-isolated glossary store (the accumulating term web). Built once when a
         corpus DSN is configured; None (no persistence) against the fixture corpus."""
@@ -1668,6 +1705,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "differential_format_enabled": differential_format_enabled(),
             "panel_differential_enabled": panel_differential_enabled(),
             "corpus_explorer_enabled": corpus_explorer_enabled(),
+            "cases_enabled": cases_enabled(),
             "decision_mode_ui_enabled": decision_mode_ui_enabled(),
             "ask_panel_enabled": live_panel,
             "panel_specialists": ([
@@ -2373,6 +2411,102 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 except Exception:
                     pass
         return {"visuals": visuals}
+
+    # ---- Historical Cases: curated landmark cases + generated answers + doctor rubric ----
+    @app.get("/cases")
+    async def cases_list() -> dict:
+        """Curated landmark cases + clusters, each merged with its latest generated answer and latest
+        doctor evaluation (if any). Read-only; the case definitions are static curated content."""
+        if not cases_enabled():
+            raise HTTPException(status_code=404, detail="historical cases not enabled")
+        from api.historical_cases import all_cases, all_clusters
+        store = _cases()
+        runs = await store.latest_runs() if store is not None else {}
+        evals = await store.latest_evals() if store is not None else {}
+        cases = []
+        for c in all_cases():
+            cid = c["id"]
+            cases.append({**c, "run": runs.get(cid), "eval": evals.get(cid)})
+        return {"clusters": all_clusters(), "cases": cases}
+
+    @app.post("/cases/{case_id}/eval")
+    async def cases_eval(case_id: str, body: CaseEvalIn) -> dict:
+        """Save a clinician's structured rubric for a case (append-only; latest wins)."""
+        if not cases_enabled():
+            raise HTTPException(status_code=404, detail="historical cases not enabled")
+        from api.historical_cases import get_case
+        if get_case(case_id) is None:
+            raise HTTPException(status_code=404, detail="unknown case")
+        if body.verdict and body.verdict not in ("accept", "revise", "reject"):
+            raise HTTPException(status_code=400, detail="verdict must be accept|revise|reject")
+        def _score(v):   # 1..5 or None (structural validation, not a semantic judgment)
+            if v is None:
+                return None
+            if not isinstance(v, int) or v < 1 or v > 5:
+                raise HTTPException(status_code=400, detail="scores must be integers 1..5")
+            return v
+        store = _cases()
+        if store is None:
+            raise HTTPException(status_code=404, detail="no store configured")
+        try:
+            eid = await store.save_eval(
+                case_id=case_id, run_id=body.run_id, accuracy=_score(body.accuracy),
+                completeness=_score(body.completeness), safety=_score(body.safety),
+                decision_useful=_score(body.decision_useful), verdict=body.verdict,
+                notes=body.notes, reviewer=body.reviewer)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"eval save error: {e}") from e
+        return {"eval_id": eid, "ok": True}
+
+    @app.post("/admin/cases/generate")
+    async def cases_generate(body: CaseGenerateIn, x_admin_token: str = Header(default="")) -> dict:
+        """Admin-gated: run noesis over the curated cases and store each answer (SPENDS credits).
+        Deferred by design — nothing generates until this is explicitly called."""
+        if not cases_enabled():
+            raise HTTPException(status_code=404, detail="historical cases not enabled")
+        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
+        if want and x_admin_token != want:
+            raise HTTPException(status_code=401, detail="admin token required")
+        from api.historical_cases import all_cases, get_case
+        store = _cases()
+        if store is None:
+            raise HTTPException(status_code=404, detail="no store configured")
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = app.state.service
+        ids = body.case_ids or [c["id"] for c in all_cases()]
+        engine = (body.engine or "reasoned").strip()
+        done, errors = [], []
+        for cid in ids:
+            case = get_case(cid)
+            if case is None:
+                errors.append({"case_id": cid, "error": "unknown case"}); continue
+            try:
+                if engine == "standard":
+                    res = await svc.ask(question=case["question"], tenant_id="demo")
+                else:
+                    res = await svc.ask_reasoned(question=case["question"], tenant_id="demo", route=False)
+                cites = [{"text": c.text, "quote": c.quote,
+                          "source": c.document_title or c.source_key, "document_id": c.document_id}
+                         for c in (getattr(res, "verified_claims", None) or [])]
+                payload = {"reasoning_conclusion": getattr(res, "reasoning_conclusion", "") or "",
+                           "coverage_gaps": list(getattr(res, "coverage_gaps", None) or []),
+                           "n_verified": len(cites)}
+                rid = await store.save_run(
+                    case_id=cid, answer=getattr(res, "composed_answer", "") or "",
+                    grounded=bool(getattr(res, "grounded", False)), citations=cites,
+                    payload=payload, engine=engine)
+                done.append({"case_id": cid, "run_id": rid, "grounded": payload["n_verified"] > 0})
+            except Exception as e:   # noqa: BLE001 — record + continue (one failure never aborts the batch)
+                try:
+                    await store.save_run(case_id=cid, answer="", grounded=False, engine=engine,
+                                         error=str(e)[:500])
+                except Exception:
+                    pass
+                errors.append({"case_id": cid, "error": str(e)[:300]})
+        return {"generated": len(done), "errors": errors, "runs": done}
 
     @app.post("/glossary/lookup")
     async def glossary_lookup(body: TermLookupIn) -> dict:

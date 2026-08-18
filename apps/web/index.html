@@ -1202,6 +1202,55 @@
     color:var(--gold);border:1px solid rgba(var(--gold-rgb),.4);border-radius:999px;padding:.05rem .4rem;vertical-align:middle;}
   .sessions .splaceholder{color:var(--muted);font-size:.9rem;margin-top:2.5rem;text-align:center;}
   .sessions .sempty{color:var(--muted);padding:1rem;font-size:.85rem;}
+  /* ---- Historical Cases (list + detail + doctor rubric) ---- */
+  .sessions .scluster{font-family:var(--mono);font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;
+    color:var(--gold);padding:.7rem .5rem .25rem;border-top:1px solid var(--hair);margin-top:.3rem;}
+  .sessions .scluster:first-child{border-top:none;margin-top:0;}
+  .sessions .caserow.on{background:var(--panel);border-left-color:var(--gold);}
+  .sessions .caserow .cstate,.sessions .caserow .cverdict{font-family:var(--mono);font-size:.56rem;text-transform:uppercase;
+    letter-spacing:.06em;border-radius:999px;padding:.05rem .4rem;border:1px solid var(--hair);}
+  .cstate-ok{color:var(--verified);border-color:rgba(127,211,174,.4)!important;}
+  .cstate-none{color:var(--muted);}
+  .cv-accept{color:var(--verified);border-color:rgba(127,211,174,.5)!important;}
+  .cv-revise{color:var(--gold);border-color:rgba(var(--gold-rgb),.5)!important;}
+  .cv-reject{color:#e0777a;border-color:rgba(224,119,122,.5)!important;}
+  .casedetail{max-width:52rem;}
+  .casedetail .ccluster{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);}
+  .casedetail .ctitle{font-family:var(--serif);font-size:1.5rem;line-height:1.25;color:var(--ink);margin:.3rem 0 .7rem;text-wrap:balance;}
+  .casedetail .cblurb{font-size:.96rem;line-height:1.7;color:var(--ink);opacity:.9;}
+  .casedetail .cqa{margin:1.1rem 0;padding:.8rem .9rem;background:var(--panel2);border:1px solid var(--hair);border-radius:10px;}
+  .casedetail .cqa-h{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.35rem;}
+  .casedetail .cq{font-family:var(--serif);font-size:1.06rem;line-height:1.5;color:var(--ink);}
+  .casedetail .cref{margin:.4rem 0 1.2rem;border:1px solid var(--hair);border-radius:10px;background:var(--bg);}
+  .casedetail .cref>summary{cursor:pointer;font-family:var(--mono);font-size:.64rem;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--verified);padding:.5rem .7rem;list-style:none;} .casedetail .cref>summary::-webkit-details-marker{display:none;}
+  .casedetail .cref-b{padding:0 .7rem .7rem;font-size:.9rem;line-height:1.6;color:var(--ink);}
+  .casedetail .csec-h{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--verified);
+    margin:1.4rem 0 .5rem;padding-top:.7rem;border-top:1px solid var(--hair);display:flex;gap:.5rem;align-items:center;}
+  .casedetail .cempty{color:var(--muted);font-size:.9rem;padding:.6rem .1rem;font-style:italic;}
+  .casedetail .cmeta{font-family:var(--mono);font-size:.62rem;color:var(--muted);margin-top:.6rem;}
+  .casedetail .cmeta .sg{color:var(--verified);}
+  .casedetail .ccites{margin:.6rem 0;} .casedetail .ccites>summary{cursor:pointer;font-family:var(--mono);font-size:.62rem;color:var(--muted);}
+  .casedetail .ccite{font-size:.82rem;line-height:1.5;margin:.4rem 0;padding-left:.6rem;border-left:2px solid var(--hair);}
+  .casedetail .ccs{color:var(--gold);font-weight:600;display:block;} .casedetail .ccq{color:var(--ink);opacity:.85;}
+  /* doctor rubric */
+  .rubric{margin:1rem 0 1.5rem;padding:.9rem 1rem;border:1px solid var(--hair);border-radius:12px;background:var(--panel2);}
+  .rbrow{display:flex;align-items:center;gap:.7rem;margin:.4rem 0;}
+  .rbrow .rblbl{flex:0 0 8.5rem;font-size:.82rem;color:var(--ink);}
+  .rbscale,.rbverdict{display:inline-flex;gap:.3rem;}
+  .rbn,.rbv{font-family:var(--mono);font-size:.72rem;border:1px solid var(--hair);background:var(--bg);color:var(--muted);
+    border-radius:7px;padding:.2rem .5rem;cursor:pointer;transition:all .12s;}
+  .rbn{width:1.9rem;text-align:center;} .rbn:hover,.rbv:hover{border-color:var(--verified);color:var(--ink);}
+  .rbn.on{background:var(--verified);color:#0A1F16;border-color:var(--verified);font-weight:700;}
+  .rbv.on{background:var(--gold);color:#1a1200;border-color:var(--gold);font-weight:700;}
+  .rbrev{width:100%;margin:.6rem 0 .4rem;padding:.4rem .55rem;background:var(--bg);border:1px solid var(--hair);border-radius:8px;
+    color:var(--ink);font:inherit;font-size:.85rem;box-sizing:border-box;}
+  .rbnotes{width:100%;padding:.45rem .55rem;background:var(--bg);border:1px solid var(--hair);border-radius:8px;color:var(--ink);
+    font:inherit;font-size:.85rem;line-height:1.5;resize:vertical;box-sizing:border-box;}
+  .rbfoot{display:flex;align-items:center;gap:.8rem;margin-top:.6rem;}
+  .rbsave{font-family:var(--mono);font-size:.74rem;font-weight:600;letter-spacing:.03em;cursor:pointer;background:var(--verified);
+    color:#0A1F16;border:none;border-radius:8px;padding:.4rem .8rem;} .rbsave:disabled{opacity:.55;cursor:default;}
+  .rbmsg{font-family:var(--mono);font-size:.68rem;color:var(--muted);}
   @media (max-width:640px){
     .sessions .shead{padding:.75rem .9rem;}
     .sessions .ssearchrow{padding:.5rem .9rem 0;}
@@ -1709,6 +1758,7 @@ let REFINE_ENABLED = false;     // pre-answer question refinement (offer sharper
 let GUIDED_REFINED = false;     // one-shot: the Q&A box was filled from Guided → skip refine on next ask
 let REASONING_ENABLED = false;  // reasoning-read interpretation + confidence layer (server-validated)
 let ASK_PANEL_ENABLED = false;  // AI specialist panel (Alpha)
+let CASES_ENABLED = false;      // Historical Cases review tab under Past Sessions (Alpha)
 let TRIAGE_ENABLED = false;     // guided-intake / triage mode (clarify → route)
 let ACCOUNTS_ENABLED = false;   // accounts + verified-clinician tier + per-answer feedback (W-taxonomy)
 let DUEL_ENABLED = false;       // A/B duel: fresh questions run standard + reasoned engines, user votes
@@ -1796,6 +1846,7 @@ async function loadConfig(){
     REFINE_ENABLED = !!c.refine_enabled;
     REASONING_ENABLED = !!c.reasoning_read_enabled;
     ASK_PANEL_ENABLED = !!c.ask_panel_enabled;
+    CASES_ENABLED = !!c.cases_enabled;
     TRIAGE_ENABLED = !!c.triage_enabled;
     ACCOUNTS_ENABLED = !!c.accounts_enabled;
     DUEL_ENABLED = !!c.duel_enabled;
@@ -5491,6 +5542,10 @@ function buildSessionTabs(){
     defs.push({key:"qa", aud:null, kind:"research", label:"Quick Q&amp;A"});
     defs.push({key:"panel", aud:null, kind:"panel", label:"◈ Specialist Panel"});
   }
+  if(CASES_ENABLED){
+    if(!defs.length) defs.push({key:"qa", aud:null, kind:"research", label:"Quick Q&amp;A"});   // ensure a base list tab
+    defs.push({key:"cases", aud:null, kind:"case", label:"Historical Cases"});
+  }
   SESS_TAB = defs[0] || null;
   if(defs.length < 2){ tabs.hidden = true; tabs.innerHTML = ""; return; }
   tabs.hidden = false;
@@ -5504,6 +5559,7 @@ function buildSessionTabs(){
   }));
 }
 async function loadSessionList(){
+  if(SESS_TAB && SESS_TAB.kind === "case") return loadCasesList();   // Historical Cases → curated list
   const q = ($("#ssearch").value||"").trim();
   slist.innerHTML = `<div class="sempty">Loading…</div>`;
   // The active tab (see buildSessionTabs) filters the list server-side by kind and/or audience.
@@ -5536,6 +5592,113 @@ async function loadSessionList(){
     const first = slist.querySelector(".srow");
     if(first && !isMobileSess()) selectSession(first);
   }catch(e){ slist.innerHTML = `<div class="sempty">Couldn't load sessions.</div>`; }
+}
+
+// ===== Historical Cases: curated landmark cases + generated answer + doctor rubric =====
+let CASES_DATA = null;
+function _clusterLabel(key){ return ((CASES_DATA&&CASES_DATA.clusters)||[]).find(c=>c.key===key)?.label || key; }
+async function loadCasesList(){
+  slist.innerHTML = `<div class="sempty">Loading…</div>`;
+  const det = $("#sdetail"); if(det) det.innerHTML = "";
+  try{
+    CASES_DATA = await (await fetch("/cases")).json();
+    const q = ($("#ssearch").value||"").trim().toLowerCase();
+    const byCluster = {}; (CASES_DATA.cases||[]).forEach(c=>{ (byCluster[c.cluster]=byCluster[c.cluster]||[]).push(c); });
+    let html = "";
+    (CASES_DATA.clusters||[]).forEach(cl=>{
+      let cases = byCluster[cl.key]||[];
+      if(q) cases = cases.filter(c=> (c.title+" "+c.case+" "+c.question).toLowerCase().includes(q));
+      if(!cases.length) return;
+      html += `<div class="scluster">${esc(cl.label)}</div>`;
+      html += cases.map(c=>{
+        const badge = c.eval ? `<span class="cverdict cv-${esc(c.eval.verdict||'reviewed')}">${esc(c.eval.verdict||"reviewed")}</span>`
+                    : (c.run ? (c.run.answer ? `<span class="cstate cstate-ok">answered</span>` : `<span class="cstate cstate-none">gen failed</span>`)
+                             : `<span class="cstate cstate-none">not generated</span>`);
+        return `<button class="srow caserow" data-id="${esc(c.id)}">
+          <div class="sq">${esc(c.title)}</div>
+          <div class="sm"><span>${c.year||""}</span>${badge}</div></button>`;
+      }).join("");
+    });
+    slist.innerHTML = html || `<div class="sempty">No cases match.</div>`;
+    slist.querySelectorAll(".caserow").forEach(b=>b.addEventListener("click",()=>selectCase(b.dataset.id)));
+    const first = slist.querySelector(".caserow");
+    if(first && !isMobileSess()) selectCase(first.dataset.id);
+  }catch(e){ slist.innerHTML = `<div class="sempty">Couldn't load cases.</div>`; }
+}
+function selectCase(id){
+  const c = ((CASES_DATA&&CASES_DATA.cases)||[]).find(x=>x.id===id); if(!c) return;
+  slist.querySelectorAll(".caserow").forEach(b=>b.classList.toggle("on", b.dataset.id===id));
+  const det = $("#sdetail"); if(!det) return;
+  const run = c.run, ev = c.eval;
+  let ans;
+  if(run && run.answer){
+    const cites = (run.citations||[]).filter(x=>x&&(x.source||x.quote));
+    const citeHtml = cites.length ? `<details class="ccites"><summary>Evidence (${cites.length})</summary>`+
+      cites.map(x=>`<div class="ccite"><span class="ccs">${esc(x.source||"source")}</span>${x.quote?`<span class="ccq">“${esc(x.quote)}”</span>`:""}</div>`).join("")+`</details>` : "";
+    ans = `<div class="answer md">${mdToHtml(run.answer)}</div>`+citeHtml+
+      `<div class="cmeta">${run.grounded?'<span class="sg">✓ grounded</span>':'<span>ungrounded</span>'} · engine: ${esc(run.engine||"reasoned")} · ${run.generated_at?new Date(run.generated_at).toLocaleString():""}</div>`;
+  } else if(run){
+    ans = `<div class="cempty">Generation failed: ${esc(run.error||"unknown error")}.</div>`;
+  } else {
+    ans = `<div class="cempty">No noesis answer generated yet — generation is admin-run and deferred until credits are confirmed.</div>`;
+  }
+  det.innerHTML = `<div class="casedetail">
+    <div class="ccluster">${esc(_clusterLabel(c.cluster))}</div>
+    <h2 class="ctitle">${esc(c.title)}</h2>
+    <div class="cblurb">${esc(c.case)}</div>
+    <div class="cqa"><div class="cqa-h">Decision question posed to noesis</div><div class="cq">${esc(c.question)}</div></div>
+    <details class="cref"><summary>Reference — the historically-established correct decision</summary><div class="cref-b">${esc(c.reference)}</div></details>
+    <div class="csec-h">◫ Noesis answer</div>
+    ${ans}
+    ${rubricHtml(c, ev)}
+  </div>`;
+  det.scrollTop = 0;
+  wireRubric(det, c);
+}
+function rubricHtml(c, ev){
+  const dims = [["accuracy","Accuracy"],["completeness","Completeness"],["safety","Safety"],["decision_useful","Decision-usefulness"]];
+  const scale = (key)=>{ const cur = ev? ev[key] : null;
+    return `<div class="rbrow"><span class="rblbl">${dims.find(d=>d[0]===key)[1]}</span><span class="rbscale" data-dim="${key}">`+
+      [1,2,3,4,5].map(n=>`<button type="button" class="rbn${cur===n?" on":""}" data-v="${n}">${n}</button>`).join("")+`</span></div>`; };
+  const verdicts = ["accept","revise","reject"];
+  return `<div class="rubric" data-case="${esc(c.id)}" data-run="${esc((c.run&&c.run.run_id)||"")}">
+    <div class="csec-h">Doctor evaluation</div>
+    ${dims.map(d=>scale(d[0])).join("")}
+    <div class="rbrow"><span class="rblbl">Verdict</span><span class="rbverdict">`+
+      verdicts.map(v=>`<button type="button" class="rbv${ev&&ev.verdict===v?" on":""}" data-v="${v}">${v}</button>`).join("")+`</span></div>
+    <input class="rbrev" type="text" placeholder="Reviewer (name/initials)" value="${esc((ev&&ev.reviewer)||"")}">
+    <textarea class="rbnotes" rows="2" placeholder="Notes — what's missing, wrong, or unsafe?">${esc((ev&&ev.notes)||"")}</textarea>
+    <div class="rbfoot"><button type="button" class="rbsave">Save evaluation</button><span class="rbmsg">${ev?"Last: "+esc(ev.verdict||"")+(ev.evaluated_at?" · "+new Date(ev.evaluated_at).toLocaleDateString():""):""}</span></div>
+  </div>`;
+}
+function wireRubric(det, c){
+  const rb = det.querySelector(".rubric"); if(!rb) return;
+  rb.querySelectorAll(".rbscale .rbn").forEach(b=>b.addEventListener("click",()=>{
+    b.parentNode.querySelectorAll(".rbn").forEach(x=>x.classList.toggle("on", x===b)); }));
+  rb.querySelectorAll(".rbverdict .rbv").forEach(b=>b.addEventListener("click",()=>{
+    rb.querySelectorAll(".rbverdict .rbv").forEach(x=>x.classList.toggle("on", x===b)); }));
+  const save = rb.querySelector(".rbsave"), msg = rb.querySelector(".rbmsg");
+  save.addEventListener("click", async ()=>{
+    const score = dim => { const on = rb.querySelector(`.rbscale[data-dim="${dim}"] .rbn.on`); return on?parseInt(on.dataset.v,10):null; };
+    const von = rb.querySelector(".rbverdict .rbv.on");
+    const body = { run_id: rb.dataset.run || null, accuracy: score("accuracy"), completeness: score("completeness"),
+      safety: score("safety"), decision_useful: score("decision_useful"),
+      verdict: von?von.dataset.v:"", reviewer: (rb.querySelector(".rbrev").value||"").trim(),
+      notes: (rb.querySelector(".rbnotes").value||"").trim() };
+    save.disabled = true; msg.textContent = "Saving…";
+    try{
+      const r = await fetch(`/cases/${encodeURIComponent(c.id)}/eval`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
+      if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+      msg.textContent = "Saved ✓";
+      // reflect in the cached data + list badge without a full reload
+      if(c) c.eval = {verdict: body.verdict, reviewer: body.reviewer, notes: body.notes,
+        accuracy: body.accuracy, completeness: body.completeness, safety: body.safety,
+        decision_useful: body.decision_useful, evaluated_at: new Date().toISOString()};
+      const row = slist.querySelector(`.caserow[data-id="${CSS.escape(c.id)}"] .sm`);
+      if(row && body.verdict) row.innerHTML = `<span>${c.year||""}</span><span class="cverdict cv-${body.verdict}">${body.verdict}</span>`;
+    }catch(e){ msg.textContent = "Couldn't save: "+(e.message||e); }
+    finally{ save.disabled = false; }
+  });
 }
 function showSessionDetail(row, rowEl){
   if(rowEl){ slist.querySelectorAll(".srow").forEach(r=>r.removeAttribute("aria-current")); rowEl.setAttribute("aria-current","true"); }

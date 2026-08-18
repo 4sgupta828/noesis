@@ -77,7 +77,17 @@ full text) · living pages (drug shortage notices, outbreak dashboards) · CDSCO
     containers drain for 5 min after a SUCCESS deploy and can claim a job with OLD code. When
     verifying a fix via a fresh ingest, buffer ~330s past the deploy before firing, or an
     old-replica claim yields a false "still broken".
-  - **T-LIC next:** USPSTF (public domain — needs a connector/registry entry, not europepmc);
+  - **USPSTF — EXCLUDED (license, verified 2026-08-17):** the "public domain, US-gov" assumption is
+    WRONG. AHRQ's copyright notice on every recommendation page: the public may reproduce/redistribute
+    "**without any changes**" but the work "**cannot be incorporated into a profit-making venture
+    without the express written permission of AHRQ**" (+ Section 1140 SSA restrictions). Noesis is
+    commercial and chunking→embedding is incorporation/adaptation → **NC-class, same as StatPearls /
+    WHO IRIS — do NOT ingest.** USPSTF members are volunteers, not federal employees, so 17 USC 105
+    (federal-work public domain) does not apply; the ePSS JSON API also requires an AHRQ API key.
+    Legitimate paths: (a) live WEB-LEG citation only (link + brief fair-use quote, never corpus
+    incorporation); (b) obtain AHRQ written permission (business action) THEN build the connector. The
+    prevention/screening ground is largely covered already by tranche-1's cc-by society guidelines.
+  - **T-LIC next:** (USPSTF removed — license-barred above);
     Cochrane PLS/abstracts (cc-by-nc → exclude full, abstracts case-by-case); widen topic set
     after tranche-1 verifies retrieval improves; the splitter max-block-size source fix.
 Ordering rationale: T1-T2 are unambiguous public domain; T3 multiplies span quality on

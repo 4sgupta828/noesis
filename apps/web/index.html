@@ -1842,6 +1842,8 @@ async function loadConfig(){
           ACCOUNTS_ENABLED = !!f.accounts_enabled;
           DYN_ENGINES = !!f.dynamic_engines_enabled;
           PULSE_ENABLED = !!f.pulse_enabled; maybeShowPulseBell();
+          CASES_ENABLED = !!f.cases_enabled;   // reveal the Case Board button even on a stale-cache load
+          { const cbb2 = $("#casesbtn"); if(cbb2 && CASES_ENABLED) cbb2.hidden = false; }
           // integrative reveals a control row → wired on the next full load (not hot-applied)
         })
         .catch(()=>{});
@@ -1857,6 +1859,7 @@ async function loadConfig(){
     VISUAL_ENABLED = !!c.visual_augment_enabled;
     VISUAL_AUTO = !!c.visual_auto_enabled;
     const tb = $("#termsbtn"); if(tb && TERMS_ENABLED) tb.hidden = false;
+    CASES_ENABLED = !!c.cases_enabled;   // set before the un-hide below (global is also re-read later)
     const cbb = $("#casesbtn"); if(cbb && CASES_ENABLED) cbb.hidden = false;
     VOICE_INTAKE_ENABLED = !!c.voice_intake_enabled;
     VOICE_EVERYWHERE = !!c.voice_everywhere_enabled;

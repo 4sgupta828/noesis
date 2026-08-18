@@ -2476,37 +2476,57 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if app.state.service is None:
             app.state.service = build_default_service()
         svc = app.state.service
-        ids = body.case_ids or [c["id"] for c in all_cases()]
+        ids = [c for c in (body.case_ids or [x["id"] for x in all_cases()]) if get_case(c) is not None]
+        if not ids:
+            raise HTTPException(status_code=400, detail="no valid case ids")
         engine = (body.engine or "reasoned").strip()
-        done, errors = [], []
-        for cid in ids:
-            case = get_case(cid)
-            if case is None:
-                errors.append({"case_id": cid, "error": "unknown case"}); continue
+        if getattr(app.state, "cases_generating", None):
+            raise HTTPException(status_code=409, detail="generation already running")
+        # Each case is a full reasoned run (20-60s); a synchronous 10-case loop would exceed the
+        # Railway edge timeout. Run in a DETACHED background task and store each run as it completes;
+        # the client polls GET /cases to watch answers populate. Idempotent enough: latest run wins.
+        async def _run(case_ids: list[str]):
+            app.state.cases_generating = {"total": len(case_ids), "done": 0, "started": True}
             try:
-                if engine == "standard":
-                    res = await svc.ask(question=case["question"], tenant_id="demo")
-                else:
-                    res = await svc.ask_reasoned(question=case["question"], tenant_id="demo", route=False)
-                cites = [{"text": c.text, "quote": c.quote,
-                          "source": c.document_title or c.source_key, "document_id": c.document_id}
-                         for c in (getattr(res, "verified_claims", None) or [])]
-                payload = {"reasoning_conclusion": getattr(res, "reasoning_conclusion", "") or "",
-                           "coverage_gaps": list(getattr(res, "coverage_gaps", None) or []),
-                           "n_verified": len(cites)}
-                rid = await store.save_run(
-                    case_id=cid, answer=getattr(res, "composed_answer", "") or "",
-                    grounded=bool(getattr(res, "grounded", False)), citations=cites,
-                    payload=payload, engine=engine)
-                done.append({"case_id": cid, "run_id": rid, "grounded": payload["n_verified"] > 0})
-            except Exception as e:   # noqa: BLE001 — record + continue (one failure never aborts the batch)
-                try:
-                    await store.save_run(case_id=cid, answer="", grounded=False, engine=engine,
-                                         error=str(e)[:500])
-                except Exception:
-                    pass
-                errors.append({"case_id": cid, "error": str(e)[:300]})
-        return {"generated": len(done), "errors": errors, "runs": done}
+                for cid in case_ids:
+                    case = get_case(cid)
+                    try:
+                        if engine == "standard":
+                            res = await svc.ask(question=case["question"], tenant_id="demo")
+                        else:
+                            res = await svc.ask_reasoned(question=case["question"], tenant_id="demo", route=False)
+                        cites = [{"text": c.text, "quote": c.quote,
+                                  "source": c.document_title or c.source_key, "document_id": c.document_id}
+                                 for c in (getattr(res, "verified_claims", None) or [])]
+                        payload = {"reasoning_conclusion": getattr(res, "reasoning_conclusion", "") or "",
+                                   "coverage_gaps": list(getattr(res, "coverage_gaps", None) or []),
+                                   "n_verified": len(cites)}
+                        await store.save_run(
+                            case_id=cid, answer=getattr(res, "composed_answer", "") or "",
+                            grounded=bool(getattr(res, "grounded", False)), citations=cites,
+                            payload=payload, engine=engine)
+                    except Exception as e:   # noqa: BLE001 — record + continue (one failure never aborts the batch)
+                        try:
+                            await store.save_run(case_id=cid, answer="", grounded=False, engine=engine,
+                                                 error=str(e)[:500])
+                        except Exception:
+                            pass
+                    app.state.cases_generating["done"] += 1
+            finally:
+                app.state.cases_generating = None
+        import asyncio as _asyncio
+        _asyncio.create_task(_run(ids))
+        return {"started": len(ids), "case_ids": ids}
+
+    @app.get("/admin/cases/status")
+    async def cases_status(x_admin_token: str = Header(default="")) -> dict:
+        """Progress of an in-flight generation batch (None when idle)."""
+        if not cases_enabled():
+            raise HTTPException(status_code=404, detail="historical cases not enabled")
+        want = os.environ.get("NOESIS_ADMIN_TOKEN", "")
+        if want and x_admin_token != want:
+            raise HTTPException(status_code=401, detail="admin token required")
+        return {"generating": getattr(app.state, "cases_generating", None)}
 
     @app.post("/glossary/lookup")
     async def glossary_lookup(body: TermLookupIn) -> dict:

@@ -33,6 +33,9 @@ CLUSTERS: tuple[dict, ...] = (
     {"key": "perinatal", "label": "Perinatal & neonatal", "era": "recent"},
     {"key": "minimally_invasive", "label": "Minimally invasive & endovascular surgery", "era": "recent"},
     {"key": "prevention_screening", "label": "Prevention, screening & genomic risk", "era": "recent"},
+    # ---- recent era, tranche 3 clusters ----
+    {"key": "global_health", "label": "Vaccines, eradication & global health", "era": "recent"},
+    {"key": "amr_microbiome", "label": "Resistance, stewardship & the microbiome", "era": "recent"},
 )
 
 CASES: tuple[dict, ...] = (
@@ -660,6 +663,243 @@ CASES: tuple[dict, ...] = (
                    "for HEPATITIS B before treatment (risk of reactivation) and give prophylaxis if "
                    "positive; watch for infusion reactions. It opened the era of therapeutic antibodies "
                    "in oncology.")},
+
+    # ============================ RECENT ERA (1975-2025), tranche 3 ============================
+    # ---- Vaccines, eradication & global health ----
+    {"id": "smallpox-eradication-1980", "cluster": "global_health", "era": "recent", "year": 1980,
+     "title": "Smallpox eradication — the first disease eliminated (1980)",
+     "case": ("1980. WHO certified the global eradication of smallpox after a campaign of surveillance "
+              "and ring vaccination; the last natural case was in 1977. It remains the only human "
+              "disease ever eradicated."),
+     "question": ("A highly contagious, often-fatal viral disease has an effective vaccine and no "
+                  "animal reservoir, yet still causes outbreaks. What strategy can eliminate it "
+                  "entirely?"),
+     "reference": ("Global ERADICATION by SURVEILLANCE and RING VACCINATION (containment): find every "
+                   "case, isolate it, and vaccinate contacts and their contacts to break chains of "
+                   "transmission — feasible here because of an effective vaccine, no animal reservoir, "
+                   "and a recognisable disease. Mass blanket vaccination alone is less efficient than "
+                   "targeted surveillance-containment.")},
+    {"id": "polio-eradication-1988", "cluster": "global_health", "era": "recent", "year": 1988,
+     "title": "Polio — the eradication endgame (1988→)",
+     "case": ("Launched in 1988, the Global Polio Eradication Initiative cut wild poliovirus cases by "
+              "over 99% through mass vaccination and surveillance; wild types 2 and 3 are certified "
+              "eradicated, with type 1 confined to a few areas."),
+     "question": ("A vaccine-preventable paralytic virus persists in a few regions. What is the "
+                  "correct strategy to finish eliminating it, and what nuance complicates the "
+                  "endgame?"),
+     "reference": ("Sustained mass VACCINATION (oral and inactivated) with intensive acute-flaccid-"
+                   "paralysis SURVEILLANCE and rapid outbreak response. Endgame nuance: the live oral "
+                   "vaccine can rarely seed vaccine-derived poliovirus, so as wild virus disappears "
+                   "the strategy shifts toward inactivated and novel oral vaccines — the last mile is "
+                   "the hardest.")},
+    {"id": "malaria-vaccine-rtss-2021", "cluster": "global_health", "era": "recent", "year": 2021,
+     "title": "The first malaria vaccine — RTS,S (2021)",
+     "case": ("2021. After large pilot programmes, WHO recommended RTS,S/AS01 (the first vaccine "
+              "against a human parasite) for children in areas of moderate-to-high malaria "
+              "transmission; the R21 vaccine followed."),
+     "question": ("Malaria still kills hundreds of thousands of children a year despite bed nets and "
+                  "drugs. What new tool adds protection, and how should it be positioned?"),
+     "reference": ("Add the MALARIA VACCINE (RTS,S/AS01 or R21) for children in moderate-to-high "
+                   "transmission settings, LAYERED WITH existing measures — insecticide-treated nets, "
+                   "seasonal chemoprevention, and prompt diagnosis and treatment. It is only partially "
+                   "protective, so it COMPLEMENTS rather than replaces vector control and case "
+                   "management.")},
+
+    # ---- Structural / endovascular & lipid (existing clusters) ----
+    {"id": "tavr-aortic-stenosis-2011", "cluster": "minimally_invasive", "era": "recent", "year": 2011,
+     "title": "TAVR for severe aortic stenosis — PARTNER (2011)",
+     "case": ("2011. The PARTNER trial showed transcatheter aortic valve replacement (TAVR) — "
+              "implanting a valve via catheter — helped patients with severe symptomatic aortic "
+              "stenosis who were inoperable or high-risk; it was later extended to lower-risk "
+              "patients."),
+     "question": ("A patient has severe symptomatic aortic stenosis but is high-risk or inoperable for "
+                  "open surgical valve replacement. What option can relieve the obstruction?"),
+     "reference": ("TRANSCATHETER AORTIC VALVE REPLACEMENT (TAVR/TAVI) — a catheter-delivered "
+                   "prosthetic valve — for inoperable/high-risk (and now selected lower-risk) "
+                   "patients, chosen by a HEART TEAM weighing anatomy, surgical risk and life "
+                   "expectancy versus surgical AVR. Severe symptomatic AS has a poor prognosis "
+                   "untreated, so intervene once symptomatic.")},
+    {"id": "thrombectomy-stroke-2015", "cluster": "reperfusion", "era": "recent", "year": 2015,
+     "title": "Endovascular thrombectomy for large-vessel-occlusion stroke (2015)",
+     "case": ("2015. A series of trials (MR CLEAN and others) proved that mechanical thrombectomy — "
+              "catheter clot removal — dramatically improved outcomes in acute ischaemic stroke from "
+              "large-vessel occlusion, beyond IV thrombolysis alone."),
+     "question": ("A patient has an acute ischaemic stroke from a large-vessel occlusion, which IV "
+                  "thrombolysis alone often fails to reopen. What intervention improves outcome, and "
+                  "in what window?"),
+     "reference": ("ENDOVASCULAR THROMBECTOMY for large-vessel occlusion — mechanical clot retrieval — "
+                   "added to IV thrombolysis when eligible. It benefits within ~6 hours, and out to "
+                   "24 hours in patients selected by perfusion/core imaging (DAWN/DEFUSE-3). Organised "
+                   "stroke systems and speed are decisive — 'time is brain'.")},
+    {"id": "pcsk9-inhibitors-2017", "cluster": "prevention_screening", "era": "recent", "year": 2017,
+     "title": "PCSK9 inhibitors — driving LDL lower still (2017)",
+     "case": ("PCSK9-inhibitor antibodies (evolocumab, alirocumab) lower LDL cholesterol far below "
+              "statin levels; the FOURIER trial (2017) showed added cardiovascular event reduction in "
+              "high-risk patients already on statins."),
+     "question": ("A very-high-risk patient with atherosclerotic disease still has elevated LDL "
+                  "cholesterol despite a maximally tolerated statin (± ezetimibe). What is the next "
+                  "step?"),
+     "reference": ("Add a PCSK9 INHIBITOR (evolocumab/alirocumab, or the siRNA inclisiran) to further "
+                   "lower LDL and reduce events in high-risk patients not at goal on statin ± "
+                   "ezetimibe. It reinforced 'lower LDL is better' for very-high-risk secondary "
+                   "prevention; weigh cost/access.")},
+
+    # ---- Targeted & immuno-oncology (existing cluster) ----
+    {"id": "anti-pd1-lung-2015", "cluster": "targeted_onco", "era": "recent", "year": 2015,
+     "title": "Immunotherapy in lung cancer — anti-PD-1 (2015)",
+     "case": ("~2015. Anti-PD-1 checkpoint inhibitors (nivolumab, pembrolizumab) improved survival in "
+              "advanced non-small-cell lung cancer; pembrolizumab became first-line for high-PD-L1 "
+              "tumours — immunotherapy in the leading cause of cancer death."),
+     "question": ("A patient has advanced non-small-cell lung cancer without a targetable driver "
+                  "mutation. Beyond chemotherapy, what improves survival, and what biomarker guides "
+                  "it?"),
+     "reference": ("IMMUNE CHECKPOINT INHIBITION (anti-PD-1/PD-L1, e.g. pembrolizumab) — as "
+                   "monotherapy for high PD-L1 expression or combined with chemotherapy otherwise. "
+                   "First EXCLUDE a targetable driver (EGFR/ALK/etc., which redirects to targeted "
+                   "therapy) and TEST PD-L1; watch for immune-related adverse events.")},
+    {"id": "braf-melanoma-2011", "cluster": "targeted_onco", "era": "recent", "year": 2011,
+     "title": "BRAF-targeted therapy for melanoma — match the mutation (2011)",
+     "case": ("2011. Vemurafenib targeted the BRAF V600E mutation in metastatic melanoma with rapid "
+              "responses; adding a MEK inhibitor improved durability — precision therapy matched to a "
+              "tumour mutation."),
+     "question": ("A patient has metastatic melanoma harbouring a BRAF V600E mutation. What targeted "
+                  "approach is correct, and why combine two drugs?"),
+     "reference": ("BRAF-TARGETED therapy — a BRAF inhibitor COMBINED WITH a MEK inhibitor (e.g. "
+                   "dabrafenib+trametinib) for BRAF V600-mutant melanoma; the combination delays "
+                   "resistance and reduces paradoxical toxicity versus a BRAF inhibitor alone. TEST "
+                   "for the BRAF mutation to select therapy — immunotherapy is the complementary/"
+                   "alternative path.")},
+    {"id": "mrd-leukemia-guided", "cluster": "targeted_onco", "era": "recent", "year": 2010,
+     "title": "Measurable residual disease — guiding leukaemia therapy",
+     "case": ("Sensitive detection of measurable (minimal) residual disease (MRD) — by "
+              "multiparameter flow cytometry, PCR or next-generation sequencing — became a routine "
+              "way to quantify leukaemia below the microscope and predict relapse, reshaping how "
+              "acute leukaemias are treated."),
+     "question": ("After inducing a morphologic remission in acute leukaemia, how can you tell who is "
+                  "likely to relapse and tailor further therapy beyond what the microscope shows?"),
+     "reference": ("Measure MEASURABLE RESIDUAL DISEASE (MRD) with sensitive methods (flow cytometry, "
+                   "PCR, NGS): MRD status after therapy is a powerful prognostic marker used to "
+                   "INTENSIFY or de-escalate treatment, decide on stem-cell transplant, and monitor "
+                   "for relapse — individualising therapy beyond morphologic remission.")},
+
+    # ---- Gene & cell therapy frontiers (existing cluster) ----
+    {"id": "zolgensma-sma-2019", "cluster": "frontier_recent", "era": "recent", "year": 2019,
+     "title": "Gene therapy for spinal muscular atrophy — treat before symptoms (2019)",
+     "case": ("2019. Onasemnogene abeparvovec (Zolgensma), a one-time gene-replacement therapy "
+              "delivering a functional SMN1 gene, transformed spinal muscular atrophy — a leading "
+              "genetic cause of infant death — especially when given before symptoms via newborn "
+              "screening."),
+     "question": ("An infant is diagnosed (ideally by newborn screening) with spinal muscular atrophy "
+                  "type 1 from SMN1 loss. What disease-modifying options exist, and why is timing "
+                  "critical?"),
+     "reference": ("Disease-modifying therapy — one-time GENE REPLACEMENT (onasemnogene) or SMN-"
+                   "augmenting drugs (nusinersen, risdiplam) — started as EARLY as possible, ideally "
+                   "pre-symptomatically via newborn screening, BEFORE motor neurons are lost. Early "
+                   "treatment preserves motor function; timing is the decisive factor.")},
+    {"id": "cftr-modulators-cf-2019", "cluster": "frontier_recent", "era": "recent", "year": 2019,
+     "title": "CFTR modulators for cystic fibrosis — fix the protein (2019)",
+     "case": ("CFTR-modulator drugs (ivacaftor from 2012; the triple combination "
+              "elexacaftor/tezacaftor/ivacaftor from 2019) correct the underlying protein defect in "
+              "cystic fibrosis for most patients, markedly improving lung function — treating the "
+              "cause, not only symptoms."),
+     "question": ("A patient with cystic fibrosis is on airway clearance, antibiotics and nutritional "
+                  "support. What newer therapy addresses the root molecular defect, and how is it "
+                  "selected?"),
+     "reference": ("A CFTR MODULATOR (e.g. elexacaftor/tezacaftor/ivacaftor) chosen by the patient's "
+                   "CFTR GENOTYPE — it corrects or potentiates the defective chloride channel for "
+                   "eligible mutations, improving lung function and survival — used ALONGSIDE (not "
+                   "instead of) airway clearance, antimicrobials and nutrition.")},
+    {"id": "sickle-cell-gene-therapy-2023", "cluster": "frontier_recent", "era": "recent", "year": 2023,
+     "title": "Gene editing for sickle cell disease (2023)",
+     "case": ("2023. The first CRISPR gene-editing therapy (exagamglogene autotemcel) — alongside a "
+              "lentiviral gene therapy — was approved for severe sickle cell disease, editing a "
+              "patient's own stem cells to switch on fetal haemoglobin and prevent vaso-occlusive "
+              "crises."),
+     "question": ("A patient with severe sickle cell disease has recurrent vaso-occlusive crises "
+                  "despite hydroxyurea and transfusions and has no matched transplant donor. What "
+                  "curative-intent option now exists?"),
+     "reference": ("Autologous GENE THERAPY / GENE EDITING (e.g. CRISPR exa-cel to induce fetal "
+                   "haemoglobin) uses the patient's OWN edited stem cells — avoiding donor matching "
+                   "and graft-versus-host disease — as a one-time, potentially curative option for "
+                   "severe disease. It requires myeloablative conditioning (counsel on fertility and "
+                   "toxicity); matched allogeneic transplant is the alternative curative route.")},
+
+    # ---- Resistance, stewardship & the microbiome ----
+    {"id": "fmt-cdiff-2013", "cluster": "amr_microbiome", "era": "recent", "year": 2013,
+     "title": "Faecal microbiota transplant for recurrent C. difficile (2013)",
+     "case": ("2013. A randomised trial showed faecal microbiota transplantation (FMT) cured "
+              "recurrent Clostridioides difficile infection far better than vancomycin — restoring a "
+              "healthy gut microbiome to resist C. difficile."),
+     "question": ("A patient has multiply-recurrent C. difficile infection despite repeated courses of "
+                  "oral antibiotics. What is the correct next step, and by what mechanism does it "
+                  "work?"),
+     "reference": ("FAECAL MICROBIOTA TRANSPLANTATION (screened donor stool, now also standardised "
+                   "microbiome products) for recurrent C. difficile — it restores the colonic "
+                   "microbiome that resists C. difficile colonisation, curing most patients where "
+                   "repeated antibiotics fail. Treat the acute episode first with fidaxomicin or "
+                   "vancomycin, and screen donors carefully.")},
+    {"id": "mdr-tb-bpal-2019", "cluster": "amr_microbiome", "era": "recent", "year": 2019,
+     "title": "All-oral regimens for drug-resistant tuberculosis (2019)",
+     "case": ("New all-oral, shorter regimens built around bedaquiline (with pretomanid and "
+              "linezolid — the BPaL regimen, ~2019) transformed multidrug-resistant tuberculosis from "
+              "long, toxic injectable-based therapy into more effective, tolerable oral courses."),
+     "question": ("A patient has multidrug-resistant tuberculosis (resistant to isoniazid and "
+                  "rifampicin). How should treatment be approached, beyond the older injectable "
+                  "regimens?"),
+     "reference": ("Use a modern ALL-ORAL regimen guided by drug-susceptibility testing — bedaquiline-"
+                   "based (e.g. BPaL/BPaLM: bedaquiline, pretomanid, linezolid ± moxifloxacin) — "
+                   "which is shorter, more effective and less toxic than legacy injectables. Confirm "
+                   "resistance by rapid molecular testing, support adherence, and monitor for QT "
+                   "prolongation and linezolid toxicity.")},
+    {"id": "mrsa-stewardship-2007", "cluster": "amr_microbiome", "era": "recent", "year": 2007,
+     "title": "MRSA and antimicrobial stewardship (2000s)",
+     "case": ("The spread of methicillin-resistant Staphylococcus aureus (MRSA), including "
+              "community-associated strains in the 2000s, drove antimicrobial stewardship, infection-"
+              "control bundles, and evidence-based empiric antibiotic choices."),
+     "question": ("A patient has a serious skin/soft-tissue or bloodstream infection where MRSA is "
+                  "prevalent. How should empiric therapy — and broader practice — be handled?"),
+     "reference": ("Cover MRSA empirically when local risk/prevalence warrants (e.g. vancomycin or an "
+                   "alternative), then DE-ESCALATE by culture — the core of ANTIMICROBIAL STEWARDSHIP "
+                   "(right drug, dose, duration, prompt narrowing) — combined with infection control "
+                   "(hand hygiene, contact precautions, decolonisation where indicated) to curb "
+                   "resistance.")},
+
+    # ---- Maternal, neonatal & critical care ----
+    {"id": "txa-pph-woman-2017", "cluster": "perinatal", "era": "recent", "year": 2017,
+     "title": "Tranexamic acid for postpartum haemorrhage — WOMAN trial (2017)",
+     "case": ("2017. The WOMAN trial showed that early tranexamic acid reduces death from bleeding in "
+              "women with postpartum haemorrhage — a leading cause of maternal death — when given "
+              "promptly."),
+     "question": ("A woman develops postpartum haemorrhage. Alongside uterotonics and resuscitation, "
+                  "what drug given EARLY reduces death, and what is the key to its benefit?"),
+     "reference": ("Give TRANEXAMIC ACID EARLY (as soon as possible, ideally within 3 hours of onset) "
+                   "IN ADDITION to standard management — uterotonics (oxytocin), uterine massage, "
+                   "fluid/blood resuscitation and source control. Timeliness is decisive: the "
+                   "mortality benefit falls sharply with delay.")},
+    {"id": "neonatal-cooling-hie-2010", "cluster": "perinatal", "era": "recent", "year": 2010,
+     "title": "Cooling for neonatal hypoxic-ischaemic encephalopathy (2010)",
+     "case": ("Trials through the 2000s showed that therapeutic hypothermia (whole-body or head "
+              "cooling) for term newborns with moderate-to-severe hypoxic-ischaemic encephalopathy "
+              "reduces death and disability."),
+     "question": ("A term newborn suffers perinatal asphyxia and develops moderate hypoxic-ischaemic "
+                  "encephalopathy. What neuroprotective intervention improves outcome, and when must "
+                  "it start?"),
+     "reference": ("THERAPEUTIC HYPOTHERMIA (controlled cooling to ~33.5°C for 72 hours) started "
+                   "WITHIN 6 HOURS of birth for term/near-term infants with moderate-severe HIE — it "
+                   "reduces death and neurodevelopmental disability. Deliver it in a unit able to cool "
+                   "with monitoring and full supportive intensive care; the early window is critical.")},
+    {"id": "dexamethasone-covid-recovery-2020", "cluster": "critical_care", "era": "recent", "year": 2020,
+     "title": "Dexamethasone for severe COVID-19 — RECOVERY (2020)",
+     "case": ("2020. The RECOVERY platform trial found that dexamethasone reduced mortality in "
+              "COVID-19 patients requiring oxygen or ventilation — the first drug shown to save lives "
+              "in severe COVID — with no benefit (and possible harm) in those not needing oxygen."),
+     "question": ("A patient hospitalised with COVID-19 needs supplemental oxygen or ventilation. What "
+                  "inexpensive therapy reduces mortality, and in whom should it NOT be used?"),
+     "reference": ("DEXAMETHASONE (a corticosteroid) reduces mortality in COVID-19 patients requiring "
+                   "OXYGEN or ventilatory support — give it to that group. Do NOT give it to patients "
+                   "who do not need oxygen (no benefit, possible harm). A landmark that a cheap, "
+                   "targeted anti-inflammatory helps only the right subgroup — match therapy to "
+                   "disease stage.")},
 )
 
 _CASE_BY_ID = {c["id"]: c for c in CASES}

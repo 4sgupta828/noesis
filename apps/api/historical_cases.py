@@ -27,6 +27,12 @@ CLUSTERS: tuple[dict, ...] = (
     {"key": "human_factors", "label": "Patient safety & human factors", "era": "recent"},
     {"key": "frontier_recent", "label": "Transplant, gene & reproductive frontiers", "era": "recent"},
     {"key": "critical_care", "label": "Critical care & ventilation", "era": "recent"},
+    # ---- recent era, tranche 2 clusters ----
+    {"key": "chronic_cure", "label": "Turning fatal or chronic disease treatable", "era": "recent"},
+    {"key": "neuromodulation", "label": "Neuromodulation & sensory restoration", "era": "recent"},
+    {"key": "perinatal", "label": "Perinatal & neonatal", "era": "recent"},
+    {"key": "minimally_invasive", "label": "Minimally invasive & endovascular surgery", "era": "recent"},
+    {"key": "prevention_screening", "label": "Prevention, screening & genomic risk", "era": "recent"},
 )
 
 CASES: tuple[dict, ...] = (
@@ -390,6 +396,270 @@ CASES: tuple[dict, ...] = (
                    "plateau pressure ≤ ~30 cmH₂O, appropriate PEEP, tolerating permissive "
                    "hypercapnia. Larger tidal volumes cause ventilator-induced lung injury; prone "
                    "positioning further reduces mortality in severe ARDS.")},
+
+    # ============================ RECENT ERA (1975-2025), tranche 2 ============================
+    # ---- Turning fatal or chronic disease treatable ----
+    {"id": "hiv-haart-1996", "cluster": "chronic_cure", "era": "recent", "year": 1996,
+     "title": "Combination antiretroviral therapy for HIV (1996)",
+     "case": ("1996. The advent of combination ('triple') antiretroviral therapy (HAART) — typically "
+              "two nucleoside analogues plus a protease inhibitor — collapsed HIV viral loads and "
+              "transformed AIDS from a near-uniformly fatal disease into a manageable chronic "
+              "condition."),
+     "question": ("A patient with HIV needs treatment to prevent progression to AIDS. Why is "
+                  "single-drug therapy the wrong approach, and what is correct?"),
+     "reference": ("COMBINATION antiretroviral therapy (≥3 active agents) to suppress viral load below "
+                   "detection — monotherapy rapidly selects resistance and fails. Start ART for "
+                   "essentially all people with HIV, monitor viral load/CD4, and support adherence; "
+                   "sustained suppression restores immunity and prevents transmission (U=U).")},
+    {"id": "hiv-prep-iprex-2010", "cluster": "chronic_cure", "era": "recent", "year": 2010,
+     "title": "Pre-exposure prophylaxis for HIV — iPrEx (2010)",
+     "case": ("2010. The iPrEx trial showed that a daily oral antiretroviral (tenofovir/"
+              "emtricitabine) taken by HIV-negative people at substantial risk markedly reduced HIV "
+              "acquisition — establishing pre-exposure prophylaxis (PrEP)."),
+     "question": ("An HIV-negative person at substantial ongoing risk of HIV asks how to protect "
+                  "themselves beyond condoms. What biomedical prevention is correct?"),
+     "reference": ("Offer PRE-EXPOSURE PROPHYLAXIS (PrEP) — daily oral tenofovir-based therapy (or a "
+                   "long-acting injectable) — to HIV-negative people at substantial risk, with "
+                   "baseline/periodic HIV and renal testing and adherence support. Efficacy tracks "
+                   "adherence; combine with STI screening and risk-reduction counselling.")},
+    {"id": "hcv-daa-2013", "cluster": "chronic_cure", "era": "recent", "year": 2013,
+     "title": "Direct-acting antivirals cure hepatitis C (2013)",
+     "case": ("2013 onward. Oral direct-acting antivirals (starting with sofosbuvir) replaced "
+              "interferon and achieved cure (sustained virologic response) in over 95% of patients "
+              "with chronic hepatitis C, in 8-12 weeks with few side effects."),
+     "question": ("A patient has chronic hepatitis C infection. What is the correct modern treatment, "
+                  "and what outcome is achievable?"),
+     "reference": ("A short oral course of DIRECT-ACTING ANTIVIRALS (interferon-free) achieves CURE "
+                   "(SVR) in >95% — treat essentially all chronic HCV. Choose the regimen by genotype/"
+                   "resistance and cirrhosis status, confirm cure at 12 weeks post-treatment, and "
+                   "still surveil for hepatocellular carcinoma in those with cirrhosis.")},
+    {"id": "berlin-patient-2008", "cluster": "chronic_cure", "era": "recent", "year": 2008,
+     "title": "The Berlin Patient — the first HIV cure (2008)",
+     "case": ("Timothy Ray Brown, HIV-positive, developed acute leukaemia and received an allogeneic "
+              "stem-cell transplant from a donor homozygous for the CCR5-Δ32 mutation (which blocks "
+              "HIV entry). He remained free of HIV without antiretrovirals — the first documented "
+              "cure of HIV."),
+     "question": ("Is a true cure of HIV (not just viral suppression) biologically possible, and what "
+                  "did the first cured patient demonstrate about the mechanism?"),
+     "reference": ("Yes — the Berlin Patient proved cure is possible: replacing the immune system with "
+                   "CCR5-Δ32 donor cells removed HIV's entry co-receptor, eliminating the reservoir. "
+                   "This is a proof-of-concept (transplant is far too toxic for routine use), and it "
+                   "focused cure research on CCR5 and reservoir elimination — routine care remains "
+                   "lifelong ART.")},
+
+    # ---- Neuromodulation & sensory restoration ----
+    {"id": "dbs-parkinsons-1990s", "cluster": "neuromodulation", "era": "recent", "year": 1993,
+     "title": "Deep brain stimulation for Parkinson's disease (1990s)",
+     "case": ("Alim-Louis Benabid and colleagues showed that high-frequency electrical stimulation of "
+              "deep brain targets (subthalamic nucleus / globus pallidus) via implanted electrodes "
+              "reversibly relieves the motor symptoms of advanced Parkinson's disease."),
+     "question": ("A patient with advanced Parkinson's disease has disabling motor fluctuations and "
+                  "dyskinesias despite optimised medication. What intervention can help, and who is a "
+                  "candidate?"),
+     "reference": ("DEEP BRAIN STIMULATION (typically of the subthalamic nucleus) for appropriately "
+                   "selected patients — good levodopa responsiveness, refractory motor fluctuations/"
+                   "tremor, without significant dementia or unstable psychiatric disease. It is "
+                   "adjustable and reversible, reducing off-time and dyskinesia; not a cure and it "
+                   "does not halt progression.")},
+    {"id": "cochlear-implant", "cluster": "neuromodulation", "era": "recent", "year": 1984,
+     "title": "The cochlear implant for profound deafness",
+     "case": ("Multichannel cochlear implants (approved for adults in the 1980s, children from 1990) "
+              "restore functional hearing by directly stimulating the auditory nerve, bypassing "
+              "non-functioning hair cells — the first device to substantially restore a human sense."),
+     "question": ("A patient with profound bilateral sensorineural hearing loss gets no useful benefit "
+                  "from hearing aids. What is the correct option, and why do hearing aids fail here?"),
+     "reference": ("A COCHLEAR IMPLANT — it bypasses the damaged cochlear hair cells and directly "
+                   "stimulates the auditory nerve, whereas hearing aids only amplify sound that "
+                   "non-functioning hair cells still cannot transduce. Early implantation (especially "
+                   "in children, within the critical period) plus auditory rehabilitation gives the "
+                   "best speech outcomes.")},
+
+    # ---- Perinatal & neonatal ----
+    {"id": "surfactant-rds-1980", "cluster": "perinatal", "era": "recent", "year": 1980,
+     "title": "Surfactant replacement for neonatal respiratory distress syndrome (1980)",
+     "case": ("1980. Tetsuro Fujiwara reported that instilling exogenous surfactant into the lungs of "
+              "premature infants with respiratory distress syndrome (hyaline membrane disease, caused "
+              "by surfactant deficiency) rapidly improved oxygenation — transforming neonatal "
+              "survival."),
+     "question": ("A premature newborn has respiratory distress syndrome from surfactant deficiency, "
+                  "with stiff lungs and hypoxaemia. What is the specific corrective treatment?"),
+     "reference": ("EXOGENOUS SURFACTANT REPLACEMENT (intratracheal) plus respiratory support (CPAP/"
+                   "gentle ventilation, oxygen) — it directly replaces the missing surfactant that "
+                   "keeps alveoli open. Combine with antenatal steroids (given to the mother "
+                   "beforehand) and lung-protective, minimally invasive respiratory support.")},
+    {"id": "antenatal-steroids-1972", "cluster": "perinatal", "era": "recent", "year": 1972,
+     "title": "Antenatal corticosteroids for threatened preterm birth (1972)",
+     "case": ("1972. Liggins and Howie showed that giving corticosteroids to mothers before preterm "
+              "delivery accelerates fetal lung maturation and dramatically reduces neonatal "
+              "respiratory distress syndrome and death."),
+     "question": ("A pregnant woman is in threatened preterm labour at, say, 30 weeks. What "
+                  "intervention given to the MOTHER improves the newborn's outcome, and why?"),
+     "reference": ("A course of ANTENATAL CORTICOSTEROIDS (betamethasone or dexamethasone) to the "
+                   "mother — it matures the fetal lungs (surfactant production), cutting neonatal RDS, "
+                   "intraventricular haemorrhage and death. Give when preterm birth is anticipated in "
+                   "the recommended gestational window; a decisive, low-cost intervention.")},
+
+    # ---- Minimally invasive & endovascular surgery ----
+    {"id": "lap-chole-1987", "cluster": "minimally_invasive", "era": "recent", "year": 1987,
+     "title": "Laparoscopic cholecystectomy — the minimally invasive revolution (1987)",
+     "case": ("1985-1987 (Mühe, then Mouret). Removing the gallbladder through small ports with a "
+              "laparoscope, rather than a large open incision, cut pain, hospital stay and recovery "
+              "time — and launched minimally invasive surgery across specialties."),
+     "question": ("A patient needs cholecystectomy for symptomatic gallstones. What approach is "
+                  "preferred over open surgery, and what is the main intra-operative safety concern?"),
+     "reference": ("LAPAROSCOPIC (minimally invasive) cholecystectomy is the standard of care — less "
+                   "pain, faster recovery. The key safety principle is achieving the CRITICAL VIEW OF "
+                   "SAFETY to avoid bile-duct injury, and converting to open surgery when anatomy is "
+                   "unclear. It generalised minimally invasive surgery broadly.")},
+    {"id": "evar-parodi-1991", "cluster": "minimally_invasive", "era": "recent", "year": 1991,
+     "title": "Endovascular aneurysm repair (EVAR) for aortic aneurysm (1991)",
+     "case": ("1991. Juan Parodi placed the first endovascular stent-graft to exclude an abdominal "
+              "aortic aneurysm from within the vessel, via the femoral arteries — avoiding a major "
+              "open operation in suitable patients."),
+     "question": ("A patient has an abdominal aortic aneurysm meeting size threshold for repair but is "
+                  "high-risk for open surgery. What less-invasive option exists, and what is its "
+                  "trade-off?"),
+     "reference": ("ENDOVASCULAR ANEURYSM REPAIR (EVAR) — a catheter-delivered stent-graft excludes "
+                   "the aneurysm, with lower peri-operative mortality and faster recovery than open "
+                   "repair. Trade-off: it requires suitable anatomy and lifelong imaging "
+                   "SURVEILLANCE for endoleak/re-intervention; open repair is more durable. Choose by "
+                   "anatomy, risk and life expectancy.")},
+
+    # ---- Prevention, screening & genomic risk ----
+    {"id": "statins-4s-1994", "cluster": "prevention_screening", "era": "recent", "year": 1994,
+     "title": "Statins for cardiovascular prevention — the 4S trial (1994)",
+     "case": ("1994. The Scandinavian Simvastatin Survival Study (4S) showed that lowering cholesterol "
+              "with a statin reduced death and cardiovascular events in patients with coronary heart "
+              "disease — proving that treating cholesterol saves lives."),
+     "question": ("A patient with established coronary heart disease and elevated cholesterol needs "
+                  "long-term risk reduction. What therapy reduces mortality, and how is intensity "
+                  "chosen?"),
+     "reference": ("A STATIN (high-intensity for established ASCVD) to lower LDL cholesterol reduces "
+                   "mortality and recurrent events — the foundation of secondary prevention, alongside "
+                   "antiplatelet therapy, blood-pressure control and lifestyle. For primary "
+                   "prevention, base the decision on estimated cardiovascular risk, not the lipid "
+                   "level alone.")},
+    {"id": "icd-madit-1996", "cluster": "prevention_screening", "era": "recent", "year": 1996,
+     "title": "Implantable defibrillator for sudden-death prevention — MADIT (1996)",
+     "case": ("1996. The MADIT trial showed that an implantable cardioverter-defibrillator (ICD) "
+              "reduced mortality in high-risk patients with prior myocardial infarction and low "
+              "ejection fraction — establishing device prevention of sudden cardiac death."),
+     "question": ("A patient with a prior myocardial infarction and a severely reduced ejection "
+                  "fraction is at risk of sudden cardiac death from ventricular arrhythmia. What "
+                  "intervention reduces mortality?"),
+     "reference": ("An IMPLANTABLE CARDIOVERTER-DEFIBRILLATOR (ICD) for primary prevention in eligible "
+                   "patients (e.g. LVEF ≤35% despite optimal therapy, adequate life expectancy) — it "
+                   "terminates lethal ventricular arrhythmias. Ensure guideline-directed medical "
+                   "therapy first and appropriate waiting periods after MI/revascularisation.")},
+    {"id": "hpv-vaccine-2006", "cluster": "prevention_screening", "era": "recent", "year": 2006,
+     "title": "HPV vaccination to prevent cancer (2006)",
+     "case": ("Harald zur Hausen established that human papillomavirus causes cervical cancer; the "
+              "first HPV vaccine was approved in 2006. Vaccinating before exposure prevents the "
+              "infections that cause cervical and other HPV-driven cancers."),
+     "question": ("How can HPV-driven cancers (cervical and others) be prevented at the population "
+                  "level, and when is the intervention most effective?"),
+     "reference": ("HPV VACCINATION of adolescents (ideally before sexual debut, routinely ~ages "
+                   "9-12, with catch-up) prevents the oncogenic HPV infections that cause cervical, "
+                   "anal, and oropharyngeal cancers — primary cancer prevention by vaccine. It "
+                   "complements, not replaces, cervical SCREENING.")},
+    {"id": "brca-risk-1994", "cluster": "prevention_screening", "era": "recent", "year": 1994,
+     "title": "BRCA1/2 and risk-reducing management of hereditary cancer (1994)",
+     "case": ("1994-95. Cloning of the BRCA1 and BRCA2 genes made it possible to identify people with "
+              "a very high inherited risk of breast and ovarian cancer — enabling genetic testing and "
+              "risk-reducing decisions."),
+     "question": ("A woman has a strong family history of early breast and ovarian cancer and tests "
+                  "positive for a pathogenic BRCA1 mutation. How should her markedly elevated risk be "
+                  "managed?"),
+     "reference": ("Manage the high inherited risk with an individualised plan: enhanced SURVEILLANCE "
+                   "(e.g. breast MRI + mammography), consideration of RISK-REDUCING surgery "
+                   "(mastectomy; and salpingo-oophorectomy, which also lowers mortality) at "
+                   "appropriate ages, chemoprevention options, and CASCADE genetic testing/counselling "
+                   "of relatives. Shared decision-making is central.")},
+
+    # ---- Critical care & ventilation (existing cluster) ----
+    {"id": "hypothermia-haca-2002", "cluster": "critical_care", "era": "recent", "year": 2002,
+     "title": "Therapeutic hypothermia after cardiac arrest (2002)",
+     "case": ("2002. Two trials (HACA and Bernard) showed that cooling comatose survivors of "
+              "out-of-hospital ventricular-fibrillation cardiac arrest improved neurological outcome "
+              "and survival — establishing targeted temperature management."),
+     "question": ("A patient is resuscitated from an out-of-hospital cardiac arrest but remains "
+                  "comatose after return of spontaneous circulation. What intervention improves "
+                  "neurological outcome?"),
+     "reference": ("TARGETED TEMPERATURE MANAGEMENT — controlled cooling (avoiding fever) of comatose "
+                   "post-arrest patients — as part of a bundled post-resuscitation care package "
+                   "(treat the cause, e.g. urgent coronary angiography for a cardiac cause; maintain "
+                   "oxygenation/perfusion; delay firm neuro-prognostication). It protects the brain "
+                   "after global ischaemia.")},
+    {"id": "sepsis-egdt-rivers-2001", "cluster": "critical_care", "era": "recent", "year": 2001,
+     "title": "Early recognition and resuscitation of sepsis — Rivers (2001)",
+     "case": ("2001. Emanuel Rivers' early goal-directed therapy trial showed that recognising severe "
+              "sepsis/septic shock early and resuscitating aggressively in the first hours improved "
+              "survival — catalysing the sepsis-bundle era (later refined by the Surviving Sepsis "
+              "Campaign)."),
+     "question": ("A patient presents with infection plus hypotension and a raised lactate (septic "
+                  "shock). What are the correct decisions in the first hour(s)?"),
+     "reference": ("Recognise sepsis EARLY and act fast: obtain cultures/lactate, give broad-spectrum "
+                   "ANTIBIOTICS within the first hour, and RESUSCITATE with IV fluids (≈30 mL/kg) then "
+                   "reassess, adding norepinephrine for persistent hypotension (target MAP ≥65) — plus "
+                   "source control. The decisive lesson is timeliness; later evidence de-emphasised "
+                   "rigid protocolised targets in favour of the early bundle.")},
+
+    # ---- Transplant frontiers (existing cluster) ----
+    {"id": "ciclosporin-1983", "cluster": "frontier_recent", "era": "recent", "year": 1983,
+     "title": "Ciclosporin — immunosuppression that made transplantation routine (1983)",
+     "case": ("Roy Calne and others introduced ciclosporin (approved 1983), a calcineurin inhibitor "
+              "that selectively suppressed graft rejection — turning organ transplantation from a "
+              "rare, high-mortality gamble (as in the Herrick identical-twin era) into routine "
+              "therapy across organs from non-identical donors."),
+     "question": ("After a solid-organ transplant from a non-identical donor, the recipient's immune "
+                  "system will reject the graft. What made routine transplantation possible, and what "
+                  "must be balanced?"),
+     "reference": ("Ongoing IMMUNOSUPPRESSION — a calcineurin inhibitor (ciclosporin/tacrolimus)-based "
+                   "regimen — prevents rejection and made non-identical-donor transplantation routine. "
+                   "It must be BALANCED against its costs: infection, malignancy, nephrotoxicity, and "
+                   "drug interactions/levels — lifelong monitoring and prophylaxis. Overcoming "
+                   "rejection is the problem the Herrick twin case first framed.")},
+    {"id": "lung-transplant-1983", "cluster": "frontier_recent", "era": "recent", "year": 1983,
+     "title": "The first successful lung transplant (1983)",
+     "case": ("1983. Joel Cooper performed the first single-lung transplant with long-term survival, "
+              "made feasible by better immunosuppression and surgical technique — extending "
+              "transplantation to end-stage lung disease."),
+     "question": ("A patient has end-stage lung disease (e.g. pulmonary fibrosis) refractory to "
+                  "medical therapy, with a poor prognosis. What definitive option exists, and what "
+                  "gates it?"),
+     "reference": ("LUNG TRANSPLANTATION is the definitive option for selected end-stage lung disease. "
+                   "It is gated by candidacy (severity/prognosis, absence of prohibitive comorbidity), "
+                   "donor availability, and the lifelong burden of immunosuppression and chronic "
+                   "rejection (bronchiolitis obliterans). Referral and evaluation should be timely, "
+                   "before the patient is too ill.")},
+
+    # ---- Targeted oncology (existing cluster) ----
+    {"id": "atra-apl-1988", "cluster": "targeted_onco", "era": "recent", "year": 1988,
+     "title": "ATRA turns acute promyelocytic leukaemia curable (1988)",
+     "case": ("1988 (Shanghai; Wang Zhen-yi and colleagues). All-trans retinoic acid (ATRA) was shown "
+              "to induce the malignant promyelocytes of acute promyelocytic leukaemia (APL) to mature "
+              "rather than be killed — a differentiation therapy that, with arsenic trioxide, made "
+              "this once rapidly-fatal leukaemia highly curable, largely without chemotherapy."),
+     "question": ("A patient has acute promyelocytic leukaemia (APL, with the PML-RARA fusion), which "
+                  "presents with dangerous coagulopathy. What is the correct, distinctive treatment "
+                  "approach?"),
+     "reference": ("Start ALL-TRANS RETINOIC ACID (ATRA) urgently — even before genetic confirmation — "
+                   "combined with ARSENIC TRIOXIDE (± anthracycline in high-risk): differentiation "
+                   "therapy targeting PML-RARA, not standard cytotoxic chemotherapy. Aggressively "
+                   "manage the coagulopathy/DIC and watch for differentiation (ATRA) syndrome. APL is "
+                   "now among the most curable acute leukaemias.")},
+    {"id": "rituximab-lymphoma-1997", "cluster": "targeted_onco", "era": "recent", "year": 1997,
+     "title": "Rituximab — the first therapeutic monoclonal antibody in cancer (1997)",
+     "case": ("1997. Rituximab, a monoclonal antibody against CD20 on B cells, became the first "
+              "therapeutic anticancer antibody — added to chemotherapy (R-CHOP), it substantially "
+              "improved survival in CD20-positive B-cell lymphomas."),
+     "question": ("A patient has a CD20-positive B-cell non-Hodgkin lymphoma. How should targeted "
+                  "biology be added to chemotherapy, and what pre-treatment risk must be checked?"),
+     "reference": ("Add the anti-CD20 monoclonal antibody RITUXIMAB to chemotherapy (e.g. R-CHOP) — "
+                   "immunochemotherapy improves response and survival in CD20+ B-cell lymphoma. Screen "
+                   "for HEPATITIS B before treatment (risk of reactivation) and give prophylaxis if "
+                   "positive; watch for infusion reactions. It opened the era of therapeutic antibodies "
+                   "in oncology.")},
 )
 
 _CASE_BY_ID = {c["id"]: c for c in CASES}

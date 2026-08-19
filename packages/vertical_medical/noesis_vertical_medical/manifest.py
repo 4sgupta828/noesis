@@ -39,8 +39,8 @@ from .web_domains import TRUSTED_WEB_DOMAINS, WEB_DOMAIN_FACETS
 from .global_guidelines import declared_lineage
 from .graph import CURATED_EDGES, GRAPH_RELATIONS, MAP_QUESTION_TOPICS_PROMPT
 from .india_brands import INDIA_CONFLICT_DIRECTIVE, brand_context
-from .pulse import (CANONIZE_TOPIC_PROMPT, SUGGEST_WATCHES_PROMPT, SUPERSESSION_JUDGE_PROMPT,
-                    WATCH_TOPIC_PROMPT)
+from .pulse import (CANONIZE_TOPIC_PROMPT, CHANGE_BRIEF_PROMPT, SUGGEST_WATCHES_PROMPT,
+                    SUPERSESSION_JUDGE_PROMPT, WATCH_TOPIC_PROMPT)
 from .coverage import COVERED_CONDITIONS
 from .authority import MedicalAuthorityPolicy
 from .connector import ClinicalTrialsConnector
@@ -130,6 +130,7 @@ def build_manifest() -> VerticalManifest:
         watch_canonize_prompt=CANONIZE_TOPIC_PROMPT,
         watch_suggest_prompt=SUGGEST_WATCHES_PROMPT,
         supersession_judge_prompt=SUPERSESSION_JUDGE_PROMPT,
+        pulse_brief_prompt=CHANGE_BRIEF_PROMPT,
         watch_topic_seed=tuple(sorted({c["name"] for c in COVERED_CONDITIONS})),
         extraction_lenses=(
             "interventions/treatments/drugs studied",

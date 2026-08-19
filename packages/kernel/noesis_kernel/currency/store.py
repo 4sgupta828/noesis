@@ -14,9 +14,21 @@ Design (spec v2, amendments A2/A4):
 from __future__ import annotations
 
 import hashlib
+import html
 import json
+import re
 
 RELATIONS = ("superseded_by", "retracted", "amended_by", "clarified_by")
+
+_HTML_TAG = re.compile(r"<[^>]+>")
+
+
+def _strip_markup(text: str) -> str:
+    """Corpus blocks can carry inline HTML (`<h4>`, `<i>`, entities). The change-brief LLM naturally
+    quotes the CLEAN human-readable text, so the span-verifier must check against clean text too —
+    otherwise a quote straddling a tag (e.g. `(all <i>p</i> < 0.05)`) fails though the model was
+    faithful. Strip tags → space, unescape entities; the verifier's normalize() collapses the rest."""
+    return html.unescape(_HTML_TAG.sub(" ", text or ""))
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS noesis_change_event (
@@ -157,6 +169,32 @@ class CurrencyStore:
             await self._unstamp(row["relation"], row["old_document_id"])
         return True
 
+    async def get_event(self, event_id: str) -> dict | None:
+        """Fetch ONE event as a dict (relation, old/new doc ids, subjects, brief, status) — the
+        brief-composer's approval path needs it. None if the id is unknown."""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            r = await conn.fetchrow(
+                "SELECT id, relation, old_document_id, new_document_id, subjects, materiality, "
+                "confidence, brief_md, status FROM noesis_change_event WHERE id=$1", event_id)
+        if r is None:
+            return None
+        d = dict(r)
+        d["subjects"] = json.loads(d["subjects"]) if isinstance(d["subjects"], str) else d["subjects"]
+        return d
+
+    async def set_brief(self, event_id: str, brief_md: str, brief_claims: list[dict]) -> bool:
+        """Store a composed, span-verified change brief on an event (brief_md/brief_claims columns
+        exist by DDL). A FAILED compose leaves the brief empty (''/[]) so a later scan retries —
+        never persist an unverified brief. Returns True if the event exists."""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            res = await conn.execute(
+                "UPDATE noesis_change_event SET brief_md=$2, brief_claims=$3::jsonb, "
+                "updated_at=now() WHERE id=$1", event_id, brief_md or "",
+                json.dumps(brief_claims or []))
+        return res.split()[-1] != "0"
+
     # ---- derived stamps (re-derivable cache on the block table) --------------------------------
 
     async def apply_stamps(self) -> int:
@@ -202,6 +240,25 @@ class CurrencyStore:
                 f"""SELECT DISTINCT document_id FROM {self._block_table}
                     WHERE document_id LIKE $1 LIMIT $2""", prefix + "%", limit)
         return [r["document_id"] for r in rows]
+
+    async def blocks_for_documents(self, document_ids: list[str], *, limit: int = 80) -> list[dict]:
+        """Fetch {document_id, block_id, text} rows for the given documents — the raw material the
+        change-brief composer feeds the LLM (and the verifier re-checks quotes against). Keyed by
+        document_id only (tenant-agnostic, exactly like the stamps); ordered for stable prompts and
+        capped so a large document can't blow the prompt. NOTE: `limit` is a blunt cap fine for the
+        small retraction/label notices P1 targets; guideline supersessions (large docs) will want
+        relevance-selected blocks instead of the first N."""
+        ids = [d for d in (document_ids or []) if d]
+        if not ids:
+            return []
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"""SELECT document_id, block_id, text FROM {self._block_table}
+                    WHERE document_id = ANY($1::text[])
+                    ORDER BY document_id, block_id LIMIT $2""", ids, limit)
+        return [{"document_id": r["document_id"], "block_id": r["block_id"],
+                 "text": _strip_markup(r["text"])} for r in rows]
 
     # ---- canonical topic registry (P1) ---------------------------------------------------------
     # STABILITY CONTRACT: LLM runs never mint variants of an existing topic — suggesters/

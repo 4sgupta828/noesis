@@ -1018,6 +1018,13 @@
   .ppfeed-i{border-top:1px dashed var(--hair);padding:.55rem 0;font-size:.8rem;line-height:1.45;}
   .ppfeed-k{font-family:var(--mono);font-size:.6rem;color:var(--gap);letter-spacing:.06em;}
   .ppfeed-d{font-family:var(--mono);font-size:.6rem;color:var(--muted);margin-left:.4rem;}
+  .ppfeed-brief{margin-top:.4rem;}
+  .ppfeed-brief>summary{cursor:pointer;font-family:var(--mono);font-size:.62rem;letter-spacing:.03em;
+    color:var(--verified);list-style:none;} .ppfeed-brief>summary::-webkit-details-marker{display:none;}
+  .ppfeed-brief>summary::before{content:"▸ ";} .ppfeed-brief[open]>summary::before{content:"▾ ";}
+  .ppfeed-brief-b{margin:.35rem 0 .2rem;padding:.5rem .7rem;background:var(--panel2);border:1px solid var(--hair);
+    border-radius:8px;font-size:.82rem;line-height:1.55;}
+  .ppfeed-brief-b .mdp{margin:.35rem 0;} .ppfeed-brief-b .mdp:first-child{margin-top:0;}
   /* Evidence Pulse: labeled Pulse button + badge · inbox panel · integrity banner · watch picker */
   .pulsebtn{position:relative;color:var(--gold);border-color:var(--gold);}
   .pulsebtn:hover{background:var(--gold);color:var(--on-accent);}
@@ -5303,9 +5310,14 @@ async function ppRender(){
     const subj = (e.subjects||[]).join("; ") || e.old_document_id || "";
     const link = e.new_url || e.old_url;
     const body = esc(subj).slice(0,90);
+    // Evidence Pulse 3.1 change-brief: render the span-verified "what changed / what it means"
+    // summary (markdown) as a collapsible below the event, when one has been composed.
+    const brief = (e.brief_md||"").trim();
+    const briefHtml = brief ? `<details class="ppfeed-brief"><summary>What changed &amp; why it matters</summary>
+      <div class="ppfeed-brief-b answer md">${mdToHtml(brief)}</div></details>` : "";
     return `<div class="ppfeed-i"><span class="ppfeed-k">${esc(what)}</span>
       <span class="ppfeed-d">${esc((e.created_at||"").slice(0,10))}</span><br>
-      ${link?`<a class="pdoc-a" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${body} ↗</a>`:body}</div>`;
+      ${link?`<a class="pdoc-a" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${body} ↗</a>`:body}${briefHtml}</div>`;
   }).join("") : `<div class="pitem-empty">No corpus change events yet.</div>`;
   // suggestions rail (cached — one call per visit)
   const sugHolder = $("#ppsugs");

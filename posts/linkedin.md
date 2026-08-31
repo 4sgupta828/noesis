@@ -1,47 +1,85 @@
-# Noesis — Can AI give a clinician an answer they can actually trust?
+# Noesis: What would it take to give a clinician an AI answer they can actually defend?
 
-*A LinkedIn post. Repo: https://github.com/4sgupta828/noesis*
+*Repo: https://github.com/4sgupta828/noesis · evidence-grounded research engine · domain-agnostic kernel + medical vertical · every claim span-checked against its source*
 
 ---
 
-**The problem that keeps AI out of the exam room:**
+## The problem that keeps AI out of the exam room
 
-A clinician doesn't need a confident paragraph. They need an answer they can *defend* — one where every claim and every number traces back to a primary source they can click and read. General-purpose chatbots fail this in the most dangerous way: they're fluent, they're often right, and when they're wrong they're indistinguishable from when they're right. In medicine, "usually correct, occasionally fabricated, never labeled" is not a product — it's a liability.
+A clinician doesn't need a confident paragraph. They need an answer they can *defend* — one where every claim and number traces to a primary source they can click and read. General chatbots fail this in the most dangerous way: they're fluent, usually right, and when they're wrong they're indistinguishable from when they're right.
 
-**What I explored: Noesis — an evidence-grounded research engine for clinical decision support.**
+In medicine, **"usually correct, occasionally fabricated, never labeled" is not a product — it's a liability.**
 
-The design is the opposite of "an LLM that knows medicine." Noesis is a research engine that **finds** things, **quotes** them, **verifies** the quote physically exists in the source, and only *then* writes prose:
+## Framed as a research problem
 
-- Curated corpus + live web → hybrid retrieval → a research loop (search → look up → extract atoms → make claims) → a hard span-check gate.
-- The one rule that defines the architecture: **a claim that can't be tied to a real retrieved passage does not ship.** Provenance is structural, not a suggestion.
-- Answers are *decision-shaped* — not a wall of evidence, but a reasoned conclusion with citations you can click back to the exact passage.
-- Crucially, the *engine* knows no medicine. It's a domain-agnostic kernel (ingest → corpus → retrieval → synthesis) with a medical vertical on top; a legal or financial vertical reuses the kernel untouched.
+| | |
+|---|---|
+| **Input** | A real clinical question |
+| **Output** | A *decision-shaped* answer where every sentence links to the exact passage that supports it |
+| **The one rule that defines the architecture** | A claim that can't be tied to a real retrieved passage **does not ship** |
+| **Central inversion** | Not "an LLM that knows medicine." A research engine that **finds → quotes → verifies → then writes** |
+| **Why it generalizes** | The *engine* knows no medicine. A domain-agnostic kernel + a vertical plug-in; law/finance reuse the kernel untouched |
 
-**What AI solves well:**
-- Reading across dozens of sources and synthesizing a coherent, cited answer far faster than a human could.
-- Reasoning to a *decision* rather than dumping search results — when it's forced to stay grounded.
+## The research loop
 
-**What AI does NOT solve — and where guardrails must be code:**
-- Its own honesty. Left alone, a model will produce a plausible citation for a claim it invented. The verifier (does this exact quote exist in the cited block?) has to be deterministic and un-overridable.
-- Currency and retraction. Whether a paper is current, superseded, or *retracted* is a data-pipeline problem, not something to trust the model to remember.
+```mermaid
+flowchart LR
+    Q["clinical question"] --> RET["hybrid retrieval<br/>curated corpus + live web"]
+    RET --> LOOP["research loop<br/>search → look up → extract atoms → claims"]
+    LOOP --> GATE{{"span-check gate<br/>quote exists verbatim?"}}
+    GATE -->|no| DROP["drop claim"]
+    GATE -->|yes| ANS["decision-shaped answer<br/>+ clickable citations"]
+    style GATE fill:#e0f2fe,stroke:#0284c7,color:#000
+    style ANS fill:#dcfce7,stroke:#16a34a,color:#000
+    style DROP fill:#fee2e2,stroke:#dc2626,color:#000
+```
 
-**What stays genuinely hard:**
-- Evidence quality and conflict. Retrieval that returns a *real* but low-authority or outdated source is worse than no answer. Ranking by authority, recency, and study design — and being honest when the evidence conflicts — is the hard, unglamorous core.
-- Attribution vs. correctness: a quote can physically exist and still be the wrong quote for the question. Provenance is necessary, never sufficient.
-- Safety framing: "for informational use by professionals, verify against primary sources" isn't boilerplate — it's the responsible boundary of what this class of tool should claim.
+The gate is deterministic and un-overridable — provenance is *structural*, not a suggestion:
 
-**How to take it from here:**
-- Held-out clinical eval gates before trusting any LLM feature; measure grounded correctness, not fluency.
-- A corpus-currency subsystem (stamp, demote, exclude retractions) so the *data* stays trustworthy, not just the generation step.
-- Kernel/vertical discipline so the same trustworthy engine can serve law, finance, policy.
+```text
+claim  → must carry a verbatim quote
+quote  → deterministic check: does this exact string exist in the cited source block?
+         miss → claim dropped. No "close enough." No self-attested citation survives.
+```
 
-**Products this could become:**
-- Point-of-care evidence lookup that returns a cited, decision-shaped answer.
-- A literature-surveillance tool that flags when new evidence changes a standing recommendation.
-- A "grounded research engine" platform licensed per vertical.
+## What AI solves — and where guardrails must be code
 
-**To go deeper, look up:** evidence-based medicine and GRADE, retrieval-augmented generation, hallucination in medical LLMs, Med-PaLM / HealthBench, and attributed QA (the AIS framework).
+| Task | Owner |
+|---|---|
+| Read across dozens of sources; synthesize a coherent, cited answer | **LLM** (far faster than a human) |
+| Reason to a *decision* rather than dump evidence | **LLM** (when forced to stay grounded) |
+| "Does this exact quote exist in the cited source?" | **Code** (deterministic span-check) |
+| Is a paper current, superseded, or **retracted**? | **Data pipeline** (not the model's memory) |
 
-The takeaway: **in high-stakes domains, the winning architecture isn't a smarter model — it's a research engine that physically can't ship a claim it didn't ground.**
+## What stays genuinely hard (open problems)
 
-#HealthcareAI #ClinicalDecisionSupport #RAG #EvidenceBasedMedicine #TrustworthyAI #MedTech
+1. **Evidence quality & conflict** — a retrieval that returns a *real* but low-authority or outdated source is worse than no answer. Ranking by authority, recency, and study design — and being honest when evidence conflicts — is the hard, unglamorous core.
+2. **Attribution ≠ correctness** — a quote can physically exist and still be the *wrong* quote for the question. Provenance is necessary, never sufficient.
+3. **Currency** — an evidence base that silently goes stale (or cites a retracted paper) is a safety failure, not a UX one.
+4. **Honest abstention** — knowing when to say "the evidence doesn't support a confident answer."
+
+## How to take it from here
+
+- **Held-out clinical eval gates** before trusting any LLM feature; measure grounded correctness, not fluency.
+- A corpus-currency subsystem: stamp → demote → exclude retractions, so the *data* stays trustworthy, not just the generation step.
+- Kernel/vertical discipline so the same trustworthy engine serves law, finance, policy.
+
+## Use cases → products
+
+| Use case | Product shape |
+|---|---|
+| Point-of-care lookup | Cited, decision-shaped answers for professionals |
+| Literature surveillance | Flag when new evidence changes a standing recommendation |
+| Multi-vertical | License a "grounded research engine" per domain |
+
+## To understand this space better
+
+Evidence-based medicine & **GRADE** · retrieval-augmented generation · hallucination in medical LLMs · **Med-PaLM / HealthBench** · attributed QA (**AIS**) · systematic-review methodology.
+
+> ⚕️ *For informational use by healthcare professionals — not medical advice. Every answer is AI-generated; verify against the cited primary sources before any clinical decision.* That disclaimer isn't boilerplate — it's the responsible boundary of what this class of tool should claim.
+
+---
+
+*In high-stakes domains, the winning architecture isn't a smarter model — it's a research engine that physically can't ship a claim it didn't ground.*
+
+**#HealthcareAI #ClinicalDecisionSupport #RAG #EvidenceBasedMedicine #TrustworthyAI #MedTech #ProductManagement**

@@ -114,9 +114,20 @@ The honest caveat, stated in the repo's own improvement notes: mechanics are pro
 | Literature surveillance | Flag when new evidence changes a standing recommendation |
 | Multi-vertical | License a "grounded research engine" per domain (law, finance, policy) |
 
-## 10. To understand the space
+## 10. The provocation
 
-Evidence-based medicine & **GRADE** · retrieval-augmented generation · hallucination in medical LLMs · **HealthBench / Med-PaLM / K-QA** · attributed QA (**AIS**) · systematic-review methodology.
+> **The most dangerous property of a medical LLM isn't that it's sometimes wrong — it's that its wrong answers are indistinguishable from its right ones.** Scaling shrinks the error *rate* and does nothing to the error *mode*. A model that is 99.9% accurate and 100% confident is more dangerous at the point of care than one that is 95% accurate and *knows when it doesn't know* — because the first one launders its rare fabrications with the same fluent, cited-looking confidence as its facts, and a busy clinician has no signal to catch them. The industry keeps optimizing the first number. The second — calibrated honesty, the willingness to abstain — is the one that actually protects a patient, and you cannot prompt your way to it. You have to build a system that fails loud.
+
+## 11. Further reading (high-quality references)
+
+- **Singhal et al. (2023)** — "Large Language Models Encode Clinical Knowledge" (**Med-PaLM**). *Nature.*
+- **Singhal et al. (2023)** — "Towards Expert-Level Medical Question Answering with LLMs" (**Med-PaLM 2**).
+- **OpenAI (2025)** — **HealthBench** — a physician-graded benchmark for health conversations.
+- **Umapathi et al. (2023)** — "Med-HALT: Medical Domain Hallucination Test for LLMs."
+- **Guyatt et al. (2008)** — "GRADE: An Emerging Consensus on Rating Quality of Evidence." *BMJ.* Why evidence has *tiers*.
+- **Lewis et al. (2020)** — "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks." *NeurIPS.*
+- **Rashkin et al. (2023)** — "Measuring Attribution in NLG Models" (**AIS**). *Computational Linguistics.*
+- **Retraction Watch** (retractionwatch.com) — why "current" is a data problem, not a model one.
 
 > ⚕️ *For informational use by healthcare professionals — not medical advice. Every answer is AI-generated; verify against the cited primary sources before any clinical decision.* That line isn't boilerplate — it's the honest boundary of what this class of tool should claim.
 

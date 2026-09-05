@@ -4,6 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Noesis — Research</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
 <style>
   /* ---- Noesis identity: deep navy canvas, gold brand accent, green = verified ---- */
   /* DEFAULT = CLINICAL LIGHT — the look familiar from clinical/EHR apps: cool-white surfaces, a
@@ -1450,6 +1453,118 @@
     transition:color .15s,border-color .15s;}
   .themebtn:hover{color:var(--ink);border-color:var(--gold);}
   @media (max-width:640px){ .themebtn{left:.7rem;bottom:.7rem;font-size:.6rem;padding:.36rem .6rem;} }
+
+  /* =====================================================================================
+     DESIGN REFRESH — 2026-09-05 (design panel: identity / answer typography / implementation)
+     Instrument, not terminal: an owned type pairing (Newsreader · Inter · JetBrains Mono), one decisive
+     accent, sans chrome, whitespace instead of rules, a reading measure on answers, baseline citations.
+     Tokens are re-declared per theme; --gold stays the accent token name so nothing breaks.
+     ===================================================================================== */
+  :root{
+    --bg:#F5F7FA; --panel:#FFFFFF; --panel2:#EEF2F7; --ink:#0F1B2A; --muted:#4C5D6E;
+    --gold:#1D5FD6; --gold-strong:#1749AE; --gold-rgb:29,95,214; --verified:#0E7C5B; --gap:#B4640F;
+    --hair:#DDE4EC; --hair-soft:rgba(15,27,42,.05); --accent-soft:rgba(29,95,214,.08);
+    --sans:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --serif:"Newsreader","Iowan Old Style","Palatino Linotype",Georgia,serif;
+    --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sh-sm:0 1px 2px rgba(15,27,42,.06); --sh-md:0 8px 24px -14px rgba(15,27,42,.28);
+    --ring:0 0 0 3px var(--accent-soft);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0B1220; --panel:#121B2E; --panel2:#0E1727; --ink:#E8ECF3; --muted:#A8B1C0;
+    --gold:#7FA6FF; --gold-strong:#A5C0FF; --gold-rgb:127,166,255; --verified:#4FCF9A; --gap:#E4A45C;
+    --on-accent:#0B1220; --on-accent-rgb:11,18,32;
+    --hair:#253147; --hair-soft:rgba(255,255,255,.06); --accent-soft:rgba(127,166,255,.14);
+    --sh-sm:0 1px 2px rgba(0,0,0,.35); --sh-md:0 10px 28px -14px rgba(0,0,0,.6);
+  }
+  :root[data-theme="editorial"]{
+    --gold:#7A5C14; --gold-strong:#5E4610; --gold-rgb:122,92,20; --hair:#DCD4C0; --accent-soft:rgba(122,92,20,.09);
+  }
+  html{font-size:16px;}
+  body{font-family:var(--sans);font-feature-settings:"cv11","tnum";-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:46rem;padding:1.4rem 1.1rem 5rem;}
+  /* ---- chrome: sans buttons, product not console ---- */
+  .histbtn,.copybtn,.sact,.pill,.setclose,.claimbtn{font-family:var(--sans);font-size:.82rem;font-weight:550;letter-spacing:0;text-transform:none;
+    border-radius:10px;padding:.48rem .85rem;min-height:38px;background:var(--panel);border:1px solid var(--hair);color:var(--ink);
+    box-shadow:var(--sh-sm);transition:background .13s,border-color .13s,color .13s;}
+  .histbtn:hover,.copybtn:hover,.sact:hover{background:var(--panel2);border-color:var(--muted);color:var(--ink);}
+  .newbtn,.newbtn:hover{background:var(--gold);color:var(--on-accent);border-color:var(--gold);font-weight:600;}
+  .newbtn:hover{background:var(--gold-strong);}
+  .copybtn{font-size:.78rem;padding:.38rem .7rem;min-height:34px;}
+  .sact{font-size:.78rem;padding:.38rem .7rem;min-height:34px;}
+  .sact-danger{color:var(--gap);}
+  .pill{font-size:.78rem;padding:.3rem .65rem;min-height:30px;}
+  .modeseg{padding:.22rem;gap:.22rem;border-radius:999px;background:var(--panel2);}
+  .modeseg .mbtn{font-family:var(--sans);font-size:.86rem;font-weight:600;letter-spacing:0;padding:.42rem 1.05rem;border-radius:999px;min-height:38px;}
+  .modeseg .mbtn[aria-selected="true"]{box-shadow:0 2px 9px -2px rgba(var(--gold-rgb),.5);}
+  #caseboard .cbtab{font-family:var(--sans);font-size:.8rem;font-weight:600;letter-spacing:0;}
+  .diaghead,.evhead{font-family:var(--sans);font-size:.78rem;font-weight:600;letter-spacing:.01em;text-transform:none;}
+  .evhint,.diaghint{font-size:.82rem;}
+  .evblock,.diagbox{border-radius:12px;box-shadow:var(--sh-sm);}
+  .themebtn{font-family:var(--sans);font-size:.72rem;letter-spacing:0;text-transform:none;font-weight:550;}
+  /* ---- hero + composer ---- */
+  h1{font-family:var(--serif);font-size:2.15rem;font-weight:500;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:lining-nums;}
+  .hsub{font-size:.98rem;line-height:1.5;max-width:36rem;}
+  .field{border-radius:20px;padding:.95rem .95rem .95rem 1.2rem;box-shadow:var(--sh-md);}
+  .field:focus-within{border-color:var(--gold);box-shadow:var(--sh-md),var(--ring);}
+  textarea{font-size:1.06rem;line-height:1.5;}
+  .about-lead{font-size:1.12rem;}
+  .about-pt b{font-family:var(--sans);font-size:.72rem;letter-spacing:.06em;}
+  /* ---- answer: a reading measure, whitespace instead of rules ---- */
+  .answer{font-size:.98rem;line-height:1.65;}
+  .answer.md{font-size:.98rem;line-height:1.65;max-width:42rem;}
+  .answer.md .mdh{font-family:var(--sans);font-size:.92rem;font-weight:600;text-transform:none;letter-spacing:.005em;color:var(--ink);
+    margin:2rem 0 .7rem;padding-top:0;border-top:0;display:block;}
+  .answer.md .mdh::before{content:"";display:block;width:22px;height:3px;border-radius:2px;background:var(--gold);margin:0 0 .5rem;}
+  .answer.md .mdh:first-child{margin-top:0;}
+  .answer.md .mdh:first-child + .mdp{font-family:var(--serif);font-size:1.32rem;line-height:1.42;font-weight:500;letter-spacing:-.012em;
+    padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--gold);margin:.2rem 0 .8rem;}
+  .answer.md .mdp{margin:.55rem 0 .8rem;line-height:1.65;}
+  .answer.md .mdp.basis{font-size:.82rem;color:var(--muted);margin:-.3rem 0 .9rem;padding-left:1rem;}
+  .answer.md .mdp.mdstem{margin-bottom:.3rem;}
+  .answer.md .mdl{margin:.5rem 0 1rem;}
+  .answer.md .mdl li{padding-left:1.45rem;margin:.62rem 0;line-height:1.6;}
+  .answer.md .mdl li::before{width:5px;height:5px;top:.66em;left:.15rem;}
+  .answer.md .mdol li{padding-left:1.75rem;}
+  .answer.md .mdol li::before{font-family:var(--mono);font-size:.76em;top:.22em;left:0;font-weight:600;}
+  .answer.md .mdl .mdol{margin:.45rem 0 .2rem;}
+  .answer.md strong{font-weight:620;}
+  .answer.md .li-note{display:block;color:var(--muted);font-size:.92em;margin-top:.18rem;}
+  .answer.md .mdh[data-sec="watch"]{color:var(--gap);} .answer.md .mdh[data-sec="watch"]::before{background:var(--gap);}
+  .answer.md .mdh[data-sec="gap"]{color:var(--muted);} .answer.md .mdh[data-sec="gap"]::before{background:var(--muted);}
+  .answer.md .mdh[data-sec="gap"] ~ .mdl li::before{background:var(--muted);}
+  .answer.md .tw{border:1px solid var(--hair);border-radius:12px;overflow-x:auto;background:var(--panel);margin:1rem 0 1.2rem;}
+  .answer.md .mdt{margin:0;font-size:.9rem;font-variant-numeric:tabular-nums lining-nums;}
+  .answer.md .mdt th{font-family:var(--sans);font-size:.7rem;letter-spacing:.06em;background:var(--panel2);border-bottom:1px solid var(--hair);padding:.55rem .8rem;}
+  .answer.md .mdt td{padding:.6rem .8rem;}
+  .answer.md .mdt tbody tr:nth-child(even) td{background:var(--hair-soft);}
+  .answer .ref,.answer.md .ref{font-family:var(--mono);font-size:.66em;font-weight:600;color:var(--gold);background:var(--accent-soft);
+    border-radius:4px;padding:.05em .28em;vertical-align:baseline;position:relative;top:-.35em;line-height:1;margin-left:.06em;}
+  .answer.md .refg{white-space:nowrap;}
+  /* ---- comments ---- */
+  .cmt{border-radius:12px;box-shadow:var(--sh-sm);}
+  .cmt-b{font-size:.95rem;}
+  /* ---- mobile ---- */
+  @media (max-width:560px){
+    .wrap{padding:1rem .9rem 5rem;}
+    h1{font-size:1.7rem;}
+    .histbtn{min-height:40px;font-size:.84rem;}
+    .modeseg{width:100%;} .modeseg .mbtn{flex:1;padding:.42rem .5rem;font-size:.8rem;}
+    .answer.md{font-size:.98rem;max-width:none;}
+    .answer.md .mdh{margin:1.5rem 0 .5rem;}
+    .answer.md .mdh:first-child + .mdp{font-size:1.15rem;padding-left:.8rem;}
+    .answer.md .mdl li{padding-left:1.25rem;}
+    .answer.md .mdol li{padding-left:1.55rem;}
+  }
+  @media (max-width:400px){
+    /* phone: the text gets the full width; the icon buttons drop to their own right-aligned row */
+    .field{flex-wrap:wrap;padding:.85rem .85rem .7rem 1rem;}
+    .field textarea{flex:1 1 100%;min-width:100%;order:1;}
+    .field > button{order:2;}
+    .field > button:not([hidden]):first-of-type{margin-left:auto;}
+    .field > button[hidden] + button:not([hidden]){margin-left:auto;}
+  }
+  @media print{ .field,header,.themebtn,.ctlbar{display:none !important;} .answer.md .mdt,.answer.md li{page-break-inside:avoid;} .answer .ref{color:#000;background:none;} }
 </style>
 <script>
   /* Apply the saved theme BEFORE first paint (no flash), then wire the toggle once the DOM is ready. */
@@ -2523,6 +2638,75 @@ function bulletLead(t){
   if(!m || /\[\d/.test(m[1])) return t;
   return `**${m[1].trim()}**${m[2]}${m[3]}`;
 }
+// ---- answer-format helpers (design panel 2026-09-05): split inline enumerations, demote sub-clauses ----
+function secAttr(title){
+  const t = String(title||"").toLowerCase();
+  if(/^bottom line|^in brief|^in short|^answer\b/.test(t)) return ' data-sec="lead"';
+  if(/^watch for|^red flags|^monitor/.test(t)) return ' data-sec="watch"';
+  if(/^not (established|covered|addressed)|^what (is|isn't|is not) (established|known)|^uncertaint|^gaps?\b|^limitations/.test(t)) return ' data-sec="gap"';
+  return "";
+}
+const _hlBalanced = t => ["F","R","K"].every(k => (t.match(new RegExp("\\[\\["+k+"\\]\\]","g"))||[]).length === (t.match(new RegExp("\\[\\[/"+k+"\\]\\]","g"))||[]).length);
+// "(1) …; (2) …; (3) …" / "1) … 2) …" inside ONE block → {stem, items} or null. Strict: markers start at 1,
+// strictly increase, ≥3 of them (or ≥2 when the stem ends with ":"), every item ≥3 words, no marker inside
+// [brackets], highlight markers balanced per item (else no split — never orphan a [[F]]…[[/F]] pair).
+function splitEnumeration(text){
+  const re = /(?:^|[\s:;,—])\(?(\d{1,2})[).]\s+/g;
+  const marks = []; let m;
+  while((m = re.exec(text))){ 
+    const before = text.slice(0, m.index);
+    const openB = (before.match(/\[/g)||[]).length - (before.match(/\]/g)||[]).length;
+    if(openB > 0) continue;                                   // inside a [citation] or [[marker]]
+    marks.push({n: +m[1], start: m.index + (m[0].startsWith("(")||/^\d/.test(m[0]) ? 0 : 1), end: m.index + m[0].length});
+  }
+  if(!marks.length || marks[0].n !== 1) return null;
+  for(let k=1;k<marks.length;k++) if(marks[k].n !== marks[k-1].n+1) return null;
+  const stem = text.slice(0, marks[0].start).replace(/[\s:;,—]+$/,"").trim();
+  if(marks.length < 3 && !(marks.length === 2 && /:$/.test(text.slice(0, marks[0].start).trim()))) return null;
+  const items = marks.map((mk, k) => text.slice(mk.end, k+1 < marks.length ? marks[k+1].start : text.length)
+    .replace(/[\s;,]*(?:and|or)?\s*$/i, "").replace(/^\s+|\s+$/g,""));
+  if(items.some(it => it.split(/\s+/).length < 3 || !_hlBalanced(it))) return null;
+  if(!_hlBalanced(stem)) return null;
+  return {stem, items};
+}
+// "a; b; c; d" — ≥3 top-level semicolon segments in a long block → list; stem = text before an early ":"
+function splitSemicolons(text){
+  if(text.length < 200 || text.includes("|")) return null;
+  let depth = 0, segs = [], cur = "";
+  for(const ch of text){
+    if("([".includes(ch)) depth++; else if(")]".includes(ch)) depth = Math.max(0, depth-1);
+    if(ch === ";" && depth === 0){ segs.push(cur); cur = ""; } else cur += ch;
+  }
+  segs.push(cur);
+  segs = segs.map(x => x.trim()).filter(Boolean);
+  if(segs.length < 3 || segs.some(x => x.split(/\s+/).length < 4 || !_hlBalanced(x))) return null;
+  let stem = "";
+  const c = segs[0].indexOf(":");
+  if(c > 0 && segs[0].slice(0, c).split(/\s+/).length <= 12){ stem = segs[0].slice(0, c+1); segs[0] = segs[0].slice(c+1).trim(); }
+  return {stem, items: segs.map(x => x.replace(/^(?:and|or)\s+/i,""))};
+}
+// a list item: bold lead + (optional) enumeration split + a second " — " clause demoted to a note
+function itemHtml(t){
+  const en = splitEnumeration(t) || splitSemicolons(t);
+  if(en) return mdInline(bulletLead(en.stem || "")) + `<ol class="mdl mdol">${en.items.map(x=>`<li>${mdInline(bulletLead(x))}</li>`).join("")}</ol>`;
+  const led = bulletLead(t);
+  const parts = led.split(/\s+—\s+/);
+  if(parts.length >= 3 && parts.slice(2).join(" — ").split(/\s+/).length >= 8)
+    return mdInline(parts.slice(0,2).join(" — ")) + `<span class="li-note">${mdInline(parts.slice(2).join(" — "))}</span>`;
+  return mdInline(led);
+}
+function blockFromLine(line){
+  const t = line.trim();
+  if(/^Basis:\s*/i.test(t)) return [`<p class="mdp basis">${mdInline(t.replace(/;\s+/g, " · "))}</p>`];
+  const en = splitEnumeration(t) || splitSemicolons(t);
+  if(en){
+    const outp = [];
+    if(en.stem) outp.push(`<p class="mdp mdstem">${mdInline(en.stem)}</p>`);
+    outp.push(`<ol class="mdl mdol">${en.items.map(x=>`<li>${mdInline(bulletLead(x))}</li>`).join("")}</ol>`);
+    return outp;
+  }
+  return [`<p class="mdp">${mdInline(t)}</p>`];
+}
 function mdToHtml(raw){
   const lines = esc(raw).split(/\r?\n/);
   const cells = r => r.replace(/^\s*\|/,"").replace(/\|\s*$/,"").split("|").map(c=>c.trim());
@@ -2541,21 +2725,23 @@ function mdToHtml(raw){
     }
     if(/^\s*\d+[.)]\s+/.test(line)){
       const items = [];
-      while(i<lines.length && /^\s*\d+[.)]\s+/.test(lines[i])){ items.push(mdInline(bulletLead(lines[i].replace(/^\s*\d+[.)]\s+/,"")))); i++; }
+      while(i<lines.length && /^\s*\d+[.)]\s+/.test(lines[i])){ items.push(itemHtml(lines[i].replace(/^\s*\d+[.)]\s+/,""))); i++; }
       out.push('<ol class="mdl mdol">'+items.map(x=>`<li>${x}</li>`).join("")+'</ol>');
       continue;
     }
     const hm = line.match(/^(#{1,4})\s+(.*)$/);
-    if(hm){ const lvl = Math.min(6, hm[1].length+2); out.push(`<h${lvl} class="mdh">${mdInline(hm[2])}</h${lvl}>`); i++; continue; }
+    if(hm){ const lvl = Math.min(6, hm[1].length+2); out.push(`<h${lvl} class="mdh"${secAttr(hm[2])}>${mdInline(hm[2])}</h${lvl}>`); i++; continue; }
     if(/^\s*[-*]\s+/.test(line)){
       const items = [];
-      while(i<lines.length && /^\s*[-*]\s+/.test(lines[i])){ items.push(mdInline(bulletLead(lines[i].replace(/^\s*[-*]\s+/,"")))); i++; }
+      while(i<lines.length && /^\s*[-*]\s+/.test(lines[i])){ items.push(itemHtml(lines[i].replace(/^\s*[-*]\s+/,""))); i++; }
       out.push('<ul class="mdl">'+items.map(x=>`<li>${x}</li>`).join("")+'</ul>');
       continue;
     }
-    const para = [line]; i++;
-    while(i<lines.length && !/^\s*$/.test(lines[i]) && !/^(#{1,4})\s|^\s*[-*]\s|^\s*\d+[.)]\s|^\s*\|/.test(lines[i])){ para.push(lines[i]); i++; }
-    out.push(`<p class="mdp">${mdInline(para.join(" "))}</p>`);
+    // ONE LINE = ONE BLOCK (the model never hard-wraps mid-sentence): consecutive lines are no longer
+    // joined into a single paragraph — that is what made "Basis:" vanish into the lede and stacked
+    // lines read as a wall. Inline enumerations and semicolon chains are split into real lists.
+    i++;
+    out.push(...blockFromLine(line));
   }
   return out.join("");
 }

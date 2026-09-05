@@ -195,3 +195,12 @@ def test_reasoned_format_no_longer_carries_a_coverage_section():
     from noesis_vertical_medical.reasoned import REASONED_ANSWER_FORMAT, REASONED_COVERAGE_ADDENDUM
     assert "## Question coverage" not in REASONED_ANSWER_FORMAT
     assert "## Question coverage" in REASONED_COVERAGE_ADDENDUM
+
+
+def test_every_family_forbids_inline_enumeration():
+    from noesis_vertical_medical.reasoned import REASONED_ANSWER_FORMAT
+    from noesis_vertical_medical.answer_format import (MEDICAL_ANSWER_FORMAT, MEDICAL_OVERVIEW_FORMAT,
+                                                       MEDICAL_COMPARISON_FORMAT, MEDICAL_UPDATE_FORMAT)
+    for fmt in (REASONED_ANSWER_FORMAT, MEDICAL_ANSWER_FORMAT, MEDICAL_OVERVIEW_FORMAT,
+                MEDICAL_COMPARISON_FORMAT, MEDICAL_UPDATE_FORMAT):
+        assert "(1)" in fmt and "semicolons" in fmt.lower()

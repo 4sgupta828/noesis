@@ -45,6 +45,12 @@ evidence GAP, not a clinical inference.
 
 Keep prose tight and scannable. Do not add a "medical advice" disclaimer beyond noting, when \
 relevant, that findings are research evidence, not individualized advice.
+NO INLINE ENUMERATION (rendering contract): never enumerate inside a sentence — no "(1) … (2) …", \
+"1) … 2)", "(a) … (b)", and never three or more parallel parts chained with semicolons. Three or \
+more parallel parts are a Markdown list: a one-line stem ending in ":" then one "- " item per part, \
+each on its own line. One paragraph = one point (≤ 3 sentences), with a blank line between \
+paragraphs; a "Basis:" line is its own paragraph, sources separated by " · ". An item has at most \
+ONE em-dash; a second clause becomes its own item.
 
 HIGHLIGHTS — to aid rapid clinical reading, mark the few most important spans with these inline \
 markers. Use them SPARINGLY (only spans that truly carry weight — a few words, rarely a whole \
@@ -434,6 +440,12 @@ What the question touched that the retrieved evidence does not settle — as a g
 
 NEVER include: "Do now", "Do if", "Watch for", a numbered action plan, a hypothetical patient, or a \
 "Basis:" tier line. Do not turn the explainer into advice for an unstated patient.
+NO INLINE ENUMERATION (rendering contract): never enumerate inside a sentence — no "(1) … (2) …", \
+"1) … 2)", "(a) … (b)", and never three or more parallel parts chained with semicolons. Three or \
+more parallel parts are a Markdown list: a one-line stem ending in ":" then one "- " item per part, \
+each on its own line. One paragraph = one point (≤ 3 sentences), with a blank line between \
+paragraphs; a "Basis:" line is its own paragraph, sources separated by " · ". An item has at most \
+ONE em-dash; a second clause becomes its own item.
 """
 
 MEDICAL_COMPARISON_FORMAT = """\
@@ -460,6 +472,12 @@ differ, outcomes not measured).
 
 NEVER include: a numbered "Do now" plan, a single-winner verdict the findings do not give, or a \
 ranking without a citation.
+NO INLINE ENUMERATION (rendering contract): never enumerate inside a sentence — no "(1) … (2) …", \
+"1) … 2)", "(a) … (b)", and never three or more parallel parts chained with semicolons. Three or \
+more parallel parts are a Markdown list: a one-line stem ending in ":" then one "- " item per part, \
+each on its own line. One paragraph = one point (≤ 3 sentences), with a blank line between \
+paragraphs; a "Basis:" line is its own paragraph, sources separated by " · ". An item has at most \
+ONE em-dash; a second clause becomes its own item.
 """
 
 MEDICAL_UPDATE_FORMAT = """\
@@ -487,4 +505,10 @@ Time windows, guidelines, or topics the retrieved evidence does not reach.
 
 NEVER include: an undated claim, a "Do now" plan, or practice advice beyond what a guideline-tier \
 finding states.
+NO INLINE ENUMERATION (rendering contract): never enumerate inside a sentence — no "(1) … (2) …", \
+"1) … 2)", "(a) … (b)", and never three or more parallel parts chained with semicolons. Three or \
+more parallel parts are a Markdown list: a one-line stem ending in ":" then one "- " item per part, \
+each on its own line. One paragraph = one point (≤ 3 sentences), with a blank line between \
+paragraphs; a "Basis:" line is its own paragraph, sources separated by " · ". An item has at most \
+ONE em-dash; a second clause becomes its own item.
 """

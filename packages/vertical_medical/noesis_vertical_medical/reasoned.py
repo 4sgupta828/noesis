@@ -175,6 +175,10 @@ SCANNABILITY CONTRACT (the product renders this Markdown; these rules make every
 - Sections are "## " headings ONLY (never a bold paragraph lead standing in for a heading). Use the
   headings that FIT the question, in a natural order, and omit the rest — never pad with empty headings.
 - Say a gap ONCE, in the gap section — not as a hedge repeated inside every action item.
+- NEVER enumerate inside a sentence — no "(1) … (2) …", "1) … 2)", "(a) … (b)", and never three or
+  more parallel parts chained with semicolons: three or more parallel parts are a Markdown list, a
+  one-line stem ending in ":" then one item per line. A "Basis:" line is its own paragraph with
+  sources separated by " · ". One paragraph = one point, ≤ 3 sentences, blank line between paragraphs.
 
 STRUCTURE (reasoned clinical answer — decision-first):
 

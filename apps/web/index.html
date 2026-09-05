@@ -2437,6 +2437,31 @@ function _chartTicks(lo, hi, n){
   return out;
 }
 const _fmtTick = v => Math.abs(v) >= 1000 ? v.toLocaleString("en-US") : String(+(+v).toFixed(3));
+// --- text metrics. An SVG string cannot measure text, so every column is sized from conservative
+// average glyph widths (px at the CSS font sizes below) and labels are WRAPPED, never truncated:
+// the longest line sets the column, the tallest label sets the row. Nothing is clipped or overlaps.
+const _CW = { lbl: 6.6, val: 7.2, tick: 5.9, cap: 8.6 };
+const _LH = 14;                                                 // line height for 12px labels
+function _wrapText(s, maxChars){                                // greedy word wrap; a long word stays whole
+  const words = String(s == null ? "" : s).trim().split(/\s+/).filter(Boolean);
+  const lines = []; let cur = "";
+  for(const w of words){
+    if(!cur) cur = w;
+    else if((cur + " " + w).length <= maxChars) cur += " " + w;
+    else { lines.push(cur); cur = w; }
+  }
+  if(cur) lines.push(cur);
+  return lines.length ? lines : [""];
+}
+const _maxLen = lines => Math.max(0, ...lines.map(l => l.length));
+const _strW = (s, k) => Math.round(String(s == null ? "" : s).length * (_CW[k] || _CW.lbl));
+// <text> with one <tspan> per line, the block vertically centred on baseline yMid
+function _textLines(E, lines, x, yMid, anchor, cls, title, lh){
+  lh = lh || _LH;
+  const y0 = yMid - (lines.length - 1) * lh / 2;
+  const ts = lines.map((l, i) => `<tspan x="${x}"${i ? ` dy="${lh}"` : ` y="${y0.toFixed(1)}"`}>${E(l)}</tspan>`).join("");
+  return `<text text-anchor="${anchor}" class="${cls}">${ts}${title ? `<title>${E(title)}</title>` : ""}</text>`;
+}
 function chartSvg(chart){
   const bars = ((chart && (chart.bars || chart.points)) || [])
     .filter(b => typeof b.value === "number" && isFinite(b.value));
@@ -2452,47 +2477,63 @@ function chartSvg(chart){
     + `<pattern id="ch-h2-${uid}" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(135)">`
     + `<line x1="0" y1="0" x2="0" y2="5" stroke="var(--panel2)" stroke-width="1.6" opacity=".55"></line></pattern>`
     + `</defs>`;
-  const barX = 200, plotW = 230;               // barX = generous left column so labels aren't clipped
-  // right-aligned label ending at barX-8; truncate to fit the column and add a <title> for the full text
-  const lbl = (s, y) => { const t = String(s == null ? "" : s); const shown = t.length > 28 ? t.slice(0,27)+"…" : t;
-    return `<text x="${barX-8}" y="${y}" text-anchor="end" class="c-lbl">${E(shown)}<title>${E(t)}</title></text>`; };
+  // label column: wrapped to ≤ 24 chars/line; its width comes from the longest line so no label is
+  // ever clipped; the row height comes from the line count so labels never collide
+  const LBL_MAX = 24;
+  const wrapL = s => _wrapText(s, LBL_MAX);
+  const labelLines = bars.map(b => wrapL(b.label));
+  const labW = Math.max(90, _strW("x".repeat(_maxLen(labelLines.flat())), "lbl") + 8);
+  const barX = labW + 12, plotW = 230;
+  const lbl = (s, yMid) => _textLines(E, wrapL(s), barX-8, yMid, "end", "c-lbl", String(s == null ? "" : s));
+  const rowHFor = (lines, min) => Math.max(min, lines.length*_LH + 10);
+  const valOf = b => String(b.value_str || b.value);
+  const valColW = strs => Math.max(0, ...strs.map(s => _strW(s, "val"))) + 16;
   // faint vertical gridlines + tick labels + unit for the horizontal value-scale kinds (bar/grouped/interval)
   const axisH = 20;
   const hAxis = (X, lo, hi, yTop, yBot, H) => {
     const ticks = _chartTicks(lo, hi, 4);
+    const last = ticks[ticks.length-1];
+    const unitX = X(last) + Math.round(_strW(_fmtTick(last), "tick")/2) + 10;   // clear of the last tick label
     return ticks.map(t => `<line x1="${X(t)}" y1="${yTop}" x2="${X(t)}" y2="${yBot}" class="c-grid"></line>`).join("")
       + ticks.map(t => `<text x="${X(t)}" y="${H-6}" text-anchor="middle" class="c-tick">${_fmtTick(t)}</text>`).join("")
-      + (chart.unit ? `<text x="${barX+plotW+10}" y="${H-6}" class="c-unit">${E(chart.unit)}</text>` : "")
+      + (chart.unit ? `<text x="${unitX}" y="${H-6}" class="c-unit">${E(chart.unit)}</text>` : "")
       + `<line x1="${X(Math.max(lo, 0) <= 0 && hi >= 0 ? 0 : lo)}" y1="${yTop}" x2="${X(Math.max(lo, 0) <= 0 && hi >= 0 ? 0 : lo)}" y2="${yBot}" class="c-axis"></line>`;
   };
+  const unitW = chart.unit ? _strW(chart.unit, "tick") + 14 : 0;
   let W, H, body = "", legend = "";
 
   if(kind === "icon_array"){                   // absolute-risk pictograph: N of `scale` icons filled
     const scale = (chart.scale && chart.scale >= 2) ? Math.round(chart.scale) : 100;
     const cols = 10, cell = 15, r = 4.6;
     const rows = Math.ceil(scale/cols), gridW = cols*cell, gridH = rows*cell;
-    const capH = 34, blockW = Math.max(gridW, 128) + 26;
-    W = Math.max(340, bars.length*blockW); H = capH + gridH + 30;
+    const lines = bars.map(b => _wrapText(b.label, 18));
+    const nLines = Math.max(...lines.map(l => l.length));
+    const capW = Math.max(...bars.map(b => _strW(valOf(b), "cap") + _strW(" of " + scale, "tick")));
+    const capH = 34, blockW = Math.max(gridW, 128, _strW("x".repeat(_maxLen(lines.flat())), "lbl") + 12, capW + 12) + 26;
+    W = Math.max(340, bars.length*blockW); H = capH + gridH + 14 + nLines*_LH + 6;
     const col = _CHART_COLS[0];                 // one hue (Cates-plot style): compare filled AREA across arms
     body = bars.map((b, bi) => {
-      const bx = bi*blockW + (blockW - gridW)/2;
+      const bx = bi*blockW + (blockW - gridW)/2, mid = (bi*blockW + blockW/2).toFixed(1);
       const filled = Math.max(0, Math.min(scale, Math.round(b.value)));
-      let g = `<text x="${(bx+gridW/2).toFixed(1)}" y="22" text-anchor="middle" class="c-icocap">${E(b.value_str||b.value)}<tspan class="c-tick" dx="2">of ${scale}</tspan></text>`;
+      let g = `<text x="${mid}" y="22" text-anchor="middle" class="c-icocap">${E(valOf(b))}<tspan class="c-tick" dx="2">of ${scale}</tspan></text>`;
       for(let k=0;k<scale;k++){
         const cx = bx + (k%cols)*cell + cell/2, cy = capH + Math.floor(k/cols)*cell + cell/2;
         g += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r}"${k<filled?` fill="${col}"`:` class="c-ico-e"`}></circle>`;
       }
-      const t = String(b.label==null?"":b.label), shown = t.length>18 ? t.slice(0,17)+"…" : t;
-      g += `<text x="${(bx+gridW/2).toFixed(1)}" y="${capH+gridH+18}" text-anchor="middle" class="c-lbl">${E(shown)}<title>${E(t)}</title></text>`;
+      g += _textLines(E, lines[bi], mid, capH + gridH + 18 + (lines[bi].length-1)*_LH/2, "middle", "c-lbl", String(b.label == null ? "" : b.label));
       return g;
     }).join("");
     legend = `<span class="lg"><i style="background:${col}"></i>affected</span>`
       + `<span class="lg"><i style="background:var(--muted);opacity:.3"></i>unaffected</span>`;
   } else if(kind === "range_band"){            // bullet: observed value vs its normal reference band
-    W = barX + plotW + 90;
-    const rowH = 48; H = bars.length*rowH + 14;
+    const rowHs = labelLines.map(L => rowHFor(L, 54));
+    const valStrs = bars.map(b => valOf(b) + (chart.unit ? " " + chart.unit : ""));
+    W = barX + plotW + Math.max(60, valColW(valStrs)/2 + 20);
+    H = rowHs.reduce((a,b) => a+b, 0) + 14;
+    let y = 14;
     body = bars.map((b, i) => {
-      const yTop = 14 + i*rowH, yMid = yTop + 16;
+      // row: value label (baseline yTop+11) · marker stem yMid±11 · band-edge labels (baseline yMid+23)
+      const rh = rowHs[i], yTop = y + (rh - 54)/2, yMid = yTop + 26; y += rh;
       const lo0 = Math.min(b.value, b.low ?? b.value), hi0 = Math.max(b.value, b.high ?? b.value);
       let span = hi0 - lo0; if(!(span > 0)) span = Math.abs(hi0) || 1;
       const lo = lo0 - span*0.35, hi = hi0 + span*0.35;
@@ -2503,101 +2544,130 @@ function chartSvg(chart){
       let s = lbl(b.label, yMid+4)
         + `<line x1="${barX}" y1="${yMid}" x2="${barX+plotW}" y2="${yMid}" class="c-axis"></line>`
         + `<rect x="${bx1}" y="${yMid-9}" width="${Math.max(1, bx2-bx1)}" height="18" rx="2" class="c-band"></rect>`;
+      // band-edge labels: centred on the edge, unless the band is too narrow for both — then each
+      // sits on the outer side of its edge so the two never overlap
+      const loS = b.low != null ? String(b.low_str || b.low) : "", hiS = b.high != null ? String(b.high_str || b.high) : "";
+      const narrow = b.low != null && b.high != null && (X(b.high) - X(b.low)) < (_strW(loS, "tick") + _strW(hiS, "tick"))/2 + 8;
       if(b.low != null) s += `<line x1="${X(b.low)}" y1="${yMid-9}" x2="${X(b.low)}" y2="${yMid+9}" class="c-band-e"></line>`
-        + `<text x="${X(b.low)}" y="${yMid+23}" text-anchor="middle" class="c-tick">${E(b.low_str||b.low)}</text>`;
+        + `<text x="${narrow ? X(b.low)-3 : X(b.low)}" y="${yMid+23}" text-anchor="${narrow ? "end" : "middle"}" class="c-tick">${E(loS)}</text>`;
       if(b.high != null) s += `<line x1="${X(b.high)}" y1="${yMid-9}" x2="${X(b.high)}" y2="${yMid+9}" class="c-band-e"></line>`
-        + `<text x="${X(b.high)}" y="${yMid+23}" text-anchor="middle" class="c-tick">${E(b.high_str||b.high)}</text>`;
-      s += `<line x1="${vx}" y1="${yMid-13}" x2="${vx}" y2="${yMid+13}" class="c-mk"></line>`
+        + `<text x="${narrow ? X(b.high)+3 : X(b.high)}" y="${yMid+23}" text-anchor="${narrow ? "start" : "middle"}" class="c-tick">${E(hiS)}</text>`;
+      // observed value above the marker; kept inside the plot so it is never clipped at either edge
+      const half = _strW(valStrs[i], "val")/2;
+      const tx = Math.max(barX + half, Math.min(barX + plotW + (W - barX - plotW) - half - 4, vx));
+      s += `<line x1="${vx}" y1="${yMid-11}" x2="${vx}" y2="${yMid+11}" class="c-mk"></line>`
         + `<circle cx="${vx}" cy="${yMid}" r="5" class="${inBand?"c-ok":"c-hi"}" stroke="var(--panel)" stroke-width="1.5"></circle>`
-        + `<text x="${vx}" y="${yTop+7}" text-anchor="middle" class="c-val">${E(b.value_str||b.value)}${chart.unit?" "+E(chart.unit):""}</text>`;
+        + `<text x="${tx}" y="${yTop+11}" text-anchor="middle" class="c-val">${E(valStrs[i])}</text>`;
       return s;
     }).join("");
     legend = `<span class="lg"><i style="background:var(--chart1);opacity:.3"></i>normal range</span>`
       + `<span class="lg"><span style="color:#3a9d5d">●</span> in range</span>`
       + `<span class="lg"><span style="color:#d98324">●</span> out of range</span>`;
   } else if(kind === "interval"){                     // forest plot: whisker low..high + marker at value
-    W = barX + plotW + 150;
+    const ciOf = b => (b.low_str && b.high_str) ? " ["+String(b.low_str)+"–"+String(b.high_str)+"]" : "";
+    const valStrs = bars.map(b => valOf(b) + ciOf(b));
+    W = barX + plotW + Math.max(valColW(valStrs), unitW + 24);
     let lo = Infinity, hi = -Infinity;
     bars.forEach(b => { lo = Math.min(lo, b.low ?? b.value, b.value); hi = Math.max(hi, b.high ?? b.value, b.value); });
     if(!isFinite(lo) || !(hi > lo)) hi = lo + 1;
     const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
     const X = v => barX + Math.round((v - lo)/(hi - lo) * plotW);
-    const rowH = 30; H = bars.length*rowH + 18 + axisH;
+    const rowHs = labelLines.map(L => rowHFor(L, 30));
+    H = rowHs.reduce((a,b) => a+b, 0) + 18 + axisH;
     const yBot = H - axisH + 2;
     const crosses1 = (lo < 1 && 1 < hi);
     const ticks = _chartTicks(lo, hi, 4);
+    const last = ticks[ticks.length-1];
+    const unitX = X(last) + Math.round(_strW(_fmtTick(last), "tick")/2) + 10;
     body = ticks.map(t => `<line x1="${X(t)}" y1="6" x2="${X(t)}" y2="${yBot}" class="c-grid"></line>`).join("")
       + ticks.map(t => `<text x="${X(t)}" y="${H-6}" text-anchor="middle" class="c-tick">${_fmtTick(t)}</text>`).join("")
-      + (chart.unit ? `<text x="${barX+plotW+10}" y="${H-6}" class="c-unit">${E(chart.unit)}</text>` : "");
+      + (chart.unit ? `<text x="${unitX}" y="${H-6}" class="c-unit">${E(chart.unit)}</text>` : "");
     body += crosses1 ? `<line x1="${X(1)}" y1="6" x2="${X(1)}" y2="${yBot}" class="c-ref"></line>` : "";
+    let y = 6;
     body += bars.map((b,i) => {
-      const cy = 18 + i*rowH, x1 = X(b.low ?? b.value), x2 = X(b.high ?? b.value), xm = X(b.value);
-      const ci = (b.low_str && b.high_str) ? " ["+E(b.low_str)+"–"+E(b.high_str)+"]" : "";
+      const rh = rowHs[i], cy = y + rh/2 + 3; y += rh;
+      const x1 = X(b.low ?? b.value), x2 = X(b.high ?? b.value), xm = X(b.value);
       return lbl(b.label, cy+4)
         + `<line x1="${x1}" y1="${cy}" x2="${x2}" y2="${cy}" class="c-wh"></line>`
         + `<line x1="${x1}" y1="${cy-4}" x2="${x1}" y2="${cy+4}" class="c-wh"></line>`
         + `<line x1="${x2}" y1="${cy-4}" x2="${x2}" y2="${cy+4}" class="c-wh"></line>`
         + `<circle cx="${xm}" cy="${cy}" r="4" class="c-dot"></circle>`
-        + `<text x="${barX+plotW+8}" y="${cy+4}" class="c-val">${E(b.value_str||b.value)}${ci}</text>`;
+        + `<text x="${barX+plotW+8}" y="${cy+4}" class="c-val">${E(valStrs[i])}</text>`;
     }).join("");
     legend = `<span class="lg"><span class="lg-dot">●</span> point estimate</span>`
       + `<span class="lg"><span class="lg-ci">├──┤</span> 95% CI</span>`
       + (crosses1 ? `<span class="lg"><span class="lg-refm">┊</span> 1.0 = no effect</span>` : "");
   } else if(kind === "grouped_bar"){           // trade-off: sub-bar per series within each option group
-    W = barX + plotW + 74;
+    W = barX + plotW + Math.max(valColW(bars.map(valOf)), unitW + 24);
     const labels = [...new Set(bars.map(b => b.label))];
     const series = [...new Set(bars.map(b => b.series || "value"))];
     const max = Math.max(...bars.map(b => Math.abs(b.value)), 0) || 1;
     const X = v => barX + Math.round(v/max * plotW);
-    const subH = 15, gap = 3, grpH = series.length*(subH+gap) + 10;
-    H = labels.length*grpH + 12 + axisH;
+    const subH = 15, gap = 3;
+    const grpHs = labels.map(lb0 => Math.max(series.length*(subH+gap) + 10, wrapL(lb0).length*_LH + 10));
+    H = grpHs.reduce((a,b) => a+b, 0) + 12 + axisH;
     body = hAxis(X, 0, max, 8, H - axisH + 2, H);
     let y = 10;
-    labels.forEach(lb0 => {
+    labels.forEach((lb0, gi) => {
+      const gh = grpHs[gi], y0 = y + (gh - 10 - series.length*(subH+gap))/2;
       series.forEach((sname, si) => {
         const b = bars.find(x => x.label === lb0 && (x.series || "value") === sname);
         if(!b) return;
-        const yy = y + si*(subH+gap), bw = Math.max(2, Math.round(Math.abs(b.value)/max * plotW));
-        body += `<rect x="${barX}" y="${yy}" width="${bw}" height="${subH}" rx="2" fill="${_CHART_COLS[si%3]}"></rect>`
-          + (si ? `<rect x="${barX}" y="${yy}" width="${bw}" height="${subH}" rx="2" fill="url(#ch-h${(si%2)?1:2}-${uid})"></rect>` : "")
-          + `<text x="${barX+bw+6}" y="${yy+12}" class="c-val">${E(b.value_str||b.value)}</text>`;
+        const yy = y0 + si*(subH+gap), bw = Math.max(2, Math.round(Math.abs(b.value)/max * plotW));
+        body += `<rect x="${barX}" y="${yy.toFixed(1)}" width="${bw}" height="${subH}" rx="2" fill="${_CHART_COLS[si%3]}"></rect>`
+          + (si ? `<rect x="${barX}" y="${yy.toFixed(1)}" width="${bw}" height="${subH}" rx="2" fill="url(#ch-h${(si%2)?1:2}-${uid})"></rect>` : "")
+          + `<text x="${barX+bw+6}" y="${(yy+12).toFixed(1)}" class="c-val">${E(valOf(b))}</text>`;
       });
-      body += lbl(lb0, y + series.length*(subH+gap)/2 + 2);
-      y += grpH;
+      body += lbl(lb0, y0 + series.length*(subH+gap)/2 + 2);
+      y += gh;
     });
     legend = series.map((s,si) => `<span class="lg"><i class="${si?("tx"+((si%2)?1:2)):""}" style="background:${_CHART_COLS[si%3]}"></i>${E(s)}</span>`).join("");
   } else if(kind === "line"){                  // trend over ordered x-steps; one polyline per series
-    const padL = 52, padR = 96, padT = 12, padB = 30;
-    W = 560; H = 240;
     const cats = [...new Set(bars.map(b => b.label))];                 // x order as emitted (ordinal)
     const series = [...new Set(bars.map(b => b.series || ""))];
     let lo = Math.min(...bars.map(b => b.value)), hi = Math.max(...bars.map(b => b.value));
     if(!(hi > lo)) hi = lo + 1;
     const dp = (hi - lo) * 0.08; lo -= dp; hi += dp;
-    const X = i => padL + (cats.length < 2 ? 0 : Math.round(i/(cats.length-1) * (W-padL-padR)));
-    const Y = v => padT + Math.round((hi - v)/(hi - lo) * (H-padT-padB));
     const ticks = _chartTicks(lo, hi, 4);
+    // margins from the text they hold: y ticks + unit on the left, endpoint values on the right,
+    // wrapped x labels at the bottom
+    const padL = Math.max(44, ...ticks.map(t => _strW(_fmtTick(t), "tick") + 14), unitW);
+    const ends = series.map(s => { const pts = cats.map((c, i) => [i, bars.find(x => x.label === c && (x.series || "") === s)]).filter(p => p[1]); return pts.length ? pts[pts.length-1][1] : null; }).filter(Boolean);
+    const padR = Math.max(40, ...ends.map(b => _strW(valOf(b), "val") + 22));
+    const xLines = cats.map(c => _wrapText(c, 12));
+    const xN = Math.max(...xLines.map(l => l.length));
+    const padT = 14, padB = 16 + xN*_LH + 6;
+    const need = _strW("x".repeat(_maxLen(xLines.flat())), "tick") + 10;      // width one x label needs
+    W = Math.max(560, Math.min(900, padL + padR + Math.max(1, cats.length-1)*need + need));
+    H = 210 + padB;
+    const innerW = W - padL - padR;
+    const X = i => padL + (cats.length < 2 ? 0 : Math.round(i/(cats.length-1) * innerW));
+    const Y = v => padT + Math.round((hi - v)/(hi - lo) * (H-padT-padB));
     body = ticks.map(t => `<line x1="${padL}" y1="${Y(t)}" x2="${W-padR+18}" y2="${Y(t)}" class="c-grid"></line>`
         + `<text x="${padL-7}" y="${Y(t)+4}" text-anchor="end" class="c-tick">${_fmtTick(t)}</text>`).join("")
       + `<line x1="${padL}" y1="${padT-2}" x2="${padL}" y2="${H-padB+4}" class="c-axis"></line>`
       + `<line x1="${padL}" y1="${H-padB+4}" x2="${W-padR+18}" y2="${H-padB+4}" class="c-axis"></line>`
-      + (chart.unit ? `<text x="${padL-7}" y="${padT-1}" text-anchor="end" class="c-unit">${E(chart.unit)}</text>` : "");
-    const xStep = Math.ceil(cats.length/7);                            // thin x labels when crowded
-    body += cats.map((c,i) => (i % xStep && i !== cats.length-1) ? "" : (() => {
-      const t = String(c == null ? "" : c), shown = t.length > 12 ? t.slice(0,11)+"…" : t;
-      return `<text x="${X(i)}" y="${H-9}" text-anchor="middle" class="c-tick">${E(shown)}<title>${E(t)}</title></text>`;
-    })()).join("");
+      + (chart.unit ? `<text x="${padL-7}" y="${padT-3}" text-anchor="end" class="c-unit">${E(chart.unit)}</text>` : "");
+    const slotW = cats.length < 2 ? innerW : innerW/(cats.length-1);
+    const xStep = Math.max(1, Math.ceil(need/Math.max(1, slotW)));       // thin only when even the widened plot cannot hold every label
+    body += cats.map((c,i) => (i % xStep && i !== cats.length-1) ? "" :
+      _textLines(E, xLines[i], X(i), H - padB + 20 + (xLines[i].length-1)*_LH/2, "middle", "c-tick", String(c == null ? "" : c))).join("");
     const dash = ["", "7 4", "2.5 3.5"];                               // series 2/3 dashed, not color-alone
+    const endLabels = [];
     series.forEach((s, si) => {
       const pts = [];
       cats.forEach((c, i) => { const b = bars.find(x => x.label === c && (x.series || "") === s); if(b) pts.push([i, b]); });
       if(pts.length < 2) return;
       const col = _CHART_COLS[si%3];
       body += `<polyline points="${pts.map(([i,b]) => X(i)+","+Y(b.value)).join(" ")}" class="c-line" stroke="${col}"${dash[si%3] ? ` stroke-dasharray="${dash[si%3]}"` : ""}></polyline>`;
-      body += pts.map(([i,b]) => `<circle cx="${X(i)}" cy="${Y(b.value)}" r="3.5" fill="${col}" class="c-pt"><title>${E(b.label)}: ${E(b.value_str||b.value)}</title></circle>`).join("");
+      body += pts.map(([i,b]) => `<circle cx="${X(i)}" cy="${Y(b.value)}" r="3.5" fill="${col}" class="c-pt"><title>${E(b.label)}: ${E(valOf(b))}</title></circle>`).join("");
       const [li, lb] = pts[pts.length-1];                              // endpoint value label
-      body += `<text x="${X(li)+8}" y="${Y(lb.value)+4}" class="c-val">${E(lb.value_str||lb.value)}</text>`;
+      endLabels.push({ x: X(li)+8, y: Y(lb.value)+4, t: valOf(lb) });
     });
+    // endpoint labels of different series can land on the same y: push them apart (≥ 13px) in y order
+    endLabels.sort((a,b) => a.y - b.y);
+    for(let i = 1; i < endLabels.length; i++) if(endLabels[i].y - endLabels[i-1].y < 13) endLabels[i].y = endLabels[i-1].y + 13;
+    body += endLabels.map(l => `<text x="${l.x}" y="${l.y}" class="c-val">${E(l.t)}</text>`).join("");
     if(series.length > 1){
       legend = series.map((s,si) => { const col = _CHART_COLS[si%3];
         const chip = !si ? `background:${col}`
@@ -2608,9 +2678,18 @@ function chartSvg(chart){
   } else if(kind === "pie"){                   // donut of shares; external labels or side legend
     const total = bars.reduce((a,b) => a + Math.max(0, b.value), 0);
     if(!(total > 0)) return "";
-    const sideLegend = bars.length > 4;
-    W = 560; H = 216;
-    const cx = sideLegend ? 118 : 280, cy = 104, R = 80, r = 46;
+    // external labels only when they cannot collide: ≤ 4 slices, none thinner than 8%, short labels;
+    // otherwise a side legend with wrapped labels (one row per slice, sized to its lines)
+    const sideLegend = bars.length > 4 || bars.some(b => Math.max(0, b.value)/total < 0.08) || bars.some(b => String(b.label == null ? "" : b.label).length > 18);
+    const legLines = bars.map(b => _wrapText(b.label, 24));
+    const legRowH = legLines.map(L => Math.max(26, L.length*_LH + 8));
+    const legH = legRowH.reduce((a,b) => a+b, 0);
+    const legLabW = _strW("x".repeat(_maxLen(legLines.flat())), "lbl");
+    const vsW = Math.max(0, ...bars.map(b => b.value_str ? _strW(b.value_str, "tick") + 8 : 0));
+    const lx0 = 236;
+    W = sideLegend ? Math.max(560, lx0 + 18 + legLabW + 12 + _strW("100%", "val") + vsW + 16) : 560;
+    H = sideLegend ? Math.max(216, legH + 28) : 216;
+    const cx = sideLegend ? 118 : 280, cy = H/2, R = 80, r = 46;
     const P = (rad, a) => `${(cx + rad*Math.cos(a)).toFixed(2)} ${(cy + rad*Math.sin(a)).toFixed(2)}`;
     let ang = -Math.PI/2;
     body = "";
@@ -2622,41 +2701,46 @@ function chartSvg(chart){
       if(frac <= 0) return;
       const large = (a1 - a0) > Math.PI ? 1 : 0;
       const d = `M${P(R, a0)} A${R} ${R} 0 ${large} 1 ${P(R, a1)} L${P(r, a1)} A${r} ${r} 0 ${large} 0 ${P(r, a0)} Z`;
-      body += `<path d="${d}" fill="${col}" class="c-slice"><title>${E(b.label)}: ${E(b.value_str||b.value)} (${pct}%)</title></path>`
+      body += `<path d="${d}" fill="${col}" class="c-slice"><title>${E(b.label)}: ${E(valOf(b))} (${pct}%)</title></path>`
         + (tx ? `<path d="${d}" fill="url(#ch-h${tx}-${uid})" class="c-slice" stroke="none"></path>` : "");
       if(!sideLegend){                         // external label + leader line per slice
         const am = (a0 + a1)/2, right = Math.cos(am) >= 0;
         const lx = cx + (R + 10)*Math.cos(am), ly = cy + (R + 10)*Math.sin(am);
         const hx = lx + (right ? 14 : -14);
-        const t = String(b.label == null ? "" : b.label), shown = t.length > 18 ? t.slice(0,17)+"…" : t;
+        const t = String(b.label == null ? "" : b.label);
         body += `<polyline points="${P(R + 2, am)},${lx.toFixed(2)},${ly.toFixed(2)},${hx.toFixed(2)},${ly.toFixed(2)}" class="c-lead"></polyline>`
-          + `<text x="${(hx + (right ? 5 : -5)).toFixed(2)}" y="${(ly + 4).toFixed(2)}" text-anchor="${right ? "start" : "end"}" class="c-lbl">${E(shown)} <tspan class="c-val">${pct}%</tspan><title>${E(t)}</title></text>`;
+          + `<text x="${(hx + (right ? 5 : -5)).toFixed(2)}" y="${(ly + 4).toFixed(2)}" text-anchor="${right ? "start" : "end"}" class="c-lbl">${E(t)} <tspan class="c-val">${pct}%</tspan><title>${E(t)}</title></text>`;
       }
     });
-    if(sideLegend){                            // >4 slices: swatch + label + share, one row each
-      const lx0 = 236, rowH = 26, y0 = Math.round(cy - (rows.length-1)*rowH/2 - 5);
+    if(sideLegend){                            // swatch + wrapped label + share, one sized row each
+      let yy = Math.round(cy - legH/2);
       rows.forEach((rw, i) => {
-        const yy = y0 + i*rowH;
+        const rh = legRowH[i], yMid = yy + rh/2;
         const vs = String(rw.b.value_str || "");
         const showVs = vs && vs.replace(/\s/g, "") !== rw.pct + "%";   // skip when it just repeats the pct
-        body += `<rect x="${lx0}" y="${yy}" width="11" height="11" rx="2" fill="${rw.col}"></rect>`
-          + (rw.tx ? `<rect x="${lx0}" y="${yy}" width="11" height="11" rx="2" fill="url(#ch-h${rw.tx}-${uid})"></rect>` : "")
-          + `<text x="${lx0+18}" y="${yy+10}" class="c-lbl">${E(String(rw.b.label).length > 26 ? String(rw.b.label).slice(0,25)+"…" : rw.b.label)}<title>${E(rw.b.label)}</title></text>`
-          + `<text x="${lx0+218}" y="${yy+10}" text-anchor="end" class="c-val">${rw.pct}%</text>`
-          + (showVs ? `<text x="${lx0+228}" y="${yy+10}" class="c-tick">${E(vs)}</text>` : "");
+        const px = lx0 + 18 + legLabW + 12;
+        body += `<rect x="${lx0}" y="${(yMid-6).toFixed(1)}" width="11" height="11" rx="2" fill="${rw.col}"></rect>`
+          + (rw.tx ? `<rect x="${lx0}" y="${(yMid-6).toFixed(1)}" width="11" height="11" rx="2" fill="url(#ch-h${rw.tx}-${uid})"></rect>` : "")
+          + _textLines(E, legLines[i], lx0+18, yMid+4, "start", "c-lbl", String(rw.b.label == null ? "" : rw.b.label))
+          + `<text x="${px}" y="${(yMid+4).toFixed(1)}" class="c-val">${rw.pct}%</text>`
+          + (showVs ? `<text x="${px + _strW(rw.pct + "%", "val") + 6}" y="${(yMid+4).toFixed(1)}" class="c-tick">${E(vs)}</text>` : "");
+        yy += rh;
       });
     }
   } else {                                     // single-series horizontal bars
-    W = barX + plotW + 74;
+    W = barX + plotW + Math.max(valColW(bars.map(valOf)), unitW + 24);
     const max = Math.max(...bars.map(b => Math.abs(b.value)), 0) || 1;
     const X = v => barX + Math.round(v/max * plotW);
-    const rowH = 30; H = bars.length*rowH + 12 + axisH;
+    const rowHs = labelLines.map(L => rowHFor(L, 30));
+    H = rowHs.reduce((a,b) => a+b, 0) + 12 + axisH;
     body = hAxis(X, 0, max, 10, H - axisH + 2, H);
+    let y = 12;
     body += bars.map((b,i) => {
-      const yy = 12 + i*rowH, bw = Math.max(2, Math.round(Math.abs(b.value)/max * plotW));
-      return lbl(b.label, yy+15)
-        + `<rect x="${barX}" y="${yy+3}" width="${bw}" height="17" rx="3" class="c-bar"></rect>`
-        + `<text x="${barX+bw+6}" y="${yy+15}" class="c-val">${E(b.value_str||b.value)}</text>`;
+      const rh = rowHs[i], yMid = y + rh/2; y += rh;
+      const bw = Math.max(2, Math.round(Math.abs(b.value)/max * plotW));
+      return lbl(b.label, yMid+4)
+        + `<rect x="${barX}" y="${(yMid-8.5).toFixed(1)}" width="${bw}" height="17" rx="3" class="c-bar"></rect>`
+        + `<text x="${barX+bw+6}" y="${(yMid+4).toFixed(1)}" class="c-val">${E(valOf(b))}</text>`;
     }).join("");
   }
   // citation footnote: which verified findings the plotted numbers come from (clickable [n] refs)

@@ -48,9 +48,10 @@ relevant, that findings are research evidence, not individualized advice.
 NO INLINE ENUMERATION (rendering contract): never enumerate inside a sentence — no "(1) … (2) …", \
 "1) … 2)", "(a) … (b)", and never three or more parallel parts chained with semicolons. Three or \
 more parallel parts are a Markdown list: a one-line stem ending in ":" then one "- " item per part, \
-each on its own line. One paragraph = one point (≤ 3 sentences), with a blank line between \
-paragraphs; a "Basis:" line is its own paragraph, sources separated by " · ". An item has at most \
-ONE em-dash; a second clause becomes its own item.
+each on its own line. One paragraph = one point, with a blank line between paragraphs — a long \
+paragraph is split, never trimmed; a "Basis:" line is its own paragraph, sources separated by " · ". \
+An item has at most ONE em-dash; a second clause becomes its own item (nothing is dropped). These \
+rules shape layout only and never decide what to include.
 
 HIGHLIGHTS — to aid rapid clinical reading, mark the few most important spans with these inline \
 markers. Use them SPARINGLY (only spans that truly carry weight — a few words, rarely a whole \
@@ -419,7 +420,8 @@ MEDICAL_OVERVIEW_FORMAT = """\
 Format the answer as Markdown for a clinical audience: a clear EXPLAINER, not a plan. Include a \
 section ONLY IF the verified findings above contain information to support it — OMIT any section you \
 cannot ground in the findings; never add outside knowledge to fill a heading. Every factual sentence \
-and bullet carries an inline [n] citation. 150–350 words; one idea per bullet.
+and bullet carries an inline [n] citation. Length follows content — include everything the findings \
+support that answers the question, and do not pad; one idea per bullet.
 
 ## In brief
 Two or three sentences that answer the question directly, with [n] citations.
@@ -443,16 +445,17 @@ NEVER include: "Do now", "Do if", "Watch for", a numbered action plan, a hypothe
 NO INLINE ENUMERATION (rendering contract): never enumerate inside a sentence — no "(1) … (2) …", \
 "1) … 2)", "(a) … (b)", and never three or more parallel parts chained with semicolons. Three or \
 more parallel parts are a Markdown list: a one-line stem ending in ":" then one "- " item per part, \
-each on its own line. One paragraph = one point (≤ 3 sentences), with a blank line between \
-paragraphs; a "Basis:" line is its own paragraph, sources separated by " · ". An item has at most \
-ONE em-dash; a second clause becomes its own item.
+each on its own line. One paragraph = one point, with a blank line between paragraphs — a long \
+paragraph is split, never trimmed; a "Basis:" line is its own paragraph, sources separated by " · ". \
+An item has at most ONE em-dash; a second clause becomes its own item (nothing is dropped). These \
+rules shape layout only and never decide what to include.
 """
 
 MEDICAL_COMPARISON_FORMAT = """\
 Format the answer as Markdown for a clinical audience: a HEAD-TO-HEAD comparison of the named \
 options. Include a section ONLY IF the verified findings above support it — OMIT what you cannot \
 ground; never add outside knowledge. Every factual sentence, bullet, and table cell carries an \
-inline [n] citation. 200–450 words.
+inline [n] citation. Length follows content — include everything the findings support, do not pad.
 
 ## Bottom line
 One or two sentences: how the options compare and what the comparison turns on, with [n].
@@ -475,16 +478,18 @@ ranking without a citation.
 NO INLINE ENUMERATION (rendering contract): never enumerate inside a sentence — no "(1) … (2) …", \
 "1) … 2)", "(a) … (b)", and never three or more parallel parts chained with semicolons. Three or \
 more parallel parts are a Markdown list: a one-line stem ending in ":" then one "- " item per part, \
-each on its own line. One paragraph = one point (≤ 3 sentences), with a blank line between \
-paragraphs; a "Basis:" line is its own paragraph, sources separated by " · ". An item has at most \
-ONE em-dash; a second clause becomes its own item.
+each on its own line. One paragraph = one point, with a blank line between paragraphs — a long \
+paragraph is split, never trimmed; a "Basis:" line is its own paragraph, sources separated by " · ". \
+An item has at most ONE em-dash; a second clause becomes its own item (nothing is dropped). These \
+rules shape layout only and never decide what to include.
 """
 
 MEDICAL_UPDATE_FORMAT = """\
 Format the answer as Markdown for a clinical audience: a DATED change log of what is new. Include a \
 section ONLY IF the verified findings above support it — OMIT what you cannot ground; never add \
 outside knowledge. Every item carries an inline [n] citation AND a date or year taken from the \
-finding; an undated item must not appear. 200–400 words.
+finding; an undated item must not appear. Length follows content — include everything the findings \
+support, do not pad.
 
 ## What changed
 One bullet per change, newest first: **date/year · source type** — what changed and what it \
@@ -508,7 +513,8 @@ finding states.
 NO INLINE ENUMERATION (rendering contract): never enumerate inside a sentence — no "(1) … (2) …", \
 "1) … 2)", "(a) … (b)", and never three or more parallel parts chained with semicolons. Three or \
 more parallel parts are a Markdown list: a one-line stem ending in ":" then one "- " item per part, \
-each on its own line. One paragraph = one point (≤ 3 sentences), with a blank line between \
-paragraphs; a "Basis:" line is its own paragraph, sources separated by " · ". An item has at most \
-ONE em-dash; a second clause becomes its own item.
+each on its own line. One paragraph = one point, with a blank line between paragraphs — a long \
+paragraph is split, never trimmed; a "Basis:" line is its own paragraph, sources separated by " · ". \
+An item has at most ONE em-dash; a second clause becomes its own item (nothing is dropped). These \
+rules shape layout only and never decide what to include.
 """

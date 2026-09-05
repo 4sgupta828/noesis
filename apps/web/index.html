@@ -1679,7 +1679,7 @@
     <button type="button" class="sback" id="cbback">← Back</button>
     <span class="stitle">⊞ Case Board</span>
     <span class="ppsub" id="cbsub">Landmark cases · known correct decision · clinician-reviewed</span>
-    <span class="cbgen"><button type="button" class="histbtn" id="cbgen" title="Generate Noesis answers for cases that don't have one yet">▷ Generate answers</button><span class="cbgenmsg" id="cbgenmsg"></span></span>
+    <span class="cbgen" id="cbgenwrap" hidden><button type="button" class="histbtn" id="cbgen" title="Generate Noesis answers for cases that don't have one yet">▷ Generate answers</button><span class="cbgenmsg" id="cbgenmsg"></span></span>
   </div>
   <div class="ssearchrow">
     <span class="cbera" id="cbera">
@@ -5913,6 +5913,7 @@ let CASES_DATA = null, CB_ERA = "recent";      // Case Board opens on Recent
 function _clusterLabel(key){ return ((CASES_DATA&&CASES_DATA.clusters)||[]).find(c=>c.key===key)?.label || key; }
 function closeCaseBoard(){ const cb=$("#caseboard"); if(cb) cb.hidden = true; document.body.style.overflow = ""; if(location.hash==="#cases") history.replaceState(null,"",location.pathname); }
 async function openCaseBoard(){
+  syncCaseGenVisibility();
   const cb = $("#caseboard"); if(!cb) return;
   try{ closeSessions(); }catch(e){} try{ closePulsePage(); }catch(e){} try{ closeTermsPage(); }catch(e){}
   cb.hidden = false; document.body.style.overflow = "hidden";
@@ -5988,7 +5989,8 @@ async function generateCaseAnswers(){
   btn.dataset.busy = "1"; btn.disabled = true;
   if(msg) msg.textContent = "Starting…";
   try{
-    const r = await fetch("/cases/generate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({case_ids: need})});
+    const r = await fetch("/cases/generate",{method:"POST",headers:{"content-type":"application/json","x-admin-password": sessionStorage.getItem("noesis_apw") || ""},body:JSON.stringify({case_ids: need})});
+    if(r.status === 401){ if(msg) msg.textContent = "Admin only — unlock ⚙ settings first."; btn.disabled = false; return; }
     if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
     const {started} = await r.json();
     // poll status; refresh the list as answers land
@@ -6868,6 +6870,9 @@ $("#termsbtn").addEventListener("click", ()=>openTermsPage());
 $("#casesbtn").addEventListener("click", openCaseBoard);
 $("#cbback").addEventListener("click", closeCaseBoard);
 $("#cbgen").addEventListener("click", generateCaseAnswers);
+// generation is admin-only: the control appears only once ⚙ settings has been unlocked in this tab
+function syncCaseGenVisibility(){ const w = $("#cbgenwrap"); if(w) w.hidden = !sessionStorage.getItem("noesis_apw"); }
+syncCaseGenVisibility();
 { let _cbt; $("#cbsearch").addEventListener("input", ()=>{ clearTimeout(_cbt); _cbt=setTimeout(loadCasesList, 200); }); }
 $("#cbera").querySelectorAll(".cbtab").forEach(b=>b.addEventListener("click", ()=>{
   CB_ERA = b.dataset.era;

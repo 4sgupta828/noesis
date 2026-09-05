@@ -2501,11 +2501,13 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         return {"eval_id": eid, "ok": True}
 
     @app.post("/cases/generate")
-    async def cases_generate(body: CaseGenerateIn) -> dict:
-        """Run noesis over the curated cases and store each answer (SPENDS credits). Gated only by the
-        feature flag (no admin token). Deferred by design — nothing generates until this is called."""
+    async def cases_generate(body: CaseGenerateIn, x_admin_password: str = Header(default="")) -> dict:
+        """Run noesis over the curated cases and store each answer (SPENDS credits). Admin-gated: the
+        Case Board is public (2026-09-05), so generation must not be triggerable by a visitor."""
         if not cases_enabled():
             raise HTTPException(status_code=404, detail="historical cases not enabled")
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="admin password required to generate case answers")
         from api.historical_cases import all_cases, get_case
         store = _cases()
         if store is None:

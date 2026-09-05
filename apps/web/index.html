@@ -476,48 +476,51 @@
   /* mission — the resting state */
   .about{max-width:40rem;margin:2.1rem auto 0;text-align:center;}
   .about-mission{font-family:var(--serif);font-size:1.05rem;line-height:1.5;color:var(--ink);margin:.9rem auto 0;max-width:30rem;}
-  /* The bedside scene: a clinician with a patient, a question over their head, an answer card that
-     fills in within seconds (a clock hand makes one sweep), and the question becoming a decision —
-     Noesis's job in one loop. Self-contained SVG+CSS on a 6s cycle; theme colors via vars. */
-  .bedside{display:block;width:100%;max-width:340px;margin:1.6rem auto 0;overflow:visible;}
+  /* The bedside scene: a clinician with a patient and a glowing assistant at their shoulder. Evidence
+     streams in and is absorbed; a bright answer card lands with a green check and a small burst; the
+     clinician lights up and the patient's trace steadies. Self-contained SVG+CSS, 6s cycle, always in
+     motion (the assistant breathes, the trace runs); theme colors via vars. */
+  .bedside{display:block;width:100%;max-width:360px;margin:1.6rem auto 0;overflow:visible;}
   .bedside .bs-bed{fill:var(--panel2);stroke:var(--hair);stroke-width:1;}
   .bedside .bs-pillow{fill:var(--panel);stroke:var(--hair);stroke-width:1;}
-  .bedside .bs-ph{fill:var(--muted);opacity:.55;}
-  .bedside .bs-blanket{fill:var(--muted);opacity:.22;}
-  .bedside .bs-dr circle,.bedside .bs-dr path{fill:var(--muted);opacity:.6;}
-  .bedside .bs-dr .bs-steth{fill:none;stroke:var(--panel);stroke-width:1.4;stroke-linecap:round;opacity:.9;}
+  .bedside .bs-ph{fill:var(--muted);opacity:.6;}
+  .bedside .bs-blanket{fill:var(--gold);opacity:.22;}
+  .bedside .bs-ecg{fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;opacity:.55;
+    stroke-dasharray:60 40;animation:bsEcg 1.4s linear infinite;}
+  .bedside .bs-ecg-on{stroke:var(--verified);opacity:0;animation:bsEcg 1.4s linear infinite, bsOn 6s ease-in-out infinite;}
+  .bedside .bs-dr circle,.bedside .bs-dr path{fill:var(--muted);opacity:.65;}
+  .bedside .bs-dr .bs-steth{fill:none;stroke:var(--panel);stroke-width:1.5;stroke-linecap:round;opacity:.95;}
   .bedside .bs-dr-on circle,.bedside .bs-dr-on path{fill:var(--gold);opacity:1;}
-  .bedside .bs-dr-on{opacity:0;animation:bsDr 6s ease-in-out infinite;}
-  .bedside .bs-q circle{fill:var(--panel);stroke:var(--muted);stroke-width:1.2;}
-  .bedside .bs-q text{fill:var(--ink);font-family:var(--sans);font-size:11px;font-weight:700;}
-  .bedside .bs-q{opacity:0;transform-box:fill-box;transform-origin:center;animation:bsQ 6s ease-in-out infinite;}
-  .bedside .bs-a circle{fill:var(--verified);stroke:none;}
-  .bedside .bs-a path{fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-  .bedside .bs-a{opacity:0;transform-box:fill-box;transform-origin:center;animation:bsA 6s ease-in-out infinite;}
-  .bedside .bs-link{fill:none;stroke:var(--gold);stroke-width:1.5;stroke-linecap:round;stroke-dasharray:3 4;opacity:0;animation:bsLink 6s ease-in-out infinite;}
-  .bedside .bs-card{opacity:0;animation:bsCard 6s ease-in-out infinite;}
-  .bedside .bs-cardbg{fill:var(--panel);stroke:var(--hair);stroke-width:1;}
-  .bedside .bs-clockf{fill:none;stroke:var(--muted);stroke-width:1.2;opacity:.7;}
-  .bedside .bs-hand{stroke:var(--gold);stroke-width:1.6;stroke-linecap:round;transform-box:view-box;transform-origin:316px 28px;animation:bsHand 6s cubic-bezier(.4,0,.2,1) infinite;}
-  .bedside .bs-l{fill:var(--muted);opacity:.35;transform-box:fill-box;transform-origin:left center;transform:scaleX(0);}
-  .bedside .bs-l0{fill:var(--gold);opacity:.9;animation:bsL0 6s ease-out infinite;}
-  .bedside .bs-l1{animation:bsL1 6s ease-out infinite;} .bedside .bs-l2{animation:bsL2 6s ease-out infinite;} .bedside .bs-l3{animation:bsL3 6s ease-out infinite;}
-  .bedside .bs-ok circle{fill:var(--verified);} .bedside .bs-ok path{fill:none;stroke:#fff;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
-  .bedside .bs-ok{opacity:0;transform-box:fill-box;transform-origin:center;animation:bsOk 6s ease-in-out infinite;}
-  @keyframes bsQ{0%{opacity:0;transform:scale(.5)}4%{opacity:1;transform:scale(1.2)}7%{transform:scale(1)}56%{opacity:1}60%,100%{opacity:0}}
-  @keyframes bsLink{0%,8%{opacity:0}10%{opacity:.85}56%{opacity:.85}62%,100%{opacity:0}}
-  @keyframes bsCard{0%,10%{opacity:0;transform:translateX(12px)}20%{opacity:1;transform:translateX(0)}90%{opacity:1;transform:translateX(0)}96%,100%{opacity:0;transform:translateX(0)}}
-  @keyframes bsHand{0%,20%{transform:rotate(0deg)}52%{transform:rotate(360deg)}100%{transform:rotate(360deg)}}
-  @keyframes bsL0{0%,22%{transform:scaleX(0)}32%{transform:scaleX(1)}100%{transform:scaleX(1)}}
-  @keyframes bsL1{0%,30%{transform:scaleX(0)}40%{transform:scaleX(1)}100%{transform:scaleX(1)}}
-  @keyframes bsL2{0%,38%{transform:scaleX(0)}48%{transform:scaleX(1)}100%{transform:scaleX(1)}}
-  @keyframes bsL3{0%,54%{transform:scaleX(0)}62%{transform:scaleX(1)}100%{transform:scaleX(1)}}
-  @keyframes bsOk{0%,52%{opacity:0;transform:scale(.5)}56%{opacity:1;transform:scale(1.25)}59%{transform:scale(1)}100%{opacity:1}}
-  @keyframes bsA{0%,58%{opacity:0;transform:scale(.5)}62%{opacity:1;transform:scale(1.2)}65%{transform:scale(1)}90%{opacity:1}96%,100%{opacity:0}}
-  @keyframes bsDr{0%,60%{opacity:0}66%{opacity:1}90%{opacity:1}96%,100%{opacity:0}}
+  .bedside .bs-dr-on{opacity:0;animation:bsOn 6s ease-in-out infinite;}
+  .bedside .bs-orb{animation:bsBob 2.6s ease-in-out infinite alternate;}
+  .bedside .bs-orb-glow{fill:var(--gold);opacity:.16;transform-box:fill-box;transform-origin:center;animation:bsBreathe 1.8s ease-in-out infinite alternate, bsGlowUp 6s ease-in-out infinite;}
+  .bedside .bs-orb-star{fill:var(--gold);opacity:.9;transform-box:fill-box;transform-origin:center;animation:bsSpin 9s linear infinite;}
+  .bedside .bs-orb-core{fill:#fff;opacity:.95;}
+  .bedside .bs-chip rect{fill:var(--panel);stroke:var(--gold);stroke-width:1.2;}
+  .bedside .bs-chip text{fill:var(--gold);font-family:var(--mono);font-size:6.5px;font-weight:700;letter-spacing:.08em;}
+  .bedside .bs-chip{opacity:0;}
+  .bedside .bs-ch0{animation:bsCh0 6s ease-in-out infinite;} .bedside .bs-ch1{animation:bsCh1 6s ease-in-out infinite;} .bedside .bs-ch2{animation:bsCh2 6s ease-in-out infinite;}
+  .bedside .bs-card{opacity:0;transform-box:fill-box;transform-origin:center;animation:bsCard 6s ease-in-out infinite;}
+  .bedside .bs-cardbg{fill:var(--panel);stroke:var(--gold);stroke-width:1.2;}
+  .bedside .bs-okc{fill:var(--verified);} .bedside .bs-okp{fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .bedside .bs-l0{fill:var(--gold);} .bedside .bs-l1,.bedside .bs-l2{fill:var(--muted);opacity:.4;}
+  .bedside .bs-spark line{stroke:var(--gold);stroke-width:2;stroke-linecap:round;}
+  .bedside .bs-spark{opacity:0;transform-box:fill-box;transform-origin:center;animation:bsSpark 6s ease-out infinite;}
+  @keyframes bsEcg{to{stroke-dashoffset:-100;}}
+  @keyframes bsOn{0%,54%{opacity:0}60%{opacity:1}92%{opacity:1}98%,100%{opacity:0}}
+  @keyframes bsBob{from{transform:translateY(-2px)}to{transform:translateY(2px)}}
+  @keyframes bsBreathe{from{transform:scale(1)}to{transform:scale(1.3)}}
+  @keyframes bsGlowUp{0%,44%{opacity:.16}52%{opacity:.5}60%{opacity:.16}100%{opacity:.16}}
+  @keyframes bsSpin{to{transform:rotate(360deg)}}
+  /* chips: fly from the right to the assistant (152,40) and shrink into it; staggered */
+  @keyframes bsCh0{0%{opacity:0;transform:translate(292px,14px) scale(1)}4%{opacity:1}26%{opacity:1;transform:translate(160px,36px) scale(.9)}32%,100%{opacity:0;transform:translate(152px,40px) scale(.2)}}
+  @keyframes bsCh1{0%,12%{opacity:0;transform:translate(300px,54px) scale(1)}16%{opacity:1}38%{opacity:1;transform:translate(160px,42px) scale(.9)}44%,100%{opacity:0;transform:translate(152px,40px) scale(.2)}}
+  @keyframes bsCh2{0%,24%{opacity:0;transform:translate(292px,94px) scale(1)}28%{opacity:1}50%{opacity:1;transform:translate(160px,46px) scale(.9)}56%,100%{opacity:0;transform:translate(152px,40px) scale(.2)}}
+  @keyframes bsCard{0%,54%{opacity:0;transform:scale(.6)}59%{opacity:1;transform:scale(1.08)}63%{transform:scale(1)}92%{opacity:1;transform:scale(1)}98%,100%{opacity:0;transform:scale(1)}}
+  @keyframes bsSpark{0%,56%{opacity:0;transform:scale(.4)}60%{opacity:1;transform:scale(1)}74%,100%{opacity:0;transform:scale(1.7)}}
   @media (prefers-reduced-motion: reduce){   /* accessibility: freeze to the decided scene */
-    .bedside .bs-q,.bedside .bs-a,.bedside .bs-link,.bedside .bs-card,.bedside .bs-hand,.bedside .bs-l,.bedside .bs-ok,.bedside .bs-dr-on{animation:none;}
-    .bedside .bs-a,.bedside .bs-card,.bedside .bs-ok,.bedside .bs-dr-on{opacity:1;} .bedside .bs-l{transform:scaleX(1);}}
+    .bedside *{animation:none !important;}
+    .bedside .bs-card,.bedside .bs-dr-on,.bedside .bs-ecg-on{opacity:1;} .bedside .bs-chip,.bedside .bs-spark{opacity:0;}}
   @media (max-width:560px){ .about{margin-top:1.4rem;} .about-mission{font-size:.98rem;} }
   .motto{display:flex;align-items:flex-start;justify-content:center;gap:1.2rem;flex-wrap:wrap;
     margin-top:2.6rem;font-family:var(--mono);font-size:.72rem;letter-spacing:.3em;
@@ -1817,32 +1820,42 @@
 
   <section id="out" aria-live="polite">
     <div class="about" id="about">
-      <svg class="bedside" viewBox="0 0 340 100" role="img" aria-label="At the bedside, a clinician's question about the patient becomes a clear decision in seconds">
-        <!-- the patient, resting -->
-        <rect class="bs-bed" x="12" y="66" width="70" height="16" rx="5"/>
-        <rect class="bs-pillow" x="16" y="58" width="18" height="9" rx="3"/>
-        <circle class="bs-ph" cx="25" cy="55" r="5.5"/>
-        <path class="bs-blanket" d="M36 66 h42 v9 h-42 z"/>
+      <svg class="bedside" viewBox="0 0 340 112" role="img" aria-label="A clinician at the bedside with a glowing assistant: evidence streams in, an answer with a green check appears, and the patient's trace steadies">
+        <!-- the patient, resting; a vitals trace runs above the bed -->
+        <rect class="bs-bed" x="10" y="80" width="76" height="16" rx="5"/>
+        <rect class="bs-pillow" x="14" y="72" width="18" height="9" rx="3"/>
+        <circle class="bs-ph" cx="23" cy="69" r="5.5"/>
+        <path class="bs-blanket" d="M34 80 h48 v9 h-48 z"/>
+        <path class="bs-ecg" d="M12 60 h12 l4 -9 l5 18 l4 -9 h12 l4 -7 l5 14 l4 -7 h24"/>
+        <path class="bs-ecg bs-ecg-on" d="M12 60 h12 l4 -9 l5 18 l4 -9 h12 l4 -7 l5 14 l4 -7 h24"/>
         <!-- the clinician at the bedside -->
-        <g class="bs-dr"><circle cx="106" cy="38" r="8"/><path d="M92 66 a14 15 0 0 1 28 0 z"/><path class="bs-steth" d="M100 50 q6 12 12 0 M112 50 v6 a3 3 0 1 0 0.1 0"/></g>
-        <g class="bs-dr bs-dr-on"><circle cx="106" cy="38" r="8"/><path d="M92 66 a14 15 0 0 1 28 0 z"/><path class="bs-steth" d="M100 50 q6 12 12 0 M112 50 v6 a3 3 0 1 0 0.1 0"/></g>
-        <!-- the question, then the decision, over the clinician -->
-        <g class="bs-q"><circle cx="128" cy="18" r="9"/><circle cx="119" cy="27" r="2"/><text x="128" y="21.5" text-anchor="middle">?</text></g>
-        <g class="bs-a"><circle cx="128" cy="18" r="9"/><circle cx="119" cy="27" r="2"/><path d="M123.5 18.5 l3 3 l6 -6.5"/></g>
-        <!-- the question travels to Noesis -->
-        <path class="bs-link" d="M138 18 C 160 18, 168 30, 184 30"/>
-        <!-- the answer card: bottom line, do now, do if — filled in within seconds -->
+        <g class="bs-dr"><circle cx="112" cy="50" r="9"/><path d="M96 80 a16 17 0 0 1 32 0 z"/><path class="bs-steth" d="M105 63 q7 13 14 0 M119 63 v6 a3 3 0 1 0 0.1 0"/></g>
+        <g class="bs-dr bs-dr-on"><circle cx="112" cy="50" r="9"/><path d="M96 80 a16 17 0 0 1 32 0 z"/><path class="bs-steth" d="M105 63 q7 13 14 0 M119 63 v6 a3 3 0 1 0 0.1 0"/></g>
+        <!-- the assistant: a glowing spark at the clinician's shoulder, always alive -->
+        <g class="bs-orb">
+          <circle class="bs-orb-glow" cx="152" cy="40" r="13"/>
+          <path class="bs-orb-star" d="M152 29 l2.6 8.4 l8.4 2.6 l-8.4 2.6 l-2.6 8.4 l-2.6 -8.4 l-8.4 -2.6 l8.4 -2.6 z"/>
+          <circle class="bs-orb-core" cx="152" cy="40" r="4"/>
+        </g>
+        <!-- evidence streaming in from the right and absorbed by the assistant -->
+        <g class="bs-chip bs-ch0" transform="translate(292 14)"><rect x="-24" y="-7" width="48" height="14" rx="7"/><text x="0" y="3" text-anchor="middle">GUIDELINE</text></g>
+        <g class="bs-chip bs-ch1" transform="translate(300 54)"><rect x="-18" y="-7" width="36" height="14" rx="7"/><text x="0" y="3" text-anchor="middle">TRIAL</text></g>
+        <g class="bs-chip bs-ch2" transform="translate(292 94)"><rect x="-18" y="-7" width="36" height="14" rx="7"/><text x="0" y="3" text-anchor="middle">LABEL</text></g>
+        <!-- the answer: a bright card with a green check, handed to the clinician -->
         <g class="bs-card">
-          <rect class="bs-cardbg" x="184" y="16" width="144" height="70" rx="7"/>
-          <g class="bs-clock"><circle class="bs-clockf" cx="316" cy="28" r="5.5"/><line class="bs-hand" x1="316" y1="28" x2="316" y2="24"/></g>
-          <rect class="bs-l bs-l0" x="194" y="27" width="70" height="6" rx="3"/>
-          <rect class="bs-l bs-l1" x="194" y="45" width="112" height="5" rx="2.5"/>
-          <rect class="bs-l bs-l2" x="194" y="59" width="96" height="5" rx="2.5"/>
-          <g class="bs-ok"><circle cx="203" cy="76" r="5"/><path d="M200.3 76.2 l2 2 l3.8 -4.2"/></g>
-          <rect class="bs-l bs-l3" x="213" y="73.5" width="60" height="5" rx="2.5"/>
+          <rect class="bs-cardbg" x="168" y="58" width="112" height="40" rx="8"/>
+          <circle class="bs-okc" cx="183" cy="78" r="7"/><path class="bs-okp" d="M179.3 78.3 l2.6 2.6 l5 -5.6"/>
+          <rect class="bs-l0" x="196" y="68" width="66" height="6" rx="3"/>
+          <rect class="bs-l1" x="196" y="80" width="50" height="5" rx="2.5"/>
+          <rect class="bs-l2" x="250" y="80" width="20" height="5" rx="2.5"/>
+        </g>
+        <!-- a small burst when the answer lands -->
+        <g class="bs-spark">
+          <line x1="224" y1="44" x2="224" y2="36"/><line x1="240" y1="48" x2="246" y2="42"/><line x1="208" y1="48" x2="202" y2="42"/>
+          <line x1="248" y1="60" x2="256" y2="58"/><line x1="200" y1="60" x2="192" y2="58"/><line x1="224" y1="106" x2="224" y2="112"/>
         </g>
       </svg>
-      <p class="about-mission">Better, faster, more accurate decisions — for the patient in front of you.</p>
+      <p class="about-mission">A super-assistant at the bedside — better information, better decisions, faster.</p>
     </div>
   </section>
   <!-- Specialist Panel body — lives in the SAME shell as Q&A (shared header + heading + mode switch +

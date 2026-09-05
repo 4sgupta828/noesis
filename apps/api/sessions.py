@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS noesis_research_session (
 );
 -- additive columns for pre-existing tables (expand-only; safe to re-run)
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS user_name  TEXT;
+-- OWNER (accounts): sessions are PRIVATE per account — listed/opened/appended/deleted only by the
+-- account that created them. NULL = created without a signed-in user (legacy / anonymous).
+ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS user_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_nrs_user ON noesis_research_session (user_id, created_at DESC);
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS user_email TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS visual_observation TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb;
@@ -99,7 +103,8 @@ class SessionStore:
                    diagnostics: dict | None = None,
                    question_contract: dict | None = None,
                    kind: str = "research",
-                   extra: dict | None = None) -> str:
+                   extra: dict | None = None,
+                   user_id: str | None = None) -> str:
         await self._ensure()
         sid = uuid.uuid4().hex
         # turn 0 also lives in `thread` so a conversation is one shareable row; the flat columns
@@ -135,19 +140,20 @@ class SessionStore:
                 """INSERT INTO noesis_research_session
                    (id, vertical, tenant_id, workspace_id, question, answer, grounded, claims,
                     source_stats, coverage_gaps, rejected, sources, user_name, user_email,
-                    visual_observation, attachments, thread, audience)
+                    visual_observation, attachments, thread, audience, user_id)
                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12::jsonb,
-                           $13,$14,$15,$16::jsonb,$17::jsonb,$18)""",
+                           $13,$14,$15,$16::jsonb,$17::jsonb,$18,$19)""",
                 sid, self._vertical, tenant_id, workspace_id, question, answer, grounded,
                 json.dumps(claims), json.dumps(source_stats), json.dumps(coverage_gaps),
                 rejected, json.dumps(sources or []),
                 (user_name or None), (user_email or None),
                 (visual_observation or None), json.dumps(attachments or []),
-                json.dumps([turn0]), (audience or "clinician"),
+                json.dumps([turn0]), (audience or "clinician"), (user_id or None),
             )
         return sid
 
-    async def append_turn(self, session_id: str, turn: dict, *, audience: str = "clinician") -> bool:
+    async def append_turn(self, session_id: str, turn: dict, *, audience: str = "clinician",
+                          user_id: str | None = None) -> bool:
         """Append a follow-up turn to a conversation thread (in place). Returns True if it matched.
 
         AUDIENCE-GUARDED: only appends when the session's audience matches `audience`. A mismatch
@@ -158,8 +164,9 @@ class SessionStore:
         async with pool.acquire() as conn:
             res = await conn.execute(
                 "UPDATE noesis_research_session SET thread = thread || $3::jsonb "
-                "WHERE id=$1 AND vertical=$2 AND NOT deleted AND audience=$4",
-                session_id, self._vertical, json.dumps([turn]), (audience or "clinician"))
+                "WHERE id=$1 AND vertical=$2 AND NOT deleted AND audience=$4 "
+                "AND user_id IS NOT DISTINCT FROM $5",      # OWNER-guarded: only the creator's account
+                session_id, self._vertical, json.dumps([turn]), (audience or "clinician"), user_id)
         return res.endswith("1")
 
     async def save_layman(self, session_id: str, text: str) -> bool:
@@ -206,13 +213,30 @@ class SessionStore:
     async def save_turn_terms(self, session_id: str, turn_index: int, terms: list[dict]) -> bool:
         return await self.save_turn_artifact(session_id, turn_index, "terms", terms)
 
-    async def soft_delete(self, session_id: str) -> bool:
+    async def claim_by_email(self, *, user_id: str, email: str) -> int:
+        """Adopt pre-accounts sessions the asker saved under this email (no owner yet) into the
+        account — one-time, idempotent; best-effort like everything here."""
+        await self._ensure()
+        if not (user_id and email):
+            return 0
+        async with (await self._get_pool()).acquire() as conn:
+            res = await conn.execute(
+                "UPDATE noesis_research_session SET user_id=$1 "
+                "WHERE vertical=$2 AND user_id IS NULL AND lower(user_email)=$3",
+                user_id, self._vertical, email.lower().strip())
+        try:
+            return int(res.split()[-1])
+        except ValueError:
+            return 0
+
+    async def soft_delete(self, session_id: str, *, user_id: str | None = None) -> bool:
         await self._ensure()
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             res = await conn.execute(
-                "UPDATE noesis_research_session SET deleted=TRUE WHERE id=$1 AND vertical=$2",
-                session_id, self._vertical)
+                "UPDATE noesis_research_session SET deleted=TRUE WHERE id=$1 AND vertical=$2 "
+                "AND user_id IS NOT DISTINCT FROM $3",
+                session_id, self._vertical, user_id)
         return res.endswith("1")
 
     async def attach_video(self, session_id: str, *, filename: str, title: str,
@@ -229,12 +253,15 @@ class SessionStore:
 
     async def list(self, *, tenant_id: str, limit: int = 50,
                    q: str | None = None, audience: str | None = None,
-                   kind: str | None = None) -> list[dict[str, Any]]:
+                   kind: str | None = None, user_id: str | None = None) -> list[dict[str, Any]]:
         await self._ensure()
         pool = await self._get_pool()
         # optional full-text-ish search over the question + asker (name/email)
         where = "vertical=$1 AND tenant_id=$2 AND NOT deleted"
         params: list[Any] = [self._vertical, tenant_id]
+        if user_id:
+            params.append(user_id)
+            where += f" AND user_id=${len(params)}"      # PRIVATE: only this account's sessions
         if q and q.strip():
             params.append(f"%{q.strip()}%")
             where += (f" AND (question ILIKE ${len(params)} OR user_name ILIKE ${len(params)}"
@@ -267,8 +294,9 @@ class SessionStore:
             "created_at": r["created_at"].isoformat(),
         } for r in rows]
 
-    async def list_videos(self, *, tenant_id: str, limit: int = 200) -> list[dict[str, Any]]:
-        """All sessions that have a briefing video (for the video catalogue)."""
+    async def list_videos(self, *, tenant_id: str, limit: int = 200,
+                          user_id: str | None = None) -> list[dict[str, Any]]:
+        """All sessions that have a briefing video (for the video catalogue) — the caller's own."""
         await self._ensure()
         pool = await self._get_pool()
         async with pool.acquire() as conn:
@@ -277,8 +305,9 @@ class SessionStore:
                           user_name, user_email, created_at
                    FROM noesis_research_session
                    WHERE vertical=$1 AND tenant_id=$2 AND NOT deleted AND video_filename IS NOT NULL
+                     AND user_id IS NOT DISTINCT FROM $4
                    ORDER BY created_at DESC LIMIT $3""",
-                self._vertical, tenant_id, limit)
+                self._vertical, tenant_id, limit, user_id)
         return [{
             "id": r["id"], "question": r["question"],
             "video_filename": r["video_filename"], "video_title": r["video_title"],
@@ -370,6 +399,7 @@ class SessionStore:
             return json.loads(v) if isinstance(v, str) else v
         return {
             "id": r["id"], "tenant_id": r["tenant_id"], "workspace_id": r["workspace_id"],
+            "user_id": r["user_id"],
             "question": r["question"], "answer": r["answer"], "grounded": r["grounded"],
             "claims": _j(r["claims"], []), "source_stats": _j(r["source_stats"], {}),
             "coverage_gaps": _j(r["coverage_gaps"], []), "rejected": r["rejected"],

@@ -1084,10 +1084,16 @@ class TriageIn(BaseModel):
 class RegisterIn(BaseModel):
     name: str
     email: str
+    password: str = ""              # required when accounts are on (PBKDF2 server-side; never logged)
     profession: str = ""            # self-declared (Physician / NP-PA / Pharmacist / Student / …)
     country: str = ""
     npi: str = ""                   # optional (US) — structurally verified against the CMS registry
     disclaimer_ack: bool = False    # the attestation from the identity gate
+
+
+class LoginIn(BaseModel):
+    email: str
+    password: str
 
 
 class SettingIn(BaseModel):
@@ -1898,7 +1904,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         return images, docs, pdfs, session_previews(
             images or [], (docs or []) + [{"name": x.get("name")} for x in (pdfs or [])])
 
-    async def _persist_panel(body, r) -> str | None:
+    async def _persist_panel(body, r, token: str = "") -> str | None:
         """Best-effort persist of a panel turn as a SHAREABLE session (mirrors _do_research). A follow-up
         (session_id present) appends to the same thread; else a new row is created. kind='panel' so the
         reopen path renders the case conference. Never breaks the response."""
@@ -1913,11 +1919,15 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 "confidence": r.confidence, "reasoning_purpose": r.reasoning_purpose,
                 "reasoning_conclusion": r.reasoning_conclusion,
                 "coverage_gaps": payload["coverage_gaps"]}
+        _owner = await _user_from_token(token)
         try:
-            if body.session_id and await store.append_turn(body.session_id, turn):
+            if body.session_id and await store.append_turn(body.session_id, turn,
+                                                            user_id=(_owner or {}).get("id")):
                 return body.session_id
             return await store.save(
                 tenant_id=body.tenant_id, workspace_id=body.workspace_id,
+                user_id=(_owner or {}).get("id"),
+                user_name=(_owner or {}).get("name"), user_email=(_owner or {}).get("email"),
                 question=r.question, answer=r.synthesis, grounded=bool(pooled),
                 claims=pooled, source_stats={}, coverage_gaps=payload["coverage_gaps"],
                 rejected=0, sources=body.sources,
@@ -1928,7 +1938,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             return None
 
     @app.post("/panel/ask")
-    async def panel_ask(body: PanelIn) -> dict:
+    async def panel_ask(body: PanelIn, x_noesis_token: str = Header(default="")) -> dict:
         """Ask-Panel (Alpha): convene the selected AI specialists (or the default set) — each runs its
         own grounded, lens-scoped research — and return each specialist's take + the synthesized panel.
         NOTE: a full panel runs for several minutes; browsers should use /panel/ask/stream, which keeps
@@ -1947,11 +1957,11 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=503, detail="No model available in replay mode.") from e
         except Exception as e:   # noqa: BLE001
             raise HTTPException(status_code=502, detail=f"provider error: {e}") from e
-        sid = await _persist_panel(body, r)
+        sid = await _persist_panel(body, r, token=x_noesis_token)
         return _panel_payload(r, session_id=sid or body.session_id)
 
     @app.post("/panel/ask/stream")
-    async def panel_ask_stream(body: PanelIn):
+    async def panel_ask_stream(body: PanelIn, x_noesis_token: str = Header(default="")):
         """Live SSE for a panel run: emits specialist_start / specialist_done progress as each lens runs,
         then a `final` event carrying the full panel payload. The keepalive `: ping` comments keep the
         edge proxy from cutting the (multi-minute) connection — the fix for the plain-POST 502."""
@@ -1976,7 +1986,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                     specialist_ids=body.specialists or None, source_keys=body.sources,
                     history=body.history, rationales=body.rationales,
                     images=images, documents=docs, pdf_docs=pdfs, on_event=on_event)
-                sid = await _persist_panel(body, r)
+                sid = await _persist_panel(body, r, token=x_noesis_token)
                 _sse_push(run, {"type": "final", "result": _panel_payload(r, session_id=sid or body.session_id)})
             except CassetteMiss:
                 _sse_push(run, {"type": "error", "detail": "No model available in replay mode."})
@@ -1996,9 +2006,22 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         return StreamingResponse(gen(), media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
 
+    async def _user_from_token(token: str) -> dict | None:
+        """Token → account (None when accounts are off, no store, or the token is unknown). Never raises."""
+        if not token or not accounts_enabled():
+            return None
+        store = _accounts()
+        if store is None:
+            return None
+        try:
+            return await store.user_by_token(token)
+        except Exception:   # noqa: BLE001
+            return None
+
     async def _do_research(body: ResearchIn, on_event=None, token: str = "") -> ResearchOut:
         """Shared research core: attachments → ask (optional live on_event) → persist → ResearchOut.
         Raises CassetteMiss / provider errors for the caller to handle."""
+        _owner = await _user_from_token(token)    # sessions are PRIVATE per account (owner stamped on save)
         if app.state.service is None:
             app.state.service = build_default_service()
         images, docs, pdfs, attach_notes, previews = None, None, None, [], []
@@ -2151,7 +2174,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                 # Audience-guarded append: only continue a thread whose audience MATCHES this turn's
                 # (mid-thread toggle → mismatch → save a fresh session instead of corrupting the thread).
                 if conversation_enabled() and body.session_id and \
-                        await store.append_turn(body.session_id, turn, audience=audience):
+                        await store.append_turn(body.session_id, turn, audience=audience,
+                                                user_id=(_owner or {}).get("id")):
                     session_id = body.session_id
                 else:
                     session_id = await store.save(
@@ -2160,7 +2184,9 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                         grounded=res.grounded, claims=claim_dicts,
                         source_stats=res.source_stats, coverage_gaps=res.coverage_gaps,
                         rejected=len(res.rejected_claims), sources=body.sources,
-                        user_name=body.user_name, user_email=body.user_email,
+                        user_id=(_owner or {}).get("id"),
+                        user_name=((_owner or {}).get("name") or body.user_name),
+                        user_email=((_owner or {}).get("email") or body.user_email),
                         visual_observation=res.visual_observation, attachments=previews,
                         audience=audience,
                         charts=(res.charts if answer_charts_enabled() else None),
@@ -3598,18 +3624,72 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail="invalid email")
         if len((body.name or "").strip()) < 2:
             raise HTTPException(status_code=400, detail="name required")
+        # Register requires a password and REJECTS an email that already has an account: the store's
+        # upsert-on-email would otherwise let anyone re-claim an existing account by email without
+        # proving the password (account takeover). Returning users sign in.
+        if not (body.password or ""):
+            raise HTTPException(status_code=400, detail="password required")
+        if await store.email_exists(body.email):
+            raise HTTPException(status_code=409,
+                                detail="an account with that email already exists — please sign in")
         npi_ok = False
         if body.npi.strip():
             from api.accounts import verify_npi
             npi_ok = await verify_npi(body.npi)
+        from api.accounts import hash_password
+        pw_hash, pw_salt = hash_password(body.password)
         try:
             user, token = await store.register(
                 email=body.email, name=body.name, profession=body.profession[:80],
                 country=body.country[:40], npi=body.npi.strip()[:16], npi_verified=npi_ok,
-                disclaimer_ack=body.disclaimer_ack)
+                disclaimer_ack=body.disclaimer_ack, pw_hash=pw_hash, pw_salt=pw_salt)
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"registration failed: {e}") from e
+        await _claim_legacy_sessions(user)
         return {"user": user, "token": token}
+
+    async def _claim_legacy_sessions(user: dict) -> None:
+        """Adopt pre-accounts sessions saved under this email into the account (best-effort)."""
+        st = _store()
+        if st is None or not user:
+            return
+        try:
+            await st.claim_by_email(user_id=user["id"], email=user.get("email") or "")
+        except Exception:   # noqa: BLE001
+            pass
+
+    @app.post("/auth/login")
+    async def auth_login(body: LoginIn) -> dict:
+        """Sign in with email + password → a fresh per-device bearer token (stored by the FE)."""
+        if not accounts_enabled():
+            raise HTTPException(status_code=404, detail="accounts are not enabled")
+        store = _accounts()
+        if store is None:
+            raise HTTPException(status_code=503, detail="no account store configured")
+        try:
+            res = await store.login(email=body.email, password=body.password)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"login failed: {e}") from e
+        if res is None:
+            raise HTTPException(status_code=401, detail="incorrect email or password")
+        user, token = res
+        await _claim_legacy_sessions(user)
+        return {"user": user, "token": token}
+
+    @app.post("/auth/logout")
+    async def auth_logout(x_noesis_token: str = Header(default="")) -> dict:
+        if accounts_enabled():
+            store = _accounts()
+            if store is not None:
+                await store.logout(x_noesis_token)
+        return {"ok": True}
+
+    @app.get("/me")
+    async def me(x_noesis_token: str = Header(default="")) -> dict:
+        user = await _user_from_token(x_noesis_token)
+        if user is None:
+            raise HTTPException(status_code=401, detail="sign in first")
+        return {"user": user}
 
     @app.post("/feedback")
     async def post_feedback(body: FeedbackIn, x_noesis_token: str = Header(default="")) -> dict:
@@ -4083,29 +4163,45 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
 
     @app.get("/sessions")
     async def list_sessions(tenant_id: str = "demo", limit: int = 100, q: str = "",
-                            audience: str = "", kind: str = "") -> dict:
-        """Recent saved Q&A for this vertical + tenant (history), optional search `q`, an optional
-        `kind` filter ('panel'|'research') for the Past-Sessions tabs, and — when the patient-mode
-        flag is on — an optional audience filter ('clinician'|'patient')."""
+                            audience: str = "", kind: str = "",
+                            x_noesis_token: str = Header(default="")) -> dict:
+        """Recent saved Q&A (history), optional search `q`, an optional `kind` filter
+        ('panel'|'research') for the Past-Sessions tabs, and — when the patient-mode flag is on —
+        an optional audience filter. PRIVATE: with accounts on, only the signed-in account's own
+        sessions are listed (no token → empty list)."""
         store = _store()
         if store is None:
             return {"sessions": []}
+        owner = None
+        if accounts_enabled():
+            user = await _user_from_token(x_noesis_token)
+            if user is None:
+                return {"sessions": []}
+            owner = user["id"]
         aud = audience if (patient_mode_enabled() and audience in ("clinician", "patient")) else None
         knd = kind if kind in ("panel", "research") else None
         try:
             return {"sessions": await store.list(tenant_id=tenant_id, limit=min(limit, 300),
-                                                 q=q or None, audience=aud, kind=knd)}
+                                                 q=q or None, audience=aud, kind=knd,
+                                                 user_id=owner)}
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"session store error: {e}") from e
 
     @app.get("/videos")
-    async def list_videos(tenant_id: str = "demo", limit: int = 200) -> dict:
-        """All briefing videos across sessions (for the video catalogue)."""
+    async def list_videos(tenant_id: str = "demo", limit: int = 200,
+                          x_noesis_token: str = Header(default="")) -> dict:
+        """Briefing videos across the caller's OWN sessions (for the video catalogue)."""
         store = _store()
         if store is None:
             return {"videos": []}
+        owner = None
+        if accounts_enabled():
+            user = await _user_from_token(x_noesis_token)
+            if user is None:
+                return {"videos": []}
+            owner = user["id"]
         try:
-            vids = await store.list_videos(tenant_id=tenant_id, limit=min(limit, 300))
+            vids = await store.list_videos(tenant_id=tenant_id, limit=min(limit, 300), user_id=owner)
             # hide videos whose file is gone (local + R2 both missing)
             from api.video import video_exists
             vids = await asyncio.to_thread(
@@ -4115,23 +4211,32 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=502, detail=f"session store error: {e}") from e
 
     @app.get("/sessions/{session_id}")
-    async def get_session(session_id: str) -> dict:
-        """Full saved Q&A (answer, claims, and any linked video)."""
+    async def get_session(session_id: str, x_noesis_token: str = Header(default="")) -> dict:
+        """Full saved Q&A (answer, claims, and any linked video). A session that belongs to an
+        account opens only for that account; ownerless (pre-accounts / anonymous) sessions stay
+        reachable by link as before."""
         store = _store()
         if store is None:
             raise HTTPException(status_code=404, detail="no session store")
         row = await store.get(session_id)
         if row is None:
             raise HTTPException(status_code=404, detail="session not found")
+        owner = row.get("user_id")
+        if owner:
+            user = await _user_from_token(x_noesis_token)
+            if user is None or user["id"] != owner:
+                raise HTTPException(status_code=403, detail="this session belongs to another account")
         return row
 
     @app.delete("/sessions/{session_id}")
-    async def delete_session(session_id: str) -> dict:
-        """Soft-delete a session (hidden from list/get; row retained)."""
+    async def delete_session(session_id: str, x_noesis_token: str = Header(default="")) -> dict:
+        """Soft-delete a session (hidden from list/get; row retained). Owner-guarded: only the
+        account that created it (or anyone, for an ownerless legacy session)."""
         store = _store()
         if store is None:
             raise HTTPException(status_code=404, detail="no session store")
-        if not await store.soft_delete(session_id):
+        user = await _user_from_token(x_noesis_token)
+        if not await store.soft_delete(session_id, user_id=(user or {}).get("id")):
             raise HTTPException(status_code=404, detail="session not found")
         return {"deleted": True}
 

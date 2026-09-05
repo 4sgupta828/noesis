@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import hmac
 import secrets
 import urllib.parse
 import urllib.request
@@ -60,6 +61,10 @@ CREATE INDEX IF NOT EXISTS idx_nfb_vertical_created ON noesis_feedback (vertical
 -- PER-DEVICE TOKENS: multiple active tokens per user, so signing in on a second browser/device no
 -- longer orphans the first (the old single token_hash column rotated on every register). The legacy
 -- column keeps being written and checked as a FALLBACK so pre-existing sessions stay valid.
+-- PASSWORD auth (additive, nullable so pre-existing token-only users are untouched): PBKDF2-HMAC-
+-- SHA256, per-user salt, both stored as hex text. Verified constant-time; never logged.
+ALTER TABLE noesis_user ADD COLUMN IF NOT EXISTS pw_hash TEXT;
+ALTER TABLE noesis_user ADD COLUMN IF NOT EXISTS pw_salt TEXT;
 CREATE TABLE IF NOT EXISTS noesis_user_token (
     token_hash  TEXT PRIMARY KEY,
     user_id     TEXT NOT NULL,
@@ -83,6 +88,26 @@ _NPI_API = "https://npiregistry.cms.hhs.gov/api/?version=2.1&number="
 
 def _hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+_PBKDF2_ITER = 240_000
+
+
+def hash_password(password: str) -> tuple[str, str]:
+    """(pw_hash_hex, pw_salt_hex) via PBKDF2-HMAC-SHA256, 240k iters, 16-byte random salt."""
+    salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, _PBKDF2_ITER)
+    return dk.hex(), salt.hex()
+
+
+def verify_password(password: str, pw_hash_hex: str, pw_salt_hex: str) -> bool:
+    """Constant-time verify. Always runs the KDF (caller passes a dummy salt for unknown users)."""
+    try:
+        salt = bytes.fromhex(pw_salt_hex or "00" * 16)
+    except ValueError:
+        salt = b"\x00" * 16
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, _PBKDF2_ITER)
+    return hmac.compare_digest(dk.hex(), pw_hash_hex or "")
 
 
 async def verify_npi(npi: str) -> bool:
@@ -130,9 +155,17 @@ class AccountStore:
             await conn.execute(_DDL)
         self._ready = True
 
+    async def email_exists(self, email: str) -> bool:
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            return bool(await conn.fetchval(
+                "SELECT 1 FROM noesis_user WHERE vertical=$1 AND email=$2",
+                self._vertical, email.lower().strip()))
+
     async def register(self, *, email: str, name: str, profession: str = "", country: str = "",
                        npi: str = "", npi_verified: bool = False,
-                       disclaimer_ack: bool = False) -> tuple[dict[str, Any], str]:
+                       disclaimer_ack: bool = False,
+                       pw_hash: str = "", pw_salt: str = "") -> tuple[dict[str, Any], str]:
         """Upsert-on-email; rotates the token every call (re-registering re-claims the account —
         acceptable at alpha, see module docstring). Returns (public user dict, RAW token — shown once)."""
         await self._ensure()
@@ -142,18 +175,22 @@ class AccountStore:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """INSERT INTO noesis_user (id, vertical, email, name, profession, country, npi,
-                                            npi_verified, token_hash, disclaimer_ack_at)
-                   VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9, CASE WHEN $10 THEN now() END)
+                                            npi_verified, token_hash, disclaimer_ack_at, pw_hash, pw_salt)
+                   VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9, CASE WHEN $10 THEN now() END,
+                           NULLIF($11,''), NULLIF($12,''))
                    ON CONFLICT (vertical, email) DO UPDATE SET
                      name=EXCLUDED.name, profession=EXCLUDED.profession, country=EXCLUDED.country,
                      npi=COALESCE(EXCLUDED.npi, noesis_user.npi),
                      npi_verified=(noesis_user.npi_verified OR EXCLUDED.npi_verified),
                      token_hash=EXCLUDED.token_hash,
                      disclaimer_ack_at=COALESCE(noesis_user.disclaimer_ack_at, EXCLUDED.disclaimer_ack_at),
+                     pw_hash=COALESCE(EXCLUDED.pw_hash, noesis_user.pw_hash),
+                     pw_salt=COALESCE(EXCLUDED.pw_salt, noesis_user.pw_salt),
                      last_seen=now()
                    RETURNING id, email, name, profession, country, npi_verified, created_at""",
                 uid, self._vertical, email.lower().strip(), name.strip(), profession.strip(),
-                country.strip(), npi.strip(), npi_verified, _hash(token), disclaimer_ack)
+                country.strip(), npi.strip(), npi_verified, _hash(token), disclaimer_ack,
+                pw_hash, pw_salt)
         # PER-DEVICE: this registration's token is ADDED to the user's active set (the legacy
         # column above still rotates for back-compat, but auth checks this table first — so the
         # previous device's token, if it's in the table, keeps working).
@@ -197,6 +234,45 @@ class AccountStore:
         return {"id": row["id"], "email": row["email"], "name": row["name"],
                 "profession": row["profession"], "country": row["country"],
                 "verified": row["npi_verified"]}
+
+    async def login(self, *, email: str, password: str) -> tuple[dict[str, Any], str] | None:
+        """Verify email+password (constant-time) and issue a new per-device token. None on bad
+        credentials or an account with no password set (token-only legacy user). Never logs the password."""
+        await self._ensure()
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """SELECT id, email, name, profession, country, npi_verified, pw_hash, pw_salt
+                   FROM noesis_user WHERE vertical=$1 AND email=$2""",
+                self._vertical, email.lower().strip())
+        # run the KDF even when the user is unknown / passwordless to avoid timing enumeration
+        ok = verify_password(password, (row["pw_hash"] if row else "") or "",
+                             (row["pw_salt"] if row else "") or "")
+        if not row or not row["pw_hash"] or not ok:
+            return None
+        token = secrets.token_urlsafe(32)
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO noesis_user_token (token_hash, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",
+                _hash(token), row["id"])
+            await conn.execute(
+                """DELETE FROM noesis_user_token WHERE user_id=$1 AND token_hash NOT IN (
+                     SELECT token_hash FROM noesis_user_token WHERE user_id=$1
+                     ORDER BY created_at DESC LIMIT $2)""", row["id"], _MAX_TOKENS_PER_USER)
+            await conn.execute("UPDATE noesis_user SET last_seen=now() WHERE id=$1", row["id"])
+        user = {"id": row["id"], "email": row["email"], "name": row["name"],
+                "profession": row["profession"], "country": row["country"], "verified": row["npi_verified"]}
+        return user, token
+
+    async def logout(self, token: str) -> None:
+        if not token:
+            return
+        await self._ensure()
+        h = _hash(token)
+        async with (await self._get_pool()).acquire() as conn:
+            await conn.execute("DELETE FROM noesis_user_token WHERE token_hash=$1", h)
+            # ALSO clear the legacy single-column token, or user_by_token's fallback keeps it valid
+            await conn.execute("UPDATE noesis_user SET token_hash='' WHERE token_hash=$1", h)
 
     async def add_feedback(self, *, user: dict | None, session_id: str, turn_index: int,
                            verdict: str, modes: list[str], claim_index: int | None,

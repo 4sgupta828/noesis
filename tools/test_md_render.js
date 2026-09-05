@@ -39,4 +39,8 @@ h=mdToHtml('## Bottom line\nStop it now [1].\n\n## Assessment\n'+'x '.repeat(220
 t('short bottom line gets the lede; a long Assessment paragraph does not', (h.match(/mdlede/g)||[]).length===1);
 h=questionHtml('A 62-year-old man with hypertension presents with 3 weeks of chest pressure.\n\nWhat is the most likely diagnosis and differential? How should he be risk-stratified?\n\nPlease:\n- Compare unstable angina, NSTEMI and SIHD');
 t('question: vignette muted, asks emphasised, list kept', /class="qctx"/.test(h) && (h.match(/class="qask"/g)||[]).length===2 && /<li>/.test(h));
+h=mdToHtml('A single normal troponin at presentation does not exclude ongoing ACS; it only reflects the timing of the sample and the most useful next step is a repeat troponin at the guideline interval; if it stays flat and low, rule-out is favored; if it rises dynamically, this reclassifies as NSTEMI [4][20][24].');
+t('prose chained with semicolons (no introducing colon) is NOT split', !/<ol/.test(h));
+h=questionHtml('A 62-year-old man presents with chest pressure.\nECG shows nonspecific changes.\n\nWhat is the most likely diagnosis?\n\nPlease:\nState what immediate medications are appropriate.\nCite the most recent guidelines.');
+t('question: everything from the first ask onward is ask, vignette before it is context', (h.match(/class="qctx"/g)||[]).length===2 && (h.match(/class="qask"/g)||[]).length===4);
 console.log(fails? `${fails} FAILED` : 'all passed'); process.exit(fails?1:0);

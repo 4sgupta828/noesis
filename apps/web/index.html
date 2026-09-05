@@ -2714,9 +2714,12 @@ function splitSemicolons(text){
   segs.push(cur);
   segs = segs.map(x => x.trim()).filter(Boolean);
   if(segs.length < 3 || segs.some(x => x.split(/\s+/).length < 4 || !_hlBalanced(x))) return null;
-  let stem = "";
+  // Only a LIST-shaped block splits: an introducing stem ending in ":" within its first 12 words
+  // ("The evidence does not: a; b; c"). Prose that merely chains clauses with semicolons stays prose.
   const c = segs[0].indexOf(":");
-  if(c > 0 && segs[0].slice(0, c).split(/\s+/).length <= 12){ stem = segs[0].slice(0, c+1); segs[0] = segs[0].slice(c+1).trim(); }
+  if(!(c > 0 && segs[0].slice(0, c).split(/\s+/).length <= 12)) return null;
+  const stem = segs[0].slice(0, c+1); segs[0] = segs[0].slice(c+1).trim();
+  if(!segs[0] || segs.length < 3) return null;
   return {stem, items: segs.map(x => x.replace(/^(?:and|or)\s+/i,""))};
 }
 // a list item: bold lead + (optional) enumeration split + a second " — " clause demoted to a note
@@ -2749,19 +2752,21 @@ function blockFromLine(line){
 function questionHtml(q){
   const text = String(q||"").replace(/\*\*/g,"").replace(/\r/g,"").trim();
   const lines = text.split("\n");
+  // long question: everything BEFORE the first ask is the vignette/context (muted); the first ask and
+  // everything after it — the questions, "Please:", and the requested items — is the ask (ink). No bold.
+  const isAsk = l => /\?\s*$/.test(l) || /^(what|how|should|which|when|why|is|are|can|does|do|would|compare|please|assess|evaluate|recommend|suggest|explain|list|outline|discuss|state|cite|clearly|describe|identify|provide|give|summari[sz]e)\b/i.test(l);
+  const firstAsk = lines.findIndex(l => l.trim() && isAsk(l.trim()));
   const out = []; let list = null;
   const flush = () => { if(list){ out.push(`<${list.tag}>${list.items.map(x=>`<li>${x}</li>`).join("")}</${list.tag}>`); list = null; } };
-  for(const raw of lines){
+  lines.forEach((raw, idx) => {
     const ln = raw.trim();
-    if(!ln){ flush(); continue; }
+    if(!ln){ flush(); return; }
     const li = ln.match(/^(?:[-*•]|\d+[.)])\s+(.*)$/);
-    if(li){ const tag = /^\d/.test(ln) ? "ol" : "ul"; if(!list || list.tag !== tag){ flush(); list = {tag, items: []}; } list.items.push(esc(li[1])); continue; }
-    flush(); out.push(`<p class="${isAsk(ln) ? "qask" : "qctx"}">${esc(ln)}</p>`);
-  }
+    if(li){ const tag = /^\d/.test(ln) ? "ol" : "ul"; if(!list || list.tag !== tag){ flush(); list = {tag, items: []}; } list.items.push(esc(li[1])); return; }
+    flush(); out.push(`<p class="${(firstAsk >= 0 && idx >= firstAsk) ? "qask" : "qctx"}">${esc(ln)}</p>`);
+  });
   flush();
   const long = text.length > 220 || lines.length > 2;
-  // long question: the ASK stands out (ink, medium), the vignette/context recedes (muted) — no bold
-  function isAsk(l){ return /\?\s*$/.test(l) || /^(what|how|should|which|when|is|are|can|does|do|would|compare|please|assess|evaluate|recommend|suggest|explain|list|outline|discuss)\b/i.test(l); }
   return `<div class="qfmt${long ? " qlong" : ""}">${out.join("")}</div>`;
 }
 function mdToHtml(raw){

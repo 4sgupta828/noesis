@@ -1435,9 +1435,8 @@
     try{
       var saved=localStorage.getItem("noesis-theme");
       if(saved==="dark"||saved==="editorial") document.documentElement.setAttribute("data-theme",saved);
-      else if(saved!=="light") document.documentElement.setAttribute("data-theme","editorial");
-      /* EDITORIAL is the default for new visitors; an explicit saved "light" is respected. */
-    }catch(e){ document.documentElement.setAttribute("data-theme","editorial"); }
+      /* CLINICAL (light) is the default for new visitors; a saved dark/editorial choice is respected. */
+    }catch(e){ /* default = clinical light (no data-theme attribute) */ }
     document.addEventListener("DOMContentLoaded", function(){
       var btn=document.getElementById("themebtn");
       function label(){ if(btn){ var t=current();

@@ -6,6 +6,8 @@ drives real device emulation (390px, DPR 2, mobile UA) and reports innerWidth / 
 the gate card rect, then saves a screenshot.
 
   .venv/bin/python tools/mobile_shot.py https://noesis-api-production.up.railway.app/ out.png [390]
+Env: NOESIS_SHOT_USER (JSON for localStorage `noesis_user`, e.g. a test token) boots signed in;
+     NOESIS_SHOT_JS runs a snippet before the screenshot (e.g. "openAccount()").
 """
 import asyncio, base64, json, subprocess, sys, time, urllib.request
 import websockets
@@ -31,7 +33,16 @@ try:
             await call("Emulation.setUserAgentOverride", userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1")
             await call("Page.enable"); await call("Runtime.enable")
             await call("Page.navigate", url=URL)
-            await asyncio.sleep(6)
+            await asyncio.sleep(4)
+            # optional signed-in state: NOESIS_SHOT_USER='{"name":..,"email":..,"token":..}' is written to
+            # localStorage on the origin, then the page is reloaded so the app boots signed in
+            import os
+            if os.environ.get("NOESIS_SHOT_USER"):
+                await call("Runtime.evaluate", expression="localStorage.setItem('noesis_user', %s)" % json.dumps(os.environ["NOESIS_SHOT_USER"]))
+                await call("Page.reload"); await asyncio.sleep(5)
+            if os.environ.get("NOESIS_SHOT_JS"):
+                await call("Runtime.evaluate", expression=os.environ["NOESIS_SHOT_JS"], awaitPromise=True)
+                await asyncio.sleep(2)
             r=await call("Runtime.evaluate", expression="""(()=>{const c=document.querySelector('.idcard');const r=c&&c.getBoundingClientRect();return JSON.stringify({innerWidth, docScrollW:document.documentElement.scrollWidth, card:r&&{left:r.left,right:r.right,width:r.width}, modalHidden: document.querySelector('#idmodal').hidden})})()""", returnByValue=True)
             print(r["result"]["value"])
             shot=await call("Page.captureScreenshot", format="png")

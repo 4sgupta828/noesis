@@ -341,9 +341,12 @@ class AccountStore:
         await self._ensure()
         async with (await self._get_pool()).acquire() as conn:
             rows = await conn.fetch(
-                """SELECT name, email, profession, country, npi_verified,
-                          created_at, last_seen
-                   FROM noesis_user WHERE vertical=$1 ORDER BY created_at DESC LIMIT $2""",
+                """SELECT u.name, u.email, u.profession, u.country, u.npi_verified,
+                          u.created_at, u.last_seen,
+                          (u.pw_hash IS NOT NULL AND u.pw_hash <> '') AS has_password,
+                          (SELECT count(*) FROM noesis_research_session s
+                            WHERE s.user_id = u.id AND NOT s.deleted) AS sessions
+                   FROM noesis_user u WHERE u.vertical=$1 ORDER BY u.created_at DESC LIMIT $2""",
                 self._vertical, int(limit))
         out = []
         for r in rows:

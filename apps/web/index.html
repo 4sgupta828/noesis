@@ -279,6 +279,9 @@
   .setrow{display:flex;align-items:center;gap:.55rem;flex-wrap:wrap;padding:.5rem 0;border-bottom:1px solid var(--hair);}
   .setrow:last-of-type{border-bottom:none;}
   .setrow b{font-size:.88rem;min-width:9.5rem;}
+  .acct-tbl{border-collapse:collapse;width:100%;font-size:.76rem;}
+  .acct-tbl th,.acct-tbl td{padding:.32rem .5rem;border-bottom:1px solid var(--hair);text-align:left;white-space:nowrap;}
+  .acct-tbl th{font-family:var(--mono);font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
   .setrow select{width:auto;flex:none;margin:0;padding:.3rem .5rem;font-size:.8rem;}
   .setrow .sethint{flex-basis:100%;font-size:.68rem;color:var(--muted);line-height:1.4;}
   .setlive{font-family:var(--mono);font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;
@@ -6386,7 +6389,10 @@ function renderSettingsUI(d){
     `<div class="setrow"><b>⇪ Ingestion</b><button type="button" class="idgo" id="seting" style="width:auto;padding:.3rem .8rem;font-size:.78rem;">Open console</button>
      <span class="sethint">All corpus sources, their live footprint, and push-ingestion controls.</span></div>` +
     `<div class="setrow"><b>◷ Performance</b><button type="button" class="idgo" id="setperf" style="width:auto;padding:.3rem .8rem;font-size:.78rem;">Open dashboard</button>
-     <span class="sethint">Latency (avg / P95 / P99), phase breakdown, failure types &amp; stop reasons across all Q&amp;A runs.</span></div>`;
+     <span class="sethint">Latency (avg / P95 / P99), phase breakdown, failure types &amp; stop reasons across all Q&amp;A runs.</span></div>` +
+    `<div class="setrow" style="display:block;"><b>◈ Accounts</b>
+     <div id="setacctbox" style="margin-top:.4rem;"><div class="sethint">Loading…</div></div></div>`;
+  loadAccountsList();
   const gbtn = body.querySelector("#setgraph");
   if(gbtn) gbtn.addEventListener("click", () => { $("#setmodal").hidden = true; openGraphConsole(); });
   const ibtn = body.querySelector("#seting");
@@ -6402,6 +6408,21 @@ function renderSettingsUI(d){
     if(r.ok) renderSettingsUI(await r.json());
     else $("#seterr").textContent = "Save failed (" + r.status + ").";
   }));
+}
+// ---- accounts listing (admin panel password) — every registered email, newest first ----
+async function loadAccountsList(){
+  const box = $("#setacctbox"); if(!box) return;
+  try{
+    const r = await fetch("/admin/users", {headers: {"x-admin-password": sessionStorage.getItem("noesis_apw") || ""}});
+    if(!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    const day = s => s ? String(s).slice(0,10) : "—";
+    const rows = (d.users||[]).map(u => `<tr><td>${esc(u.email||"")}</td><td>${esc(u.name||"")}</td><td>${esc(u.profession||"")}</td>`
+      + `<td>${day(u.created_at)}</td><td>${day(u.last_seen)}</td><td style="text-align:center;">${u.sessions||0}</td>`
+      + `<td style="text-align:center;">${u.has_password ? "✓" : "—"}${u.npi_verified ? " ✓NPI" : ""}</td></tr>`).join("");
+    box.innerHTML = `<div class="sethint" style="margin:.2rem 0 .4rem;"><b>${d.count||0}</b> registered account${d.count===1?"":"s"} · newest first</div>`
+      + `<div style="overflow-x:auto;"><table class="acct-tbl"><thead><tr><th>Email</th><th>Name</th><th>Profession</th><th>Registered</th><th>Last seen</th><th>Sessions</th><th>Password</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }catch(e){ box.innerHTML = `<div class="sethint">Couldn't load accounts (${esc(String(e.message||e))}).</div>`; }
 }
 $("#setbtn").addEventListener("click", openSettings);
 $("#setgo").addEventListener("click", loadSettingsUI);

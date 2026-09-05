@@ -122,6 +122,11 @@ class VerticalManifest:
     # mechanism-steering retrieval hint, selected by the dynamic router for WHY/HOW questions.
     understanding_answer_format: str | None = None
     understanding_query_hint: str | None = None
+    # Optional FORMAT FAMILIES for non-decision question kinds the router recognizes ("overview",
+    # "comparison", "update"): kind → compose directive (opaque prose). A kind with no entry falls to
+    # the standard adaptive synthesis. The kernel owns the kind names and the routing; the vertical
+    # owns the words (answer-format panel, 2026-09-04: a general question must never get a plan).
+    answer_formats: dict[str, str] | None = None
     # Optional vertical-supplied instruction for the VISION pre-step: how to DESCRIBE a
     # user-uploaded image (color/shape/borders/texture/distribution), producing a labeled
     # visual observation — never a diagnosis. Opaque prose; the kernel only threads it into

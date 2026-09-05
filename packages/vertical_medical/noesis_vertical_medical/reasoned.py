@@ -12,17 +12,31 @@ Both are opaque to the kernel (Rule 18: the LLM owns these judgments end to end)
 """
 
 REASONED_SCAFFOLD_PROMPT = """\
-You are a clinician planning the WORKUP OF A QUESTION before any evidence is retrieved.
+You are triaging a question to the answer SHAPE it deserves; only for a decision question do you
+also plan its workup before any evidence is retrieved.
 
 FIRST, classify the question (`kind`):
-- "management" — a patient-management or case question: differential, workup, treatment choice,
-  monitoring, what-to-do. These deserve a decision-structured answer.
+- "management" — a DECISION question: a specific patient/case/scenario, a dose or threshold, or an
+  explicit "should I / which / how much" for a known condition. These deserve a decision-structured
+  answer. A question with NO patient, NO value, and NO named decision is NEVER "management".
+- "overview" — a general or educational ask with no case and no decision: "what is X", "what is a
+  balanced diet", "types of Y", "benefits of Z". Deserves an explainer, never a plan — leave every
+  list EMPTY.
+- "comparison" — two or more named options weighed against each other ("A vs B in CKD"). Deserves a
+  head-to-head, not a plan — leave every list EMPTY.
+- "update" — what is new / changed in a period ("what's new in HFpEF this year"). Deserves a dated
+  change log — leave every list EMPTY.
 - "lookup" — a pure evidence lookup: what a trial showed, a drug's pharmacokinetics/dose/interactions
   as facts, definitions, epidemiology, "what does the evidence say about X". These deserve a plain
   evidence synthesis, NOT a decision frame — set kind="lookup" and leave every list EMPTY.
 - "understanding" — a WHY/HOW question: why does an intervention work, what causes what, what is the
   mechanism/pathophysiology, why do two conditions travel together, why did trials show a result.
   These deserve a CAUSAL-MODEL answer — set kind="understanding" and leave every list EMPTY.
+
+If torn between "management" and any other kind, choose the other kind unless the question names a
+case, a value, or an explicit "should I / which / how much". Set `confidence="low"` whenever the choice
+is not obvious, and `has_case_context=true` only when the asker describes a specific patient, case,
+values, or scenario.
 
 For a "management" question, also set `is_diagnostic`:
 - is_diagnostic = TRUE when the question is fundamentally about IDENTIFYING WHAT THE DIAGNOSIS IS — it
@@ -42,11 +56,11 @@ recommendations.
 - key_decisions: the concrete management decisions the answer must address (e.g. "which first-line
   agent given renal function?", "admit vs discharge criteria?", "which test first and what triggers
   escalation?").
-- explicit_asks: every sub-question the user EXPLICITLY asked, each restated as one short question —
-  including named decisions ("IV vs oral iron?"), named tradeoffs, requested time horizons ("what in
-  the first 24 hours? at 30 days?"), and requested distinctions ("which of these is guideline-backed
-  vs extrapolation?"). This list is the audit contract: the final answer must address every item or
-  explicitly mark it unanswerable. Do not paraphrase away specifics (lab values, drug names).
+- explicit_asks: ONLY sub-questions present in the user's own text, each restated as one short
+  question — named decisions ("IV vs oral iron?"), named tradeoffs, requested time horizons, requested
+  distinctions. A single question has an EMPTY list; never add branches the user did not ask. This
+  list is the audit contract: the final answer must address every item or explicitly mark it
+  unanswerable. Do not paraphrase away specifics (lab values, drug names).
 
 Keep each item under 12 words. 3–6 items per list; fewer for a narrow management question. You are
 writing a research plan, not an answer — if you find yourself stating a fact or recommending an
@@ -124,11 +138,15 @@ REASONED_ANSWER_FORMAT = """\
 GOVERNING RULE — a CLEAR CLINICIAN READ that DOES JUSTICE to the question. This governs the whole answer
 and overrides the structure below where they conflict. The goal is to inform the clinician fully AND help
 them think decisively — balanced, not a wall of research and not amputated:
-- Answer as a clinical DECISION, not a literature review — even for "benefits / options / what helps"
-  questions. Say what a clinician should DO with the evidence (for WHICH patients/indications to use,
-  recommend, or avoid it, HOW, and the caveats that change it). Evidence strength is a short qualifier on
-  a recommendation, never the organizing principle — NO "evidence quality" / "efficacy" / study-
-  cataloguing section, and no running research narrative.
+- SCOPE: this directive is for a DECISION about a specific patient, case, dose, or threshold. If the
+  question names no patient and no decision (a definition, an overview, "benefits of X", a comparison,
+  a mechanism), do NOT manufacture one: answer the question asked with ## Bottom line plus the headings
+  that fit, and OMIT Do now / Do if / Watch for entirely.
+- For a decision question, answer as a clinical DECISION, not a literature review. Say what a clinician
+  should DO with the evidence (for WHICH patients/indications to use, recommend, or avoid it, HOW, and
+  the caveats that change it). Evidence strength is a short qualifier on a recommendation, never the
+  organizing principle — NO "evidence quality" / "efficacy" / study-cataloguing section, and no running
+  research narrative.
 - LENGTH FOLLOWS CONTENT — do NOT force brevity and do NOT pad. Include everything genuinely relevant to
   deciding well; cutting a decision-relevant point to hit a length is WRONG. Equally, every line must EARN
   its place: does it change or sharpen what the clinician does? If not, it does not belong. Cut research

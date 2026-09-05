@@ -1390,6 +1390,7 @@ def build_default_service() -> ResearchService:
         alt_query_hint=getattr(manifest, "alt_query_hint", None),
         integrative_query_hint=getattr(manifest, "integrative_query_hint", None),
         understanding_answer_format=getattr(manifest, "understanding_answer_format", None),
+        answer_formats=getattr(manifest, "answer_formats", None),
         understanding_query_hint=getattr(manifest, "understanding_query_hint", None),
         vertical_name=manifest.name, ui=manifest.ui,
         connectors=connectors, corpus_source_key=corpus_key,

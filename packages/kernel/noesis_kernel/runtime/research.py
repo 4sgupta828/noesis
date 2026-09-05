@@ -84,6 +84,7 @@ class ResearchService:
     alt_query_hint: str | None = None            # retrieval-steering hint for Alternative mode
     understanding_answer_format: str | None = None  # UNDERSTANDING engine: causal-model compose contract
     understanding_query_hint: str | None = None     # UNDERSTANDING engine: mechanism-steering hint
+    answer_formats: dict[str, str] | None = None    # non-decision kinds ("overview"/"comparison"/"update") → directive
     max_calls: int = 80                     # 40 → 80: stage-2 BudgetState-honesty re-plan — the
     #                                         claims-first/binding/fallback/frame-repair calls are
     #                                         now charged (see budget.py DEFAULT_MAX_LLM_CALLS)
@@ -200,7 +201,15 @@ class ResearchService:
 
         class _Scaffold(BaseModel):
             # kind = the routing judgment (LLM-owned, Rule 18). Lists are QUESTIONS/topics to cover.
-            kind: Literal["management", "lookup", "understanding"] = "management"
+            # DEFAULT IS "lookup", NOT "management": an unparsed/omitted kind must land on the
+            # non-directive synthesis — the decision plan is applied only when the model chose it
+            # (answer-format panel, 2026-09-04: "what is a balanced diet" was getting "Do now").
+            kind: Literal["management", "lookup", "understanding", "overview", "comparison", "update"] = "lookup"
+            # confidence (LLM-owned): "low" when two kinds fit about equally → the adaptive standard
+            # synthesis (it omits unsupported sections, so it cannot pad a plan).
+            confidence: Literal["high", "low"] = "high"
+            # a specific patient / case / values / scenario is described (vs. a general question)
+            has_case_context: bool = False
             # is_diagnostic (LLM-owned): true when a management question asks for a DIFFERENTIAL / "what
             # could this be" / the initial workup of a PRESENTATION — routes to the differential-first
             # clinical-decision format. False for a pure treatment/monitoring management question.
@@ -227,9 +236,22 @@ class ResearchService:
                 messages=[{"role": "user", "content": question}],
                 response_format=_Scaffold, max_tokens=1200)
             s = comp.parsed
-            if route and s.kind == "lookup":
-                # pure evidence lookup → the standard adaptive engine fits better; say so in the trace
-                await _emit({"type": "engine", "engine": "standard", "why": "evidence lookup"})
+            _fams = self.answer_formats or {}
+            if route and s.kind in _fams:
+                # NON-DECISION family the vertical supplies a directive for (overview / comparison /
+                # update): plain adaptive research with that compose contract — never the decision plan.
+                kw = dict(kw)
+                kw["answer_format_override"] = _fams[s.kind]
+                await _emit({"type": "engine", "engine": s.kind, "why": f"{s.kind} question"})
+                return await self.ask(**kw)
+            if route and s.kind not in ("management", "understanding"):
+                # lookup (or a family with no directive wired) → the standard adaptive engine
+                await _emit({"type": "engine", "engine": "standard",
+                             "why": ("evidence lookup" if s.kind == "lookup" else f"{s.kind} (no format wired)")})
+                return await self.ask(**kw)
+            if route and s.kind == "management" and s.confidence == "low":
+                # the model itself is unsure it is a decision question → never force a plan
+                await _emit({"type": "engine", "engine": "standard", "why": "low-confidence routing"})
                 return await self.ask(**kw)
             if route and s.kind == "understanding" and self.understanding_answer_format:
                 # WHY/HOW question → the UNDERSTANDING engine: mechanism-steered retrieval + the
@@ -267,7 +289,10 @@ class ResearchService:
                 kw["answer_format_override"] = self.differential_answer_format
                 return await self.ask(**kw)
         except Exception:   # noqa: BLE001 — scaffold is an enhancer; its failure never blocks the answer
-            pass
+            if route:
+                # classifier failed → the NON-directive synthesis (a plan is the wrong default shape)
+                await _emit({"type": "engine", "engine": "standard", "why": "routing unavailable"})
+                return await self.ask(**kw)
         kw["answer_format_override"] = self.reasoned_answer_format
         return await self.ask(**kw)
 

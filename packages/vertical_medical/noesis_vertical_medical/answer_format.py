@@ -402,3 +402,85 @@ findings. 1–6 rows; every figure must appear verbatim in some finding. Give th
 
 Reach for these two before a plain bar whenever the answer is really about "how likely / how common"
 (icon_array) or "is my value in range" (range_band)."""
+
+
+# ---- FORMAT FAMILIES for non-decision question kinds (answer-format panel, 2026-09-04) ----------
+# Selected by the kernel router from the scaffold classifier's `kind`; each keeps the adaptive rule
+# (omit any section the findings cannot ground) and the grounding contract unchanged. None of these
+# ever carries a Do now / Do if / Watch for plan — a general question is answered, not planned.
+
+MEDICAL_OVERVIEW_FORMAT = """\
+Format the answer as Markdown for a clinical audience: a clear EXPLAINER, not a plan. Include a \
+section ONLY IF the verified findings above contain information to support it — OMIT any section you \
+cannot ground in the findings; never add outside knowledge to fill a heading. Every factual sentence \
+and bullet carries an inline [n] citation. 150–350 words; one idea per bullet.
+
+## In brief
+Two or three sentences that answer the question directly, with [n] citations.
+
+## What it is
+Definition and the key components, with the specific figures the evidence gives (amounts, \
+thresholds, proportions) and the population they apply to.
+
+## What the evidence supports
+The main findings, one idea per bullet, strongest evidence first (guideline / systematic review > \
+trial > observational). Say what kind of evidence each rests on in a few words.
+
+## Nuances and common misconceptions
+Only where the findings address them: where guidance differs, what is often misunderstood.
+
+## Not covered by this evidence
+What the question touched that the retrieved evidence does not settle — as a gap, not an inference.
+
+NEVER include: "Do now", "Do if", "Watch for", a numbered action plan, a hypothetical patient, or a \
+"Basis:" tier line. Do not turn the explainer into advice for an unstated patient.
+"""
+
+MEDICAL_COMPARISON_FORMAT = """\
+Format the answer as Markdown for a clinical audience: a HEAD-TO-HEAD comparison of the named \
+options. Include a section ONLY IF the verified findings above support it — OMIT what you cannot \
+ground; never add outside knowledge. Every factual sentence, bullet, and table cell carries an \
+inline [n] citation. 200–450 words.
+
+## Bottom line
+One or two sentences: how the options compare and what the comparison turns on, with [n].
+
+## Head-to-head
+A Markdown table: one row per attribute the findings actually compare (efficacy outcome, safety, \
+dosing/monitoring burden, population studied, evidence tier), one column per option. Include a \
+row ONLY when the findings state BOTH sides; write "not reported" rather than guess a cell.
+
+## When each is preferred
+Bulleted: **Option A** — the situations the evidence favors it, and why [n]. Same for each option. \
+Only conditions the findings support.
+
+## Not established
+What the comparison cannot settle from this evidence (head-to-head data missing, populations \
+differ, outcomes not measured).
+
+NEVER include: a numbered "Do now" plan, a single-winner verdict the findings do not give, or a \
+ranking without a citation.
+"""
+
+MEDICAL_UPDATE_FORMAT = """\
+Format the answer as Markdown for a clinical audience: a DATED change log of what is new. Include a \
+section ONLY IF the verified findings above support it — OMIT what you cannot ground; never add \
+outside knowledge. Every item carries an inline [n] citation AND a date or year taken from the \
+finding; an undated item must not appear. 200–400 words.
+
+## What changed
+One bullet per change, newest first: **date/year · source type** — what changed and what it \
+replaces or adds [n].
+
+## Key new evidence
+A Markdown table: Source | Date | Finding | Evidence tier — only rows the findings state.
+
+## What has not changed
+Standing guidance the new evidence leaves in place, briefly, with [n].
+
+## Not covered by this evidence
+Time windows, guidelines, or topics the retrieved evidence does not reach.
+
+NEVER include: an undated claim, a "Do now" plan, or practice advice beyond what a guideline-tier \
+finding states.
+"""

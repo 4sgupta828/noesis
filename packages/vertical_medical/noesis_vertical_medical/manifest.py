@@ -20,6 +20,7 @@ from .answer_format import (
     MEDICAL_CLINICAL_CHART_GUIDANCE,
     MEDICAL_REASONING_FORMAT,
     MEDICAL_PATIENT_REASONING_FORMAT,
+    MEDICAL_COMPARISON_FORMAT, MEDICAL_OVERVIEW_FORMAT, MEDICAL_UPDATE_FORMAT,
 )
 from .vision import MEDICAL_REPORT_PROMPT, MEDICAL_VISION_PROMPT
 from .layman import MEDICAL_LAYMAN_PROMPT
@@ -118,6 +119,9 @@ def build_manifest() -> VerticalManifest:
         cam_intent_prompt=MEDICAL_CAM_INTENT_SYSTEM,
         understanding_answer_format=UNDERSTANDING_ANSWER_FORMAT,
         understanding_query_hint=UNDERSTANDING_QUERY_HINT,
+        # non-decision format families (answer-format panel, 2026-09-04): kind → directive
+        answer_formats={"overview": MEDICAL_OVERVIEW_FORMAT, "comparison": MEDICAL_COMPARISON_FORMAT,
+                        "update": MEDICAL_UPDATE_FORMAT},
         web_domains=TRUSTED_WEB_DOMAINS,
         web_domain_facets=WEB_DOMAIN_FACETS,
         lineage=tuple(declared_lineage()),

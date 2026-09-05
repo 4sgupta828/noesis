@@ -5048,10 +5048,11 @@ async function askQuestion(question, opts){
   }
   PENDING_INTAKE_TRANSCRIPT = null;   // single-use: only the first answer after Guided carries it
   if(opts.engine) payload.engine = opts.engine;   // interlock hop: force a specific engine
-  // Answer-style toggle — stay true to the selected mode: Clinical Decision FORCES the reasoned decision
-  // engine (a decision framework even for broad/benefit/overview questions — never a research-synthesis
-  // fallback); Research FORCES the standard evidence synthesis. Never overrides an explicit opts.engine.
-  else if(DECISION_MODE_UI) payload.engine = (DECISION_MODE === "research") ? "standard" : "reasoned";
+  // Answer-style toggle: "Research" FORCES the standard evidence synthesis; "Clinical Decision" is AUTO —
+  // the question picks its shape (decision plan / differential / explainer / comparison / update /
+  // lookup). Forcing the decision plan here was what put "Do now" on "what is a balanced diet"
+  // (answer-format panel, 2026-09-04). Never overrides an explicit opts.engine (hop chips, duel).
+  else if(DECISION_MODE_UI && DECISION_MODE === "research") payload.engine = "standard";
   if(USER){ payload.user_name = USER.name; payload.user_email = USER.email; }
   if(conv){
     if(THREAD.turns.length) payload.history = threadHistoryPayload();

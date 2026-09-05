@@ -89,3 +89,91 @@ def test_flag_off_diagnostic_still_uses_reasoned_format():
     asyncio.run(svc.ask_reasoned(question="Chest pain — differential and workup?", tenant_id="A"))
     assert _REASONED_FMT in llm.compose_blob
     assert _DIFFERENTIAL_FMT not in llm.compose_blob
+
+
+# ---- answer-format panel (2026-09-04): routing by question shape, non-directive defaults --------------
+_OVERVIEW_FMT = "OVERVIEW-EXPLAINER-FORMAT-SENTINEL"
+
+
+class _KindLLM(_LLM):
+    """Scripted scaffold with an explicit kind / confidence (or a raised error)."""
+
+    def __init__(self, kind: str, confidence: str = "high", raise_scaffold: bool = False):
+        super().__init__(is_diagnostic=False)
+        self.kind, self.confidence, self.raise_scaffold = kind, confidence, raise_scaffold
+
+    async def complete(self, *, system, messages, response_format, max_tokens=2048, temperature=None):
+        if getattr(response_format, "__name__", "") == "_Scaffold":
+            if self.raise_scaffold:
+                raise RuntimeError("classifier down")
+            return LLMResult(parsed=response_format(kind=self.kind, confidence=self.confidence), model="c")
+        return await super().complete(system=system, messages=messages, response_format=response_format,
+                                      max_tokens=max_tokens, temperature=temperature)
+
+
+def _kind_service(llm):
+    src = InMemoryRetrievalSource()
+    src.add(IndexedBlock(block_id="b1", document_id="d1", tenant_id="A", text=_TEXT,
+                         locator=Locator("block_span", "d1", {"block_id": "b1"})))
+    return ResearchService(
+        llm=llm, embedder=FakeEmbedder(dim=8), sources={"corpus": src},
+        reasoned_scaffold_prompt=_SCAFFOLD_PROMPT, reasoned_answer_format=_REASONED_FMT,
+        differential_answer_format=_DIFFERENTIAL_FMT,
+        answer_formats={"overview": _OVERVIEW_FMT})
+
+
+def test_overview_kind_uses_the_explainer_format_never_the_plan():
+    llm = _KindLLM("overview")
+    asyncio.run(_kind_service(llm).ask_reasoned(question="What is a balanced diet?", tenant_id="A"))
+    assert _OVERVIEW_FMT in llm.compose_blob
+    assert _REASONED_FMT not in llm.compose_blob and _DIFFERENTIAL_FMT not in llm.compose_blob
+
+
+def test_family_without_a_wired_format_falls_to_standard():
+    llm = _KindLLM("comparison")          # vertical wired only "overview" here
+    asyncio.run(_kind_service(llm).ask_reasoned(question="A vs B?", tenant_id="A"))
+    assert _REASONED_FMT not in llm.compose_blob and _OVERVIEW_FMT not in llm.compose_blob
+
+
+def test_low_confidence_management_falls_to_standard_not_the_plan():
+    llm = _KindLLM("management", confidence="low")
+    asyncio.run(_kind_service(llm).ask_reasoned(question="metformin and kidneys?", tenant_id="A"))
+    assert _REASONED_FMT not in llm.compose_blob
+
+
+def test_confident_management_still_gets_the_plan():
+    llm = _KindLLM("management", confidence="high")
+    asyncio.run(_kind_service(llm).ask_reasoned(question="metformin dose at eGFR 30-45?", tenant_id="A"))
+    assert _REASONED_FMT in llm.compose_blob
+
+
+def test_classifier_failure_falls_to_standard_when_routing():
+    llm = _KindLLM("management", raise_scaffold=True)
+    asyncio.run(_kind_service(llm).ask_reasoned(question="anything", tenant_id="A"))
+    assert _REASONED_FMT not in llm.compose_blob
+
+
+def test_forced_arm_keeps_the_plan_even_if_classifier_fails():
+    llm = _KindLLM("management", raise_scaffold=True)
+    asyncio.run(_kind_service(llm).ask_reasoned(question="anything", tenant_id="A", route=False))
+    assert _REASONED_FMT in llm.compose_blob
+
+
+def test_scaffold_default_kind_is_not_management():
+    # an omitted `kind` must never mean "decision plan" — guard the Pydantic default itself
+    import inspect
+    from noesis_kernel.runtime import research as _r
+    src = inspect.getsource(_r)
+    assert '"overview", "comparison", "update"] = "lookup"' in src
+
+
+def test_medical_directives_carry_the_panel_rules():
+    from noesis_vertical_medical.reasoned import REASONED_ANSWER_FORMAT, REASONED_SCAFFOLD_PROMPT
+    from noesis_vertical_medical.manifest import build_manifest
+    MANIFEST = build_manifest()
+    assert "even for" not in REASONED_ANSWER_FORMAT            # the line that forced plans on overviews
+    assert "SCOPE" in REASONED_ANSWER_FORMAT
+    for k in ("overview", "comparison", "update"):
+        assert f'"{k}"' in REASONED_SCAFFOLD_PROMPT
+        assert k in (MANIFEST.answer_formats or {})
+        assert "Do now" in MANIFEST.answer_formats[k]          # each family names the plan as forbidden

@@ -60,7 +60,7 @@ flowchart LR
       OA["Open-access literature<br/>(Europe PMC, PubMed)"]
       GUI["Society / gov guidelines<br/>(curated registry)"]
       TRIALS["ClinicalTrials.gov · FDA<br/>DailyMed · FAERS · CDC"]
-      WEB["Live web<br/>(Tavily / Exa)"]
+      WEB["Live web<br/>(Brave / Exa / Tavily)"]
     end
 
     subgraph KERNEL["Domain-agnostic kernel"]
@@ -298,6 +298,23 @@ A model **name** overrides the provider, so an explicit `claude-*` stays on Anth
 global default is DeepSeek (and vice versa). Structured output uses OpenAI's `json_schema` with a
 `json_object` fallback for DeepSeek. The switch is reversible with no redeploy (unset the env), and
 the per-answer diagnostics trace records which model served each call.
+
+### Web search providers
+
+The web leg is the same kind of seam (`build_web`). `NOESIS_WEB_PROVIDER` selects explicitly
+(`brave` / `exa` / `tavily`); unset, the first funded key wins in that order.
+
+```bash
+BRAVE_API_KEY=BSA...        # Brave Search API — ranked results + query-aware extra snippets; page
+                            # bodies are fetched directly (bot-walled pages fall back to snippets)
+EXA_API_KEY=...             # Exa neural search — serves its own cached page text + highlights
+TAVILY_API_KEY=...          # Tavily — fallback when no other key is set
+```
+
+All three return the same `WebResult` (url, title, snippet, body, published, highlights) and the
+vertical's trusted-domain whitelist applies to each (Exa: `includeDomains`; Brave: post-filter over an
+over-fetched result set). Brave's entry plans allow ~1 request/s; calls are throttled in-process
+(`NOESIS_BRAVE_MIN_INTERVAL`, default 1.0s) and 429s are retried.
 
 ---
 

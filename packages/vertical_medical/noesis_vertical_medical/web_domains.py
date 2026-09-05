@@ -8,9 +8,11 @@ Domain knowledge lives in the vertical (Rule 18); the kernel's Exa client only a
 """
 from __future__ import annotations
 
-# NOTE: this list gates EXA SEARCH, and Exa serves its own cached page text — publisher bot-walls
-# (OUP/Silverchair/Elsevier) do NOT limit what can be searched, only what we can fetch directly.
-# So the frontier here is quality judgment, not fetchability. Bar: peer-reviewed, professional
+# NOTE: this list gates WEB SEARCH (Exa: includeDomains; Brave: post-filter). Exa serves its own
+# cached page text; Brave results are fetched directly, and a bot-walled publisher page
+# (OUP/Silverchair/Elsevier) falls back to Brave's verbatim extra snippets as its body — so the
+# whitelist does NOT limit what can be searched, only how much page text we get back.
+# The frontier here is quality judgment, not fetchability. Bar: peer-reviewed, professional
 # society, guideline body, government/regulator, or professional-grade reference. Deliberately
 # excluded: consumer health portals, ad-driven aggregators, preprint-only servers.
 TRUSTED_WEB_DOMAINS: tuple[str, ...] = (

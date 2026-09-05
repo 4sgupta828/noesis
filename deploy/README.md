@@ -11,7 +11,9 @@ One vertical per deployment. The image serves the API + research console.
 | `PORT` | HTTP port | `8000` (Railway sets this) |
 | `ANTHROPIC_API_KEY` | LLM (record/live only) | secret |
 | `OPENAI_API_KEY` | embeddings (record/live only) | secret |
-| `TAVILY_API_KEY` | web search (record/live only) | secret |
+| `BRAVE_API_KEY` | web search — Brave (record/live only) | secret |
+| `EXA_API_KEY` / `TAVILY_API_KEY` | web search — Exa / Tavily (record/live only) | secret |
+| `NOESIS_WEB_PROVIDER` | force the web-search provider (`brave` / `exa` / `tavily`); unset → first funded key: Brave, Exa, Tavily | `brave` |
 | `NOESIS_LLM_MODEL` | override the Anthropic model | `claude-sonnet-5` |
 | `NOESIS_CORPUS_DSN` | Postgres+pgvector DSN for the corpus (when wired) | `postgresql://…` |
 | `NOESIS_CASSETTE_ROOT` | where cassettes live (replay/record) | `evals/cassettes` |

@@ -1101,6 +1101,11 @@ class ShareIn(BaseModel):
     public: bool = True
 
 
+class LinkEmailIn(BaseModel):
+    email: str
+    password: str
+
+
 class CommentIn(BaseModel):
     name: str
     body: str
@@ -3701,6 +3706,49 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             if store is not None:
                 await store.logout(x_noesis_token)
         return {"ok": True}
+
+    @app.post("/me/link-email")
+    async def me_link_email(body: LinkEmailIn, x_noesis_token: str = Header(default="")) -> dict:
+        """Link another email you've used: prove you own it (its password) and every session under
+        that account — plus any ownerless session saved with that email — moves to THIS account."""
+        me_user = await _user_from_token(x_noesis_token)
+        if me_user is None:
+            raise HTTPException(status_code=401, detail="sign in first")
+        store, st = _accounts(), _store()
+        if store is None or st is None:
+            raise HTTPException(status_code=503, detail="no account store")
+        other = await store.check_password(email=body.email, password=body.password)
+        if other is None:
+            raise HTTPException(status_code=401, detail="incorrect email or password for that account")
+        if other["id"] == me_user["id"]:
+            raise HTTPException(status_code=400, detail="that is already this account")
+        moved = await st.move_owner(from_user_id=other["id"], to_user_id=me_user["id"])
+        moved += await st.claim_by_email(user_id=me_user["id"], email=other["email"])
+        return {"linked": other["email"], "moved": moved}
+
+    @app.get("/admin/sessions/unowned")
+    async def admin_unowned(limit: int = 100, q: str = "", x_admin_password: str = Header(default="")) -> dict:
+        """Sessions with no account (pre-accounts / API runs) — admin only (they may be anyone's)."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        st = _store()
+        if st is None:
+            return {"sessions": []}
+        return {"sessions": await st.list_unowned(limit=max(1, min(int(limit), 500)), q=q or None)}
+
+    @app.post("/sessions/{session_id}/claim")
+    async def claim_session(session_id: str, x_noesis_token: str = Header(default=""),
+                            x_admin_password: str = Header(default="")) -> dict:
+        """Admin attaches an UNOWNED session to the signed-in account (admin password + own token)."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        user = await _user_from_token(x_noesis_token)
+        if user is None:
+            raise HTTPException(status_code=401, detail="sign in first")
+        st = _store()
+        if st is None or not await st.claim(session_id, user_id=user["id"]):
+            raise HTTPException(status_code=404, detail="session not found or already owned")
+        return {"claimed": True}
 
     @app.get("/me")
     async def me(x_noesis_token: str = Header(default="")) -> dict:

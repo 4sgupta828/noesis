@@ -273,6 +273,18 @@ class AccountStore:
                 "profession": row["profession"], "country": row["country"], "verified": row["npi_verified"]}
         return user, token
 
+    async def check_password(self, *, email: str, password: str) -> dict[str, Any] | None:
+        """Verify credentials WITHOUT issuing a token (used to link a second email to an account)."""
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT id, email, name, pw_hash, pw_salt FROM noesis_user WHERE vertical=$1 AND email=$2",
+                self._vertical, email.lower().strip())
+        ok = verify_password(password, (row["pw_hash"] if row else "") or "", (row["pw_salt"] if row else "") or "")
+        if not row or not row["pw_hash"] or not ok:
+            return None
+        return {"id": row["id"], "email": row["email"], "name": row["name"]}
+
     async def logout(self, token: str) -> None:
         if not token:
             return

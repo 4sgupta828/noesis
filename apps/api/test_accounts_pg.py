@@ -120,3 +120,29 @@ def test_public_sharing_and_discussion() -> None:
                 await conn.execute("DELETE FROM noesis_session_comment WHERE session_id IN (SELECT id FROM noesis_research_session WHERE vertical=$1)", VERT)
             await _cleanup(acc, sess)
     asyncio.run(body())
+
+
+def test_link_email_moves_sessions_and_claim_only_unowned() -> None:
+    async def body():
+        acc = AccountStore(DSN, vertical=VERT)
+        sess = SessionStore(DSN, vertical=VERT)
+        try:
+            h, salt = hash_password("pw")
+            a, _ = await acc.register(email="main@x.io", name="Main", pw_hash=h, pw_salt=salt)
+            b, _ = await acc.register(email="old@x.io", name="Old", pw_hash=h, pw_salt=salt)
+            assert await acc.check_password(email="old@x.io", password="nope") is None
+            assert (await acc.check_password(email="OLD@x.io", password="pw"))["id"] == b["id"]
+            common = dict(tenant_id="demo", workspace_id=None, answer="A", grounded=True, claims=[],
+                          source_stats={}, coverage_gaps=[], rejected=0, sources=None)
+            s1 = await sess.save(question="q1", user_id=b["id"], **common)
+            s2 = await sess.save(question="q2", user_email="old@x.io", **common)      # ownerless, that email
+            s3 = await sess.save(question="q3", **common)                             # ownerless, no email
+            moved = await sess.move_owner(from_user_id=b["id"], to_user_id=a["id"])
+            moved += await sess.claim_by_email(user_id=a["id"], email="old@x.io")
+            assert moved == 2
+            assert {r["id"] for r in await sess.list_unowned(limit=50)} >= {s3} and s2 not in {r["id"] for r in await sess.list_unowned(limit=50)}
+            assert await sess.claim(s3, user_id=a["id"]) and not await sess.claim(s1, user_id=b["id"])
+            assert {r["id"] for r in await sess.list(tenant_id="demo", user_id=a["id"])} == {s1, s2, s3}
+        finally:
+            await _cleanup(acc, sess)
+    asyncio.run(body())

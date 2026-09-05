@@ -309,6 +309,44 @@ class SessionStore:
                 "AND s.user_id IS NOT DISTINCT FROM $4", comment_id, session_id, self._vertical, owner_user_id)
         return res.endswith("1")
 
+    async def move_owner(self, *, from_user_id: str, to_user_id: str) -> int:
+        """Re-attach every session of one account to another (linking a second email)."""
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            res = await conn.execute(
+                "UPDATE noesis_research_session SET user_id=$2 WHERE vertical=$1 AND user_id=$3",
+                self._vertical, to_user_id, from_user_id)
+        try:
+            return int(res.split()[-1])
+        except ValueError:
+            return 0
+
+    async def list_unowned(self, *, limit: int = 100, q: str | None = None) -> list[dict[str, Any]]:
+        """Sessions with no account attached (pre-accounts / API runs) — admin browsing for claiming."""
+        await self._ensure()
+        where = "vertical=$1 AND user_id IS NULL AND NOT deleted"
+        params: list[Any] = [self._vertical]
+        if q and q.strip():
+            params.append(f"%{q.strip()}%")
+            where += f" AND (question ILIKE ${len(params)} OR user_email ILIKE ${len(params)})"
+        params.append(limit)
+        async with (await self._get_pool()).acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT id, question, user_name, user_email, created_at, jsonb_array_length(thread) AS turns "
+                f"FROM noesis_research_session WHERE {where} ORDER BY created_at DESC LIMIT ${len(params)}", *params)
+        return [{"id": r["id"], "question": r["question"], "user_name": r["user_name"],
+                 "user_email": r["user_email"], "turns": r["turns"] or 1,
+                 "created_at": r["created_at"].isoformat()} for r in rows]
+
+    async def claim(self, session_id: str, *, user_id: str) -> bool:
+        """Attach an UNOWNED session to an account (never re-attaches an owned one)."""
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            res = await conn.execute(
+                "UPDATE noesis_research_session SET user_id=$3 WHERE id=$1 AND vertical=$2 AND user_id IS NULL",
+                session_id, self._vertical, user_id)
+        return res.endswith("1")
+
     async def claim_by_email(self, *, user_id: str, email: str) -> int:
         """Adopt pre-accounts sessions the asker saved under this email (no owner yet) into the
         account — one-time, idempotent; best-effort like everything here."""

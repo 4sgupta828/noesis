@@ -1757,6 +1757,20 @@
         </div>
       </section>
       <section class="acctcard acctwide">
+        <h3>Link another email <span class="acctmuted">bring past sessions into this account</span></h3>
+        <p class="acctcardsub">Asked questions under a different address before? Sign in to it once here and every session saved under it moves to this account.</p>
+        <div class="cform" id="linkform" style="margin-top:.2rem;">
+          <input id="linkemail" type="email" placeholder="Other email" autocomplete="off" />
+          <input id="linkpw" type="password" placeholder="Its password" autocomplete="off" />
+          <div class="cfoot"><button type="button" class="idgo" id="linkgo" style="width:auto;padding:.5rem 1.1rem;">Link and move sessions</button><span class="cerr" id="linkmsg"></span></div>
+        </div>
+      </section>
+      <section class="acctcard acctwide" id="unownedcard" hidden>
+        <h3>Unclaimed sessions <span class="acctmuted">admin · saved with no account</span></h3>
+        <p class="acctcardsub">Sessions asked before accounts existed (or via the API). Claim the ones that are yours; they move into this account.</p>
+        <div id="unownedbox"><span class="acctmuted">Loading…</span></div>
+      </section>
+      <section class="acctcard acctwide">
         <h3>Session</h3>
         <p class="acctcardsub">Signing out revokes this device's token only; other signed-in devices stay signed in.</p>
         <div class="acctcardbtns">
@@ -6421,6 +6435,7 @@ async function openAccount(){
   $("#acctmeta").textContent = meta;
   $("#prefTheme").value = document.documentElement.getAttribute("data-theme") || "light";
   $("#acctpage").hidden = false;
+  loadUnowned();
   // server-side prefs (fresh: /me may carry more than the cached USER, e.g. a country set at signup)
   try{
     const r = await fetch("/me/settings", {headers: authHeaders()});
@@ -6438,6 +6453,36 @@ async function openAccount(){
   }catch(e){ $("#acctcount").textContent = ""; }
 }
 $("#acctbtn").addEventListener("click", openAccount);
+$("#linkgo").addEventListener("click", async ()=>{
+  const email = $("#linkemail").value.trim(), password = $("#linkpw").value, msg = $("#linkmsg");
+  if(!email || !password){ msg.textContent = "Enter the other email and its password."; return; }
+  msg.textContent = "…";
+  try{
+    const r = await fetch("/me/link-email", {method:"POST", headers:{"content-type":"application/json", ...authHeaders()}, body: JSON.stringify({email, password})});
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok){ msg.textContent = d.detail || "Couldn't link."; return; }
+    msg.textContent = `Linked ${d.linked} — ${d.moved} session${d.moved===1?"":"s"} moved here.`;
+    $("#linkpw").value = ""; openAccount();
+  }catch(e){ msg.textContent = "Network error — try again."; }
+});
+async function loadUnowned(){
+  const card = $("#unownedcard"), box = $("#unownedbox"); if(!card) return;
+  const apw = sessionStorage.getItem("noesis_apw") || "";
+  card.hidden = !apw; if(!apw) return;
+  try{
+    const r = await fetch("/admin/sessions/unowned?limit=200", {headers:{"x-admin-password": apw}});
+    const d = r.ok ? await r.json() : {sessions: []};
+    if(!d.sessions.length){ box.innerHTML = `<span class="acctmuted">None left.</span>`; return; }
+    box.innerHTML = `<div style="overflow-x:auto;"><table class="acct-tbl"><thead><tr><th>When</th><th>Question</th><th>Saved as</th><th></th></tr></thead><tbody>`
+      + d.sessions.map(s=>`<tr data-id="${esc(s.id)}"><td>${esc(String(s.created_at).slice(0,10))}</td><td style="white-space:normal;min-width:16rem;">${esc((s.question||"").slice(0,110))}</td><td>${esc(s.user_email||s.user_name||"—")}</td><td><button type="button" class="histbtn claimbtn">Claim</button></td></tr>`).join("")
+      + `</tbody></table></div>`;
+    box.querySelectorAll(".claimbtn").forEach(b=>b.addEventListener("click", async ()=>{
+      const tr = b.closest("tr"); b.disabled = true;
+      try{ const r = await fetch("/sessions/"+encodeURIComponent(tr.dataset.id)+"/claim", {method:"POST", headers:{"x-admin-password": apw, ...authHeaders()}});
+        if(r.ok) tr.remove(); else b.disabled = false; }catch(_){ b.disabled = false; }
+    }));
+  }catch(e){ box.innerHTML = `<span class="acctmuted">Couldn't load.</span>`; }
+}
 $("#signinbtn").addEventListener("click", ()=>openAuth(USER && USER.email ? "login" : "register"));
 $("#acctclose").addEventListener("click", ()=>{ $("#acctpage").hidden = true; });
 $("#acctsessions").addEventListener("click", ()=>{ $("#acctpage").hidden = true; openSessions(); });

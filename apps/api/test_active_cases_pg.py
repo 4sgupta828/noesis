@@ -82,3 +82,27 @@ def test_publish_is_anonymous_owner_guarded_and_idempotent() -> None:
         finally:
             await _cleanup(sess)
     asyncio.run(body())
+
+
+def test_admin_publishes_any_account_and_unowned() -> None:
+    async def body():
+        sess = SessionStore(DSN, vertical=VERT)
+        try:
+            theirs = await sess.save(tenant_id="demo", workspace_id=None, question="Their case, eGFR 40", answer="x [1]",
+                                     grounded=True, claims=[], source_stats={}, coverage_gaps=[], rejected=0,
+                                     sources=[], user_id="owner-9")
+            nobody = await sess.save(tenant_id="demo", workspace_id=None, question="Unowned case", answer="y",
+                                     grounded=False, claims=[], source_stats={}, coverage_gaps=[], rejected=0,
+                                     sources=[], user_id=None)
+            assert [s["id"] for s in await sess.admin_list(user_id="owner-9")] == [theirs]
+            assert [s["id"] for s in await sess.admin_list(user_id=None)] == [nobody]
+            # a non-admin, non-owner cannot publish either; an admin can publish both
+            assert (await sess.active_publish([theirs, nobody], user_id="someone"))["published"] == []
+            res = await sess.active_publish([theirs, nobody], user_id=None, admin=True)
+            assert sorted(p["session_id"] for p in res["published"]) == sorted([theirs, nobody])
+            assert [m["session_id"] for m in await sess.active_mine(user_id="owner-9")] == [theirs]
+            assert [m["session_id"] for m in await sess.active_mine(user_id=None)] == [nobody]
+            assert len(await sess.active_list()) == 2
+        finally:
+            await _cleanup(sess)
+    asyncio.run(body())

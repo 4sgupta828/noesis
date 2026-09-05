@@ -1351,6 +1351,8 @@
   .acpick{max-width:52rem;}
   .acpick h2{font-family:var(--sans);font-size:1.15rem;font-weight:700;margin:0 0 .3rem;}
   .acpick .acbar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.6rem 0;}
+  .acpick .acacct{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;font-family:var(--sans);font-size:.84rem;font-weight:600;margin:.4rem 0;}
+  .acpick .acacct select{flex:1 1 14rem;min-width:0;max-width:100%;min-height:40px;padding:.35rem .6rem;border:1px solid var(--hair);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit;font-size:16px;}
   .acpick .acbar input[type=search]{flex:1 1 12rem;min-width:0;min-height:40px;padding:.4rem .7rem;border:1px solid var(--hair);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit;font-size:16px;}
   .acpick .acbar .histbtn{margin-left:0;min-height:40px;}
   .acpick .aclist{border:1px solid var(--hair);border-radius:10px;overflow:hidden;max-height:52vh;overflow-y:auto;}
@@ -6500,17 +6502,36 @@ async function unpublishActive(id, btn){
   }catch(e){ if(btn){ btn.disabled = false; btn.textContent = "Couldn't remove: "+(e.message||e); } return false; }
 }
 // The publish picker: the account's own sessions, multi-select → anonymous snapshots on the board.
-async function openActivePublish(){
+async function openActivePublish(acct){
   if(!(USER && USER.token)){ requireSignIn(); return; }
+  acct = (typeof acct === "string") ? acct : "";
   const det = $("#cbDetail"); if(!det) return;
   cbShowDetail();
   det.innerHTML = `<div class="splaceholder">Loading your sessions…</div>`;
+  // admin (⚙ unlocked): publish from ANY account, or the unowned sessions — acct = "" means my own
+  const apw = sessionStorage.getItem("noesis_apw") || "";
+  const adminH = apw ? {"x-admin-password": apw} : {};
+  let accounts = [];
+  if(apw){ try{ const r = await fetch("/admin/users", {headers: adminH}); if(r.ok) accounts = (await r.json()).users || []; }catch(e){} }
   let mine = [];
+  const onBoard = {};
   try{
-    const [r] = await Promise.all([fetch("/sessions?limit=300", {headers: authHeaders()}), refreshMyActive()]);
-    mine = (await r.json()).sessions || [];
-  }catch(e){ det.innerHTML = `<div class="cempty">Couldn't load your sessions.</div>`; return; }
-  const onBoard = {}; Object.entries(MY_ACTIVE).forEach(([cid, sid])=>{ onBoard[sid] = cid; });
+    if(acct){
+      const [r, m] = await Promise.all([fetch(`/admin/users/${encodeURIComponent(acct)}/sessions?limit=500`, {headers: adminH}),
+                                        fetch(`/admin/users/${encodeURIComponent(acct)}/active-cases`, {headers: adminH})]);
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
+      mine = (await r.json()).sessions || [];
+      if(m.ok) ((await m.json()).cases || []).forEach(c=>{ onBoard[c.session_id] = c.case_id; });
+    } else {
+      const [r] = await Promise.all([fetch("/sessions?limit=300", {headers: authHeaders()}), refreshMyActive()]);
+      mine = (await r.json()).sessions || [];
+      Object.entries(MY_ACTIVE).forEach(([cid, sid])=>{ onBoard[sid] = cid; });
+    }
+  }catch(e){ det.innerHTML = `<div class="cempty">Couldn't load sessions.</div>`; return; }
+  const acctSel = apw ? `<label class="acacct">Account <select id="acacct" aria-label="Account to publish from">
+      <option value="">My account (${esc(USER.email||"")})</option>
+      ${accounts.filter(u=>u.id && u.email !== USER.email).map(u=>`<option value="${esc(u.id)}" ${u.id===acct?"selected":""}>${esc(u.email||u.name||u.id)} · ${u.sessions||0}</option>`).join("")}
+      <option value="unowned" ${acct==="unowned"?"selected":""}>Unowned sessions (no account)</option></select></label>` : "";
   const item = s => `<label class="acitem" data-id="${esc(s.id)}" data-q="${esc((s.question||"").toLowerCase())}">
       <input type="checkbox" value="${esc(s.id)}" ${onBoard[s.id] ? "" : ""}>
       <span><span class="acq">${esc(s.question||"")}</span>
@@ -6523,13 +6544,15 @@ async function openActivePublish(){
   det.innerHTML = `<div class="acpick">
     <h2>Publish cases to the board — anonymously</h2>
     <div class="acnote">Each selected case is copied to Active Cases with no publisher, no asker, and no patient reference. Attached patient names/IDs, e-mails, phone numbers, record numbers and full dates are removed from the text automatically. Re-publishing a case refreshes its copy; you can remove yours any time.</div>
-    <div class="acbar"><input type="search" id="acfilter" placeholder="Filter your sessions…" aria-label="Filter sessions">
+    ${acctSel}
+    <div class="acbar"><input type="search" id="acfilter" placeholder="Filter ${acct ? "sessions" : "your sessions"}…" aria-label="Filter sessions">
       <button type="button" class="histbtn" id="acall">Select all shown</button><button type="button" class="histbtn" id="acnone">Clear</button></div>
     <div class="aclist" id="aclist">${mine.length ? mine.map(item).join("") : `<div class="sempty">You have no saved sessions yet.</div>`}</div>
     <label class="acconfirm"><input type="checkbox" id="acok"><span>I have checked that the selected cases contain no patient names or other identifying details beyond what is removed automatically.</span></label>
     <button type="button" class="acgo" id="acgo" disabled>Publish 0 anonymously</button>
     <div class="acmsg" id="acmsg"></div></div>`;
   const listEl = det.querySelector("#aclist"), go = det.querySelector("#acgo"), ok = det.querySelector("#acok"), msg = det.querySelector("#acmsg");
+  const sel = det.querySelector("#acacct"); if(sel) sel.addEventListener("change", ()=>openActivePublish(sel.value));
   const boxes = ()=>[...listEl.querySelectorAll("input[type=checkbox]")];
   const shown = ()=>boxes().filter(b=>!b.closest(".acitem").hidden);
   const sync = ()=>{ const n = boxes().filter(b=>b.checked).length; go.textContent = `Publish ${n} anonymously`; go.disabled = !(n && ok.checked); };
@@ -6546,10 +6569,10 @@ async function openActivePublish(){
     if(!ids.length) return;
     go.disabled = true; msg.textContent = `Publishing ${ids.length}…`;
     try{
-      const r = await fetch("/active-cases/publish", {method:"POST", headers:{"content-type":"application/json", ...authHeaders()}, body: JSON.stringify({session_ids: ids})});
+      const r = await fetch(acct ? "/admin/active-cases/publish" : "/active-cases/publish", {method:"POST", headers:{"content-type":"application/json", ...adminH, ...authHeaders()}, body: JSON.stringify({session_ids: ids})});
       if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
       const res = await r.json();
-      msg.textContent = `Published ${res.published.length} anonymously${res.skipped.length ? ` · ${res.skipped.length} skipped (not yours)` : ""}.`;
+      msg.textContent = `Published ${res.published.length} anonymously${res.skipped.length ? ` · ${res.skipped.length} skipped${acct ? "" : " (not yours)"}` : ""}.`;
       await loadActiveCases();
       if(!isMobileSess()) $("#cbDetail").insertAdjacentHTML("afterbegin", `<div class="acnote">${esc(msg.textContent)}</div>`);
     }catch(e){ msg.textContent = "Couldn't publish: "+(e.message||e); go.disabled = false; }

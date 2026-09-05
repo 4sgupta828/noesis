@@ -353,7 +353,7 @@ class AccountStore:
         await self._ensure()
         async with (await self._get_pool()).acquire() as conn:
             rows = await conn.fetch(
-                """SELECT u.name, u.email, u.profession, u.country, u.npi_verified,
+                """SELECT u.id, u.name, u.email, u.profession, u.country, u.npi_verified,
                           u.created_at, u.last_seen,
                           (u.pw_hash IS NOT NULL AND u.pw_hash <> '') AS has_password,
                           (SELECT count(*) FROM noesis_research_session s

@@ -560,10 +560,13 @@ class SessionStore:
                 "top_leg_queries": sorted(top_queries.items(), key=lambda x: -x[1])[:10]}
 
     # ---- Active Cases (anonymous publication to the public Case Board) --------------------------
-    async def active_publish(self, session_ids: list[str], *, user_id: str | None) -> dict[str, Any]:
+    async def active_publish(self, session_ids: list[str], *, user_id: str | None,
+                             admin: bool = False) -> dict[str, Any]:
         """Publish the caller's OWN sessions anonymously: each becomes a de-identified snapshot row
         (see api.deident). Re-publishing refreshes the snapshot under the same case_id. Returns the
-        published case ids and the session ids that were skipped (not the caller's / unknown)."""
+        published case ids and the session ids that were skipped (not the caller's / unknown).
+        `admin=True` (admin-password gated by the caller) publishes any account's or unowned sessions —
+        the snapshot is just as anonymous whoever publishes it."""
         import secrets
         from api.deident import anonymous_snapshot
         await self._ensure()
@@ -572,7 +575,7 @@ class SessionStore:
         pool = await self._get_pool()
         for sid in dict.fromkeys(session_ids or []):
             row = await self.get(sid)
-            if row is None or (row.get("user_id") or None) != (user_id or None):
+            if row is None or (not admin and (row.get("user_id") or None) != (user_id or None)):
                 skipped.append(sid)
                 continue
             snap = anonymous_snapshot(row)
@@ -639,16 +642,39 @@ class SessionStore:
                      "anonymous": True})
         return snap
 
-    async def active_mine(self, *, user_id: str) -> list[dict[str, Any]]:
-        """Which of the caller's sessions are on the board (for the publish picker)."""
+    async def active_mine(self, *, user_id: str | None) -> list[dict[str, Any]]:
+        """Which of an account's sessions are on the board (for the publish picker). user_id=None →
+        the unowned sessions (admin use)."""
         await self._ensure()
         async with (await self._get_pool()).acquire() as conn:
             rows = await conn.fetch(
                 """SELECT a.case_id, a.session_id, a.published_at FROM noesis_active_case a
                    JOIN noesis_research_session s ON s.id = a.session_id
-                   WHERE a.vertical=$1 AND s.user_id=$2 ORDER BY a.published_at DESC""", self._vertical, user_id)
+                   WHERE a.vertical=$1 AND s.user_id IS NOT DISTINCT FROM $2 ORDER BY a.published_at DESC""",
+                self._vertical, user_id)
         return [{"case_id": r["case_id"], "session_id": r["session_id"],
                  "published_at": r["published_at"].isoformat()} for r in rows]
+
+    async def admin_list(self, *, user_id: str | None, limit: int = 300, q: str | None = None) -> list[dict[str, Any]]:
+        """An account's sessions (or the unowned ones when user_id is None) for admin bulk actions —
+        the same row shape as `list`, across tenants."""
+        await self._ensure()
+        where = "vertical=$1 AND NOT deleted AND user_id IS NOT DISTINCT FROM $2"
+        params: list[Any] = [self._vertical, user_id]
+        if q and q.strip():
+            params.append(f"%{q.strip()}%")
+            where += f" AND (question ILIKE ${len(params)} OR patient_ref ILIKE ${len(params)})"
+        params.append(limit)
+        async with (await self._get_pool()).acquire() as conn:
+            rows = await conn.fetch(
+                f"""SELECT id, question, grounded, created_at, patient_ref, real_patient,
+                           thread->0->>'kind' AS kind, audience
+                    FROM noesis_research_session WHERE {where} ORDER BY created_at DESC LIMIT ${len(params)}""",
+                *params)
+        return [{"id": r["id"], "question": r["question"], "grounded": r["grounded"],
+                 "kind": r["kind"] or "research", "audience": r["audience"] or "clinician",
+                 "real_patient": bool(r["real_patient"]), "patient_ref": r["patient_ref"],
+                 "created_at": r["created_at"].isoformat()} for r in rows]
 
     async def get(self, session_id: str) -> dict[str, Any] | None:
         await self._ensure()

@@ -4357,6 +4357,40 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             return {"cases": []}
         return {"cases": await store.active_mine(user_id=user["id"])}
 
+    # admin: bulk-publish from ANY account (or the unowned sessions) — same anonymous snapshot
+    def _admin_uid(uid: str) -> str | None:
+        return None if uid in ("unowned", "none", "") else uid
+
+    @app.get("/admin/users/{uid}/sessions")
+    async def admin_user_sessions(uid: str, q: str = "", limit: int = 300,
+                                  x_admin_password: str = Header(default="")) -> dict:
+        """An account's sessions ("unowned" → sessions with no account), for admin bulk publishing."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        store = _store()
+        if store is None:
+            return {"sessions": []}
+        return {"sessions": await store.admin_list(user_id=_admin_uid(uid), q=q or None, limit=min(max(limit, 1), 1000))}
+
+    @app.get("/admin/users/{uid}/active-cases")
+    async def admin_user_active(uid: str, x_admin_password: str = Header(default="")) -> dict:
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        store = _store()
+        return {"cases": await store.active_mine(user_id=_admin_uid(uid)) if store is not None else []}
+
+    @app.post("/admin/active-cases/publish")
+    async def admin_active_publish(body: ActivePublishIn, x_admin_password: str = Header(default="")) -> dict:
+        """Admin bulk-publish: any sessions, regardless of owner. The copies are just as anonymous."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        store = _store()
+        if store is None:
+            raise HTTPException(status_code=404, detail="no session store")
+        if not body.session_ids:
+            return {"published": [], "skipped": []}
+        return await store.active_publish(body.session_ids[:1000], user_id=None, admin=True)
+
     @app.get("/active-cases/{case_id}")
     async def active_case_get(case_id: str) -> dict:
         store = _store()

@@ -1561,8 +1561,11 @@
     border-radius:10px;padding:.48rem .85rem;min-height:38px;background:var(--panel);border:1px solid var(--hair);color:var(--ink);
     box-shadow:var(--sh-sm);transition:background .13s,border-color .13s,color .13s;}
   .histbtn:hover,.copybtn:hover,.sact:hover{background:var(--panel2);border-color:var(--muted);color:var(--ink);}
-  .newbtn,.newbtn:hover{background:var(--gold);color:var(--on-accent);border-color:var(--gold);font-weight:600;}
-  .newbtn:hover{background:var(--gold-strong);}
+  /* header / nav buttons: quiet, like roster — hairline outline, muted text, no fill, no shadow */
+  .histbtn{background:transparent;box-shadow:none;color:var(--muted);font-weight:550;font-size:.8rem;padding:.38rem .8rem;min-height:34px;border-radius:9px;}
+  .histbtn:hover{color:var(--ink);border-color:var(--muted);background:var(--panel2);}
+  .newbtn{color:var(--gold);border-color:rgba(var(--gold-rgb),.5);}
+  .newbtn:hover{color:var(--on-accent);background:var(--gold);border-color:var(--gold);}
   .copybtn{font-size:.78rem;padding:.38rem .7rem;min-height:34px;}
   .sact{font-size:.78rem;padding:.38rem .7rem;min-height:34px;}
   .sact-danger{color:var(--gap);}

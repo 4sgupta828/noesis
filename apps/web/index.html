@@ -5289,12 +5289,14 @@ function buildPanelSessionActions(box, row){
   box.innerHTML = btn("pd-copy","⧉","Copy","Copy the panel conclusion")
     + btn("pd-link","🔗","Link","Copy a link to this panel discussion")
     + btn("pd-share","🌐", row.public ? "Public link" : "Share publicly", "Publish this panel discussion to a public link anyone can read and comment on")
+    + btn("pd-board","⊞", MY_ACTIVE_BY_SID[row.id] ? "On Case Board" : "To Case Board", MY_ACTIVE_BY_SID[row.id] ? "On the public Case Board (anonymous) — click to remove" : "Publish this discussion to the public Case Board anonymously — identifying details removed")
     + btn("pd-cont","↳","Continue in chat","Continue the discussion — ask the panel a follow-up")
     + btn("pd-del","🗑","Delete","Delete this panel discussion");
   const syn = ((row.thread && row.thread.length ? row.thread[row.thread.length-1] : row).answer) || "";
   $("#pd-copy").addEventListener("click", e=>copyText(syn, e.currentTarget));
   $("#pd-link").addEventListener("click", e=>copyLinkUrl(panelUrl(row.id), e.currentTarget));
   $("#pd-share").addEventListener("click", e=>shareClick(row.id, e.currentTarget));
+  $("#pd-board").addEventListener("click", e=>caseBoardToggle(row.id, e.currentTarget, ()=>buildPanelSessionActions(box, row)));
   $("#pd-cont").addEventListener("click", ()=>{ closeSessions(); openPanelSession(row); });   // full view → follow-up
   $("#pd-del").addEventListener("click", async ()=>{
     if(!confirm("Delete this panel discussion?")) return;
@@ -6248,6 +6250,7 @@ const isMobileSess = () => window.matchMedia("(max-width:640px)").matches;
 function setSback(label){ const b = $("#sback"); if(b) b.textContent = label; }
 function openSessions(){
   if(!requireSignIn()) return;
+  refreshMyActive();                    // which sessions are already on the Case Board (for the ⊞ action)
   sessionsEl.hidden = false;
   sessionsEl.dataset.view = "list";     // mobile lands on the list; a tap drills into one answer
   setSback("← Back");
@@ -6402,11 +6405,33 @@ function selectCase(id){
   cbShowDetail();
 }
 // ---- Active Cases: anonymous, de-identified cases published from accounts ---------------------
-let ACTIVE_CASES = [], MY_ACTIVE = {};       // MY_ACTIVE: case_id → session_id for the signed-in account
+let ACTIVE_CASES = [], MY_ACTIVE = {}, MY_ACTIVE_BY_SID = {};   // case_id → session_id, and the reverse
 async function refreshMyActive(){
-  MY_ACTIVE = {};
+  MY_ACTIVE = {}; MY_ACTIVE_BY_SID = {};
   if(!(USER && USER.token)) return;
-  try{ const r = await fetch("/active-cases/mine", {headers: authHeaders()}); if(r.ok) (await r.json()).cases.forEach(c=>{ MY_ACTIVE[c.case_id] = c.session_id; }); }catch(e){}
+  try{ const r = await fetch("/active-cases/mine", {headers: authHeaders()}); if(r.ok) (await r.json()).cases.forEach(c=>{ MY_ACTIVE[c.case_id] = c.session_id; MY_ACTIVE_BY_SID[c.session_id] = c.case_id; }); }catch(e){}
+}
+// Past Sessions: one-click publish / remove of a single session on the anonymous Case Board.
+async function caseBoardToggle(sid, btn, done){
+  const cid = MY_ACTIVE_BY_SID[sid];
+  const lbl = btn.querySelector(".sact-t");
+  try{
+    if(cid){
+      if(!confirm("Remove this case from the Case Board?")) return;
+      if(lbl) lbl.textContent = "Removing…";
+      if(!(await unpublishActive(cid))) throw new Error("not removed");
+      delete MY_ACTIVE_BY_SID[sid];
+    } else {
+      if(!confirm("Publish this case to the public Case Board anonymously?\n\nNo publisher, asker or patient reference is stored. The attached patient name/ID, e-mails, phone numbers, record numbers and full dates are removed from the text automatically.\n\nPlease confirm the case text contains no other names or identifying details.")) return;
+      if(lbl) lbl.textContent = "Publishing…";
+      const r = await fetch("/active-cases/publish", {method:"POST", headers:{"content-type":"application/json", ...authHeaders()}, body: JSON.stringify({session_ids: [sid]})});
+      if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+      const res = await r.json();
+      if(!res.published.length) throw new Error("only the session's owner can publish it");
+      MY_ACTIVE_BY_SID[sid] = res.published[0].case_id; MY_ACTIVE[res.published[0].case_id] = sid;
+    }
+    if(done) done();
+  }catch(e){ if(lbl) lbl.textContent = "Couldn't: " + (e.message||e); }
 }
 async function loadActiveCases(){
   const list = $("#cbList"); if(!list) return;
@@ -6753,6 +6778,10 @@ function buildSessionActions(box, row, firstTurn, firstAns, rowEl){
   bits.push(btn("sa-share", "🌐", row.public ? "Public link" : "Share publicly",
     row.public ? "Copy the public link — anyone with it can read and comment" : "Publish to a public link anyone can read and comment on"));
   if(row.public) bits.push(btn("sa-unshare", "⊘", "Unpublish", "Hide the public page (the link stops working)"));
+  const onBoard = !!MY_ACTIVE_BY_SID[row.id];
+  bits.push(btn("sa-board", "⊞", onBoard ? "On Case Board" : "To Case Board",
+    onBoard ? "This case is on the public Case Board (anonymous) — click to remove it" : "Publish this case to the public Case Board anonymously — identifying details removed",
+    onBoard ? "rp-on" : ""));
   bits.push(btn("sa-rp", "◉", row.patient_ref ? `Patient: ${row.patient_ref}` : "Attach to patient",
     row.patient_ref ? "Change or remove the patient this session is attached to" : "Attach this session to a patient by name or ID — find it later by searching that name/ID",
     row.patient_ref ? "rp-on" : ""));
@@ -6781,6 +6810,8 @@ function buildSessionActions(box, row, firstTurn, firstAns, rowEl){
     try{ await publishSession(row.id, false); row.public = false; buildSessionActions(box, row, firstTurn, firstAns, rowEl); }
     catch(e){ alert("Couldn't unpublish: " + (e.message||e)); }
   });
+  const bd = box.querySelector("#sa-board");
+  if(bd) bd.addEventListener("click", ()=>caseBoardToggle(row.id, bd, ()=>buildSessionActions(box, row, firstTurn, firstAns, rowEl)));
   const rt = box.querySelector("#sa-retry");
   if(rt) rt.addEventListener("click", ()=>retryDeeper(firstTurn.question||row.question, nextEf));
   const ct = box.querySelector("#sa-cont");

@@ -425,6 +425,7 @@
   /* synthesized answer */
   .answer{font-size:.96rem;line-height:1.62;letter-spacing:-.005em;white-space:pre-wrap;margin:.2rem 0 1.4rem;}
   .answer .ref{color:var(--gold);font-weight:640;cursor:pointer;font-size:.72em;padding:0 .05em;}
+  .answer .refg{white-space:nowrap;}
   /* structured answer — a clinical brief */
   .answer.md{white-space:normal;font-size:.92rem;}
   .answer.md .mdh{font-family:var(--sans);font-size:.7rem;font-weight:680;text-transform:uppercase;
@@ -2010,9 +2011,14 @@ function esc(s){const d=document.createElement("div");d.textContent=s??"";return
 // [n] AND grouped [n, m, k] citation refs → clickable sups, in ONE pass (a chained second replace
 // would re-match the [n] text inside the sups the first pass emitted and nest tags).
 function linkCitationRefs(s, cls){
-  return s.replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, (m, g) =>
-    g.split(",").map(x => { const n = x.trim();
-      return `<sup class="${cls||"ref"}" data-n="${n}">[${n}]</sup>`; }).join(""));
+  const sups = g => g.split(",").map(x => { const n = x.trim();
+      return `<sup class="${cls||"ref"}" data-n="${n}">[${n}]</sup>`; }).join("");
+  // A RUN of adjacent refs ("[6][8]" / "[1] [5]") plus any trailing punctuation is one unbreakable
+  // unit, glued to the word before it (nbsp) — so a line never ends on "[6]" with "[8]." orphaned
+  // on the next, and a sentence's period never wraps away from its citation.
+  return s.replace(/( )?((?:\[\d+(?:\s*,\s*\d+)*\](?:\s*(?=\[\d))?)+)([.,;:!?)]*)/g, (m, sp, run, punct) =>
+    (sp ? "&nbsp;" : "") + '<span class="refg">'
+      + run.replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, (mm, g) => sups(g)) + punct + '</span>');
 }
 
 // Inline: bold, clickable [n] refs, and typed highlight marks. Operates on

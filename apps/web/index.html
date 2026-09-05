@@ -101,7 +101,7 @@
     box-shadow:0 8px 30px -16px rgba(0,0,0,.7), 0 0 0 3px rgba(var(--gold-rgb),.14);}
   textarea{flex:1;border:0;background:transparent;color:var(--ink);font:inherit;font-size:1.06rem;
     line-height:1.5;resize:none;outline:none;padding:.15rem 0;min-height:3.5rem;max-height:20rem;overflow-y:auto;}
-  textarea::placeholder{color:var(--muted);}
+  textarea::placeholder,input::placeholder{color:var(--muted);opacity:.62;}
   button.go{flex:none;width:44px;height:44px;border:0;border-radius:50%;cursor:pointer;
     background:var(--gold);color:var(--on-accent);display:grid;place-items:center;
     transition:transform .12s, background .15s;}
@@ -6328,6 +6328,18 @@ $("#idgo").addEventListener("click", async ()=>{
   maybeShowPulseBell();
 });
 $("#idmodal").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#idgo").click(); });
+// Intake boxes go EMPTY the moment they are focused: the example placeholder is stashed on focus and
+// restored on blur only if nothing was typed — so a clicked box never shows example text.
+document.addEventListener("focusin", e => {
+  const el = e.target;
+  if(!(el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && /^(text|search|email|url)$/.test(el.type)))) return;
+  if(el.placeholder){ el.dataset.ph = el.placeholder; el.placeholder = ""; }
+});
+document.addEventListener("focusout", e => {
+  const el = e.target;
+  if(el && el.dataset && el.dataset.ph !== undefined && !el.value){ el.placeholder = el.dataset.ph; delete el.dataset.ph; }
+  else if(el && el.dataset && el.dataset.ph !== undefined){ delete el.dataset.ph; }
+});
 
 // ---- product settings (⚙, password-gated): live flag toggles served by /admin/settings ----
 const SET_LABELS = {

@@ -6,7 +6,7 @@
 <title>Noesis — Research</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
 <style>
   /* ---- Noesis identity: deep navy canvas, gold brand accent, green = verified ---- */
   /* DEFAULT = CLINICAL LIGHT — the look familiar from clinical/EHR apps: cool-white surfaces, a
@@ -1541,6 +1541,25 @@
   .answer .ref,.answer.md .ref{font-family:var(--mono);font-size:.66em;font-weight:600;color:var(--gold);background:var(--accent-soft);
     border-radius:4px;padding:.05em .28em;vertical-align:baseline;position:relative;top:-.35em;line-height:1;margin-left:.06em;}
   .answer.md .refg{white-space:nowrap;}
+  /* ---- questions: regular weight; long vignettes read as prose with their own paragraphs/lists ---- */
+  .pubq,.turn-qtext,.sessions .sqhead .qq{font-weight:400;}
+  .qfmt p{margin:0 0 .45rem;} .qfmt p:last-child{margin-bottom:0;}
+  .qfmt ul,.qfmt ol{margin:.3rem 0 .5rem 1.25rem;padding:0;} .qfmt li{margin:.2rem 0;}
+  .qfmt.qlong{font-size:1.06rem;line-height:1.55;letter-spacing:0;}
+  .qfmt.qlong p{margin-bottom:.55rem;}
+  .qfmt strong,.qfmt b{font-weight:400;}
+  /* ---- citation hover card: the finding + its full verbatim quote + source, from the ref's own evidence card ---- */
+  #citehover{position:fixed;z-index:1300;max-width:min(460px,92vw);display:none;background:var(--panel);
+    border:1px solid var(--hair);border-left:3px solid var(--gold);border-radius:12px;padding:.75rem .9rem;
+    box-shadow:var(--sh-md),0 2px 6px rgba(15,27,42,.08);font-family:var(--sans);}
+  #citehover.on{display:block;}
+  #citehover .ch-n{font-family:var(--mono);font-size:.68rem;font-weight:600;color:var(--gold);margin-bottom:.35rem;}
+  #citehover .ch-claim{font-size:.88rem;color:var(--ink);line-height:1.5;margin-bottom:.5rem;font-weight:500;}
+  #citehover .ch-quote{margin:0;font-family:var(--serif);font-size:.9rem;color:var(--muted);font-style:italic;line-height:1.5;
+    padding-left:.7rem;border-left:2px solid var(--hair);max-height:11rem;overflow:auto;}
+  #citehover .ch-src{margin-top:.55rem;font-size:.74rem;color:var(--muted);}
+  #citehover .ch-src a{color:var(--gold);text-decoration:none;} #citehover .ch-src a:hover{text-decoration:underline;}
+  .answer .ref{cursor:pointer;}
   /* ---- comments ---- */
   .cmt{border-radius:12px;box-shadow:var(--sh-sm);}
   .cmt-b{font-size:.95rem;}
@@ -1901,6 +1920,8 @@
     </div>
   </div>
 </section>
+
+<div id="citehover" role="tooltip" aria-hidden="true"></div>
 
 <div class="idmodal" id="idmodal" hidden>
   <div class="idcard">
@@ -2706,6 +2727,24 @@ function blockFromLine(line){
     return outp;
   }
   return [`<p class="mdp">${mdInline(t)}</p>`];
+}
+// A QUESTION is not an answer: keep its paragraphs and lists, never bold it, and let long case
+// vignettes read as prose (smaller, regular weight) instead of a shouted headline.
+function questionHtml(q){
+  const text = String(q||"").replace(/\*\*/g,"").replace(/\r/g,"").trim();
+  const lines = text.split("\n");
+  const out = []; let list = null;
+  const flush = () => { if(list){ out.push(`<${list.tag}>${list.items.map(x=>`<li>${x}</li>`).join("")}</${list.tag}>`); list = null; } };
+  for(const raw of lines){
+    const ln = raw.trim();
+    if(!ln){ flush(); continue; }
+    const li = ln.match(/^(?:[-*•]|\d+[.)])\s+(.*)$/);
+    if(li){ const tag = /^\d/.test(ln) ? "ol" : "ul"; if(!list || list.tag !== tag){ flush(); list = {tag, items: []}; } list.items.push(esc(li[1])); continue; }
+    flush(); out.push(`<p>${esc(ln)}</p>`);
+  }
+  flush();
+  const long = text.length > 220 || lines.length > 2;
+  return `<div class="qfmt${long ? " qlong" : ""}">${out.join("")}</div>`;
 }
 function mdToHtml(raw){
   const lines = esc(raw).split(/\r?\n/);
@@ -3942,7 +3981,7 @@ async function loadPublicSession(token){
     const canDelete = !!row.is_owner;              // the publisher (signed in on this device) can moderate
     const when = row.created_at ? new Date(row.created_at).toLocaleDateString([], {dateStyle:"medium"}) : "";
     let html = `<div class="pubbar"><span>Shared for discussion${row.user_name?` by <b>${esc(row.user_name)}</b>`:""}${when?` · ${esc(when)}`:""}</span><a href="${location.pathname}">Ask your own question on Noesis →</a></div>`
-      + `<div class="pubq">${esc(row.question)}</div>`
+      + `<div class="pubq">${questionHtml(row.question)}</div>`
       + `<div class="pubmeta">${turns.length>1?`${turns.length} turns · `:""}every citation opens the source passage · AI-generated, verify before acting</div>`;
     out.innerHTML = html;
     if(isPanelRow(row)){
@@ -5057,7 +5096,7 @@ function renderPanelSessionDetail(row){
     </div>`;
   }).join("");
   sdetail.innerHTML = `<div class="sqhead">
-      <div class="qhrow"><div class="qq"><span class="skind">◈ Panel</span> ${esc(row.question)}</div></div>
+      <div class="qhrow"><div class="qq"><span class="skind">◈ Panel</span> ${questionHtml(row.question)}</div></div>
       <div class="qm">${who?`Asked by <b>${esc(row.user_name||"")}</b>${row.user_email?" · "+esc(row.user_email):""} · `:""}${fmtDate(row.created_at)}${turns.length>1?` · ${turns.length} turns`:""}</div>
     </div>
     <div class="sactions" id="pd-actions"></div>
@@ -5959,7 +5998,7 @@ function renderThread(){
   THREAD.turns.forEach((t,i)=>{
     const block = document.createElement("div"); block.className = "turn";
     const qh = document.createElement("div"); qh.className = "turn-q";
-    qh.innerHTML = `<span class="turn-qmark">Q${i+1}</span><div class="turn-qtext">${esc(t.question||"")}</div>`;
+    qh.innerHTML = `<span class="turn-qmark">Q${i+1}</span><div class="turn-qtext">${questionHtml(t.question||"")}</div>`;
     block.appendChild(qh);
     const ans = document.createElement("div"); block.appendChild(ans);
     out.appendChild(block);
@@ -6278,7 +6317,7 @@ function showSessionDetail(row, rowEl){
   // mobile). All actions live in a single compact, iconized toolbar (#sactions) BETWEEN the question
   // and the answer.
   sdetail.innerHTML = `<div class="sqhead">
-      <div class="qhrow"><div class="qq">${esc(row.question)}</div></div>
+      <div class="qhrow"><div class="qq">${questionHtml(row.question)}</div></div>
       <div class="qm">${who?`Asked by <b>${esc(row.user_name||"")}</b>${row.user_email?" · "+esc(row.user_email):""} · `:""}${fmtDate(row.created_at)}${turns.length>1?` · ${turns.length} turns`:""}</div>
     </div><div class="sactions" id="sactions"></div><div id="sdbody"></div>`;
   if(PATIENT_MODE_ENABLED && (row.audience||"clinician") === "patient"){
@@ -6305,7 +6344,7 @@ function showSessionDetail(row, rowEl){
     const block = document.createElement("div"); block.className = "turn";
     const ef = Number(t.effort) || 1;
     if(i>0){ const qh = document.createElement("div"); qh.className = "turn-q";   // Q1 is in the header
-      qh.innerHTML = `<span class="turn-qmark">Q${i+1}</span><div class="turn-qtext">${esc(t.question||"")}`
+      qh.innerHTML = `<span class="turn-qmark">Q${i+1}</span><div class="turn-qtext">${questionHtml(t.question||"")}`
         + (EFFORT_ENABLED && ef>1 ? `<span class="efbadge">${effortTier(ef).name} · ${ef}×</span>` : "")
         + `</div>`;
       block.appendChild(qh); }
@@ -6755,6 +6794,53 @@ $("#idgo").addEventListener("click", async ()=>{
   maybeShowPulseBell();
 });
 $("#idmodal").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#idgo").click(); });
+
+// ---- citation hover (like eigen): hovering a [n] shows the finding + its FULL verbatim quote + source,
+// pulled from the ref's OWN evidence card #f{n} (ids repeat across turns/sessions, so resolve within the
+// nearest ancestor that contains one). Click still scrolls to the card. Touch: first tap shows the card.
+(function(){
+  const card = document.getElementById("citehover"); if(!card) return;
+  let hideT = null, current = null;
+  const hide = () => { card.classList.remove("on"); card.setAttribute("aria-hidden","true"); current = null; };
+  const cancel = () => { if(hideT){ clearTimeout(hideT); hideT = null; } };
+  const scheduleHide = () => { cancel(); hideT = setTimeout(hide, 180); };
+  function evidenceFor(ref){
+    const n = ref.getAttribute("data-n"); if(!n) return null;
+    let scope = ref.parentElement;
+    while(scope && scope !== document.body){ const ev = scope.querySelector("#f"+n); if(ev) return ev; scope = scope.parentElement; }
+    return document.getElementById("f"+n);
+  }
+  function show(ref){
+    const ev = evidenceFor(ref); if(!ev) return;
+    const ctext = ev.querySelector(".ctext"), cq = ev.querySelector(".cquote"), src = ev.querySelector(".srclink, .src");
+    let h = `<div class="ch-n">Finding ${esc(ref.getAttribute("data-n"))}</div>`;
+    if(ctext) h += `<div class="ch-claim">${ctext.innerHTML}</div>`;
+    if(cq && cq.textContent.trim()) h += `<blockquote class="ch-quote">${cq.innerHTML}</blockquote>`;
+    if(src) h += `<div class="ch-src">${src.outerHTML}</div>`;
+    card.innerHTML = h; card.classList.add("on"); card.setAttribute("aria-hidden","false"); current = ref;
+    const r = ref.getBoundingClientRect(), cw = card.offsetWidth, ch = card.offsetHeight;
+    const x = Math.max(8, Math.min(r.left + r.width/2 - cw/2, window.innerWidth - cw - 8));
+    let y = r.top - ch - 8; if(y < 8) y = r.bottom + 8;
+    card.style.left = x + "px"; card.style.top = y + "px";
+  }
+  document.addEventListener("mouseover", e => {
+    const ref = e.target.closest && e.target.closest(".ref[data-n]");
+    if(ref){ cancel(); if(ref !== current) show(ref); return; }
+    if(card.contains(e.target)) cancel();
+  });
+  document.addEventListener("mouseout", e => {
+    const to = e.relatedTarget;
+    if(to && (card.contains(to) || (to.closest && to.closest(".ref[data-n]")))) return;
+    if(e.target.closest && (e.target.closest(".ref[data-n]") || card.contains(e.target))) scheduleHide();
+  });
+  document.addEventListener("touchstart", e => {
+    const ref = e.target.closest && e.target.closest(".ref[data-n]");
+    if(ref && ref !== current){ e.preventDefault(); show(ref); }
+    else if(!card.contains(e.target)) hide();
+  }, {passive:false});
+  window.addEventListener("scroll", hide, {passive:true});
+  document.addEventListener("keydown", e => { if(e.key === "Escape") hide(); });
+})();
 $("#idclose").addEventListener("click", ()=>{ $("#idmodal").hidden = true; });
 // Intake boxes go EMPTY the moment they are focused: the example placeholder is stashed on focus and
 // restored on blur only if nothing was typed — so a clicked box never shows example text.

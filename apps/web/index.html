@@ -1538,6 +1538,8 @@
   .answer.md .mdol li{padding-left:1.75rem;}
   .answer.md .mdol li::before{font-family:var(--mono);font-size:.76em;top:.22em;left:0;font-weight:600;}
   .answer.md .mdl .mdol{margin:.45rem 0 .2rem;}
+  .answer.md .mdl .mdsub{margin:.35rem 0 .1rem;} .answer.md .mdsub li{margin:.3rem 0;font-size:.97em;}
+  .answer.md .mdsub li::before{background:var(--muted);width:4px;height:4px;}
   .answer.md strong{font-weight:620;}
   .answer.md .li-note{display:block;color:var(--muted);font-size:.92em;margin-top:.18rem;}
   .answer.md .mdh[data-sec="watch"]{color:var(--gap);} .answer.md .mdh[data-sec="watch"]::before{background:var(--gap);}
@@ -1551,6 +1553,9 @@
   .answer .ref,.answer.md .ref{font-family:var(--mono);font-size:.66em;font-weight:600;color:var(--gold);background:var(--accent-soft);
     border-radius:4px;padding:.05em .28em;vertical-align:baseline;position:relative;top:-.35em;line-height:1;margin-left:.06em;}
   .answer.md .refg{white-space:nowrap;}
+  /* a pile of ≥3 refs collapses into one pill: numbers stay individually clickable, the line stays calm */
+  .answer .refpile{background:var(--accent-soft);border-radius:4px;padding:.05em .25em;position:relative;top:-.35em;display:inline-block;line-height:1;}
+  .answer .refpile .ref{background:none;padding:0 .1em;top:0;margin:0;}
   /* ---- questions: regular weight; long vignettes read as prose with their own paragraphs/lists ---- */
   .pubq,.turn-qtext,.sessions .sqhead .qq{font-weight:400;}
   .qfmt p{margin:0 0 .45rem;} .qfmt p:last-child{margin-bottom:0;}
@@ -2323,16 +2328,20 @@ function linkCitationRefs(s, cls){
   // A RUN of adjacent refs ("[6][8]" / "[1] [5]") plus any trailing punctuation is one unbreakable
   // unit, glued to the word before it (nbsp) — so a line never ends on "[6]" with "[8]." orphaned
   // on the next, and a sentence's period never wraps away from its citation.
-  return s.replace(/( )?((?:\[\d+(?:\s*,\s*\d+)*\](?:\s*(?=\[\d))?)+)([.,;:!?)]*)/g, (m, sp, run, punct) =>
-    (sp ? "&nbsp;" : "") + '<span class="refg">'
-      + run.replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, (mm, g) => sups(g)) + punct + '</span>');
+  return s.replace(/( )?((?:\[\d+(?:\s*,\s*\d+)*\](?:\s*(?=\[\d))?)+)([.,;:!?)]*)/g, (m, sp, run, punct) => {
+    const inner = run.replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, (mm, g) => sups(g));
+    const count = (inner.match(/<sup/g)||[]).length;
+    return (sp ? "&nbsp;" : "") + `<span class="refg${count >= 3 ? " refpile" : ""}">` + inner + punct + '</span>';
+  });
 }
 
 // Inline: bold, clickable [n] refs, and typed highlight marks. Operates on
 // ALREADY-ESCAPED text (XSS-safe) — the [[F]]/[[R]]/[[K]] markers survive esc()
 // (literal brackets) and never collide with [n] refs (F/R/K aren't digits).
 function mdInline(s){
-  s = linkCitationRefs(s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>'));
+  s = s.replace(/\*\*((?:[^*\n]|\*(?!\*))+?)\*\*/g,'<strong>$1</strong>')      // bold may contain *italic*
+       .replace(/(^|[\s(>])\*([^*\n]+?)\*(?=[\s).,;:!?<]|$)/g,'$1<em>$2</em>');    // *italic* (not list markers)
+  s = linkCitationRefs(s);
   s = s.replace(/\[\[F\]\]([\s\S]*?)\[\[\/F\]\]/g,'<mark class="hl hl-f">$1</mark>')
        .replace(/\[\[R\]\]([\s\S]*?)\[\[\/R\]\]/g,'<mark class="hl hl-r">$1</mark>')
        .replace(/\[\[K\]\]([\s\S]*?)\[\[\/K\]\]/g,'<mark class="hl hl-k">$1</mark>');
@@ -2696,6 +2705,7 @@ function splitEnumeration(text){
   if(!marks.length || marks[0].n !== 1) return null;
   for(let k=1;k<marks.length;k++) if(marks[k].n !== marks[k-1].n+1) return null;
   const stem = text.slice(0, marks[0].start).replace(/[\s:;,—]+$/,"").trim();
+  if((stem.match(/\*\*/g)||[]).length % 2) return null;              // never cut inside bold
   if(marks.length < 3 && !(marks.length === 2 && /:$/.test(text.slice(0, marks[0].start).trim()))) return null;
   const items = marks.map((mk, k) => text.slice(mk.end, k+1 < marks.length ? marks[k+1].start : text.length)
     .replace(/[\s;,]*(?:and|or)?\s*$/i, "").replace(/^\s+|\s+$/g,""));
@@ -2716,10 +2726,12 @@ function splitSemicolons(text){
   if(segs.length < 3 || segs.some(x => x.split(/\s+/).length < 4 || !_hlBalanced(x))) return null;
   // Only a LIST-shaped block splits: an introducing stem ending in ":" within its first 12 words
   // ("The evidence does not: a; b; c"). Prose that merely chains clauses with semicolons stays prose.
-  const c = segs[0].indexOf(":");
+  let c = segs[0].indexOf(":");
   if(!(c > 0 && segs[0].slice(0, c).split(/\s+/).length <= 12)) return null;
+  if(segs[0].slice(c+1).startsWith("**")) c += 2;                    // "**Label:**" — keep the closing marker in the stem
   const stem = segs[0].slice(0, c+1); segs[0] = segs[0].slice(c+1).trim();
   if(!segs[0] || segs.length < 3) return null;
+  if((stem.match(/\*\*/g)||[]).length % 2) return null;              // never cut inside bold
   return {stem, items: segs.map(x => x.replace(/^(?:and|or)\s+/i,""))};
 }
 // a list item: bold lead + (optional) enumeration split + a second " — " clause demoted to a note
@@ -2731,6 +2743,13 @@ function itemHtml(t){
   const parts = led.split(/\s+—\s+/);
   if(parts.length >= 3 && parts.slice(2).join(" — ").split(/\s+/).length >= 8)
     return mdInline(parts.slice(0,2).join(" — ")) + `<span class="li-note">${mdInline(parts.slice(2).join(" — "))}</span>`;
+  // a bullet over 60 words with several sentences: the first sentence is the item, the rest a note —
+  // same words, scannable shape (a citation group or a decimal never counts as a sentence end)
+  if(led.split(/\s+/).length > 60){
+    const m = led.match(/^([\s\S]*?[.!?](?:\s*\[\d+\])*)\s+(?=[A-Z(])([\s\S]{40,})$/);
+    if(m && !/\d[.!?]$/.test(m[1]) && _hlBalanced(m[1]) && _hlBalanced(m[2]))
+      return mdInline(m[1]) + `<span class="li-note">${mdInline(m[2])}</span>`;
+  }
   return mdInline(led);
 }
 function blockFromLine(line){
@@ -2800,9 +2819,14 @@ function mdToHtml(raw){
       }
       continue; }
     if(/^\s*[-*]\s+/.test(line)){
-      const items = [];
-      while(i<lines.length && /^\s*[-*]\s+/.test(lines[i])){ items.push(itemHtml(lines[i].replace(/^\s*[-*]\s+/,""))); i++; }
-      out.push('<ul class="mdl">'+items.map(x=>`<li>${x}</li>`).join("")+'</ul>');
+      const items = [];   // [{html, kids:[]}] — an indented "- " line nests under the previous item
+      while(i<lines.length && /^\s*[-*]\s+/.test(lines[i])){
+        const indent = (lines[i].match(/^\s*/)||[""])[0].length, body = lines[i].replace(/^\s*[-*]\s+/,"");
+        if(indent >= 2 && items.length) items[items.length-1].kids.push(itemHtml(body));
+        else items.push({html: itemHtml(body), kids: []});
+        i++;
+      }
+      out.push('<ul class="mdl">'+items.map(it=>`<li>${it.html}${it.kids.length?`<ul class="mdl mdsub">${it.kids.map(k=>`<li>${k}</li>`).join("")}</ul>`:""}</li>`).join("")+'</ul>');
       continue;
     }
     // ONE LINE = ONE BLOCK (the model never hard-wraps mid-sentence): consecutive lines are no longer

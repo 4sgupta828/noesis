@@ -43,4 +43,14 @@ h=mdToHtml('A single normal troponin at presentation does not exclude ongoing AC
 t('prose chained with semicolons (no introducing colon) is NOT split', !/<ol/.test(h));
 h=questionHtml('A 62-year-old man presents with chest pressure.\nECG shows nonspecific changes.\n\nWhat is the most likely diagnosis?\n\nPlease:\nState what immediate medications are appropriate.\nCite the most recent guidelines.');
 t('question: everything from the first ask onward is ask, vignette before it is context', (h.match(/class="qctx"/g)||[]).length===2 && (h.match(/class="qask"/g)||[]).length===4);
+h=mdToHtml('**6. Non-cardiac causes — *(standard clinical reasoning — not from the retrieved evidence)***');
+t('bold containing italics renders without stray asterisks', !/\*/.test(h.replace(/<[^>]+>/g,'')) && /<em>/.test(h));
+h=mdToHtml('- Parent item [1]\n  - Child detail one [2]\n  - Child detail two [3]\n- Next parent [4]');
+t('indented bullets nest under their parent', /<ul class="mdl mdsub">/.test(h) && (h.match(/<li>/g)||[]).length===4);
+h=mdToHtml('Supported by trials [1][2][3][4].');
+t('a pile of ≥3 refs collapses into one pill with individual refs', /refpile/.test(h) && (h.match(/<sup/g)||[]).length===4);
+h=mdToHtml('- **Lead** — '+'word '.repeat(40)+'ends here [1]. '+'Second sentence with more detail '.repeat(6)+'[2].');
+t('a 60+ word bullet keeps its first sentence and demotes the rest', /li-note/.test(h));
+h=mdToHtml('- **Metformin:** Remains first-line background therapy if the glycemic target is met [54]; requires dose adjustment for renal excretion given CKD3 [19]; if contraindicated or not tolerated, switch to an alternative agent with renal data [20].');
+t('bold label stem survives a semicolon split intact', /<strong>Metformin:<\/strong>/.test(h) && !/\*\*/.test(h.replace(/<[^>]+>/g,'')) && (h.match(/<li>/g)||[]).length===4);
 console.log(fails? `${fails} FAILED` : 'all passed'); process.exit(fails?1:0);

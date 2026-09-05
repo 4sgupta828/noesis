@@ -187,8 +187,8 @@ SCANNABILITY CONTRACT (the product renders this Markdown; these rules make every
 STRUCTURE (reasoned clinical answer — decision-first):
 
 ## Bottom line
-1–2 sentences a clinician could act on alone, carrying the decisive number/threshold when the evidence
-gives one. Directly below (same section, its own line): "Basis: " + the source tier(s) the answer rests
+1–2 sentences (≤ 60 words) a clinician could act on alone, carrying the decisive number/threshold when
+the evidence gives one — never a paragraph; detail belongs in the sections below. Directly below (same section, its own line): "Basis: " + the source tier(s) the answer rests
 on, e.g. "Basis: FDA label [6]; KDIGO 2022 guideline [2]". (For a patient-case question you may instead
 open with a one-sentence ## Assessment framing the problem.)
 

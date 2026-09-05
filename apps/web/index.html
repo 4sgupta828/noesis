@@ -6116,7 +6116,7 @@ function retryDeeper(question, ef){
 async function selectSession(rowEl){
   sdetail.innerHTML = `<div class="status">Loading…</div>`;
   try{
-    const row = await (await fetch("/sessions/"+encodeURIComponent(rowEl.dataset.id))).json();
+    const row = await (await fetch("/sessions/"+encodeURIComponent(rowEl.dataset.id), {headers: authHeaders()})).json();
     showSessionDetail(row, rowEl);
   }catch(e){ sdetail.innerHTML = `<div class="empty">Couldn't load that session.</div>`; }
 }
@@ -6159,7 +6159,7 @@ async function openSessionById(id){
   $("#ssearch").value = ""; slist.innerHTML = `<div class="sempty">Loading…</div>`;
   await loadSessionList();
   try{
-    const row = await (await fetch("/sessions/"+encodeURIComponent(id))).json();
+    const row = await (await fetch("/sessions/"+encodeURIComponent(id), {headers: authHeaders()})).json();
     showSessionDetail(row, [...slist.querySelectorAll(".srow")].find(b=>b.dataset.id===id) || null);
   }catch(e){}
 }
@@ -6171,7 +6171,7 @@ document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ if(!vlight.hidde
 async function deleteSession(id, rowEl){
   if(!confirm("Delete this session? It will be removed from your history.")) return;
   try{
-    const r = await fetch("/sessions/"+encodeURIComponent(id), {method:"DELETE"});
+    const r = await fetch("/sessions/"+encodeURIComponent(id), {method:"DELETE", headers: authHeaders()});
     if(!r.ok) throw new Error();
     if(rowEl) rowEl.remove();
     const next = slist.querySelector(".srow");

@@ -1650,8 +1650,8 @@
   </div>
   <div class="ssearchrow">
     <span class="cbera" id="cbera">
-      <button type="button" class="cbtab on" data-era="historical">Historical</button>
-      <button type="button" class="cbtab" data-era="recent">Recent (1975–2025)</button>
+      <button type="button" class="cbtab on" data-era="recent">Recent (1975–2025)</button>
+      <button type="button" class="cbtab" data-era="historical">Historical</button>
     </span>
     <input type="search" class="ssearch" id="cbsearch" placeholder="Search cases…" aria-label="Search cases" />
   </div>
@@ -5760,7 +5760,7 @@ async function loadSessionList(){
 }
 
 // ===== Case Board: curated landmark cases + Noesis answer + clinician rubric (its own page) =====
-let CASES_DATA = null, CB_ERA = "historical";
+let CASES_DATA = null, CB_ERA = "recent";      // Case Board opens on Recent
 function _clusterLabel(key){ return ((CASES_DATA&&CASES_DATA.clusters)||[]).find(c=>c.key===key)?.label || key; }
 function closeCaseBoard(){ const cb=$("#caseboard"); if(cb) cb.hidden = true; document.body.style.overflow = ""; if(location.hash==="#cases") history.replaceState(null,"",location.pathname); }
 async function openCaseBoard(){

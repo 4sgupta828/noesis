@@ -1334,6 +1334,7 @@
   /* Case Board header generate control */
   #caseboard .shead #cbsub{font-family:var(--mono);font-size:.6rem;color:var(--muted);letter-spacing:.02em;}
   #caseboard .shead .cbgen{margin-left:auto;display:inline-flex;align-items:center;gap:.6rem;}
+  #caseboard .shead .cbgen[hidden]{display:none;}
   #caseboard .shead .cbgenmsg{font-family:var(--mono);font-size:.66rem;color:var(--muted);}
   @media (max-width:640px){ #caseboard .shead #cbsub{display:none;} }
   /* Case Board era toggle (Historical / Recent) */
@@ -6323,11 +6324,15 @@ async function loadSessionList(){
 let CASES_DATA = null, CB_ERA = "recent";      // Case Board opens on Recent
 function _clusterLabel(key){ return ((CASES_DATA&&CASES_DATA.clusters)||[]).find(c=>c.key===key)?.label || key; }
 function closeCaseBoard(){ const cb=$("#caseboard"); if(cb) cb.hidden = true; document.body.style.overflow = ""; if(location.hash==="#cases") history.replaceState(null,"",location.pathname); }
+// phones show one screen at a time: the list, then the selected case (← returns to the list)
+function cbShowDetail(){ const cb=$("#caseboard"); if(cb && isMobileSess()){ cb.dataset.view = "detail"; $("#cbback").textContent = "← Cases"; } }
+function cbShowList(){ const cb=$("#caseboard"); if(cb){ cb.dataset.view = "list"; $("#cbback").textContent = "← Back"; } }
 async function openCaseBoard(){
   syncCaseGenVisibility();
   const cb = $("#caseboard"); if(!cb) return;
   try{ closeSessions(); }catch(e){} try{ closePulsePage(); }catch(e){} try{ closeTermsPage(); }catch(e){}
   cb.hidden = false; document.body.style.overflow = "hidden";
+  cbShowList();
   if(location.hash!=="#cases") history.replaceState(null,"","#cases");
   loadCasesList();
 }
@@ -6392,6 +6397,7 @@ function selectCase(id){
   </div>`;
   det.scrollTop = 0;
   wireRubric(det, c);
+  cbShowDetail();
 }
 // ---- Active Cases: anonymous, de-identified cases published from accounts ---------------------
 let ACTIVE_CASES = [], MY_ACTIVE = {};       // MY_ACTIVE: case_id → session_id for the signed-in account
@@ -6454,6 +6460,7 @@ async function selectActiveCase(id){
     const un = det.querySelector(".acun");
     if(un) un.addEventListener("click", ()=>unpublishActive(id, un));
     det.scrollTop = 0;
+    cbShowDetail();
   }catch(e){ det.innerHTML = `<div class="cempty">This case is no longer on the board.</div>`; }
 }
 async function unpublishActive(id, btn){
@@ -6469,6 +6476,7 @@ async function unpublishActive(id, btn){
 async function openActivePublish(){
   if(!(USER && USER.token)){ requireSignIn(); return; }
   const det = $("#cbDetail"); if(!det) return;
+  cbShowDetail();
   det.innerHTML = `<div class="splaceholder">Loading your sessions…</div>`;
   let mine = [];
   try{
@@ -7511,12 +7519,13 @@ $("#pplback").addEventListener("click", closePeople);
 $("#pplbtn").addEventListener("click", openPeople);
 $("#termsbtn").addEventListener("click", ()=>openTermsPage());
 $("#casesbtn").addEventListener("click", openCaseBoard);
-$("#cbback").addEventListener("click", closeCaseBoard);
+$("#cbback").addEventListener("click", ()=>{ const cb=$("#caseboard"); if(isMobileSess() && cb && cb.dataset.view === "detail") cbShowList(); else closeCaseBoard(); });
 $("#cbgen").addEventListener("click", generateCaseAnswers);
 // generation is admin-only: the control appears only once ⚙ settings has been unlocked in this tab
 function syncCaseGenVisibility(){
   const w = $("#cbgenwrap"); if(w) w.hidden = !sessionStorage.getItem("noesis_apw") || CB_ERA === "active";
   const p = $("#cbpubwrap"); if(p) p.hidden = CB_ERA !== "active";
+  document.querySelectorAll("#cbera .cbtab").forEach(x=>x.classList.toggle("on", x.dataset.era === CB_ERA));
   const sub = $("#cbsub"); if(sub) sub.textContent = CB_ERA === "active" ? "Anonymous cases from clinicians · identifying details removed · open for discussion" : "Landmark cases · known correct decision · clinician-reviewed";
 }
 $("#cbpub").addEventListener("click", openActivePublish);

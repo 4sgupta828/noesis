@@ -47,6 +47,24 @@ ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS user_name  TEXT;
 -- account that created them. NULL = created without a signed-in user (legacy / anonymous).
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS user_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_nrs_user ON noesis_research_session (user_id, created_at DESC);
+-- PUBLIC SHARING: the owner publishes a session to an unguessable token; anyone with the link reads
+-- it (no account), and named people can leave comments. Unpublishing keeps the token (re-publish
+-- restores the same link) but hides the page.
+ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS public BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS share_token TEXT;
+ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nrs_share ON noesis_research_session (share_token) WHERE share_token IS NOT NULL;
+CREATE TABLE IF NOT EXISTS noesis_session_comment (
+    id          TEXT PRIMARY KEY,
+    session_id  TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    affiliation TEXT NOT NULL DEFAULT '',
+    body        TEXT NOT NULL,
+    ip_hash     TEXT NOT NULL DEFAULT '',
+    deleted     BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_nsc_session ON noesis_session_comment (session_id, created_at);
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS user_email TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS visual_observation TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb;
@@ -212,6 +230,78 @@ class SessionStore:
 
     async def save_turn_terms(self, session_id: str, turn_index: int, terms: list[dict]) -> bool:
         return await self.save_turn_artifact(session_id, turn_index, "terms", terms)
+
+    # ---- public sharing + discussion ----
+    async def set_public(self, session_id: str, *, user_id: str | None, public: bool) -> str | None:
+        """Owner-guarded publish/unpublish. Returns the share token (minted once, stable across
+        unpublish/re-publish) or None when the session is not the caller's."""
+        import secrets
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT share_token FROM noesis_research_session WHERE id=$1 AND vertical=$2 AND NOT deleted "
+                "AND user_id IS NOT DISTINCT FROM $3", session_id, self._vertical, user_id)
+            if row is None:
+                return None
+            token = row["share_token"] or secrets.token_urlsafe(18)
+            await conn.execute(
+                "UPDATE noesis_research_session SET public=$3, share_token=$4, "
+                "published_at=CASE WHEN $3 THEN COALESCE(published_at, now()) ELSE published_at END "
+                "WHERE id=$1 AND vertical=$2", session_id, self._vertical, public, token)
+        return token
+
+    async def get_public(self, token: str) -> dict[str, Any] | None:
+        """A PUBLISHED session by its share token, stripped of anything private (asker email, account
+        id, tenant, attachments, intake transcript). None when unknown or unpublished."""
+        if not token:
+            return None
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            r = await conn.fetchrow(
+                "SELECT id FROM noesis_research_session WHERE share_token=$1 AND vertical=$2 AND public AND NOT deleted",
+                token, self._vertical)
+        if r is None:
+            return None
+        row = await self.get(r["id"])
+        if row is None:
+            return None
+        for k in ("user_email", "user_id", "tenant_id", "workspace_id", "attachments", "share_token"):
+            row.pop(k, None)
+        row["thread"] = [{k: v for k, v in (t or {}).items() if k not in ("intake_transcript", "attachments")}
+                         for t in (row.get("thread") or [])]
+        row["public"] = True
+        return row
+
+    async def list_comments(self, session_id: str, *, limit: int = 500) -> list[dict[str, Any]]:
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id, name, affiliation, body, created_at FROM noesis_session_comment "
+                "WHERE session_id=$1 AND NOT deleted ORDER BY created_at ASC LIMIT $2", session_id, limit)
+        return [{"id": r["id"], "name": r["name"], "affiliation": r["affiliation"], "body": r["body"],
+                 "created_at": r["created_at"].isoformat()} for r in rows]
+
+    async def add_comment(self, session_id: str, *, name: str, affiliation: str, body: str,
+                          ip_hash: str = "") -> dict[str, Any]:
+        await self._ensure()
+        cid = uuid.uuid4().hex
+        async with (await self._get_pool()).acquire() as conn:
+            r = await conn.fetchrow(
+                "INSERT INTO noesis_session_comment (id, session_id, name, affiliation, body, ip_hash) "
+                "VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, name, affiliation, body, created_at",
+                cid, session_id, name.strip()[:80], (affiliation or "").strip()[:120], body.strip()[:2000], ip_hash)
+        return {"id": r["id"], "name": r["name"], "affiliation": r["affiliation"], "body": r["body"],
+                "created_at": r["created_at"].isoformat()}
+
+    async def delete_comment(self, session_id: str, comment_id: str, *, owner_user_id: str | None) -> bool:
+        """Only the session's owner can remove a comment (moderation)."""
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            res = await conn.execute(
+                "UPDATE noesis_session_comment c SET deleted=TRUE FROM noesis_research_session s "
+                "WHERE c.id=$1 AND c.session_id=$2 AND s.id=c.session_id AND s.vertical=$3 "
+                "AND s.user_id IS NOT DISTINCT FROM $4", comment_id, session_id, self._vertical, owner_user_id)
+        return res.endswith("1")
 
     async def claim_by_email(self, *, user_id: str, email: str) -> int:
         """Adopt pre-accounts sessions the asker saved under this email (no owner yet) into the
@@ -400,6 +490,7 @@ class SessionStore:
         return {
             "id": r["id"], "tenant_id": r["tenant_id"], "workspace_id": r["workspace_id"],
             "user_id": r["user_id"],
+            "public": bool(r["public"]), "share_token": r["share_token"],
             "question": r["question"], "answer": r["answer"], "grounded": r["grounded"],
             "claims": _j(r["claims"], []), "source_stats": _j(r["source_stats"], {}),
             "coverage_gaps": _j(r["coverage_gaps"], []), "rejected": r["rejected"],

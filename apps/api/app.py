@@ -7,6 +7,7 @@ serves its sources + gating + persona. Providers run in NOESIS_PROVIDER_MODE
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -14,7 +15,7 @@ import time
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -1094,6 +1095,17 @@ class RegisterIn(BaseModel):
 class LoginIn(BaseModel):
     email: str
     password: str
+
+
+class ShareIn(BaseModel):
+    public: bool = True
+
+
+class CommentIn(BaseModel):
+    name: str
+    body: str
+    affiliation: str = ""
+    website: str = ""        # honeypot — bots fill it, people never see it
 
 
 class SettingIn(BaseModel):
@@ -4231,6 +4243,92 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             if user is None or user["id"] != owner:
                 raise HTTPException(status_code=403, detail="this session belongs to another account")
         return row
+
+    # ---- PUBLIC SHARING + DISCUSSION ---------------------------------------------------------------
+    @app.post("/sessions/{session_id}/share")
+    async def share_session(session_id: str, body: ShareIn,
+                            x_noesis_token: str = Header(default="")) -> dict:
+        """Owner publishes (or unpublishes) a session to an unguessable link. Anyone with the link can
+        read it without an account and named people can comment; the owner can re-hide it any time."""
+        store = _store()
+        if store is None:
+            raise HTTPException(status_code=404, detail="no session store")
+        user = await _user_from_token(x_noesis_token)
+        if accounts_enabled() and user is None:
+            raise HTTPException(status_code=401, detail="sign in to share")
+        token = await store.set_public(session_id, user_id=(user or {}).get("id"), public=body.public)
+        if token is None:
+            raise HTTPException(status_code=403, detail="only the session's owner can share it")
+        return {"public": body.public, "share_token": token, "path": f"/#share/{token}"}
+
+    def _client_ip(request: Request) -> str:
+        fwd = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+        return fwd or (request.client.host if request.client else "")
+
+    _COMMENT_HITS: dict[str, list[float]] = {}
+
+    def _comment_rate_ok(ip: str, *, limit: int = 5, window_s: int = 600) -> bool:
+        import time as _t
+        now = _t.monotonic()
+        hits = [t for t in _COMMENT_HITS.get(ip, []) if now - t < window_s]
+        if len(hits) >= limit:
+            _COMMENT_HITS[ip] = hits
+            return False
+        hits.append(now)
+        _COMMENT_HITS[ip] = hits
+        return True
+
+    @app.get("/public/sessions/{token}")
+    async def public_session(token: str) -> dict:
+        """A published session (no account needed) + its discussion. Private fields are stripped."""
+        store = _store()
+        if store is None:
+            raise HTTPException(status_code=404, detail="no session store")
+        row = await store.get_public(token)
+        if row is None:
+            raise HTTPException(status_code=404, detail="this answer is not shared (or was unshared)")
+        row["comments"] = await store.list_comments(row["id"])
+        return row
+
+    @app.get("/public/sessions/{token}/comments")
+    async def public_comments(token: str) -> dict:
+        store = _store()
+        row = await store.get_public(token) if store is not None else None
+        if row is None:
+            raise HTTPException(status_code=404, detail="not shared")
+        return {"comments": await store.list_comments(row["id"])}
+
+    @app.post("/public/sessions/{token}/comments")
+    async def public_comment_add(token: str, body: CommentIn, request: Request) -> dict:
+        """A named comment on a shared answer — no account. Name required; honeypot + per-IP rate
+        limit (5 per 10 min) keep bots out; the owner can delete any comment."""
+        store = _store()
+        row = await store.get_public(token) if store is not None else None
+        if row is None:
+            raise HTTPException(status_code=404, detail="not shared")
+        if body.website.strip():
+            return {"ok": True}                       # honeypot tripped: pretend success, store nothing
+        name, text = body.name.strip(), body.body.strip()
+        if len(name) < 2 or len(name) > 80:
+            raise HTTPException(status_code=400, detail="please give your name (2–80 characters)")
+        if len(text) < 3 or len(text) > 2000:
+            raise HTTPException(status_code=400, detail="comment must be 3–2000 characters")
+        ip = _client_ip(request)
+        if not _comment_rate_ok(ip):
+            raise HTTPException(status_code=429, detail="too many comments — try again in a few minutes")
+        ip_hash = hashlib.sha256(ip.encode()).hexdigest()[:24] if ip else ""
+        c = await store.add_comment(row["id"], name=name, affiliation=body.affiliation, body=text, ip_hash=ip_hash)
+        return {"ok": True, "comment": c}
+
+    @app.delete("/sessions/{session_id}/comments/{comment_id}")
+    async def delete_comment(session_id: str, comment_id: str, x_noesis_token: str = Header(default="")) -> dict:
+        store = _store()
+        if store is None:
+            raise HTTPException(status_code=404, detail="no session store")
+        user = await _user_from_token(x_noesis_token)
+        if not await store.delete_comment(session_id, comment_id, owner_user_id=(user or {}).get("id")):
+            raise HTTPException(status_code=403, detail="only the session's owner can remove comments")
+        return {"deleted": True}
 
     @app.delete("/sessions/{session_id}")
     async def delete_session(session_id: str, x_noesis_token: str = Header(default="")) -> dict:

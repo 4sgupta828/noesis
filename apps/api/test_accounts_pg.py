@@ -83,3 +83,40 @@ def test_register_login_logout_and_private_sessions() -> None:
         finally:
             await _cleanup(acc, sess)
     asyncio.run(body())
+
+
+def test_public_sharing_and_discussion() -> None:
+    async def body():
+        acc = AccountStore(DSN, vertical=VERT)
+        sess = SessionStore(DSN, vertical=VERT)
+        try:
+            h, salt = hash_password("pw")
+            owner, _ = await acc.register(email="o@x.io", name="Owner", pw_hash=h, pw_salt=salt)
+            other, _ = await acc.register(email="p@x.io", name="Other", pw_hash=h, pw_salt=salt)
+            common = dict(tenant_id="demo", workspace_id=None, answer="A [1]", grounded=True, claims=[],
+                          source_stats={}, coverage_gaps=[], rejected=0, sources=None)
+            sid = await sess.save(question="q?", user_id=owner["id"], user_email="o@x.io", **common)
+            # only the owner can publish; the token is stable across unpublish / re-publish
+            assert await sess.set_public(sid, user_id=other["id"], public=True) is None
+            assert await sess.get_public("nope") is None
+            tok = await sess.set_public(sid, user_id=owner["id"], public=True)
+            pub = await sess.get_public(tok)
+            assert pub and pub["id"] == sid and pub["public"] is True
+            assert "user_email" not in pub and "user_id" not in pub and "share_token" not in pub
+            assert (await sess.get(sid))["public"] is True
+            # discussion: named comments, owner-only removal
+            c = await sess.add_comment(sid, name="Dr. A", affiliation="Cardiology", body="Useful.", ip_hash="x")
+            assert [x["id"] for x in await sess.list_comments(sid)] == [c["id"]]
+            assert not await sess.delete_comment(sid, c["id"], owner_user_id=other["id"])
+            assert await sess.delete_comment(sid, c["id"], owner_user_id=owner["id"])
+            assert await sess.list_comments(sid) == []
+            # unpublish hides the page; re-publish restores the SAME link
+            assert await sess.set_public(sid, user_id=owner["id"], public=False) == tok
+            assert await sess.get_public(tok) is None
+            assert await sess.set_public(sid, user_id=owner["id"], public=True) == tok
+            assert (await sess.get_public(tok))["id"] == sid
+        finally:
+            async with (await acc._get_pool()).acquire() as conn:
+                await conn.execute("DELETE FROM noesis_session_comment WHERE session_id IN (SELECT id FROM noesis_research_session WHERE vertical=$1)", VERT)
+            await _cleanup(acc, sess)
+    asyncio.run(body())

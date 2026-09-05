@@ -414,6 +414,33 @@
   .sessions .sdel:hover{color:var(--gap);border-color:rgba(214,151,90,.6);}
   /* session action toolbar — one compact iconized row BETWEEN the question and the answer */
   .sactions{display:flex;flex-wrap:wrap;gap:.4rem;margin:0 0 1.4rem;}
+  /* PUBLIC VIEW (#share/<token>): a read-only answer page for people without an account */
+  .public-view header .histbtn, .public-view header a.histbtn, .public-view #modeswitch, .public-view #ask,
+  .public-view #about, .public-view .themebtn{display:none !important;}
+  .public-view #heading{font-size:1.15rem;color:var(--muted);font-weight:400;}
+  .pubbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.6rem;border:1px solid var(--hair);
+    border-radius:12px;padding:.6rem .9rem;margin:0 0 1.2rem;background:var(--panel);font-size:.82rem;color:var(--muted);}
+  .pubbar a{color:var(--gold);text-decoration:none;font-weight:600;}
+  .pubq{font-family:var(--serif);font-size:1.35rem;line-height:1.35;margin:.2rem 0 .3rem;}
+  .pubmeta{font-size:.8rem;color:var(--muted);margin-bottom:1rem;}
+  .pubturn{margin:0 0 1.6rem;}
+  .pubturn .turnq{font-family:var(--serif);font-size:1.1rem;margin:1.2rem 0 .5rem;}
+  .disc{border-top:1px solid var(--hair);margin-top:2rem;padding-top:1.2rem;}
+  .disc h3{font-family:var(--serif);font-size:1.25rem;margin:0 0 .3rem;}
+  .disc .dsub{font-size:.82rem;color:var(--muted);margin:0 0 1rem;}
+  .cmt{border:1px solid var(--hair);border-radius:12px;padding:.75rem .95rem;margin:0 0 .7rem;background:var(--panel);}
+  .cmt-h{display:flex;flex-wrap:wrap;gap:.4rem .6rem;align-items:baseline;font-size:.82rem;margin-bottom:.35rem;}
+  .cmt-h b{font-size:.9rem;} .cmt-h span{color:var(--muted);}
+  .cmt-b{font-size:.92rem;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;}
+  .cmt-del{margin-left:auto;font-size:.72rem;color:var(--muted);background:none;border:none;cursor:pointer;}
+  .cform{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.9rem;}
+  .cform input,.cform textarea{width:100%;box-sizing:border-box;background:var(--panel2);border:1px solid var(--hair);border-radius:10px;
+    color:var(--ink);font:inherit;font-size:.92rem;padding:.6rem .75rem;min-height:40px;}
+  .cform textarea{grid-column:1 / -1;min-height:96px;resize:vertical;}
+  .cform .cfoot{grid-column:1 / -1;display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;}
+  .cform .cerr{color:var(--gap);font-size:.8rem;}
+  .cform .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;}
+  @media (max-width:560px){ .cform{grid-template-columns:1fr;} .pubq{font-size:1.15rem;} }
   .sactions:empty{display:none;}
   .sact{display:inline-flex;align-items:center;gap:.35rem;font-family:var(--mono);font-size:.64rem;
     text-transform:uppercase;letter-spacing:.04em;cursor:pointer;background:transparent;
@@ -1928,6 +1955,7 @@ let BASE_PLACEHOLDER = "";                   // vertical console placeholder (re
 let DISCLAIMER = {};                          // {gate, footer, answer} responsibility copy from config
 let EXAMPLES = [];                            // vertical example questions → random intake prompt
 let ATTACHMENTS = [];       // [{name, media_type, data(base64)}]
+const PUBLIC_VIEW = /^#share\//.test(location.hash);   // read-only shared answer: no gate, no composer
 let USER = null;            // {name, email} captured at landing, saved per session
 let LAST = null;            // {question, answer} for the answer-video add-on
 let CURRENT_Q = "";        // the question of the answer currently rendered
@@ -1994,7 +2022,8 @@ async function loadConfig(){
     ACCOUNTS_ENABLED = !!c.accounts_enabled;
     if(typeof updateAuthUI === "function"){
       // accounts on + no token (pre-accounts local identity, or signed out) → sign in / create account
-      if(ACCOUNTS_ENABLED && (!USER || !USER.token)){ openAuth(USER && USER.email ? "login" : "register");
+      if(PUBLIC_VIEW){ /* shared answer: never gate a reader */ }
+      else if(ACCOUNTS_ENABLED && (!USER || !USER.token)){ openAuth(USER && USER.email ? "login" : "register");
         if(USER && USER.email) $("#idemail").value = USER.email; }
       else updateAuthUI();
     }
@@ -2542,7 +2571,7 @@ function render(data, target, opts){
   const topbtns = `${hasHl?`<button type="button" class="copybtn hltoggle" id="hltoggle" title="Show color highlights (load-bearing facts, reasoning, key context)">✦ Highlights</button>`:""}`
     + `${(TERMS_ENABLED && data.grounded && (data.answer||"").trim())?`<button type="button" class="copybtn" id="termstop" title="Explain the key medical concepts this answer used — and add them to your Concepts glossary">✦ Explain concepts</button>`:""}`
     + `${(VISUAL_ENABLED && data.grounded && (data.answer||"").trim())?`<button type="button" class="copybtn" id="visualstop" title="Add grounded visuals — mechanism flows, decision trees, timelines — built only from this answer">◫ Add visuals</button>`:""}`
-    + `${showLink?`<button type="button" class="copybtn" id="linkbtn">🔗 Copy link</button>`:""}`
+    + `${showLink?`<button type="button" class="copybtn" id="linkbtn">🔗 Copy link</button><button type="button" class="copybtn" id="sharebtn" title="Publish this answer to a public link anyone can read and comment on">🌐 Share publicly</button>`:""}`
     + `${(data.answer||n)?`<button type="button" class="copybtn" id="copybtn">⧉ Copy</button>`:""}`
     + fbTop;
   // noTopbtns: the session-detail view lifts turn-1's actions into a single toolbar above the answer
@@ -2700,6 +2729,8 @@ function render(data, target, opts){
   });
   const lb = target.querySelector("#linkbtn");
   if(lb && showLink){ if(target===out) setShareHash(sid); lb.addEventListener("click", ()=>copyLink(sid, lb)); }
+  const sb = target.querySelector("#sharebtn");
+  if(sb && showLink) sb.addEventListener("click", ()=>shareClick(sid, sb));
   const pg = target.querySelector("#plaingo");
   if(pg) pg.addEventListener("click", ()=>generatePlain(target));
   const gg = target.querySelector("#gapgo");
@@ -3619,6 +3650,107 @@ async function loadPanelSession(id){
     else out.innerHTML = `<div class="empty">That panel session is no longer available.</div>`;
   }catch(e){ /* leave the current view */ }
 }
+// ---- PUBLIC SHARING: owner publishes → unguessable link; readers need no account; named comments ----
+const publicUrl = token => location.origin + location.pathname + "#share/" + encodeURIComponent(token);
+async function publishSession(sid, makePublic){
+  const r = await fetch("/sessions/"+encodeURIComponent(sid)+"/share", {method:"POST",
+    headers:{"content-type":"application/json", ...authHeaders()}, body: JSON.stringify({public: !!makePublic})});
+  if(!r.ok){ const e = await r.json().catch(()=>({})); throw new Error(e.detail || r.status); }
+  return r.json();
+}
+// Share button behavior: not yet public → publish + copy the public link; already public → copy again.
+async function shareClick(sid, btn){
+  const was = btn.textContent;
+  try{
+    btn.disabled = true; btn.textContent = "…";
+    const d = await publishSession(sid, true);
+    await copyLinkUrl(publicUrl(d.share_token), btn);
+    btn.dataset.public = "1"; btn.title = "Public link copied — anyone with it can read and comment. Unpublish from Past Sessions.";
+    setTimeout(()=>{ btn.textContent = "🌐 Public link"; btn.disabled = false; }, 1500);
+  }catch(e){ btn.textContent = was; btn.disabled = false; alert("Couldn't share: " + (e.message||e)); }
+}
+function commentMarkup(c, sid, canDelete){
+  const when = c.created_at ? new Date(c.created_at).toLocaleString([], {dateStyle:"medium", timeStyle:"short"}) : "";
+  return `<div class="cmt" data-cid="${esc(c.id)}"><div class="cmt-h"><b>${esc(c.name)}</b>${c.affiliation?`<span>${esc(c.affiliation)}</span>`:""}<span>${esc(when)}</span>`
+    + (canDelete?`<button type="button" class="cmt-del" title="Remove this comment">✕ remove</button>`:"")
+    + `</div><div class="cmt-b">${esc(c.body)}</div></div>`;
+}
+function discussionMarkup(token, comments, sid, canDelete){
+  const saved = (()=>{ try{ return JSON.parse(localStorage.getItem("noesis_commenter")||"{}"); }catch(e){ return {}; } })();
+  return `<section class="disc" id="disc"><h3>Discussion</h3>
+    <div class="dsub">${comments.length ? `${comments.length} comment${comments.length===1?"":"s"}` : "No comments yet"} · anyone with this link can comment under their name — no account needed.</div>
+    <div id="clist">${comments.map(c=>commentMarkup(c, sid, canDelete)).join("")}</div>
+    <form class="cform" id="cform" autocomplete="on">
+      <input id="cname" placeholder="Your name (required)" maxlength="80" value="${esc(saved.name||"")}" />
+      <input id="caff" placeholder="Affiliation / role (optional)" maxlength="120" value="${esc(saved.affiliation||"")}" />
+      <textarea id="cbody" placeholder="Add to the discussion…" maxlength="2000"></textarea>
+      <input class="hp" id="cweb" name="website" tabindex="-1" autocomplete="off" />
+      <div class="cfoot"><button type="submit" class="idgo" style="width:auto;padding:.5rem 1.1rem;">Post comment</button><span class="cerr" id="cerr"></span></div>
+    </form></section>`;
+}
+function wireDiscussion(root, token, sid, canDelete){
+  const form = root.querySelector("#cform"); if(!form) return;
+  form.addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    const name = $("#cname").value.trim(), affiliation = $("#caff").value.trim(), body = $("#cbody").value.trim();
+    const err = $("#cerr"); err.textContent = "";
+    if(name.length < 2){ err.textContent = "Please give your name."; return; }
+    if(body.length < 3){ err.textContent = "Write a comment first."; return; }
+    const btn = form.querySelector("button[type=submit]"); btn.disabled = true;
+    try{
+      const r = await fetch("/public/sessions/"+encodeURIComponent(token)+"/comments", {method:"POST",
+        headers:{"content-type":"application/json"}, body: JSON.stringify({name, affiliation, body, website: $("#cweb").value})});
+      const d = await r.json().catch(()=>({}));
+      if(!r.ok){ err.textContent = d.detail || "Couldn't post — try again."; btn.disabled = false; return; }
+      if(d.comment){ $("#clist").insertAdjacentHTML("beforeend", commentMarkup(d.comment, sid, canDelete)); }
+      $("#cbody").value = "";
+      try{ localStorage.setItem("noesis_commenter", JSON.stringify({name, affiliation})); }catch(_){}
+    }catch(_){ err.textContent = "Network error — try again."; }
+    btn.disabled = false;
+  });
+  root.addEventListener("click", async (e)=>{
+    const b = e.target.closest(".cmt-del"); if(!b) return;
+    const el = b.closest(".cmt"); if(!el || !confirm("Remove this comment?")) return;
+    try{ const r = await fetch("/sessions/"+encodeURIComponent(sid)+"/comments/"+encodeURIComponent(el.dataset.cid), {method:"DELETE", headers: authHeaders()});
+      if(r.ok) el.remove(); }catch(_){}
+  });
+}
+async function loadPublicSession(token){
+  document.body.classList.add("public-view");
+  out.innerHTML = `<div class="status">Loading shared answer…</div>`;
+  try{
+    const r = await fetch("/public/sessions/"+encodeURIComponent(token));
+    if(!r.ok) throw new Error("not found");
+    const row = await r.json();
+    CURRENT_Q = row.question;
+    $("#heading").textContent = "A shared Noesis answer";
+    const turns = (row.thread && row.thread.length) ? row.thread : [row];
+    const canDelete = !!(USER && USER.token);      // the owner (signed in on this device) can moderate
+    const when = row.created_at ? new Date(row.created_at).toLocaleDateString([], {dateStyle:"medium"}) : "";
+    let html = `<div class="pubbar"><span>Shared for discussion${row.user_name?` by <b>${esc(row.user_name)}</b>`:""}${when?` · ${esc(when)}`:""}</span><a href="${location.pathname}">Ask your own question on Noesis →</a></div>`
+      + `<div class="pubq">${esc(row.question)}</div>`
+      + `<div class="pubmeta">${turns.length>1?`${turns.length} turns · `:""}every citation opens the source passage · AI-generated, verify before acting</div>`;
+    out.innerHTML = html;
+    if(isPanelRow(row)){
+      const holder = document.createElement("div"); out.appendChild(holder);
+      try{ renderPanelSessionDetailInto ? renderPanelSessionDetailInto(row, holder) : (holder.innerHTML = `<div class="answer md">${mdToHtml(row.answer||"")}</div>`); }
+      catch(_){ holder.innerHTML = `<div class="answer md">${mdToHtml(row.answer||"")}</div>`; }
+    } else {
+      turns.forEach((t, i)=>{
+        const div = document.createElement("div"); div.className = "pubturn";
+        if(i > 0) div.innerHTML = `<div class="turnq">Q${i+1} · ${esc(t.question||"")}</div>`;
+        const ans = document.createElement("div"); div.appendChild(ans); out.appendChild(div);
+        render({...t, session_id: row.id}, ans, {noLink:true, noConvo:true, noFeedback:true});
+      });
+    }
+    out.insertAdjacentHTML("beforeend", discussionMarkup(token, row.comments || [], row.id, canDelete));
+    wireDiscussion(out, token, row.id, canDelete);
+    window.scrollTo({top:0});
+  }catch(e){
+    out.innerHTML = `<div class="empty">This answer is not shared, or its owner has unshared it.</div>`;
+  }
+}
+
 // Open a shared session as a permalink: render its answer (or whole conversation thread).
 async function loadSharedSession(id){
   out.innerHTML = `<div class="status">Loading shared answer…</div>`;
@@ -4733,11 +4865,13 @@ function buildPanelSessionActions(box, row){
     + `<span class="sact-i">${icon}</span><span class="sact-t">${esc(label)}</span></button>`;
   box.innerHTML = btn("pd-copy","⧉","Copy","Copy the panel conclusion")
     + btn("pd-link","🔗","Link","Copy a link to this panel discussion")
+    + btn("pd-share","🌐", row.public ? "Public link" : "Share publicly", "Publish this panel discussion to a public link anyone can read and comment on")
     + btn("pd-cont","↳","Continue in chat","Continue the discussion — ask the panel a follow-up")
     + btn("pd-del","🗑","Delete","Delete this panel discussion");
   const syn = ((row.thread && row.thread.length ? row.thread[row.thread.length-1] : row).answer) || "";
   $("#pd-copy").addEventListener("click", e=>copyText(syn, e.currentTarget));
   $("#pd-link").addEventListener("click", e=>copyLinkUrl(panelUrl(row.id), e.currentTarget));
+  $("#pd-share").addEventListener("click", e=>shareClick(row.id, e.currentTarget));
   $("#pd-cont").addEventListener("click", ()=>{ closeSessions(); openPanelSession(row); });   // full view → follow-up
   $("#pd-del").addEventListener("click", async ()=>{
     if(!confirm("Delete this panel discussion?")) return;
@@ -6053,6 +6187,9 @@ function buildSessionActions(box, row, firstTurn, firstAns, rowEl){
   if(hasHl) bits.push(btn("sa-hl", "✦", "Highlights", "Show color highlights (facts · reasoning · context)"));
   if(hasAns) bits.push(btn("sa-copy", "⧉", "Copy", "Copy this answer"));
   bits.push(btn("sa-link", "🔗", "Link", "Copy a shareable link to this session"));
+  bits.push(btn("sa-share", "🌐", row.public ? "Public link" : "Share publicly",
+    row.public ? "Copy the public link — anyone with it can read and comment" : "Publish to a public link anyone can read and comment on"));
+  if(row.public) bits.push(btn("sa-unshare", "⊘", "Unpublish", "Hide the public page (the link stops working)"));
   bits.push(btn("sa-rp", "◉", row.real_patient ? "Patient case" : "Mark patient case",
     "Mark this session as a real-world patient case (orange ◉ in the session list)",
     row.real_patient ? "rp-on" : ""));
@@ -6073,6 +6210,14 @@ function buildSessionActions(box, row, firstTurn, firstAns, rowEl){
   if(cp) cp.addEventListener("click", ()=>copyAnswer(firstTurn, cp));
   const lk = box.querySelector("#sa-link");
   if(lk) lk.addEventListener("click", ()=>copyLink(row.id, lk));
+  const sh = box.querySelector("#sa-share");
+  if(sh) sh.addEventListener("click", ()=>shareClick(row.id, sh).then(()=>{ row.public = true; }));
+  const us = box.querySelector("#sa-unshare");
+  if(us) us.addEventListener("click", async ()=>{
+    if(!confirm("Unpublish this answer? The public link will stop working (comments are kept).")) return;
+    try{ await publishSession(row.id, false); row.public = false; buildSessionActions(box, row, firstTurn, firstAns, rowEl); }
+    catch(e){ alert("Couldn't unpublish: " + (e.message||e)); }
+  });
   const rt = box.querySelector("#sa-retry");
   if(rt) rt.addEventListener("click", ()=>retryDeeper(firstTurn.question||row.question, nextEf));
   const ct = box.querySelector("#sa-cont");
@@ -6210,7 +6355,7 @@ document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !sessionsEl.hid
 function initIdentity(){
   try{ USER = JSON.parse(localStorage.getItem("noesis_user")||"null"); }catch(e){ USER = null; }
   // Show the gate for new users AND for returning users who predate the disclaimer (never attested).
-  if(!USER || !USER.email || !USER.disclaimer_ack){
+  if(!PUBLIC_VIEW && (!USER || !USER.email || !USER.disclaimer_ack)){
     if(USER){ if(USER.name) $("#idname").value = USER.name; if(USER.email) $("#idemail").value = USER.email; }
     $("#idmodal").hidden = false; setTimeout(()=>$("#idname").focus(), 60);
   }
@@ -6731,7 +6876,9 @@ initIdentity();
 function routeHash(){    // #s/<id> → Q&A answer/thread · #p/<id> → panel session page · #sessions/#panel
   const mp = location.hash.match(/^#p\/(.+)$/);
   const m = location.hash.match(/^#s\/(.+)$/);
-  if(mp){ loadPanelSession(decodeURIComponent(mp[1])); }
+  const msh = location.hash.match(/^#share\/(.+)$/);
+  if(msh){ loadPublicSession(decodeURIComponent(msh[1])); }
+  else if(mp){ loadPanelSession(decodeURIComponent(mp[1])); }
   else if(m){ loadSharedSession(decodeURIComponent(m[1])); }   // legacy #s/<panelid> still self-routes to the panel
   else if(location.hash === "#sessions"){ openSessions(); }
   else if(location.hash === "#panel" && ASK_PANEL_ENABLED){ openPanel(""); }

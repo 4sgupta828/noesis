@@ -111,7 +111,7 @@ def test_panel_decision_addendum_grid_and_tensions() -> None:
     # The decision addendum leads with the decision GRID (one row per decision/cause) with the
     # required columns, then an explicit agreements-vs-tensions block NAMING specialties.
     from noesis_vertical_medical.specialists import PANEL_DECISION_ADDENDUM as add
-    for col in ("Do now [n]", "Decisive threshold/result [n]", "Action it triggers [n]",
+    for col in ("Do now", "Decisive threshold/result", "Action it triggers",
                 "Panel position (specialties agreeing; dissenting)", "Open gap"):
         assert col in add, col
     assert "Agreements vs tensions" in add

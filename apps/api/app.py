@@ -1230,6 +1230,7 @@ class TopicsIn(BaseModel):
 
 class PatientFlagIn(BaseModel):
     real_patient: bool = True
+    patient: str | None = None      # name or ID to attach (searchable later); "" detaches
 
 
 class Citation(BaseModel):
@@ -4416,11 +4417,19 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         return {"deleted": True}
 
     @app.post("/sessions/{session_id}/patient-flag")
-    async def session_patient_flag(session_id: str, body: PatientFlagIn) -> dict:
-        """Mark/unmark a session as a REAL-WORLD PATIENT case (orange ◉ in the session list)."""
+    async def session_patient_flag(session_id: str, body: PatientFlagIn,
+                                   x_noesis_token: str = Header(default="")) -> dict:
+        """Attach a session to a patient (name or ID the clinician chooses; searchable in Past Sessions),
+        or detach with an empty value. Owner-guarded when accounts are on. Legacy boolean still works."""
         store = _store()
         if store is None:
             raise HTTPException(status_code=404, detail="no session store")
+        if body.patient is not None:
+            user = await _user_from_token(x_noesis_token)
+            if not await store.set_patient(session_id, body.patient, user_id=(user or {}).get("id")):
+                raise HTTPException(status_code=404, detail="session not found (or not yours)")
+            ref = body.patient.strip()[:120]
+            return {"id": session_id, "real_patient": bool(ref), "patient_ref": ref or None}
         if not await store.set_real_patient(session_id, body.real_patient):
             raise HTTPException(status_code=404, detail="session not found")
         return {"id": session_id, "real_patient": body.real_patient}

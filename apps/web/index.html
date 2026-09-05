@@ -417,6 +417,9 @@
   .sessions .sdel:hover{color:var(--gap);border-color:rgba(214,151,90,.6);}
   /* session action toolbar — one compact iconized row BETWEEN the question and the answer */
   .sactions{display:flex;flex-wrap:wrap;gap:.4rem;margin:0 0 1.4rem;}
+  .rpedit{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;width:100%;margin:.2rem 0;}
+  .rpedit input{flex:1;min-width:12rem;background:var(--panel2);border:1px solid var(--hair);border-radius:10px;color:var(--ink);font:inherit;font-size:.9rem;padding:.45rem .7rem;min-height:38px;}
+  .rpref{font-family:var(--sans);font-size:.78rem;font-weight:600;color:var(--gap);margin-left:.15rem;}
   /* PUBLIC VIEW (#share/<token>): a read-only answer page for people without an account */
   .public-view header .histbtn, .public-view header a.histbtn, .public-view #modeswitch, .public-view #ask,
   .public-view #about, .public-view .themebtn, .public-view #termstop, .public-view #visualstop, .public-view #plaingo,
@@ -1517,8 +1520,11 @@
     margin:2rem 0 .7rem;padding-top:0;border-top:0;display:block;}
   .answer.md .mdh::before{content:"";display:block;width:22px;height:3px;border-radius:2px;background:var(--gold);margin:0 0 .5rem;}
   .answer.md .mdh:first-child{margin-top:0;}
-  .answer.md .mdh:first-child + .mdp{font-family:var(--serif);font-size:1.32rem;line-height:1.42;font-weight:500;letter-spacing:-.012em;
-    padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--gold);margin:.2rem 0 .8rem;}
+  .answer.md .mdh:first-child + .mdp,.answer.md .mdh[data-sec="lead"] + .mdp{font-family:var(--serif);font-size:1.3rem;line-height:1.45;
+    font-weight:400;letter-spacing:-.01em;color:var(--ink);background:var(--accent-soft);border-left:3px solid var(--gold);
+    border-radius:0 12px 12px 0;padding:.85rem 1.1rem .85rem 1.1rem;margin:.2rem 0 1rem;}
+  .answer.md .mdh:first-child + .mdp strong,.answer.md .mdh[data-sec="lead"] + .mdp strong{font-weight:400;}
+  .answer.md .mdh.mdh-sub{font-size:.86rem;margin:1.1rem 0 .4rem;color:var(--muted);} .answer.md .mdh.mdh-sub::before{display:none;}
   .answer.md .mdp{margin:.55rem 0 .8rem;line-height:1.65;}
   .answer.md .mdp.basis{font-size:.82rem;color:var(--muted);margin:-.3rem 0 .9rem;padding-left:1rem;}
   .answer.md .mdp.mdstem{margin-bottom:.3rem;}
@@ -1794,7 +1800,7 @@
     <span class="stitle">Past Sessions</span>
   </div>
   <div class="ssearchrow">
-    <input type="search" class="ssearch" id="ssearch" placeholder="Search questions or people…" aria-label="Search sessions" />
+    <input type="search" class="ssearch" id="ssearch" placeholder="Search questions, people, patient name/ID…" aria-label="Search sessions" />
   </div>
   <div class="stabs" id="stabs" role="tablist" hidden>
     <button type="button" class="stab" data-aud="clinician" role="tab" aria-selected="true">Clinician Driven Q&amp;A</button>
@@ -2708,6 +2714,7 @@ function splitSemicolons(text){
 }
 // a list item: bold lead + (optional) enumeration split + a second " — " clause demoted to a note
 function itemHtml(t){
+  t = t.replace(/^\(?[a-c]\)\s+(?=\S)/i, "");                          // "(c) Weak/absent evidence:" → no letter
   const en = splitEnumeration(t) || splitSemicolons(t);
   if(en) return mdInline(bulletLead(en.stem || "")) + `<ol class="mdl mdol">${en.items.map(x=>`<li>${mdInline(bulletLead(x))}</li>`).join("")}</ol>`;
   const led = bulletLead(t);
@@ -2717,7 +2724,9 @@ function itemHtml(t){
   return mdInline(led);
 }
 function blockFromLine(line){
-  const t = line.trim();
+  let t = line.trim().replace(/^\(?[a-c]\)\s+(?=\S)/i, "");          // stray "(a) / (b) / (c)" labels never display
+  const subh = t.match(/^\*\*([^*\n]{2,60}?):?\*\*:?\s*$/);            // a line that is ONLY "**Label:**" is a sub-heading
+  if(subh) return [`<h5 class="mdh mdh-sub">${mdInline(subh[1].replace(/:$/,""))}</h5>`];
   if(/^Basis:\s*/i.test(t)) return [`<p class="mdp basis">${mdInline(t.replace(/;\s+/g, " · "))}</p>`];
   const en = splitEnumeration(t) || splitSemicolons(t);
   if(en){
@@ -6137,7 +6146,7 @@ async function loadSessionList(){
       const who = s.user_name || s.user_email;
       const isPanel = s.kind === "panel";
       return `<button class="srow" data-id="${esc(s.id)}" data-kind="${esc(s.kind||"research")}">
-        <div class="sq">${s.real_patient?'<span class="rpdot" title="Real-world patient case">◉</span> ':""}${isPanel?'<span class="skind">◈ Panel</span> ':""}${esc(s.question)}</div>
+        <div class="sq">${s.real_patient?`<span class="rpdot" title="${esc(s.patient_ref?("Patient: "+s.patient_ref):"Real-world patient case")}">◉${s.patient_ref?` <span class="rpref">${esc(s.patient_ref)}</span>`:""}</span> `:""}${isPanel?'<span class="skind">◈ Panel</span> ':""}${esc(s.question)}</div>
         <div class="sm">
           ${who?`<span class="swho">${esc(who)}</span>`:""}
           ${s.grounded?'<span class="sg">✓ grounded</span>':'<span>ungrounded</span>'}
@@ -6448,9 +6457,9 @@ function buildSessionActions(box, row, firstTurn, firstAns, rowEl){
   bits.push(btn("sa-share", "🌐", row.public ? "Public link" : "Share publicly",
     row.public ? "Copy the public link — anyone with it can read and comment" : "Publish to a public link anyone can read and comment on"));
   if(row.public) bits.push(btn("sa-unshare", "⊘", "Unpublish", "Hide the public page (the link stops working)"));
-  bits.push(btn("sa-rp", "◉", row.real_patient ? "Patient case" : "Mark patient case",
-    "Mark this session as a real-world patient case (orange ◉ in the session list)",
-    row.real_patient ? "rp-on" : ""));
+  bits.push(btn("sa-rp", "◉", row.patient_ref ? `Patient: ${row.patient_ref}` : "Attach to patient",
+    row.patient_ref ? "Change or remove the patient this session is attached to" : "Attach this session to a patient by name or ID — find it later by searching that name/ID",
+    row.patient_ref ? "rp-on" : ""));
   if(canRetry) bits.push(btn("sa-retry", "↻", "More effort", `Retry at ${effortTier(nextEf).name} · ${nextEf}×`));
   if(CONV_ENABLED) bits.push(btn("sa-cont", "↳", "Continue in chat", "Continue this conversation in the main chat"));
   bits.push(btn("sa-del", "🗑", "Delete", "Delete session", "sact-danger"));
@@ -6489,24 +6498,28 @@ function buildSessionActions(box, row, firstTurn, firstAns, rowEl){
   const dl = box.querySelector("#sa-del");
   if(dl) dl.addEventListener("click", ()=>deleteSession(row.id, rowEl));
   const rp = box.querySelector("#sa-rp");
-  if(rp) rp.addEventListener("click", async ()=>{
-    const want = !row.real_patient;
-    try{
-      const r = await fetch("/sessions/"+encodeURIComponent(row.id)+"/patient-flag",
-        {method:"POST", headers:{"content-type":"application/json"},
-         body:JSON.stringify({real_patient: want})});
-      if(!r.ok) throw 0;
-      row.real_patient = want;
-      rp.classList.toggle("rp-on", want);
-      rp.querySelector(".sact-t").textContent = want ? "Patient case" : "Mark patient case";
-      const sq = rowEl && rowEl.querySelector(".sq");
-      if(sq){
-        const dot = sq.querySelector(".rpdot");
-        if(want && !dot) sq.insertAdjacentHTML("afterbegin",
-          '<span class="rpdot" title="Real-world patient case">◉</span> ');
-        else if(!want && dot) dot.remove();
-      }
-    }catch(e){ alert("Couldn't update the patient-case flag."); }
+  if(rp) rp.addEventListener("click", ()=>{
+    if(box.querySelector(".rpedit")) return;
+    const ed = document.createElement("form"); ed.className = "rpedit";
+    ed.innerHTML = `<input type="text" maxlength="120" placeholder="Patient name or ID" value="${esc(row.patient_ref||"")}" aria-label="Patient name or ID">`
+      + `<button type="submit" class="histbtn">Attach</button>`
+      + (row.patient_ref ? `<button type="button" class="histbtn rpclear">Remove</button>` : "")
+      + `<button type="button" class="histbtn rpcancel">Cancel</button>`;
+    rp.insertAdjacentElement("afterend", ed); ed.querySelector("input").focus();
+    const save = async (val)=>{
+      try{
+        const r = await fetch("/sessions/"+encodeURIComponent(row.id)+"/patient-flag",
+          {method:"POST", headers:{"content-type":"application/json", ...authHeaders()}, body:JSON.stringify({patient: val})});
+        if(!r.ok) throw new Error();
+        const d = await r.json(); row.patient_ref = d.patient_ref || null; row.real_patient = !!d.real_patient;
+        if(rowEl){ const dot = rowEl.querySelector(".rpdot"); if(dot) dot.remove();
+          if(row.patient_ref) rowEl.querySelector(".sq")?.insertAdjacentHTML("afterbegin", `<span class="rpdot" title="Patient: ${esc(row.patient_ref)}">◉ <span class="rpref">${esc(row.patient_ref)}</span></span> `); }
+        buildSessionActions(box, row, firstTurn, firstAns, rowEl);
+      }catch(e){ alert("Couldn't save the patient attachment."); }
+    };
+    ed.addEventListener("submit", e=>{ e.preventDefault(); save(ed.querySelector("input").value.trim()); });
+    ed.querySelector(".rpcancel").addEventListener("click", ()=>ed.remove());
+    const rc = ed.querySelector(".rpclear"); if(rc) rc.addEventListener("click", ()=>save(""));
   });
 }
 // Re-ask a past question in the main chat at a higher effort — a fresh run (new thread), not an
@@ -6838,7 +6851,7 @@ $("#idmodal").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#idgo").cl
     if(ref && ref !== current){ e.preventDefault(); show(ref); }
     else if(!card.contains(e.target)) hide();
   }, {passive:false});
-  window.addEventListener("scroll", hide, {passive:true});
+  window.addEventListener("scroll", () => { if(current) show(current); }, {passive:true});   // follow the ref, don't vanish
   document.addEventListener("keydown", e => { if(e.key === "Escape") hide(); });
 })();
 $("#idclose").addEventListener("click", ()=>{ $("#idmodal").hidden = true; });

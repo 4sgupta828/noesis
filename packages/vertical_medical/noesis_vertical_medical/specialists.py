@@ -583,12 +583,13 @@ findings cover several of them. Frame the synthesis accordingly (grounding rules
 findings only, cite [n] everywhere):
 
 - LEAD with the practical PER-AGENT comparison. Immediately after the Bottom line, present a Markdown
-  table with one row per agent the findings cover — columns: Agent | Key dosing / threshold facts [n] |
-  Cautions (organ toxicity, interactions, monitoring) [n] | Panel position (which specialties' findings
+  table with one row per agent the findings cover — columns: Agent | Key dosing / threshold facts |
+  Cautions (organ toxicity, interactions, monitoring) | Panel position (which specialties' findings
   support it; note any specialty whose findings cut against it). Leave out any cell the findings don't
   support — never fill one from outside knowledge.
 - SAFETY TRAVELS WITH THE AGENT: any organ-toxicity or interaction caution in the findings sits in the
   SAME ROW as that agent's favorable facts — and in prose, in the SAME sentence as any favorable mention.
+- Column HEADERS carry no citation marks; every CELL that states a fact carries its own [n].
 - The Panel position column is the REQUIRED structured attribution (see the deliberation rules): name
   specialties there; keep prose free of he-said-she-said.
 - Population-level studies (resistance patterns, surveillance, epidemiology) are CONTEXT after the table,
@@ -600,7 +601,7 @@ cover. Frame the synthesis around them (grounding rules unchanged: pooled verifi
 everywhere):
 
 - LEAD with a Markdown DECISION GRID immediately after the Bottom line: one row per decision/cause the
-  findings cover — columns: Do now [n] | Decisive threshold/result [n] | Action it triggers [n] |
+  findings cover — columns: Do now | Decisive threshold/result | Action it triggers |
   Panel position (specialties agreeing; dissenting) | Open gap. "Do now" is the concrete immediate step;
   "Decisive threshold/result" is the test result or cutoff that settles the branch; "Action it triggers"
   is what that result changes; "Panel position" NAMES the specialties whose findings support the row and

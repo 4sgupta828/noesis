@@ -29,4 +29,8 @@ t('enumeration inside a bullet → nested numbered list', /<li>.*<ol class="mdl 
 h=questionHtml("A 68-year-old man with **HFrEF** presents with:\n- 3 weeks of exertional dyspnea\n- orthopnea\n\nLabs: creatinine 1.8, potassium 5.4.\nWhat is the differential and initial workup?");
 t('question: paragraphs + list kept, no bold, long class', /qlong/.test(h) && (h.match(/<li>/g)||[]).length===2 && !/\*\*|<strong>/.test(h) && (h.match(/<p>/g)||[]).length===3);
 t('question: short one-liner stays plain', !/qlong/.test(questionHtml("Metformin dose at eGFR 30-45?")));
+h=mdToHtml('## Uncertainties\n- (c) Weak/absent evidence: none of the findings constitute a dedicated guideline [1].\n- (a) Missing patient information: no bilirubin cutoff given [2].');
+t('letter labels (a)/(c) are stripped from items', !/\([ac]\)/.test(h) && (h.match(/<li>/g)||[]).length===2);
+h=mdToHtml('**Agreements:**\n- Metformin is low risk [1].');
+t('a bold-only line renders as a sub-heading, not a bold paragraph', /mdh-sub/.test(h) && !/<p class="mdp"><strong>/.test(h));
 console.log(fails? `${fails} FAILED` : 'all passed'); process.exit(fails?1:0);

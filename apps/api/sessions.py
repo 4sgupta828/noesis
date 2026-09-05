@@ -69,6 +69,9 @@ ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS user_email TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS visual_observation TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS real_patient BOOLEAN NOT NULL DEFAULT FALSE;
+-- ATTACH TO PATIENT: a name or identifier the clinician types (free text, theirs to choose) so sessions
+-- can be found later by patient. Setting it marks the session as a real-world patient case.
+ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS patient_ref TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS layman_answer TEXT;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS deleted BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS thread JSONB NOT NULL DEFAULT '[]'::jsonb;
@@ -413,7 +416,7 @@ class SessionStore:
         if q and q.strip():
             params.append(f"%{q.strip()}%")
             where += (f" AND (question ILIKE ${len(params)} OR user_name ILIKE ${len(params)}"
-                      f" OR user_email ILIKE ${len(params)})")
+                      f" OR user_email ILIKE ${len(params)} OR patient_ref ILIKE ${len(params)})")
         if audience in ("clinician", "patient"):
             params.append(audience)
             where += f" AND audience=${len(params)}"
@@ -428,7 +431,7 @@ class SessionStore:
             rows = await conn.fetch(
                 f"""SELECT id, question, grounded, video_filename, user_name, user_email,
                            jsonb_array_length(attachments) AS n_attach, audience, created_at,
-                           real_patient, thread->0->>'kind' AS kind
+                           real_patient, patient_ref, thread->0->>'kind' AS kind
                     FROM noesis_research_session
                     WHERE {where} ORDER BY created_at DESC LIMIT ${len(params)}""",
                 *params)
@@ -438,7 +441,7 @@ class SessionStore:
             "user_name": r["user_name"], "user_email": r["user_email"],
             "audience": r["audience"] or "clinician",
             "kind": r["kind"] or "research",
-            "real_patient": bool(r["real_patient"]),
+            "real_patient": bool(r["real_patient"]), "patient_ref": r["patient_ref"],
             "created_at": r["created_at"].isoformat(),
         } for r in rows]
 
@@ -463,6 +466,17 @@ class SessionStore:
             "user_name": r["user_name"], "user_email": r["user_email"],
             "created_at": r["created_at"].isoformat(),
         } for r in rows]
+
+    async def set_patient(self, session_id: str, patient_ref: str, *, user_id: str | None = None) -> bool:
+        """Attach a session to a patient name/ID (owner-guarded); empty detaches. Attached ⇒ real case."""
+        await self._ensure()
+        ref = (patient_ref or "").strip()[:120]
+        async with (await self._get_pool()).acquire() as conn:
+            res = await conn.execute(
+                "UPDATE noesis_research_session SET patient_ref=NULLIF($3,''), real_patient=($3<>'') "
+                "WHERE id=$1 AND vertical=$2 AND NOT deleted AND user_id IS NOT DISTINCT FROM $4",
+                session_id, self._vertical, ref, user_id)
+        return res.endswith("1")
 
     async def set_real_patient(self, session_id: str, value: bool) -> bool:
         """Mark/unmark a session as a REAL-WORLD PATIENT case (the orange ◉ in the list)."""
@@ -562,6 +576,6 @@ class SessionStore:
             "terms": _j(r["terms"], []),
             "thread": _j(r["thread"], []),
             "audience": r["audience"] or "clinician",
-            "real_patient": bool(r["real_patient"]),
+            "real_patient": bool(r["real_patient"]), "patient_ref": r["patient_ref"],
             "created_at": r["created_at"].isoformat(),
         }

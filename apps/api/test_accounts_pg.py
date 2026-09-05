@@ -167,3 +167,26 @@ def test_claim_many_attaches_only_unowned() -> None:
         finally:
             await _cleanup(acc, sess)
     asyncio.run(body())
+
+
+def test_attach_to_patient_owner_guarded_and_searchable() -> None:
+    async def body():
+        acc = AccountStore(DSN, vertical=VERT)
+        sess = SessionStore(DSN, vertical=VERT)
+        try:
+            h, salt = hash_password("pw")
+            a, _ = await acc.register(email="pt@x.io", name="Doc", pw_hash=h, pw_salt=salt)
+            common = dict(tenant_id="demo", workspace_id=None, answer="A", grounded=True, claims=[],
+                          source_stats={}, coverage_gaps=[], rejected=0, sources=None)
+            sid = await sess.save(question="drain timing?", user_id=a["id"], **common)
+            assert not await sess.set_patient(sid, "MRN-4471", user_id="someone-else")
+            assert await sess.set_patient(sid, "MRN-4471", user_id=a["id"])
+            row = await sess.get(sid)
+            assert row["patient_ref"] == "MRN-4471" and row["real_patient"] is True
+            assert [r["id"] for r in await sess.list(tenant_id="demo", user_id=a["id"], q="4471")] == [sid]
+            assert await sess.set_patient(sid, "", user_id=a["id"])
+            row = await sess.get(sid)
+            assert row["patient_ref"] is None and row["real_patient"] is False
+        finally:
+            await _cleanup(acc, sess)
+    asyncio.run(body())

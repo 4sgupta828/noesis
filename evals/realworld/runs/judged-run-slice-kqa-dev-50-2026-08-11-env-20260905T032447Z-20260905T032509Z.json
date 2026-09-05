@@ -1,0 +1,148 @@
+{
+  "summary": {
+    "git": "136887c",
+    "answers_judged": 5,
+    "must_have_recall_mean": 0.517,
+    "answers_fully_covered": 1,
+    "contradiction_answers": 0,
+    "failure_buckets": {
+      "missing_evidence": 3,
+      "wrong_evidence_selected": 0,
+      "ranking_failure": 0,
+      "reasoning_or_composition": 0,
+      "abstained_despite_evidence": 0,
+      "question_misunderstood": 0,
+      "not_a_failure": 1
+    },
+    "judge_agreement_double_grade": null
+  },
+  "judgments": [
+    {
+      "id": "kqa-147",
+      "question": "So prednisone is a cortisone type medication?",
+      "must_have": [
+        "Prednisone is a synthetic drug that derives from cortisone."
+      ],
+      "verdicts": [
+        "missing"
+      ],
+      "covered": 0,
+      "missing": 1,
+      "contradicted": 0,
+      "n": 1,
+      "recall": 0.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved sources (drug labels, MedlinePlus, StatPearls, Mayo Clinic) establish prednisone's classification as a synthetic glucocorticoid/corticosteroid but none appear to state the specific etymo"
+      }
+    },
+    {
+      "id": "kqa-45",
+      "question": "Does bronchitis turn into pneumonia?",
+      "must_have": [
+        "It's uncommon for bronchitis to turn into pneumonia, but it's possible",
+        "In cases where bronchitis does not resolve in three weeks, one should be checked by a physician for pneumonia",
+        "In cases of worsening of symptoms, one should be checked by a physician for pneumonia"
+      ],
+      "verdicts": [
+        "missing",
+        "missing",
+        "covered"
+      ],
+      "covered": 1,
+      "missing": 2,
+      "contradicted": 0,
+      "n": 3,
+      "recall": 0.333,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The retrieved evidence (consumer articles, drug labels, pharmacovigilance study, cohort protocols) never addresses the frequency/commonality of bronchitis progressing to pneumonia or the specific '3-w"
+      }
+    },
+    {
+      "id": "kqa-23",
+      "question": "Can I take nyquil and benedryl at the same time?",
+      "must_have": [
+        "Taking Doxylamine and Diphenhydramine simultaneously can increase the risk of side effects",
+        "Seek immediate medical attention in case of suspicion of an antihistamine overdose.",
+        "It is possible to overdose on antihistamines.",
+        ""
+      ],
+      "verdicts": [
+        "missing",
+        "covered",
+        "covered",
+        "missing"
+      ],
+      "covered": 2,
+      "missing": 2,
+      "contradicted": 0,
+      "n": 4,
+      "recall": 0.5,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "missing_evidence",
+        "why": "The question asks specifically about NyQuil (which contains doxylamine) plus Benadryl (diphenhydramine). The gold fact concerns the doxylamine-diphenhydramine interaction specifically, but no retrieve"
+      }
+    },
+    {
+      "id": "kqa-99",
+      "question": "Is it common to have an abscess with no pain?",
+      "must_have": [
+        "Not experiencing pain does not exclude the presence of an abscess.",
+        " If you suspect you might have an abscess, you should consult your healthcare provider for diagnosis and treatment.",
+        " A common symptom of an abscess is pain.",
+        " Less commonly, an abscess can be painless due to its location, size, patient's characteristics and other causes."
+      ],
+      "verdicts": [
+        "covered",
+        "missing",
+        "covered",
+        "covered"
+      ],
+      "covered": 3,
+      "missing": 1,
+      "contradicted": 0,
+      "n": 4,
+      "recall": 0.75,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      },
+      "failure": {
+        "bucket": "not_a_failure",
+        "why": "The missed fact is a generic safety/advice disclaimer (\"consult your healthcare provider\") rather than a substantive clinical finding. The answer thoroughly covers the actual clinical question about p"
+      }
+    },
+    {
+      "id": "kqa-141",
+      "question": "Or could bactrim potentially cause a yeast infection?",
+      "must_have": [
+        "Bactrim could potentially cause a yeast infection."
+      ],
+      "verdicts": [
+        "covered"
+      ],
+      "covered": 1,
+      "missing": 0,
+      "contradicted": 0,
+      "n": 1,
+      "recall": 1.0,
+      "judge": {
+        "model": "(default anthropic)",
+        "prompt_sha": "128cc98ddfe7"
+      }
+    }
+  ]
+}

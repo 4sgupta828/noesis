@@ -41,7 +41,8 @@ try:
                 await call("Runtime.evaluate", expression="localStorage.setItem('noesis_user', %s)" % json.dumps(os.environ["NOESIS_SHOT_USER"]))
                 await call("Page.reload"); await asyncio.sleep(5)
             if os.environ.get("NOESIS_SHOT_JS"):
-                await call("Runtime.evaluate", expression=os.environ["NOESIS_SHOT_JS"], awaitPromise=True)
+                res = await call("Runtime.evaluate", expression="(async()=>{"+os.environ["NOESIS_SHOT_JS"].replace("\n"," ")+"})()" if "await " in os.environ["NOESIS_SHOT_JS"] else os.environ["NOESIS_SHOT_JS"], awaitPromise=True, returnByValue=True)
+                print("JS:", (res.get("result") or {}).get("value"))
                 await asyncio.sleep(2)
             r=await call("Runtime.evaluate", expression="""(()=>{const c=document.querySelector('.idcard');const r=c&&c.getBoundingClientRect();return JSON.stringify({innerWidth, docScrollW:document.documentElement.scrollWidth, card:r&&{left:r.left,right:r.right,width:r.width}, modalHidden: document.querySelector('#idmodal').hidden})})()""", returnByValue=True)
             print(r["result"]["value"])

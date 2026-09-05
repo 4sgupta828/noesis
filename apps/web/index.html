@@ -475,48 +475,50 @@
 
   /* mission — the resting state */
   .about{max-width:40rem;margin:2.1rem auto 0;text-align:center;}
-  .about-lead{font-family:var(--serif);font-size:1.08rem;line-height:1.6;color:var(--ink);margin:0 0 1.2rem;}
-  .about-pts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;text-align:left;}
-  .about-pt{border-top:2px solid rgba(var(--gold-rgb),.55);padding-top:.6rem;min-width:0;}
-  .about-pt b{display:block;font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin-bottom:.3rem;}
-  .about-pt span{font-size:.86rem;line-height:1.5;color:var(--muted);}
-  /* The "spirit of Noesis" scene: an answer (three lines, left) and the sources it rests on (three
-     documents, right). One line at a time, a thread reaches into a document, the passage it came from
-     lights up, and the line receives its citation; when every line is cited the answer reads
-     "verified", then the scene resets. Self-contained SVG+CSS on a 6s cycle; theme colors via vars. */
-  .groundanim{display:block;width:100%;max-width:340px;margin:1.9rem auto 0;overflow:visible;}
-  .groundanim .ga-line{fill:var(--muted);opacity:.38;}
-  .groundanim .ga-head{fill:var(--ink);opacity:.55;}
-  .groundanim .ga-page{fill:var(--panel2);stroke:var(--hair);stroke-width:1;}
-  .groundanim .ga-pl{stroke:var(--muted);stroke-width:2;stroke-linecap:round;opacity:.35;}
-  .groundanim .ga-pass{fill:var(--gold);opacity:0;}
-  .groundanim .ga-thread{fill:none;stroke:var(--gold);stroke-width:1.6;stroke-linecap:round;stroke-dasharray:140;stroke-dashoffset:140;opacity:0;}
-  .groundanim .ga-cite{opacity:0;transform-box:fill-box;transform-origin:center;}
-  .groundanim .ga-cite rect{fill:var(--gold);}
-  .groundanim .ga-cite text{fill:#fff;font-family:var(--mono);font-size:7px;font-weight:700;}
-  .groundanim .ga-ok{opacity:0;}
-  .groundanim .ga-ok path{fill:none;stroke:var(--verified);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-  .groundanim .ga-ok text{fill:var(--verified);font-family:var(--mono);font-size:7.5px;letter-spacing:.12em;font-weight:700;}
-  .groundanim .ga-t0{animation:gaT0 6s ease-in-out infinite;} .groundanim .ga-t1{animation:gaT1 6s ease-in-out infinite;} .groundanim .ga-t2{animation:gaT2 6s ease-in-out infinite;}
-  .groundanim .ga-p0{animation:gaP0 6s ease-in-out infinite;} .groundanim .ga-p1{animation:gaP1 6s ease-in-out infinite;} .groundanim .ga-p2{animation:gaP2 6s ease-in-out infinite;}
-  .groundanim .ga-c0{animation:gaC0 6s ease-in-out infinite;} .groundanim .ga-c1{animation:gaC1 6s ease-in-out infinite;} .groundanim .ga-c2{animation:gaC2 6s ease-in-out infinite;}
-  .groundanim .ga-ok{animation:gaOk 6s ease-in-out infinite;}
-  /* threads draw in over ~8% of the cycle, starting at 2% / 24% / 46%; everything holds, then fades out together */
-  @keyframes gaT0{0%,2%{stroke-dashoffset:140;opacity:0}3%{opacity:1}10%{stroke-dashoffset:0;opacity:1}90%{stroke-dashoffset:0;opacity:1}96%,100%{stroke-dashoffset:0;opacity:0}}
-  @keyframes gaT1{0%,24%{stroke-dashoffset:140;opacity:0}25%{opacity:1}32%{stroke-dashoffset:0;opacity:1}90%{stroke-dashoffset:0;opacity:1}96%,100%{stroke-dashoffset:0;opacity:0}}
-  @keyframes gaT2{0%,46%{stroke-dashoffset:140;opacity:0}47%{opacity:1}54%{stroke-dashoffset:0;opacity:1}90%{stroke-dashoffset:0;opacity:1}96%,100%{stroke-dashoffset:0;opacity:0}}
-  @keyframes gaP0{0%,9%{opacity:0}12%{opacity:.9}90%{opacity:.55}96%,100%{opacity:0}}
-  @keyframes gaP1{0%,31%{opacity:0}34%{opacity:.9}90%{opacity:.55}96%,100%{opacity:0}}
-  @keyframes gaP2{0%,53%{opacity:0}56%{opacity:.9}90%{opacity:.55}96%,100%{opacity:0}}
-  @keyframes gaC0{0%,10%{opacity:0;transform:scale(.5)}13%{opacity:1;transform:scale(1.25)}16%{transform:scale(1)}90%{opacity:1}96%,100%{opacity:0}}
-  @keyframes gaC1{0%,32%{opacity:0;transform:scale(.5)}35%{opacity:1;transform:scale(1.25)}38%{transform:scale(1)}90%{opacity:1}96%,100%{opacity:0}}
-  @keyframes gaC2{0%,54%{opacity:0;transform:scale(.5)}57%{opacity:1;transform:scale(1.25)}60%{transform:scale(1)}90%{opacity:1}96%,100%{opacity:0}}
-  @keyframes gaOk{0%,62%{opacity:0}67%{opacity:1}90%{opacity:1}96%,100%{opacity:0}}
-  @media (prefers-reduced-motion: reduce){   /* accessibility: freeze to the fully-cited, verified scene */
-    .groundanim .ga-thread,.groundanim .ga-pass,.groundanim .ga-cite,.groundanim .ga-ok{animation:none;}
-    .groundanim .ga-thread{stroke-dashoffset:0;opacity:1;} .groundanim .ga-pass{opacity:.55;}
-    .groundanim .ga-cite{opacity:1;} .groundanim .ga-ok{opacity:1;}}
-  @media (max-width:560px){ .about{margin-top:1.4rem;} .about-lead{font-size:.98rem;} .about-pts{grid-template-columns:1fr;gap:.8rem;} }
+  .about-mission{font-family:var(--serif);font-size:1.05rem;line-height:1.5;color:var(--ink);margin:.9rem auto 0;max-width:30rem;}
+  /* The bedside scene: a clinician with a patient, a question over their head, an answer card that
+     fills in within seconds (a clock hand makes one sweep), and the question becoming a decision —
+     Noesis's job in one loop. Self-contained SVG+CSS on a 6s cycle; theme colors via vars. */
+  .bedside{display:block;width:100%;max-width:340px;margin:1.6rem auto 0;overflow:visible;}
+  .bedside .bs-bed{fill:var(--panel2);stroke:var(--hair);stroke-width:1;}
+  .bedside .bs-pillow{fill:var(--panel);stroke:var(--hair);stroke-width:1;}
+  .bedside .bs-ph{fill:var(--muted);opacity:.55;}
+  .bedside .bs-blanket{fill:var(--muted);opacity:.22;}
+  .bedside .bs-dr circle,.bedside .bs-dr path{fill:var(--muted);opacity:.6;}
+  .bedside .bs-dr .bs-steth{fill:none;stroke:var(--panel);stroke-width:1.4;stroke-linecap:round;opacity:.9;}
+  .bedside .bs-dr-on circle,.bedside .bs-dr-on path{fill:var(--gold);opacity:1;}
+  .bedside .bs-dr-on{opacity:0;animation:bsDr 6s ease-in-out infinite;}
+  .bedside .bs-q circle{fill:var(--panel);stroke:var(--muted);stroke-width:1.2;}
+  .bedside .bs-q text{fill:var(--ink);font-family:var(--sans);font-size:11px;font-weight:700;}
+  .bedside .bs-q{opacity:0;transform-box:fill-box;transform-origin:center;animation:bsQ 6s ease-in-out infinite;}
+  .bedside .bs-a circle{fill:var(--verified);stroke:none;}
+  .bedside .bs-a path{fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .bedside .bs-a{opacity:0;transform-box:fill-box;transform-origin:center;animation:bsA 6s ease-in-out infinite;}
+  .bedside .bs-link{fill:none;stroke:var(--gold);stroke-width:1.5;stroke-linecap:round;stroke-dasharray:3 4;opacity:0;animation:bsLink 6s ease-in-out infinite;}
+  .bedside .bs-card{opacity:0;animation:bsCard 6s ease-in-out infinite;}
+  .bedside .bs-cardbg{fill:var(--panel);stroke:var(--hair);stroke-width:1;}
+  .bedside .bs-clockf{fill:none;stroke:var(--muted);stroke-width:1.2;opacity:.7;}
+  .bedside .bs-hand{stroke:var(--gold);stroke-width:1.6;stroke-linecap:round;transform-box:view-box;transform-origin:316px 28px;animation:bsHand 6s cubic-bezier(.4,0,.2,1) infinite;}
+  .bedside .bs-l{fill:var(--muted);opacity:.35;transform-box:fill-box;transform-origin:left center;transform:scaleX(0);}
+  .bedside .bs-l0{fill:var(--gold);opacity:.9;animation:bsL0 6s ease-out infinite;}
+  .bedside .bs-l1{animation:bsL1 6s ease-out infinite;} .bedside .bs-l2{animation:bsL2 6s ease-out infinite;} .bedside .bs-l3{animation:bsL3 6s ease-out infinite;}
+  .bedside .bs-ok circle{fill:var(--verified);} .bedside .bs-ok path{fill:none;stroke:#fff;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+  .bedside .bs-ok{opacity:0;transform-box:fill-box;transform-origin:center;animation:bsOk 6s ease-in-out infinite;}
+  @keyframes bsQ{0%{opacity:0;transform:scale(.5)}4%{opacity:1;transform:scale(1.2)}7%{transform:scale(1)}56%{opacity:1}60%,100%{opacity:0}}
+  @keyframes bsLink{0%,8%{opacity:0}10%{opacity:.85}56%{opacity:.85}62%,100%{opacity:0}}
+  @keyframes bsCard{0%,10%{opacity:0;transform:translateX(12px)}20%{opacity:1;transform:translateX(0)}90%{opacity:1;transform:translateX(0)}96%,100%{opacity:0;transform:translateX(0)}}
+  @keyframes bsHand{0%,20%{transform:rotate(0deg)}52%{transform:rotate(360deg)}100%{transform:rotate(360deg)}}
+  @keyframes bsL0{0%,22%{transform:scaleX(0)}32%{transform:scaleX(1)}100%{transform:scaleX(1)}}
+  @keyframes bsL1{0%,30%{transform:scaleX(0)}40%{transform:scaleX(1)}100%{transform:scaleX(1)}}
+  @keyframes bsL2{0%,38%{transform:scaleX(0)}48%{transform:scaleX(1)}100%{transform:scaleX(1)}}
+  @keyframes bsL3{0%,54%{transform:scaleX(0)}62%{transform:scaleX(1)}100%{transform:scaleX(1)}}
+  @keyframes bsOk{0%,52%{opacity:0;transform:scale(.5)}56%{opacity:1;transform:scale(1.25)}59%{transform:scale(1)}100%{opacity:1}}
+  @keyframes bsA{0%,58%{opacity:0;transform:scale(.5)}62%{opacity:1;transform:scale(1.2)}65%{transform:scale(1)}90%{opacity:1}96%,100%{opacity:0}}
+  @keyframes bsDr{0%,60%{opacity:0}66%{opacity:1}90%{opacity:1}96%,100%{opacity:0}}
+  @media (prefers-reduced-motion: reduce){   /* accessibility: freeze to the decided scene */
+    .bedside .bs-q,.bedside .bs-a,.bedside .bs-link,.bedside .bs-card,.bedside .bs-hand,.bedside .bs-l,.bedside .bs-ok,.bedside .bs-dr-on{animation:none;}
+    .bedside .bs-a,.bedside .bs-card,.bedside .bs-ok,.bedside .bs-dr-on{opacity:1;} .bedside .bs-l{transform:scaleX(1);}}
+  @media (max-width:560px){ .about{margin-top:1.4rem;} .about-mission{font-size:.98rem;} }
   .motto{display:flex;align-items:flex-start;justify-content:center;gap:1.2rem;flex-wrap:wrap;
     margin-top:2.6rem;font-family:var(--mono);font-size:.72rem;letter-spacing:.3em;
     text-transform:uppercase;color:var(--gold);opacity:.75;}
@@ -1572,11 +1574,12 @@
   .themebtn{font-family:var(--sans);font-size:.72rem;letter-spacing:0;text-transform:none;font-weight:550;}
   /* ---- hero + composer ---- */
   h1{font-family:var(--serif);font-size:2.2rem;font-weight:500;letter-spacing:-.015em;line-height:1.12;font-variant-numeric:lining-nums;}
+  h1#heading{text-align:center;}
   .hsub{font-size:.98rem;line-height:1.5;max-width:36rem;}
   .field{border-radius:20px;padding:.95rem .95rem .95rem 1.2rem;box-shadow:var(--sh-md);}
   .field:focus-within{border-color:var(--gold);box-shadow:var(--sh-md),var(--ring);}
   textarea{font-size:1.06rem;line-height:1.5;}
-  .about-lead{font-size:1.12rem;}
+  .about-mission{font-size:1.12rem;}
   .about-pt b{font-family:var(--sans);font-size:.72rem;letter-spacing:.06em;}
   /* ---- answer: a reading measure, whitespace instead of rules ---- */
   /* the answer body reads in the serif — the journal voice; headings, tables and chrome stay sans */
@@ -1814,32 +1817,32 @@
 
   <section id="out" aria-live="polite">
     <div class="about" id="about">
-      <div class="about-pts">
-        <div class="about-pt"><b>Grounded</b><span>Every line cites its source.</span></div>
-        <div class="about-pt"><b>Verified</b><span>If a source doesn't say it, neither do we.</span></div>
-        <div class="about-pt"><b>Actionable</b><span>Bottom line, do now, do if.</span></div>
-      </div>
-      <svg class="groundanim" viewBox="0 0 340 96" role="img" aria-label="Each line of an answer draws a thread to the passage in a source document it came from, receives its citation, and the answer is marked verified">
-        <!-- the answer: a short heading and three lines -->
-        <rect class="ga-head" x="16" y="14" width="34" height="4" rx="2"/>
-        <rect class="ga-line" x="16" y="30" width="98" height="6" rx="3"/>
-        <rect class="ga-line" x="16" y="48" width="82" height="6" rx="3"/>
-        <rect class="ga-line" x="16" y="66" width="90" height="6" rx="3"/>
-        <!-- the sources: three documents, each with the passage the thread will land on -->
-        <g class="ga-doc"><rect class="ga-page" x="248" y="8"  width="56" height="24" rx="3"/><line class="ga-pl" x1="255" y1="15" x2="290" y2="15"/><rect class="ga-pass ga-p0" x="254" y="20" width="44" height="5" rx="2"/></g>
-        <g class="ga-doc"><rect class="ga-page" x="248" y="36" width="56" height="24" rx="3"/><line class="ga-pl" x1="255" y1="43" x2="284" y2="43"/><rect class="ga-pass ga-p1" x="254" y="48" width="44" height="5" rx="2"/></g>
-        <g class="ga-doc"><rect class="ga-page" x="248" y="64" width="56" height="24" rx="3"/><line class="ga-pl" x1="255" y1="71" x2="292" y2="71"/><rect class="ga-pass ga-p2" x="254" y="76" width="44" height="5" rx="2"/></g>
-        <!-- threads: each answer line reaches into its source passage -->
-        <path class="ga-thread ga-t0" d="M136 33 C 190 33, 200 22.5, 254 22.5"/>
-        <path class="ga-thread ga-t1" d="M136 51 C 190 51, 200 50.5, 254 50.5"/>
-        <path class="ga-thread ga-t2" d="M136 69 C 190 69, 200 78.5, 254 78.5"/>
-        <!-- citations that land on each line -->
-        <g class="ga-cite ga-c0"><rect x="118" y="27" width="14" height="11" rx="3"/><text x="125" y="35.3" text-anchor="middle">1</text></g>
-        <g class="ga-cite ga-c1"><rect x="102" y="45" width="14" height="11" rx="3"/><text x="109" y="53.3" text-anchor="middle">2</text></g>
-        <g class="ga-cite ga-c2"><rect x="110" y="63" width="14" height="11" rx="3"/><text x="117" y="71.3" text-anchor="middle">3</text></g>
-        <!-- the verdict once every line is cited -->
-        <g class="ga-ok"><path d="M17 86 l3.2 3.2 l6.3 -6.6"/><text x="32" y="89.5">VERIFIED</text></g>
+      <svg class="bedside" viewBox="0 0 340 100" role="img" aria-label="At the bedside, a clinician's question about the patient becomes a clear decision in seconds">
+        <!-- the patient, resting -->
+        <rect class="bs-bed" x="12" y="66" width="70" height="16" rx="5"/>
+        <rect class="bs-pillow" x="16" y="58" width="18" height="9" rx="3"/>
+        <circle class="bs-ph" cx="25" cy="55" r="5.5"/>
+        <path class="bs-blanket" d="M36 66 h42 v9 h-42 z"/>
+        <!-- the clinician at the bedside -->
+        <g class="bs-dr"><circle cx="106" cy="38" r="8"/><path d="M92 66 a14 15 0 0 1 28 0 z"/><path class="bs-steth" d="M100 50 q6 12 12 0 M112 50 v6 a3 3 0 1 0 0.1 0"/></g>
+        <g class="bs-dr bs-dr-on"><circle cx="106" cy="38" r="8"/><path d="M92 66 a14 15 0 0 1 28 0 z"/><path class="bs-steth" d="M100 50 q6 12 12 0 M112 50 v6 a3 3 0 1 0 0.1 0"/></g>
+        <!-- the question, then the decision, over the clinician -->
+        <g class="bs-q"><circle cx="128" cy="18" r="9"/><circle cx="119" cy="27" r="2"/><text x="128" y="21.5" text-anchor="middle">?</text></g>
+        <g class="bs-a"><circle cx="128" cy="18" r="9"/><circle cx="119" cy="27" r="2"/><path d="M123.5 18.5 l3 3 l6 -6.5"/></g>
+        <!-- the question travels to Noesis -->
+        <path class="bs-link" d="M138 18 C 160 18, 168 30, 184 30"/>
+        <!-- the answer card: bottom line, do now, do if — filled in within seconds -->
+        <g class="bs-card">
+          <rect class="bs-cardbg" x="184" y="16" width="144" height="70" rx="7"/>
+          <g class="bs-clock"><circle class="bs-clockf" cx="316" cy="28" r="5.5"/><line class="bs-hand" x1="316" y1="28" x2="316" y2="24"/></g>
+          <rect class="bs-l bs-l0" x="194" y="27" width="70" height="6" rx="3"/>
+          <rect class="bs-l bs-l1" x="194" y="45" width="112" height="5" rx="2.5"/>
+          <rect class="bs-l bs-l2" x="194" y="59" width="96" height="5" rx="2.5"/>
+          <g class="bs-ok"><circle cx="203" cy="76" r="5"/><path d="M200.3 76.2 l2 2 l3.8 -4.2"/></g>
+          <rect class="bs-l bs-l3" x="213" y="73.5" width="60" height="5" rx="2.5"/>
+        </g>
       </svg>
+      <p class="about-mission">Better, faster, more accurate decisions — for the patient in front of you.</p>
     </div>
   </section>
   <!-- Specialist Panel body — lives in the SAME shell as Q&A (shared header + heading + mode switch +

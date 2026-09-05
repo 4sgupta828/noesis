@@ -252,9 +252,12 @@
   /* identity gate (name + email at landing) */
   .idmodal[hidden]{display:none;}
   .idmodal{position:fixed;inset:0;z-index:70;background:rgba(4,10,20,.82);
-    -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);display:grid;place-items:center;padding:1.2rem;}
+    -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);display:grid;place-items:center;padding:1.2rem;
+    /* minmax(0,1fr): an implicit `auto` track sizes to the card's max-content (25rem) and overflows a
+       phone viewport — the card was clipped on the right at 390px. */
+    grid-template-columns:minmax(0,1fr);overflow-y:auto;}
   .idcard{background:var(--panel);border:1px solid var(--hair);border-radius:16px;padding:1.7rem 1.5rem;
-    max-width:25rem;width:100%;box-shadow:0 24px 70px -34px #000;}
+    max-width:25rem;width:100%;box-sizing:border-box;box-shadow:0 24px 70px -34px #000;}
   .idcard img,.idcard .idlogo{height:74px;width:auto;display:block;margin:0 auto .6rem;}
   .idcard h2{font-family:var(--serif);font-size:1.35rem;text-align:center;margin:0 0 .3rem;}
   .idcard p{color:var(--muted);font-size:.84rem;text-align:center;margin:0 0 1.2rem;line-height:1.5;}

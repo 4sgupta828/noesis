@@ -4279,8 +4279,9 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         return True
 
     @app.get("/public/sessions/{token}")
-    async def public_session(token: str) -> dict:
-        """A published session (no account needed) + its discussion. Private fields are stripped."""
+    async def public_session(token: str, x_noesis_token: str = Header(default="")) -> dict:
+        """A published session (no account needed) + its discussion. Private fields are stripped;
+        `is_owner` is true only when the caller's token belongs to the publisher (moderation UI)."""
         store = _store()
         if store is None:
             raise HTTPException(status_code=404, detail="no session store")
@@ -4288,6 +4289,9 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if row is None:
             raise HTTPException(status_code=404, detail="this answer is not shared (or was unshared)")
         row["comments"] = await store.list_comments(row["id"])
+        owner = await store.owner_of(row["id"])
+        user = await _user_from_token(x_noesis_token) if x_noesis_token else None
+        row["is_owner"] = bool(user and owner and user["id"] == owner)
         return row
 
     @app.get("/public/sessions/{token}/comments")

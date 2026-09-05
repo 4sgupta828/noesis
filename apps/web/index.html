@@ -416,7 +416,9 @@
   .sactions{display:flex;flex-wrap:wrap;gap:.4rem;margin:0 0 1.4rem;}
   /* PUBLIC VIEW (#share/<token>): a read-only answer page for people without an account */
   .public-view header .histbtn, .public-view header a.histbtn, .public-view #modeswitch, .public-view #ask,
-  .public-view #about, .public-view .themebtn{display:none !important;}
+  .public-view #about, .public-view .themebtn, .public-view #termstop, .public-view #visualstop, .public-view #plaingo,
+  .public-view .xitem, .public-view #sub, .public-view .subline, .public-view #heading + p{display:none !important;}
+  .cform .idgo{background:var(--gold);color:var(--on-accent);border:none;border-radius:10px;font:inherit;font-weight:600;cursor:pointer;min-height:40px;}
   .public-view #heading{font-size:1.15rem;color:var(--muted);font-weight:400;}
   .pubbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.6rem;border:1px solid var(--hair);
     border-radius:12px;padding:.6rem .9rem;margin:0 0 1.2rem;background:var(--panel);font-size:.82rem;color:var(--muted);}
@@ -1505,6 +1507,7 @@
     <button type="button" class="histbtn" id="histbtn" style="margin-left:0;">Past Sessions</button>
     <button type="button" class="histbtn setbtn" id="setbtn" style="margin-left:0;" title="Product settings (admin)" aria-label="Product settings">⚙</button>
     <button type="button" class="histbtn" id="acctbtn" style="margin-left:0;" hidden title="Your account — who is signed in, preferences, sign out">◈ Account</button>
+    <button type="button" class="histbtn" id="signinbtn" style="margin-left:0;" hidden title="Sign in or create an account">Sign in</button>
     <button type="button" class="histbtn pulsebtn" id="pulsebell" style="margin-left:0;" hidden
             title="Evidence changes on your watched topics" aria-label="Pulse inbox">◉ Pulse<span class="pbadge" id="pbadge" hidden></span></button>
     <button type="button" class="histbtn" id="pplbtn" style="margin-left:0;" hidden
@@ -1795,6 +1798,7 @@
     <div class="iderr" id="iderr"></div>
     <div class="iddisc" id="iddisc" hidden></div>
     <button type="button" class="idgo" id="idgo">I understand — continue</button>
+    <button type="button" class="setclose" id="idclose">Not now ✕</button>
   </div>
 </div>
 
@@ -2022,10 +2026,11 @@ async function loadConfig(){
     ACCOUNTS_ENABLED = !!c.accounts_enabled;
     if(typeof updateAuthUI === "function"){
       // accounts on + no token (pre-accounts local identity, or signed out) → sign in / create account
-      if(PUBLIC_VIEW){ /* shared answer: never gate a reader */ }
-      else if(ACCOUNTS_ENABLED && (!USER || !USER.token)){ openAuth(USER && USER.email ? "login" : "register");
-        if(USER && USER.email) $("#idemail").value = USER.email; }
-      else updateAuthUI();
+      // LANDING IS PUBLIC (2026-09-05): nobody is gated on arrival — the Case Board, Concepts and shared
+      // answers are readable without an account. Sign-in is requested at the first PRIVATE action
+      // (asking a question, Past Sessions, Videos, Pulse, Account) via requireSignIn().
+      if(USER && USER.email && !USER.token) $("#idemail").value = USER.email;
+      updateAuthUI();
     }
     DUEL_ENABLED = !!c.duel_enabled;
     INTEGRATIVE_ENABLED = false;   // integrative toggle removed from the UI (Alternative mode supersedes it)
@@ -3719,13 +3724,13 @@ async function loadPublicSession(token){
   document.body.classList.add("public-view");
   out.innerHTML = `<div class="status">Loading shared answer…</div>`;
   try{
-    const r = await fetch("/public/sessions/"+encodeURIComponent(token));
+    const r = await fetch("/public/sessions/"+encodeURIComponent(token), {headers: authHeaders()});
     if(!r.ok) throw new Error("not found");
     const row = await r.json();
     CURRENT_Q = row.question;
     $("#heading").textContent = "A shared Noesis answer";
     const turns = (row.thread && row.thread.length) ? row.thread : [row];
-    const canDelete = !!(USER && USER.token);      // the owner (signed in on this device) can moderate
+    const canDelete = !!row.is_owner;              // the publisher (signed in on this device) can moderate
     const when = row.created_at ? new Date(row.created_at).toLocaleDateString([], {dateStyle:"medium"}) : "";
     let html = `<div class="pubbar"><span>Shared for discussion${row.user_name?` by <b>${esc(row.user_name)}</b>`:""}${when?` · ${esc(when)}`:""}</span><a href="${location.pathname}">Ask your own question on Noesis →</a></div>`
       + `<div class="pubq">${esc(row.question)}</div>`
@@ -3921,6 +3926,7 @@ function cancelResearch(){
   try{ CURRENT_ABORT.abort(); }catch(_){}
 }
 $("#ask").addEventListener("submit", e=>{
+  if(!requireSignIn()){ e.preventDefault(); return; }   // asking is private: attest + sign in first
   e.preventDefault();
   const question = q.value.trim();
   if(APP_MODE === "triage"){ submitTriage(question); return; }        // guided intake → next clarifying turn
@@ -5438,6 +5444,7 @@ function maybeShowPulseBell(){
 let PULSE_DAYS = 30;
 function closePulsePage(){ const pp=$("#pulsepage"); if(pp) pp.hidden = true; document.body.style.overflow = ""; }
 async function openPulsePage(){
+  if(!requireSignIn()) return;
   if(!USER || !USER.token){ PULSE_REAUTH = true; const m=$("#idmodal"); if(m){ m.hidden=false; } else alert("Sign in to use Pulse."); return; }
   const pp = $("#pulsepage"); if(!pp) return;
   try{ closeSessions(); }catch(e){}
@@ -5823,6 +5830,7 @@ const sessionsEl = $("#sessions"), slist = $("#slist"), sdetail = $("#sdetail");
 const isMobileSess = () => window.matchMedia("(max-width:640px)").matches;
 function setSback(label){ const b = $("#sback"); if(b) b.textContent = label; }
 function openSessions(){
+  if(!requireSignIn()) return;
   sessionsEl.hidden = false;
   sessionsEl.dataset.view = "list";     // mobile lands on the list; a tap drills into one answer
   setSback("← Back");
@@ -6271,7 +6279,7 @@ async function selectSession(rowEl){
 
 // ---- briefing videos catalogue ----
 const videosEl = $("#videos"), vgrid = $("#vgrid"), vlight = $("#vlight"), vlvideo = $("#vlvideo");
-function openVideos(){ videosEl.hidden = false; document.body.style.overflow = "hidden"; loadVideos(); }
+function openVideos(){ if(!requireSignIn()) return; videosEl.hidden = false; document.body.style.overflow = "hidden"; loadVideos(); }
 function closeVideos(){ videosEl.hidden = true; if($("#sessions").hidden) document.body.style.overflow = ""; }
 async function loadVideos(){
   vgrid.innerHTML = `<div class="vempty">Loading…</div>`;
@@ -6355,7 +6363,7 @@ document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !sessionsEl.hid
 function initIdentity(){
   try{ USER = JSON.parse(localStorage.getItem("noesis_user")||"null"); }catch(e){ USER = null; }
   // Show the gate for new users AND for returning users who predate the disclaimer (never attested).
-  if(!PUBLIC_VIEW && (!USER || !USER.email || !USER.disclaimer_ack)){
+  if(!PUBLIC_VIEW && !ACCOUNTS_ENABLED && (!USER || !USER.email || !USER.disclaimer_ack)){
     if(USER){ if(USER.name) $("#idname").value = USER.name; if(USER.email) $("#idemail").value = USER.email; }
     $("#idmodal").hidden = false; setTimeout(()=>$("#idname").focus(), 60);
   }
@@ -6370,6 +6378,7 @@ function updateAuthUI(){
   const go = $("#idgo"), sw = $("#idswitch"), nm = $("#idname"), pw = $("#idpassword"),
         tg = $("#idtoggle"), ex = $("#idextra"), ab = $("#acctbtn");
   if(ab) ab.hidden = !loggedIn();
+  const si = $("#signinbtn"); if(si) si.hidden = !ACCOUNTS_ENABLED || loggedIn();
   if(!ACCOUNTS_ENABLED){ if(pw) pw.hidden = true; if(tg) tg.hidden = true; return; }
   if(pw) pw.hidden = false;
   if(tg) tg.hidden = false;
@@ -6378,6 +6387,13 @@ function updateAuthUI(){
   if(nm) nm.hidden = (AUTH_MODE === "login");         // name only matters when creating an account
   if(ex) ex.hidden = (AUTH_MODE === "login") || ex.dataset.off === "1";
   if(pw) pw.autocomplete = (AUTH_MODE === "login") ? "current-password" : "new-password";
+}
+// Gate a PRIVATE action: signed in (or accounts off) → true; else open sign-in and return false.
+function requireSignIn(){
+  if(!ACCOUNTS_ENABLED || (USER && USER.token)) return true;
+  openAuth(USER && USER.email ? "login" : "register");
+  if(USER && USER.email) $("#idemail").value = USER.email;
+  return false;
 }
 function openAuth(mode){ AUTH_MODE = mode || "login"; $("#iderr").textContent = ""; updateAuthUI();
   $("#idmodal").hidden = false; setTimeout(()=>$(AUTH_MODE === "login" ? "#idemail" : "#idname").focus(), 60); }
@@ -6419,6 +6435,7 @@ async function openAccount(){
   }catch(e){ $("#acctcount").textContent = ""; }
 }
 $("#acctbtn").addEventListener("click", openAccount);
+$("#signinbtn").addEventListener("click", ()=>openAuth(USER && USER.email ? "login" : "register"));
 $("#acctclose").addEventListener("click", ()=>{ $("#acctpage").hidden = true; });
 $("#acctsessions").addEventListener("click", ()=>{ $("#acctpage").hidden = true; openSessions(); });
 $("#logoutbtn").addEventListener("click", signOut);
@@ -6477,6 +6494,7 @@ $("#idgo").addEventListener("click", async ()=>{
   maybeShowPulseBell();
 });
 $("#idmodal").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#idgo").click(); });
+$("#idclose").addEventListener("click", ()=>{ $("#idmodal").hidden = true; });
 // Intake boxes go EMPTY the moment they are focused: the example placeholder is stashed on focus and
 // restored on blur only if nothing was typed — so a clicked box never shows example text.
 document.addEventListener("focusin", e => {

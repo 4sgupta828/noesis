@@ -272,6 +272,12 @@ class SessionStore:
         row["public"] = True
         return row
 
+    async def owner_of(self, session_id: str) -> str | None:
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            return await conn.fetchval(
+                "SELECT user_id FROM noesis_research_session WHERE id=$1 AND vertical=$2", session_id, self._vertical)
+
     async def list_comments(self, session_id: str, *, limit: int = 500) -> list[dict[str, Any]]:
         await self._ensure()
         async with (await self._get_pool()).acquire() as conn:

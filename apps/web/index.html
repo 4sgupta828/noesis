@@ -440,6 +440,11 @@
   .answer.md .mdl li{position:relative;padding-left:1.2rem;margin:.42rem 0;line-height:1.64;}
   .answer.md .mdl li::before{content:"";position:absolute;left:.05rem;top:.62em;width:6px;height:6px;
     border-radius:50%;background:var(--gold);}
+  /* numbered lists (reasoned "Do now"): gold ordinal instead of the dot */
+  .answer.md .mdol{counter-reset:li;}
+  .answer.md .mdol li{counter-increment:li;padding-left:1.55rem;}
+  .answer.md .mdol li::before{content:counter(li) ".";width:auto;height:auto;top:.05em;left:0;border-radius:0;
+    background:none;color:var(--gold);font-weight:680;font-size:.9em;font-variant-numeric:tabular-nums;}
   .answer.md strong{font-weight:660;color:var(--ink);}
   .answer.md .mdt{border-collapse:collapse;width:100%;margin:.75rem 0 1.05rem;font-size:.93rem;}
   .answer.md .mdt th{font-family:var(--sans);font-size:.66rem;text-transform:uppercase;letter-spacing:.09em;
@@ -1096,10 +1101,6 @@
   .gapfix.infoot{margin:.2rem 0 .1rem;padding:.65rem .85rem;}
   .gapfix.infoot.soft{border-left-color:var(--hair);background:transparent;}
   .gapfix.infoot .gapfix-hint{margin-bottom:.5rem;}
-  /* diagnostics nested in the dossier: dashed-rule sub-section, not a second box */
-  .evbody .diagbox{border:none;border-top:1px dashed var(--hair);border-radius:0;margin-top:.7rem;}
-  .evbody .diagbox>summary{padding:.6rem .2rem;}
-  .evbody .diagbox .diagbody{padding:.2rem .2rem .5rem;}
   .suggest-chips{display:flex;flex-direction:column;gap:.5rem;}
   .chip-q{text-align:left;font-family:inherit;font-size:.92rem;line-height:1.4;color:var(--ink);cursor:pointer;
     background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:.6rem .8rem;transition:border-color .15s,color .15s;}
@@ -2356,6 +2357,15 @@ function chartSvg(chart){
 // Minimal, self-contained, XSS-safe markdown → HTML. We esc() the whole source FIRST,
 // so any HTML in the model output is neutralized before we add known-safe tags. Handles
 // headings (##/###), bullet lists, simple tables, bold, and [n] refs. No external lib.
+// Every list item gets exactly one bold LEAD (the action / label), so scanning is uniform even when
+// the model bolded some bullets and not others: an item that does not open with **…** gets its text
+// up to the first " — " or ": " bolded (only when that lead is short enough to be a label).
+function bulletLead(t){
+  if(/^\s*\*\*/.test(t)) return t;
+  const m = t.match(/^([^—:\n]{3,70}?)(\s+—\s+|:\s+)([\s\S]*)$/);
+  if(!m || /\[\d/.test(m[1])) return t;
+  return `**${m[1].trim()}**${m[2]}${m[3]}`;
+}
 function mdToHtml(raw){
   const lines = esc(raw).split(/\r?\n/);
   const cells = r => r.replace(/^\s*\|/,"").replace(/\|\s*$/,"").split("|").map(c=>c.trim());
@@ -2372,16 +2382,22 @@ function mdToHtml(raw){
         '</tbody></table></div>');
       continue;
     }
+    if(/^\s*\d+[.)]\s+/.test(line)){
+      const items = [];
+      while(i<lines.length && /^\s*\d+[.)]\s+/.test(lines[i])){ items.push(mdInline(bulletLead(lines[i].replace(/^\s*\d+[.)]\s+/,"")))); i++; }
+      out.push('<ol class="mdl mdol">'+items.map(x=>`<li>${x}</li>`).join("")+'</ol>');
+      continue;
+    }
     const hm = line.match(/^(#{1,4})\s+(.*)$/);
     if(hm){ const lvl = Math.min(6, hm[1].length+2); out.push(`<h${lvl} class="mdh">${mdInline(hm[2])}</h${lvl}>`); i++; continue; }
     if(/^\s*[-*]\s+/.test(line)){
       const items = [];
-      while(i<lines.length && /^\s*[-*]\s+/.test(lines[i])){ items.push(mdInline(lines[i].replace(/^\s*[-*]\s+/,""))); i++; }
+      while(i<lines.length && /^\s*[-*]\s+/.test(lines[i])){ items.push(mdInline(bulletLead(lines[i].replace(/^\s*[-*]\s+/,"")))); i++; }
       out.push('<ul class="mdl">'+items.map(x=>`<li>${x}</li>`).join("")+'</ul>');
       continue;
     }
     const para = [line]; i++;
-    while(i<lines.length && !/^\s*$/.test(lines[i]) && !/^(#{1,4})\s|^\s*[-*]\s|^\s*\|/.test(lines[i])){ para.push(lines[i]); i++; }
+    while(i<lines.length && !/^\s*$/.test(lines[i]) && !/^(#{1,4})\s|^\s*[-*]\s|^\s*\d+[.)]\s|^\s*\|/.test(lines[i])){ para.push(lines[i]); i++; }
     out.push(`<p class="mdp">${mdInline(para.join(" "))}</p>`);
   }
   return out.join("");
@@ -2523,7 +2539,7 @@ function render(data, target, opts){
     //   Backing evidence — the claim cards;
     //   Coverage gaps / Strengthen — the model's stated gap NOTES + the fill-gaps ACTION in one
     //   tab (the notes explain what's missing, the action resolves it — separate tabs would be
-    //   duplicative). DIAGNOSTICS stays a nested disclosure below the panes.
+    //   duplicative). DIAGNOSTICS is its OWN card below the dossier (not nested in it).
     const gapFoot = GAP_ENABLED ? gapPanelMarkup(weakEv, true) : "";
     const gapsPane = gapsHtml || gapFoot;
     const gapsTabLabel = ngaps ? `Coverage gaps (${ngaps})` : "Strengthen evidence";
@@ -2537,14 +2553,13 @@ function render(data, target, opts){
         </div>`:""}
         <div class="evpane" data-pane="ev">${cards}</div>
         ${gapsPane?`<div class="evpane" data-pane="gaps" hidden>${gapsHtml}${gapFoot}</div>`:""}
-        ${diagBoxMarkup(data)}
       </div>
     </details>`);
   }
   // no dossier to host it (unverified / error answer) → the gap panel stands alone
   if(GAP_ENABLED && !n) evBits.push(gapPanelMarkup(!data.grounded || (data.coverage_gaps||[]).length));
-  // no dossier to host it (unverified answer) → diagnostics stands alone, still collapsed
-  if(data.answer && !n) evBits.push(diagBoxMarkup(data));
+  // Diagnostics: a separate collapsed card after the evidence dossier (or alone when there is none)
+  if(data.answer) evBits.push(diagBoxMarkup(data));
   if(evBits.length) parts.push(`<div class="ansbox">${evBits.join("")}</div>`);
   // CONVERSATION-LEVEL box: briefing video + explain-in-plain-language. In a thread it renders ONCE at
   // the bottom (renderThread passes noConvo per turn); in single-answer mode it renders here.

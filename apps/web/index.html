@@ -476,18 +476,11 @@
   /* mission — the resting state */
   .about{max-width:40rem;margin:2.1rem auto 0;text-align:center;}
   .about-mission{font-family:var(--serif);font-size:1.05rem;line-height:1.5;color:var(--ink);margin:.9rem auto 0;max-width:30rem;}
-  /* The bedside scene: a clinician with a patient and a glowing assistant at their shoulder. Evidence
-     streams in and is absorbed; a bright answer card lands with a green check and a small burst; the
-     clinician lights up and the patient's trace steadies. Self-contained SVG+CSS, 6s cycle, always in
+  /* The decision scene: a clinician with a glowing assistant at their shoulder. Evidence streams in
+     and is absorbed; a bright answer card lands with a green check and a small burst; the clinician
+     lights up. Self-contained SVG+CSS, 6s cycle, always in
      motion (the assistant breathes, the trace runs); theme colors via vars. */
-  .bedside{display:block;width:100%;max-width:360px;margin:1.6rem auto 0;overflow:visible;}
-  .bedside .bs-bed{fill:var(--panel2);stroke:var(--hair);stroke-width:1;}
-  .bedside .bs-pillow{fill:var(--panel);stroke:var(--hair);stroke-width:1;}
-  .bedside .bs-ph{fill:var(--muted);opacity:.6;}
-  .bedside .bs-blanket{fill:var(--gold);opacity:.22;}
-  .bedside .bs-ecg{fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;opacity:.55;
-    stroke-dasharray:60 40;animation:bsEcg 1.4s linear infinite;}
-  .bedside .bs-ecg-on{stroke:var(--verified);opacity:0;animation:bsEcg 1.4s linear infinite, bsOn 6s ease-in-out infinite;}
+  .bedside{display:block;width:100%;max-width:300px;margin:1.6rem auto 0;overflow:visible;}
   .bedside .bs-dr circle,.bedside .bs-dr path{fill:var(--muted);opacity:.65;}
   .bedside .bs-dr .bs-steth{fill:none;stroke:var(--panel);stroke-width:1.5;stroke-linecap:round;opacity:.95;}
   .bedside .bs-dr-on circle,.bedside .bs-dr-on path{fill:var(--gold);opacity:1;}
@@ -506,21 +499,20 @@
   .bedside .bs-l0{fill:var(--gold);} .bedside .bs-l1,.bedside .bs-l2{fill:var(--muted);opacity:.4;}
   .bedside .bs-spark line{stroke:var(--gold);stroke-width:2;stroke-linecap:round;}
   .bedside .bs-spark{opacity:0;transform-box:fill-box;transform-origin:center;animation:bsSpark 6s ease-out infinite;}
-  @keyframes bsEcg{to{stroke-dashoffset:-100;}}
   @keyframes bsOn{0%,54%{opacity:0}60%{opacity:1}92%{opacity:1}98%,100%{opacity:0}}
   @keyframes bsBob{from{transform:translateY(-2px)}to{transform:translateY(2px)}}
   @keyframes bsBreathe{from{transform:scale(1)}to{transform:scale(1.3)}}
   @keyframes bsGlowUp{0%,44%{opacity:.16}52%{opacity:.5}60%{opacity:.16}100%{opacity:.16}}
   @keyframes bsSpin{to{transform:rotate(360deg)}}
   /* chips: fly from the right to the assistant (152,40) and shrink into it; staggered */
-  @keyframes bsCh0{0%{opacity:0;transform:translate(292px,14px) scale(1)}4%{opacity:1}26%{opacity:1;transform:translate(160px,36px) scale(.9)}32%,100%{opacity:0;transform:translate(152px,40px) scale(.2)}}
-  @keyframes bsCh1{0%,12%{opacity:0;transform:translate(300px,54px) scale(1)}16%{opacity:1}38%{opacity:1;transform:translate(160px,42px) scale(.9)}44%,100%{opacity:0;transform:translate(152px,40px) scale(.2)}}
-  @keyframes bsCh2{0%,24%{opacity:0;transform:translate(292px,94px) scale(1)}28%{opacity:1}50%{opacity:1;transform:translate(160px,46px) scale(.9)}56%,100%{opacity:0;transform:translate(152px,40px) scale(.2)}}
-  @keyframes bsCard{0%,54%{opacity:0;transform:scale(.6)}59%{opacity:1;transform:scale(1.08)}63%{transform:scale(1)}92%{opacity:1;transform:scale(1)}98%,100%{opacity:0;transform:scale(1)}}
-  @keyframes bsSpark{0%,56%{opacity:0;transform:scale(.4)}60%{opacity:1;transform:scale(1)}74%,100%{opacity:0;transform:scale(1.7)}}
+  @keyframes bsCh0{0%{opacity:0;transform:translate(228px,14px) scale(1)}4%{opacity:1}26%{opacity:1;transform:translate(90px,36px) scale(.9)}32%,100%{opacity:0;transform:translate(82px,40px) scale(.2)}}
+  @keyframes bsCh1{0%,12%{opacity:0;transform:translate(236px,54px) scale(1)}16%{opacity:1}38%{opacity:1;transform:translate(90px,42px) scale(.9)}44%,100%{opacity:0;transform:translate(82px,40px) scale(.2)}}
+  @keyframes bsCh2{0%,24%{opacity:0;transform:translate(228px,94px) scale(1)}28%{opacity:1}50%{opacity:1;transform:translate(90px,46px) scale(.9)}56%,100%{opacity:0;transform:translate(82px,40px) scale(.2)}}
+  @keyframes bsCard{0%,54%{opacity:0;transform:translateX(-70px) scale(.6)}59%{opacity:1;transform:translateX(-70px) scale(1.08)}63%{transform:translateX(-70px) scale(1)}92%{opacity:1;transform:translateX(-70px) scale(1)}98%,100%{opacity:0;transform:translateX(-70px) scale(1)}}
+  @keyframes bsSpark{0%,56%{opacity:0;transform:translateX(-70px) scale(.4)}60%{opacity:1;transform:translateX(-70px) scale(1)}74%,100%{opacity:0;transform:translateX(-70px) scale(1.7)}}
   @media (prefers-reduced-motion: reduce){   /* accessibility: freeze to the decided scene */
     .bedside *{animation:none !important;}
-    .bedside .bs-card,.bedside .bs-dr-on,.bedside .bs-ecg-on{opacity:1;} .bedside .bs-chip,.bedside .bs-spark{opacity:0;}}
+    .bedside .bs-card,.bedside .bs-dr-on{opacity:1;transform:translateX(-70px);} .bedside .bs-chip,.bedside .bs-spark{opacity:0;}}
   @media (max-width:560px){ .about{margin-top:1.4rem;} .about-mission{font-size:.98rem;} }
   .motto{display:flex;align-items:flex-start;justify-content:center;gap:1.2rem;flex-wrap:wrap;
     margin-top:2.6rem;font-family:var(--mono);font-size:.72rem;letter-spacing:.3em;
@@ -1823,15 +1815,9 @@
 
   <section id="out" aria-live="polite">
     <div class="about" id="about">
-      <svg class="bedside" viewBox="0 0 340 112" role="img" aria-label="A clinician at the bedside with a glowing assistant: evidence streams in, an answer with a green check appears, and the patient's trace steadies">
-        <!-- the patient, resting; a vitals trace runs above the bed -->
-        <rect class="bs-bed" x="10" y="80" width="76" height="16" rx="5"/>
-        <rect class="bs-pillow" x="14" y="72" width="18" height="9" rx="3"/>
-        <circle class="bs-ph" cx="23" cy="69" r="5.5"/>
-        <path class="bs-blanket" d="M34 80 h48 v9 h-48 z"/>
-        <path class="bs-ecg" d="M12 60 h12 l4 -9 l5 18 l4 -9 h12 l4 -7 l5 14 l4 -7 h24"/>
-        <path class="bs-ecg bs-ecg-on" d="M12 60 h12 l4 -9 l5 18 l4 -9 h12 l4 -7 l5 14 l4 -7 h24"/>
-        <!-- the clinician at the bedside -->
+      <svg class="bedside" viewBox="0 0 270 112" role="img" aria-label="A clinician with a glowing assistant: evidence streams in and a clear answer with a green check appears">
+        <g transform="translate(-70 0)">
+        <!-- the clinician -->
         <g class="bs-dr"><circle cx="112" cy="50" r="9"/><path d="M96 80 a16 17 0 0 1 32 0 z"/><path class="bs-steth" d="M105 63 q7 13 14 0 M119 63 v6 a3 3 0 1 0 0.1 0"/></g>
         <g class="bs-dr bs-dr-on"><circle cx="112" cy="50" r="9"/><path d="M96 80 a16 17 0 0 1 32 0 z"/><path class="bs-steth" d="M105 63 q7 13 14 0 M119 63 v6 a3 3 0 1 0 0.1 0"/></g>
         <!-- the assistant: a glowing spark at the clinician's shoulder, always alive -->
@@ -1840,10 +1826,11 @@
           <path class="bs-orb-star" d="M152 29 l2.6 8.4 l8.4 2.6 l-8.4 2.6 l-2.6 8.4 l-2.6 -8.4 l-8.4 -2.6 l8.4 -2.6 z"/>
           <circle class="bs-orb-core" cx="152" cy="40" r="4"/>
         </g>
+        </g>
         <!-- evidence streaming in from the right and absorbed by the assistant -->
-        <g class="bs-chip bs-ch0" transform="translate(292 14)"><rect x="-24" y="-7" width="48" height="14" rx="7"/><text x="0" y="3" text-anchor="middle">GUIDELINE</text></g>
-        <g class="bs-chip bs-ch1" transform="translate(300 54)"><rect x="-18" y="-7" width="36" height="14" rx="7"/><text x="0" y="3" text-anchor="middle">TRIAL</text></g>
-        <g class="bs-chip bs-ch2" transform="translate(292 94)"><rect x="-18" y="-7" width="36" height="14" rx="7"/><text x="0" y="3" text-anchor="middle">LABEL</text></g>
+        <g class="bs-chip bs-ch0" transform="translate(228 14)"><rect x="-24" y="-7" width="48" height="14" rx="7"/><text x="0" y="3" text-anchor="middle">GUIDELINE</text></g>
+        <g class="bs-chip bs-ch1" transform="translate(236 54)"><rect x="-18" y="-7" width="36" height="14" rx="7"/><text x="0" y="3" text-anchor="middle">TRIAL</text></g>
+        <g class="bs-chip bs-ch2" transform="translate(228 94)"><rect x="-18" y="-7" width="36" height="14" rx="7"/><text x="0" y="3" text-anchor="middle">LABEL</text></g>
         <!-- the answer: a bright card with a green check, handed to the clinician -->
         <g class="bs-card">
           <rect class="bs-cardbg" x="168" y="58" width="112" height="40" rx="8"/>
@@ -1858,7 +1845,7 @@
           <line x1="248" y1="60" x2="256" y2="58"/><line x1="200" y1="60" x2="192" y2="58"/><line x1="224" y1="106" x2="224" y2="112"/>
         </g>
       </svg>
-      <p class="about-mission">A super-assistant at the bedside — better information, better decisions, faster.</p>
+      <p class="about-mission">Better clinical decisions — better information, faster.</p>
     </div>
   </section>
   <!-- Specialist Panel body — lives in the SAME shell as Q&A (shared header + heading + mode switch +

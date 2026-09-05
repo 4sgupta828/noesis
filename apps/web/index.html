@@ -2679,6 +2679,7 @@ function bulletLead(t){
   if(/^\s*\*\*/.test(t)) return t;
   const m = t.match(/^([^—:\n]{3,70}?)(\s+—\s+|:\s+)([\s\S]*)$/);
   if(!m || /\[\d/.test(m[1])) return t;
+  if(/\*\*/.test(m[1])) return t;                 // the lead already carries its own bold ("Risk is **dynamic**:") — leave it
   return `**${m[1].trim()}**${m[2]}${m[3]}`;
 }
 // ---- answer-format helpers (design panel 2026-09-05): split inline enumerations, demote sub-clauses ----
@@ -2709,7 +2710,7 @@ function splitEnumeration(text){
   if(marks.length < 3 && !(marks.length === 2 && /:$/.test(text.slice(0, marks[0].start).trim()))) return null;
   const items = marks.map((mk, k) => text.slice(mk.end, k+1 < marks.length ? marks[k+1].start : text.length)
     .replace(/[\s;,]*(?:and|or)?\s*$/i, "").replace(/^\s+|\s+$/g,""));
-  if(items.some(it => it.split(/\s+/).length < 3 || !_hlBalanced(it))) return null;
+  if(items.some(it => it.split(/\s+/).length < 3 || !_hlBalanced(it) || (it.match(/\*\*/g)||[]).length % 2)) return null;
   if(!_hlBalanced(stem)) return null;
   return {stem, items};
 }
@@ -2731,7 +2732,8 @@ function splitSemicolons(text){
   if(segs[0].slice(c+1).startsWith("**")) c += 2;                    // "**Label:**" — keep the closing marker in the stem
   const stem = segs[0].slice(0, c+1); segs[0] = segs[0].slice(c+1).trim();
   if(!segs[0] || segs.length < 3) return null;
-  if((stem.match(/\*\*/g)||[]).length % 2) return null;              // never cut inside bold
+  const bal = x => (x.match(/\*\*/g)||[]).length % 2 === 0;
+  if(!bal(stem) || !segs.every(bal)) return null;                    // never cut inside bold
   return {stem, items: segs.map(x => x.replace(/^(?:and|or)\s+/i,""))};
 }
 // a list item: bold lead + (optional) enumeration split + a second " — " clause demoted to a note

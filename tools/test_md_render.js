@@ -53,4 +53,6 @@ h=mdToHtml('- **Lead** — '+'word '.repeat(40)+'ends here [1]. '+'Second senten
 t('a 60+ word bullet keeps its first sentence and demotes the rest', /li-note/.test(h));
 h=mdToHtml('- **Metformin:** Remains first-line background therapy if the glycemic target is met [54]; requires dose adjustment for renal excretion given CKD3 [19]; if contraindicated or not tolerated, switch to an alternative agent with renal data [20].');
 t('bold label stem survives a semicolon split intact', /<strong>Metformin:<\/strong>/.test(h) && !/\*\*/.test(h.replace(/<[^>]+>/g,'')) && (h.match(/<li>/g)||[]).length===4);
+h=mdToHtml('- Risk is **dynamic**: ESC recommends reassessing the score 4–6 months after index evaluation [1].');
+t('a bullet whose lead already has bold is not re-wrapped', !/\*\*/.test(h.replace(/<[^>]+>/g,'')) && (h.match(/<strong>/g)||[]).length===1);
 console.log(fails? `${fails} FAILED` : 'all passed'); process.exit(fails?1:0);

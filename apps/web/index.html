@@ -435,6 +435,13 @@
   .empty .k{color:var(--ink);font-weight:560;}
 
   /* mission — the resting state */
+  .about{max-width:40rem;margin:2.1rem auto 0;text-align:center;}
+  .about-lead{font-family:var(--serif);font-size:1.08rem;line-height:1.6;color:var(--ink);margin:0 0 1.2rem;}
+  .about-pts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;text-align:left;}
+  .about-pt{border-top:2px solid rgba(var(--gold-rgb),.55);padding-top:.6rem;min-width:0;}
+  .about-pt b{display:block;font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin-bottom:.3rem;}
+  .about-pt span{font-size:.86rem;line-height:1.5;color:var(--muted);}
+  @media (max-width:560px){ .about{margin-top:1.4rem;} .about-lead{font-size:.98rem;} .about-pts{grid-template-columns:1fr;gap:.8rem;} }
   .motto{display:flex;align-items:flex-start;justify-content:center;gap:1.2rem;flex-wrap:wrap;
     margin-top:2.6rem;font-family:var(--mono);font-size:.72rem;letter-spacing:.3em;
     text-transform:uppercase;color:var(--gold);opacity:.75;}
@@ -1521,8 +1528,9 @@
     </div>
     <input type="file" id="file" accept="image/*,.pdf,application/pdf,.dcm,application/dicom" multiple hidden />
     <div class="attns" id="attns" hidden></div>
-    <!-- ONE slim control bar — intent lives in tooltips, not prose (minimal landing page) -->
-    <div class="ctlbar">
+    <!-- Control bar HIDDEN on the landing (2026-09-04): effort + answer-style live in the DOM for the
+         JS that owns them, but the composer shows no knobs — the reasoned default is the product. -->
+    <div class="ctlbar" hidden>
       <div class="effort" id="effort" data-tier="1" hidden
            title="Research effort — deeper digs harder but uses more credits and time">
         <span class="lbl">Effort</span>
@@ -1554,15 +1562,13 @@
   </form>
 
   <section id="out" aria-live="polite">
-    <div class="motto">
-      <div class="mstep"><b>Discover</b>
-        <svg class="micon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
-      <i></i>
-      <div class="mstep"><b>Understand</b>
-        <svg class="micon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.8 1 1.6 1 2.5h6c0-.9.3-1.7 1-2.5A6 6 0 0 0 12 3z"/></svg></div>
-      <i></i>
-      <div class="mstep"><b>Act</b>
-        <svg class="micon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/><circle cx="12" cy="12" r="0.7" fill="currentColor"/></svg></div>
+    <div class="about" id="about">
+      <p class="about-lead">Noesis is an evidence-grounded research engine for clinicians. Ask a real question about the case in front of you; it searches a curated medical corpus and the live literature, reasons over what it finds, and verifies every claim and number against its source before it answers.</p>
+      <div class="about-pts">
+        <div class="about-pt"><b>Grounded</b><span>Every statement cites the passage it rests on — click a citation to read the source.</span></div>
+        <div class="about-pt"><b>Verified</b><span>Claims that cannot be located in a source are dropped, not softened.</span></div>
+        <div class="about-pt"><b>Decision-shaped</b><span>Bottom line, what to do now, what to do if, and what the evidence does not settle.</span></div>
+      </div>
     </div>
   </section>
   <!-- Specialist Panel body — lives in the SAME shell as Q&A (shared header + heading + mode switch +

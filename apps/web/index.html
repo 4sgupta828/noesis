@@ -1343,6 +1343,31 @@
   #caseboard .cbtab.on{background:var(--verified);color:#0A1F16;font-weight:700;}
   #caseboard .cbtab:not(.on):hover{color:var(--ink);}
   #caseboard .ssearchrow{display:flex;align-items:center;gap:.2rem;flex-wrap:wrap;}
+  /* Active Cases: anonymous board rows + the publish picker */
+  #caseboard .acrow .sq{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+  #caseboard .ackind{font-family:var(--mono);font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border:1px solid var(--hair);border-radius:999px;padding:.08rem .45rem;}
+  .acnote{font-family:var(--sans);font-size:.82rem;color:var(--muted);margin:.4rem 0 1rem;line-height:1.45;}
+  .acpick{max-width:52rem;}
+  .acpick h2{font-family:var(--sans);font-size:1.15rem;font-weight:700;margin:0 0 .3rem;}
+  .acpick .acbar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.6rem 0;}
+  .acpick .acbar input[type=search]{flex:1 1 12rem;min-width:0;min-height:40px;padding:.4rem .7rem;border:1px solid var(--hair);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit;font-size:16px;}
+  .acpick .acbar .histbtn{margin-left:0;min-height:40px;}
+  .acpick .aclist{border:1px solid var(--hair);border-radius:10px;overflow:hidden;max-height:52vh;overflow-y:auto;}
+  .acpick .acitem{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.6rem;align-items:start;padding:.55rem .7rem;border-bottom:1px solid var(--hair);background:var(--panel);}
+  .acpick .acitem:last-child{border-bottom:0;}
+  .acpick .acitem input{width:20px;height:20px;margin-top:.15rem;accent-color:var(--accent);}
+  .acpick .acitem .acq{font-family:var(--sans);font-size:.88rem;line-height:1.35;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .acpick .acitem .acm{font-family:var(--mono);font-size:.6rem;color:var(--muted);margin-top:.2rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;}
+  .acpick .acitem .acon{color:var(--verified-ink,var(--ink));background:var(--verified);border-radius:999px;padding:.05rem .45rem;font-weight:700;}
+  .acpick .acitem .acun{font:inherit;font-family:var(--mono);font-size:.62rem;background:transparent;border:1px solid var(--hair);border-radius:6px;color:var(--muted);padding:.3rem .5rem;min-height:32px;cursor:pointer;}
+  .acpick .acconfirm{display:flex;gap:.6rem;align-items:flex-start;margin:.9rem 0 .6rem;font-family:var(--sans);font-size:.84rem;line-height:1.4;color:var(--ink);}
+  .acpick .acconfirm input{width:20px;height:20px;flex:none;margin-top:.1rem;accent-color:var(--accent);}
+  .acpick .acmsg{font-family:var(--mono);font-size:.68rem;color:var(--muted);margin-top:.5rem;min-height:1.2em;}
+  .acpick .acgo{font:inherit;font-family:var(--sans);font-weight:700;font-size:.9rem;min-height:42px;padding:.5rem 1rem;border:0;border-radius:9px;background:var(--accent);color:#fff;cursor:pointer;}
+  .acpick .acgo:disabled{opacity:.45;cursor:default;}
+  .acdetail .achead{display:flex;flex-wrap:wrap;gap:.5rem .9rem;align-items:center;font-family:var(--mono);font-size:.62rem;color:var(--muted);margin-bottom:.6rem;}
+  .acdetail .achead .acun{font:inherit;font-family:var(--mono);font-size:.62rem;background:transparent;border:1px solid var(--hair);border-radius:6px;color:var(--muted);padding:.3rem .5rem;min-height:32px;cursor:pointer;margin-left:auto;}
+  @media (max-width:560px){ .acpick .acbar .histbtn,.acpick .acgo{width:100%;} .acpick .aclist{max-height:none;} }
   @media (max-width:640px){
     .sessions .shead{padding:.75rem .9rem;}
     .sessions .ssearchrow{padding:.5rem .9rem 0;}
@@ -1832,11 +1857,13 @@
     <span class="stitle">⊞ Case Board</span>
     <span class="ppsub" id="cbsub">Landmark cases · known correct decision · clinician-reviewed</span>
     <span class="cbgen" id="cbgenwrap" hidden><button type="button" class="histbtn" id="cbgen" title="Generate Noesis answers for cases that don't have one yet">▷ Generate answers</button><span class="cbgenmsg" id="cbgenmsg"></span></span>
+    <span class="cbgen" id="cbpubwrap" hidden><button type="button" class="histbtn" id="cbpub" title="Publish cases from your account to the board — anonymously, with patient details removed">↑ Publish my cases</button></span>
   </div>
   <div class="ssearchrow">
     <span class="cbera" id="cbera">
       <button type="button" class="cbtab on" data-era="recent">Recent (1975–2025)</button>
       <button type="button" class="cbtab" data-era="historical">Historical</button>
+      <button type="button" class="cbtab" data-era="active">Active Cases</button>
     </span>
     <input type="search" class="ssearch" id="cbsearch" placeholder="Search cases…" aria-label="Search cases" />
   </div>
@@ -6306,6 +6333,8 @@ async function openCaseBoard(){
 }
 async function loadCasesList(){
   const list = $("#cbList"); if(!list) return;
+  syncCaseGenVisibility();
+  if(CB_ERA === "active") return loadActiveCases();
   list.innerHTML = `<div class="sempty">Loading…</div>`;
   const det = $("#cbDetail"); if(det) det.innerHTML = `<div class="splaceholder">Select a case to view its answer.</div>`;
   try{
@@ -6363,6 +6392,133 @@ function selectCase(id){
   </div>`;
   det.scrollTop = 0;
   wireRubric(det, c);
+}
+// ---- Active Cases: anonymous, de-identified cases published from accounts ---------------------
+let ACTIVE_CASES = [], MY_ACTIVE = {};       // MY_ACTIVE: case_id → session_id for the signed-in account
+async function refreshMyActive(){
+  MY_ACTIVE = {};
+  if(!(USER && USER.token)) return;
+  try{ const r = await fetch("/active-cases/mine", {headers: authHeaders()}); if(r.ok) (await r.json()).cases.forEach(c=>{ MY_ACTIVE[c.case_id] = c.session_id; }); }catch(e){}
+}
+async function loadActiveCases(){
+  const list = $("#cbList"); if(!list) return;
+  list.innerHTML = `<div class="sempty">Loading…</div>`;
+  const det = $("#cbDetail"); if(det) det.innerHTML = `<div class="splaceholder">Select a case to read it.</div>`;
+  try{
+    const q = ($("#cbsearch").value||"").trim();
+    const [r] = await Promise.all([fetch("/active-cases?q="+encodeURIComponent(q)), refreshMyActive()]);
+    ACTIVE_CASES = (await r.json()).cases || [];
+    if(!ACTIVE_CASES.length){
+      list.innerHTML = `<div class="sempty">${q ? "No cases match." : "No active cases yet." + ((USER&&USER.token) ? " Use “↑ Publish my cases” to add yours — anonymously." : " Sign in to publish yours — anonymously.")}</div>`;
+      return;
+    }
+    list.innerHTML = ACTIVE_CASES.map(c=>`<button class="srow caserow acrow" data-id="${esc(c.case_id)}">
+        <div class="sq">${esc(c.question)}</div>
+        <div class="sm"><span>${c.published_at ? new Date(c.published_at).toLocaleDateString([], {dateStyle:"medium"}) : ""}</span>
+          <span class="ackind">${c.kind === "panel" ? "specialist panel" : "Q&amp;A"}${c.n_turns > 1 ? ` · ${c.n_turns} turns` : ""}</span>
+          ${MY_ACTIVE[c.case_id] ? `<span class="ackind">yours</span>` : ""}</div></button>`).join("");
+    list.querySelectorAll(".acrow").forEach(b=>b.addEventListener("click",()=>selectActiveCase(b.dataset.id)));
+    const first = list.querySelector(".acrow");
+    if(first && !isMobileSess()) selectActiveCase(first.dataset.id);
+  }catch(e){ list.innerHTML = `<div class="sempty">Couldn't load active cases.</div>`; }
+}
+async function selectActiveCase(id){
+  const list = $("#cbList");
+  if(list) list.querySelectorAll(".caserow").forEach(b=>b.classList.toggle("on", b.dataset.id===id));
+  const det = $("#cbDetail"); if(!det) return;
+  det.innerHTML = `<div class="splaceholder">Loading…</div>`;
+  try{
+    const r = await fetch("/active-cases/"+encodeURIComponent(id));
+    if(!r.ok) throw new Error("gone");
+    const row = await r.json();
+    const when = row.published_at ? new Date(row.published_at).toLocaleDateString([], {dateStyle:"medium"}) : "";
+    const canRetract = !!MY_ACTIVE[id] || !!sessionStorage.getItem("noesis_apw");
+    det.innerHTML = `<div class="casedetail acdetail">
+      <div class="achead"><span class="ccluster">Anonymous case</span><span>published ${esc(when)}</span><span>identifying details removed</span>
+        ${canRetract ? `<button type="button" class="acun" data-id="${esc(id)}">Remove from board</button>` : ""}</div>
+      <div class="pubq">${questionHtml(row.question||"")}</div>
+      <div class="csec-h">◫ Noesis answer</div>
+      <div class="acbody"></div></div>`;
+    const body = det.querySelector(".acbody");
+    const turns = (row.thread && row.thread.length) ? row.thread : [row];
+    if(row.kind === "panel" || isPanelRow(row)){
+      body.innerHTML = `<div class="answer md">${mdToHtml(row.answer||"")}</div>`;
+    } else {
+      turns.forEach((t, i)=>{
+        const div = document.createElement("div"); div.className = "pubturn";
+        if(i > 0) div.innerHTML = `<div class="turnq">Q${i+1} · ${esc(t.question||"")}</div>`;
+        const ans = document.createElement("div"); div.appendChild(ans); body.appendChild(div);
+        render({...t, session_id: "case-"+id}, ans, {noLink:true, noConvo:true, noFeedback:true});
+      });
+    }
+    const un = det.querySelector(".acun");
+    if(un) un.addEventListener("click", ()=>unpublishActive(id, un));
+    det.scrollTop = 0;
+  }catch(e){ det.innerHTML = `<div class="cempty">This case is no longer on the board.</div>`; }
+}
+async function unpublishActive(id, btn){
+  if(btn){ btn.disabled = true; btn.textContent = "Removing…"; }
+  try{
+    const r = await fetch("/active-cases/"+encodeURIComponent(id), {method:"DELETE", headers:{"x-admin-password": sessionStorage.getItem("noesis_apw")||"", ...authHeaders()}});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+    delete MY_ACTIVE[id];
+    return true;
+  }catch(e){ if(btn){ btn.disabled = false; btn.textContent = "Couldn't remove: "+(e.message||e); } return false; }
+}
+// The publish picker: the account's own sessions, multi-select → anonymous snapshots on the board.
+async function openActivePublish(){
+  if(!(USER && USER.token)){ requireSignIn(); return; }
+  const det = $("#cbDetail"); if(!det) return;
+  det.innerHTML = `<div class="splaceholder">Loading your sessions…</div>`;
+  let mine = [];
+  try{
+    const [r] = await Promise.all([fetch("/sessions?limit=300", {headers: authHeaders()}), refreshMyActive()]);
+    mine = (await r.json()).sessions || [];
+  }catch(e){ det.innerHTML = `<div class="cempty">Couldn't load your sessions.</div>`; return; }
+  const onBoard = {}; Object.entries(MY_ACTIVE).forEach(([cid, sid])=>{ onBoard[sid] = cid; });
+  const item = s => `<label class="acitem" data-id="${esc(s.id)}" data-q="${esc((s.question||"").toLowerCase())}">
+      <input type="checkbox" value="${esc(s.id)}" ${onBoard[s.id] ? "" : ""}>
+      <span><span class="acq">${esc(s.question||"")}</span>
+        <span class="acm"><span>${s.created_at ? new Date(s.created_at).toLocaleDateString([], {dateStyle:"medium"}) : ""}</span>
+          <span>${s.kind === "panel" ? "specialist panel" : "Q&amp;A"}</span>
+          ${s.patient_ref ? `<span>patient attached · will be removed</span>` : ""}
+          ${onBoard[s.id] ? `<span class="acon">on board</span>` : ""}</span></span>
+      ${onBoard[s.id] ? `<button type="button" class="acun" data-cid="${esc(onBoard[s.id])}">Remove</button>` : "<span></span>"}
+    </label>`;
+  det.innerHTML = `<div class="acpick">
+    <h2>Publish cases to the board — anonymously</h2>
+    <div class="acnote">Each selected case is copied to Active Cases with no publisher, no asker, and no patient reference. Attached patient names/IDs, e-mails, phone numbers, record numbers and full dates are removed from the text automatically. Re-publishing a case refreshes its copy; you can remove yours any time.</div>
+    <div class="acbar"><input type="search" id="acfilter" placeholder="Filter your sessions…" aria-label="Filter sessions">
+      <button type="button" class="histbtn" id="acall">Select all shown</button><button type="button" class="histbtn" id="acnone">Clear</button></div>
+    <div class="aclist" id="aclist">${mine.length ? mine.map(item).join("") : `<div class="sempty">You have no saved sessions yet.</div>`}</div>
+    <label class="acconfirm"><input type="checkbox" id="acok"><span>I have checked that the selected cases contain no patient names or other identifying details beyond what is removed automatically.</span></label>
+    <button type="button" class="acgo" id="acgo" disabled>Publish 0 anonymously</button>
+    <div class="acmsg" id="acmsg"></div></div>`;
+  const listEl = det.querySelector("#aclist"), go = det.querySelector("#acgo"), ok = det.querySelector("#acok"), msg = det.querySelector("#acmsg");
+  const boxes = ()=>[...listEl.querySelectorAll("input[type=checkbox]")];
+  const shown = ()=>boxes().filter(b=>!b.closest(".acitem").hidden);
+  const sync = ()=>{ const n = boxes().filter(b=>b.checked).length; go.textContent = `Publish ${n} anonymously`; go.disabled = !(n && ok.checked); };
+  listEl.addEventListener("change", sync); ok.addEventListener("change", sync);
+  det.querySelector("#acfilter").addEventListener("input", e=>{ const q = e.target.value.trim().toLowerCase(); listEl.querySelectorAll(".acitem").forEach(it=>{ it.hidden = !!q && !it.dataset.q.includes(q); }); });
+  det.querySelector("#acall").addEventListener("click", ()=>{ shown().forEach(b=>{ b.checked = true; }); sync(); });
+  det.querySelector("#acnone").addEventListener("click", ()=>{ boxes().forEach(b=>{ b.checked = false; }); sync(); });
+  listEl.querySelectorAll(".acun").forEach(b=>b.addEventListener("click", async e=>{
+    e.preventDefault();
+    if(await unpublishActive(b.dataset.cid, b)){ const it = b.closest(".acitem"); it.querySelector(".acon")?.remove(); b.replaceWith(document.createElement("span")); }
+  }));
+  go.addEventListener("click", async ()=>{
+    const ids = boxes().filter(b=>b.checked).map(b=>b.value);
+    if(!ids.length) return;
+    go.disabled = true; msg.textContent = `Publishing ${ids.length}…`;
+    try{
+      const r = await fetch("/active-cases/publish", {method:"POST", headers:{"content-type":"application/json", ...authHeaders()}, body: JSON.stringify({session_ids: ids})});
+      if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+      const res = await r.json();
+      msg.textContent = `Published ${res.published.length} anonymously${res.skipped.length ? ` · ${res.skipped.length} skipped (not yours)` : ""}.`;
+      await loadActiveCases();
+      if(!isMobileSess()) $("#cbDetail").insertAdjacentHTML("afterbegin", `<div class="acnote">${esc(msg.textContent)}</div>`);
+    }catch(e){ msg.textContent = "Couldn't publish: "+(e.message||e); go.disabled = false; }
+  });
 }
 async function generateCaseAnswers(){
   const btn = $("#cbgen"), msg = $("#cbgenmsg");
@@ -7358,7 +7514,12 @@ $("#casesbtn").addEventListener("click", openCaseBoard);
 $("#cbback").addEventListener("click", closeCaseBoard);
 $("#cbgen").addEventListener("click", generateCaseAnswers);
 // generation is admin-only: the control appears only once ⚙ settings has been unlocked in this tab
-function syncCaseGenVisibility(){ const w = $("#cbgenwrap"); if(w) w.hidden = !sessionStorage.getItem("noesis_apw"); }
+function syncCaseGenVisibility(){
+  const w = $("#cbgenwrap"); if(w) w.hidden = !sessionStorage.getItem("noesis_apw") || CB_ERA === "active";
+  const p = $("#cbpubwrap"); if(p) p.hidden = CB_ERA !== "active";
+  const sub = $("#cbsub"); if(sub) sub.textContent = CB_ERA === "active" ? "Anonymous cases from clinicians · identifying details removed · open for discussion" : "Landmark cases · known correct decision · clinician-reviewed";
+}
+$("#cbpub").addEventListener("click", openActivePublish);
 syncCaseGenVisibility();
 { let _cbt; $("#cbsearch").addEventListener("input", ()=>{ clearTimeout(_cbt); _cbt=setTimeout(loadCasesList, 200); }); }
 $("#cbera").querySelectorAll(".cbtab").forEach(b=>b.addEventListener("click", ()=>{

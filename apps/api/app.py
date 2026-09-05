@@ -1106,6 +1106,10 @@ class LinkEmailIn(BaseModel):
     password: str
 
 
+class ActivePublishIn(BaseModel):
+    session_ids: list[str]
+
+
 class ClaimManyIn(BaseModel):
     session_ids: list[str]
 
@@ -4330,6 +4334,65 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if token is None:
             raise HTTPException(status_code=403, detail="only the session's owner can share it")
         return {"public": body.public, "share_token": token, "path": f"/#share/{token}"}
+
+    # ---- Active Cases: anonymous, de-identified publication to the public Case Board ----------
+    @app.get("/active-cases")
+    async def active_cases_list(q: str = "", limit: int = 200) -> dict:
+        """Public, no account: anonymous cases on the board (question + answer excerpt). Never carries
+        who published, who asked, or a patient reference — the stored rows are de-identified snapshots."""
+        store = _store()
+        if store is None:
+            return {"cases": []}
+        try:
+            return {"cases": await store.active_list(q=q or None, limit=min(max(limit, 1), 500))}
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"session store error: {e}") from e
+
+    @app.get("/active-cases/mine")
+    async def active_cases_mine(x_noesis_token: str = Header(default="")) -> dict:
+        """The signed-in account's own board entries (session_id → case_id), for the publish picker."""
+        store = _store()
+        user = await _user_from_token(x_noesis_token)
+        if store is None or user is None:
+            return {"cases": []}
+        return {"cases": await store.active_mine(user_id=user["id"])}
+
+    @app.get("/active-cases/{case_id}")
+    async def active_case_get(case_id: str) -> dict:
+        store = _store()
+        row = await store.active_get(case_id) if store is not None else None
+        if row is None:
+            raise HTTPException(status_code=404, detail="no such case")
+        return row
+
+    @app.post("/active-cases/publish")
+    async def active_cases_publish(body: ActivePublishIn, x_noesis_token: str = Header(default="")) -> dict:
+        """Bulk-publish the caller's OWN sessions anonymously. Each becomes a de-identified snapshot
+        (api.deident strips owner/asker/patient reference/attachments and scrubs identifiers from the
+        text). Sessions the caller does not own are skipped, never published."""
+        store = _store()
+        if store is None:
+            raise HTTPException(status_code=404, detail="no session store")
+        user = await _user_from_token(x_noesis_token)
+        if user is None:
+            raise HTTPException(status_code=401, detail="sign in to publish")
+        if not body.session_ids:
+            return {"published": [], "skipped": []}
+        return await store.active_publish(body.session_ids[:500], user_id=user["id"])
+
+    @app.delete("/active-cases/{case_id}")
+    async def active_case_unpublish(case_id: str, x_noesis_token: str = Header(default=""),
+                                    x_admin_password: str = Header(default="")) -> dict:
+        """Retract a board entry — the source session's owner, or an admin."""
+        store = _store()
+        if store is None:
+            raise HTTPException(status_code=404, detail="no session store")
+        user = await _user_from_token(x_noesis_token)
+        admin = bool(x_admin_password) and x_admin_password == _admin_ui_pw()
+        ok = await store.active_unpublish(case_id, user_id=(user or {}).get("id"), admin=admin)
+        if not ok:
+            raise HTTPException(status_code=403, detail="only the publisher (or an admin) can retract it")
+        return {"removed": True}
 
     def _client_ip(request: Request) -> str:
         fwd = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()

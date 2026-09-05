@@ -79,6 +79,20 @@ ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS audience TEXT NOT N
 ALTER TABLE noesis_research_session ADD COLUMN IF NOT EXISTS terms JSONB NOT NULL DEFAULT '[]'::jsonb;
 CREATE INDEX IF NOT EXISTS idx_nrs_vertical_tenant_created
     ON noesis_research_session (vertical, tenant_id, created_at DESC);
+-- ACTIVE CASES: an owner publishes sessions ANONYMOUSLY to the public Case Board. The board row is a
+-- de-identified SNAPSHOT (no owner, asker, patient reference, attachments, or identifiers in the
+-- text); `session_id` links back only so the owner (or an admin) can retract it. `case_id` is a
+-- fresh random id so a board entry cannot be correlated with a share link or a private permalink.
+CREATE TABLE IF NOT EXISTS noesis_active_case (
+    case_id      TEXT PRIMARY KEY,
+    session_id   TEXT NOT NULL UNIQUE,
+    vertical     TEXT NOT NULL,
+    kind         TEXT NOT NULL DEFAULT 'research',
+    question     TEXT NOT NULL,
+    snapshot     JSONB NOT NULL,
+    published_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_nac_vertical_pub ON noesis_active_case (vertical, published_at DESC);
 """
 
 
@@ -544,6 +558,97 @@ class SessionStore:
                 "without_legs": {"answers": base["answers"], "grounded_rate": _rate(base),
                                  "avg_claims": _avg(base)},
                 "top_leg_queries": sorted(top_queries.items(), key=lambda x: -x[1])[:10]}
+
+    # ---- Active Cases (anonymous publication to the public Case Board) --------------------------
+    async def active_publish(self, session_ids: list[str], *, user_id: str | None) -> dict[str, Any]:
+        """Publish the caller's OWN sessions anonymously: each becomes a de-identified snapshot row
+        (see api.deident). Re-publishing refreshes the snapshot under the same case_id. Returns the
+        published case ids and the session ids that were skipped (not the caller's / unknown)."""
+        import secrets
+        from api.deident import anonymous_snapshot
+        await self._ensure()
+        published: list[dict[str, str]] = []
+        skipped: list[str] = []
+        pool = await self._get_pool()
+        for sid in dict.fromkeys(session_ids or []):
+            row = await self.get(sid)
+            if row is None or (row.get("user_id") or None) != (user_id or None):
+                skipped.append(sid)
+                continue
+            snap = anonymous_snapshot(row)
+            kind = "panel" if (row.get("thread") or [{}])[0].get("kind") == "panel" else "research"
+            async with pool.acquire() as conn:
+                case_id = await conn.fetchval(
+                    "SELECT case_id FROM noesis_active_case WHERE session_id=$1", sid) or secrets.token_urlsafe(12)
+                await conn.execute(
+                    """INSERT INTO noesis_active_case (case_id, session_id, vertical, kind, question, snapshot)
+                       VALUES ($1,$2,$3,$4,$5,$6::jsonb)
+                       ON CONFLICT (session_id) DO UPDATE SET snapshot=EXCLUDED.snapshot, kind=EXCLUDED.kind,
+                           question=EXCLUDED.question, published_at=now()""",
+                    case_id, sid, self._vertical, kind, snap.get("question") or "", json.dumps(snap))
+            published.append({"session_id": sid, "case_id": case_id})
+        return {"published": published, "skipped": skipped}
+
+    async def active_unpublish(self, case_id: str, *, user_id: str | None, admin: bool = False) -> bool:
+        """Retract a board entry: the owner of the source session, or an admin."""
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            sid = await conn.fetchval(
+                "SELECT session_id FROM noesis_active_case WHERE case_id=$1 AND vertical=$2", case_id, self._vertical)
+            if sid is None:
+                return False
+            if not admin:
+                owner = await conn.fetchval("SELECT user_id FROM noesis_research_session WHERE id=$1", sid)
+                if owner is None or owner != user_id:
+                    return False
+            await conn.execute("DELETE FROM noesis_active_case WHERE case_id=$1", case_id)
+        return True
+
+    async def active_list(self, *, q: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
+        """Public board listing — identity-free by construction (only snapshot fields)."""
+        await self._ensure()
+        where = "vertical=$1"
+        params: list[Any] = [self._vertical]
+        if q and q.strip():
+            params.append(f"%{q.strip()}%")
+            where += f" AND (question ILIKE ${len(params)} OR snapshot->>'answer' ILIKE ${len(params)})"
+        params.append(limit)
+        async with (await self._get_pool()).acquire() as conn:
+            rows = await conn.fetch(
+                f"""SELECT case_id, kind, question, published_at,
+                           left(snapshot->>'answer', 600) AS excerpt,
+                           jsonb_array_length(COALESCE(snapshot->'thread', '[]'::jsonb)) AS n_turns,
+                           (snapshot->>'grounded')::boolean AS grounded
+                    FROM noesis_active_case WHERE {where}
+                    ORDER BY published_at DESC LIMIT ${len(params)}""", *params)
+        return [{"case_id": r["case_id"], "kind": r["kind"], "question": r["question"],
+                 "excerpt": r["excerpt"] or "", "n_turns": r["n_turns"] or 1,
+                 "grounded": bool(r["grounded"]), "published_at": r["published_at"].isoformat()} for r in rows]
+
+    async def active_get(self, case_id: str) -> dict[str, Any] | None:
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            r = await conn.fetchrow(
+                "SELECT case_id, kind, snapshot, published_at FROM noesis_active_case WHERE case_id=$1 AND vertical=$2",
+                case_id, self._vertical)
+        if r is None:
+            return None
+        snap = r["snapshot"]
+        snap = json.loads(snap) if isinstance(snap, str) else dict(snap)
+        snap.update({"case_id": r["case_id"], "kind": r["kind"], "published_at": r["published_at"].isoformat(),
+                     "anonymous": True})
+        return snap
+
+    async def active_mine(self, *, user_id: str) -> list[dict[str, Any]]:
+        """Which of the caller's sessions are on the board (for the publish picker)."""
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            rows = await conn.fetch(
+                """SELECT a.case_id, a.session_id, a.published_at FROM noesis_active_case a
+                   JOIN noesis_research_session s ON s.id = a.session_id
+                   WHERE a.vertical=$1 AND s.user_id=$2 ORDER BY a.published_at DESC""", self._vertical, user_id)
+        return [{"case_id": r["case_id"], "session_id": r["session_id"],
+                 "published_at": r["published_at"].isoformat()} for r in rows]
 
     async def get(self, session_id: str) -> dict[str, Any] | None:
         await self._ensure()

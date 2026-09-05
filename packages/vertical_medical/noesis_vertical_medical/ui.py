@@ -41,9 +41,8 @@ class MedicalUI:
                          "AI-generated and may be incomplete, out of date, or wrong; always verify against the "
                          "cited primary sources before any clinical decision. By continuing you confirm you "
                          "understand this and accept sole responsibility for how you use the information."),
-                "footer": ("For informational purposes only — not medical advice. Noesis is intended for "
-                           "healthcare professionals. Verify every answer against the cited primary sources "
-                           "and apply independent clinical judgment before acting."),
+                "footer": ("For healthcare professionals — not medical advice. Verify against the cited "
+                           "sources and apply independent clinical judgment before acting."),
                 "answer": ("AI-generated summary of published evidence — informational only, not medical advice. "
                            "Verify against the cited sources and apply independent clinical judgment before acting."),
             },

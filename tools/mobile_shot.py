@@ -13,7 +13,9 @@ import asyncio, base64, json, subprocess, sys, time, urllib.request
 import websockets
 URL=sys.argv[1]; OUT=sys.argv[2]; W=int(sys.argv[3]) if len(sys.argv)>3 else 390
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-proc=subprocess.Popen([CHROME,"--headless=new","--disable-gpu","--remote-debugging-port=9333","--user-data-dir=/tmp/claude-cdp-profile","about:blank"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+import os, tempfile
+PROFILE=os.environ.get("NOESIS_SHOT_PROFILE") or tempfile.mkdtemp(prefix="noesis-shot-")   # fresh profile per run
+proc=subprocess.Popen([CHROME,"--headless=new","--disable-gpu","--remote-debugging-port=9333","--user-data-dir="+PROFILE,"about:blank"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 try:
     for _ in range(50):
         try:

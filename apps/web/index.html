@@ -2031,6 +2031,9 @@ async function loadConfig(){
       // (asking a question, Past Sessions, Videos, Pulse, Account) via requireSignIn().
       if(USER && USER.email && !USER.token) $("#idemail").value = USER.email;
       updateAuthUI();
+      if(!PUBLIC_VIEW && !ACCOUNTS_ENABLED && (!USER || !USER.email || !USER.disclaimer_ack)){
+        $("#idmodal").hidden = false; setTimeout(()=>$("#idname").focus(), 60);   // legacy local identity (accounts off)
+      }
     }
     DUEL_ENABLED = !!c.duel_enabled;
     INTEGRATIVE_ENABLED = false;   // integrative toggle removed from the UI (Alternative mode supersedes it)
@@ -6363,10 +6366,8 @@ document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !sessionsEl.hid
 function initIdentity(){
   try{ USER = JSON.parse(localStorage.getItem("noesis_user")||"null"); }catch(e){ USER = null; }
   // Show the gate for new users AND for returning users who predate the disclaimer (never attested).
-  if(!PUBLIC_VIEW && !ACCOUNTS_ENABLED && (!USER || !USER.email || !USER.disclaimer_ack)){
-    if(USER){ if(USER.name) $("#idname").value = USER.name; if(USER.email) $("#idemail").value = USER.email; }
-    $("#idmodal").hidden = false; setTimeout(()=>$("#idname").focus(), 60);
-  }
+  if(USER){ if(USER.name) $("#idname").value = USER.name; if(USER.email) $("#idemail").value = USER.email; }
+  // no gate on arrival — see the config callback (legacy accounts-OFF identity gate) and requireSignIn()
 }
 // AUTH (accounts on): create account (email + password + name) or sign in (email + password) — the
 // same PBKDF2 flow as roster. authHeaders() attaches the bearer token to every private request.

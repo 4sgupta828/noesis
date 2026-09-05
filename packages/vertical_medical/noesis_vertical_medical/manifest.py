@@ -31,7 +31,7 @@ from .visuals import MEDICAL_VISUALS_PROMPT
 from .question_contract import MEDICAL_CONTRACT_PROMPT
 from .refine import MEDICAL_REFINE_PROMPT
 from .triage import MEDICAL_TRIAGE_PROMPT, MEDICAL_TRIAGE_PROMPT_V2
-from .reasoned import REASONED_SCAFFOLD_PROMPT, REASONED_ANSWER_FORMAT, MEDICAL_DIFFERENTIAL_FORMAT
+from .reasoned import REASONED_COVERAGE_ADDENDUM, REASONED_SCAFFOLD_PROMPT, REASONED_ANSWER_FORMAT, MEDICAL_DIFFERENTIAL_FORMAT
 from .integrative import INTEGRATIVE_DIRECTIVE, INTEGRATIVE_QUERY_HINT
 from .alt_modality import (
     MEDICAL_ALTERNATIVE_DIRECTIVE, MEDICAL_ALTERNATIVE_QUERY_HINT, MEDICAL_CAM_INTENT_SYSTEM)
@@ -111,6 +111,7 @@ def build_manifest() -> VerticalManifest:
         triage_prompt_v2=MEDICAL_TRIAGE_PROMPT_V2,
         reasoned_scaffold_prompt=REASONED_SCAFFOLD_PROMPT,
         reasoned_answer_format=REASONED_ANSWER_FORMAT,
+        reasoned_coverage_addendum=REASONED_COVERAGE_ADDENDUM,
         differential_answer_format=MEDICAL_DIFFERENTIAL_FORMAT,
         integrative_prompt=INTEGRATIVE_DIRECTIVE,
         integrative_query_hint=INTEGRATIVE_QUERY_HINT,

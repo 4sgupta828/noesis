@@ -93,20 +93,22 @@ def test_flag_off_diagnostic_still_uses_reasoned_format():
 
 # ---- answer-format panel (2026-09-04): routing by question shape, non-directive defaults --------------
 _OVERVIEW_FMT = "OVERVIEW-EXPLAINER-FORMAT-SENTINEL"
+_COVERAGE_ADDENDUM = "QUESTION-COVERAGE-ADDENDUM-SENTINEL"
 
 
 class _KindLLM(_LLM):
-    """Scripted scaffold with an explicit kind / confidence (or a raised error)."""
+    """Scripted scaffold with an explicit kind / confidence / explicit_asks (or a raised error)."""
 
-    def __init__(self, kind: str, confidence: str = "high", raise_scaffold: bool = False):
+    def __init__(self, kind: str, confidence: str = "high", raise_scaffold: bool = False, asks=()):
         super().__init__(is_diagnostic=False)
-        self.kind, self.confidence, self.raise_scaffold = kind, confidence, raise_scaffold
+        self.kind, self.confidence, self.raise_scaffold, self.asks = kind, confidence, raise_scaffold, list(asks)
 
     async def complete(self, *, system, messages, response_format, max_tokens=2048, temperature=None):
         if getattr(response_format, "__name__", "") == "_Scaffold":
             if self.raise_scaffold:
                 raise RuntimeError("classifier down")
-            return LLMResult(parsed=response_format(kind=self.kind, confidence=self.confidence), model="c")
+            return LLMResult(parsed=response_format(kind=self.kind, confidence=self.confidence,
+                                                    explicit_asks=self.asks), model="c")
         return await super().complete(system=system, messages=messages, response_format=response_format,
                                       max_tokens=max_tokens, temperature=temperature)
 
@@ -119,7 +121,8 @@ def _kind_service(llm):
         llm=llm, embedder=FakeEmbedder(dim=8), sources={"corpus": src},
         reasoned_scaffold_prompt=_SCAFFOLD_PROMPT, reasoned_answer_format=_REASONED_FMT,
         differential_answer_format=_DIFFERENTIAL_FMT,
-        answer_formats={"overview": _OVERVIEW_FMT})
+        answer_formats={"overview": _OVERVIEW_FMT},
+        reasoned_coverage_addendum=_COVERAGE_ADDENDUM)
 
 
 def test_overview_kind_uses_the_explainer_format_never_the_plan():
@@ -177,3 +180,18 @@ def test_medical_directives_carry_the_panel_rules():
         assert f'"{k}"' in REASONED_SCAFFOLD_PROMPT
         assert k in (MANIFEST.answer_formats or {})
         assert "Do now" in MANIFEST.answer_formats[k]          # each family names the plan as forbidden
+
+
+def test_coverage_section_only_when_the_user_asked_several_subquestions():
+    one = _KindLLM("management", asks=["dose at eGFR 30-45?"])
+    asyncio.run(_kind_service(one).ask_reasoned(question="metformin dose at eGFR 30-45?", tenant_id="A"))
+    assert _REASONED_FMT in one.compose_blob and _COVERAGE_ADDENDUM not in one.compose_blob
+    two = _KindLLM("management", asks=["IV vs oral iron?", "when to transfuse?"])
+    asyncio.run(_kind_service(two).ask_reasoned(question="IV vs oral iron, and when to transfuse?", tenant_id="A"))
+    assert _REASONED_FMT in two.compose_blob and _COVERAGE_ADDENDUM in two.compose_blob
+
+
+def test_reasoned_format_no_longer_carries_a_coverage_section():
+    from noesis_vertical_medical.reasoned import REASONED_ANSWER_FORMAT, REASONED_COVERAGE_ADDENDUM
+    assert "## Question coverage" not in REASONED_ANSWER_FORMAT
+    assert "## Question coverage" in REASONED_COVERAGE_ADDENDUM

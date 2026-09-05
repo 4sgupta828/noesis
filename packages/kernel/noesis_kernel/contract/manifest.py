@@ -127,6 +127,9 @@ class VerticalManifest:
     # the standard adaptive synthesis. The kernel owns the kind names and the routing; the vertical
     # owns the words (answer-format panel, 2026-09-04: a general question must never get a plan).
     answer_formats: dict[str, str] | None = None
+    # Optional addendum the kernel appends to the reasoned directive ONLY when the scaffold found ≥2
+    # sub-questions in the user's own text (a per-sub-question coverage section). Opaque prose.
+    reasoned_coverage_addendum: str | None = None
     # Optional vertical-supplied instruction for the VISION pre-step: how to DESCRIBE a
     # user-uploaded image (color/shape/borders/texture/distribution), producing a labeled
     # visual observation — never a diagnosis. Opaque prose; the kernel only threads it into

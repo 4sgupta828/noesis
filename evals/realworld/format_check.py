@@ -36,10 +36,18 @@ def check(row: dict) -> tuple[bool, list[str]]:
         if t.lower() not in ans.lower():
             problems.append(f"required text missing: {t}")
     if gold.get("require_dated_items"):
-        bullets = [ln for ln in ans.splitlines() if ln.strip().startswith(("-", "*", "1", "2", "3"))]
+        # only the "What changed" section must be dated; undated findings have their own section
+        sec, bullets = None, []
+        for ln in ans.splitlines():
+            if ln.startswith("## "):
+                sec = ln.lower()
+            elif sec and "what changed" in sec and ln.strip().startswith(("-", "*", "1", "2", "3")):
+                bullets.append(ln)
         undated = [ln for ln in bullets if not YEAR.search(ln)]
-        if bullets and undated:
-            problems.append(f"{len(undated)}/{len(bullets)} items undated")
+        if not bullets:
+            problems.append("no items under What changed")
+        elif undated:
+            problems.append(f"{len(undated)}/{len(bullets)} What-changed items undated")
     return (not problems), problems
 
 

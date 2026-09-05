@@ -134,6 +134,15 @@ DECISION GATES (apply to every recommendation and every can't-miss escalation be
   the extrapolation where the recommendation is made, not only in a caveats section.
 """
 
+# Appended by the KERNEL only when the scaffold found ≥2 sub-questions in the user's own text — the
+# section can no longer appear on a single-question ask (held-out eval fmt-04, 2026-09-05).
+REASONED_COVERAGE_ADDENDUM = """\
+## Question coverage
+The user asked several sub-questions. Add a final section: one line per sub-question,
+**Sub-question label** — answered / partial / not answerable, plus half a sentence on what is missing for
+the latter two. Omit for single-question asks (the coverage brief does not count as sub-questions).
+"""
+
 REASONED_ANSWER_FORMAT = """\
 GOVERNING RULE — a CLEAR CLINICIAN READ that DOES JUSTICE to the question. This governs the whole answer
 and overrides the structure below where they conflict. The goal is to inform the clinician fully AND help
@@ -204,11 +213,6 @@ Distinguish (a) missing patient information, (b) genuine clinical uncertainty, (
 by the label ("Missing: …", "Uncertain: …", "No evidence: …"). This section REPLACES any per-branch
 checklist: the "[Coverage brief …]" branches appended to the question are RETRIEVAL scaffolding, NOT the
 user's sub-questions — never enumerate them back with answered/partial verdicts.
-
-## Question coverage
-ONLY IF the user's own question text explicitly asked multiple sub-questions: one line per sub-question,
-**Sub-question label** — answered / partial / not answerable, plus half a sentence on what is missing for
-the latter two. Omit for single-question asks (the coverage brief does not count as sub-questions).
 
 DECISION GATES (apply to every recommendation before it ships):
 - The cited finding must support the INFERENCE you draw, not merely mention the topic. If the finding

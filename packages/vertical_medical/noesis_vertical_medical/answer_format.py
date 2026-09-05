@@ -470,7 +470,11 @@ finding; an undated item must not appear. 200–400 words.
 
 ## What changed
 One bullet per change, newest first: **date/year · source type** — what changed and what it \
-replaces or adds [n].
+replaces or adds [n]. ONLY findings that state a date or year belong here.
+
+## Also reported, undated
+Findings relevant to the question whose date the evidence does not state — listed separately so \
+"what changed" stays a dated record. Omit if none.
 
 ## Key new evidence
 A Markdown table: Source | Date | Finding | Evidence tier — only rows the findings state.

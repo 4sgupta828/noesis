@@ -85,6 +85,7 @@ class ResearchService:
     understanding_answer_format: str | None = None  # UNDERSTANDING engine: causal-model compose contract
     understanding_query_hint: str | None = None     # UNDERSTANDING engine: mechanism-steering hint
     answer_formats: dict[str, str] | None = None    # non-decision kinds ("overview"/"comparison"/"update") → directive
+    reasoned_coverage_addendum: str | None = None   # appended only when the user asked ≥2 sub-questions
     max_calls: int = 80                     # 40 → 80: stage-2 BudgetState-honesty re-plan — the
     #                                         claims-first/binding/fallback/frame-repair calls are
     #                                         now charged (see budget.py DEFAULT_MAX_LLM_CALLS)
@@ -274,6 +275,11 @@ class ResearchService:
                 # steer retrieval toward decision-grade sources for the differential + thresholds
                 lines.append("- prioritize guideline / consensus / systematic-review sources for the "
                              "workup and management thresholds")
+            if len(s.explicit_asks) >= 2 and self.reasoned_coverage_addendum:
+                # MULTI-ASK question → the per-sub-question coverage section is appended mechanically;
+                # a single question never gets one (the model can no longer decide to add it).
+                kw = dict(kw)
+                kw["extra_directive"] = "\n\n".join(x for x in (kw.get("extra_directive"), self.reasoned_coverage_addendum) if x)
             if lines:
                 kw = dict(kw)
                 kw["graph_question"] = question     # expander anchors on the ASKED subject, not brief branches

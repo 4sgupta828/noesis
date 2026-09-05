@@ -44,6 +44,15 @@ def test_register_login_logout_and_private_sessions() -> None:
             h2, salt2 = hash_password("pw-b")
             bob, tok_b = await acc.register(email="b@x.io", name="Bob", pw_hash=h2, pw_salt=salt2)
             assert await acc.email_exists("A@x.io") and not await acc.email_exists("c@x.io")
+            # a pre-passwords (token-only) account has no password → may claim itself by setting one
+            legacy, _ = await acc.register(email="l@x.io", name="Legacy")
+            assert await acc.email_exists("l@x.io") and not await acc.has_password("l@x.io")
+            assert await acc.login(email="l@x.io", password="anything") is None
+            h3, salt3 = hash_password("pw-l")
+            claimed, _ = await acc.register(email="l@x.io", name="Legacy", pw_hash=h3, pw_salt=salt3)
+            assert claimed["id"] == legacy["id"] and await acc.has_password("l@x.io")
+            assert (await acc.login(email="l@x.io", password="pw-l"))[0]["id"] == legacy["id"]
+            assert await acc.has_password("a@x.io")                    # normal accounts stay 409 at the route
             # login: right password → fresh token; wrong → None
             assert await acc.login(email="a@x.io", password="nope") is None
             u, tok_a2 = await acc.login(email="a@x.io", password="pw-a")

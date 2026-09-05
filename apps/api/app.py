@@ -3624,12 +3624,14 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail="invalid email")
         if len((body.name or "").strip()) < 2:
             raise HTTPException(status_code=400, detail="name required")
-        # Register requires a password and REJECTS an email that already has an account: the store's
-        # upsert-on-email would otherwise let anyone re-claim an existing account by email without
-        # proving the password (account takeover). Returning users sign in.
+        # Register requires a password and REJECTS an email whose account already HAS a password:
+        # the store's upsert-on-email would otherwise let anyone re-claim an account by email without
+        # proving the password (account takeover). Returning users sign in. A PRE-PASSWORDS account
+        # (registered when identity was token-only, so it has no password to sign in with) may claim
+        # itself here by setting one — the only way those users can get back in without mail infra.
         if not (body.password or ""):
             raise HTTPException(status_code=400, detail="password required")
-        if await store.email_exists(body.email):
+        if await store.has_password(body.email):
             raise HTTPException(status_code=409,
                                 detail="an account with that email already exists — please sign in")
         npi_ok = False

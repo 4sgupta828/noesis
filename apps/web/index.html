@@ -303,6 +303,29 @@
   #grfilter{margin:.2rem 0 .4rem;padding:.4rem .6rem;font-size:.8rem;width:100%;}
   @media (max-width:640px){ .grimpact{grid-template-columns:1fr;} }
   .idcard .idrow{display:flex;gap:.5rem;} .idcard .idrow>*{flex:1;min-width:0;}
+  /* account page */
+  .acctpage{position:fixed;inset:0;z-index:1000;background:var(--bg);overflow:auto;padding:2.2rem 1.2rem 3rem;
+    padding-bottom:calc(3rem + env(safe-area-inset-bottom));}
+  .acctpage[hidden]{display:none;}
+  .acctwrap{max-width:880px;margin:0 auto;}
+  .accttop{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem;}
+  .acctid{display:flex;gap:.9rem;align-items:center;min-width:0;}
+  .acctavatar{width:54px;height:54px;border-radius:15px;background:var(--gold);color:var(--on-accent);display:flex;align-items:center;
+    justify-content:center;font-size:1.35rem;font-weight:700;flex:none;text-transform:uppercase;}
+  .accth1{font-family:var(--serif);font-size:1.6rem;margin:0;letter-spacing:-.01em;overflow-wrap:anywhere;}
+  .acctsub{color:var(--muted);font-size:.9rem;margin-top:.15rem;overflow-wrap:anywhere;}
+  .acctbtns{display:flex;gap:.5rem;flex-wrap:wrap;}
+  .acctgrid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+  .acctcard{border:1px solid var(--hair);border-radius:14px;padding:1.15rem 1.25rem;background:var(--panel);min-width:0;}
+  .acctwide{grid-column:1 / -1;}
+  .acctcard h3{margin:0 0 .55rem;font-size:1.02rem;font-family:var(--sans);font-weight:650;}
+  .acctmuted{font-weight:400;color:var(--muted);font-size:.8rem;margin-left:.3rem;}
+  .acctcardsub{color:var(--muted);font-size:.85rem;margin:.1rem 0 .85rem;line-height:1.5;}
+  .acctcardbtns{display:flex;gap:.5rem;flex-wrap:wrap;}
+  .acctpref{display:flex;align-items:center;justify-content:space-between;gap:.8rem;padding:.5rem 0;border-bottom:1px solid var(--hair);}
+  .acctpref label{font-size:.9rem;}
+  .acctpref select{background:var(--panel2);border:1px solid var(--hair);border-radius:9px;color:var(--ink);font:inherit;font-size:.86rem;padding:.4rem .6rem;min-height:40px;}
+  @media(max-width:640px){.acctgrid{grid-template-columns:1fr;} .acctpage{padding:1.2rem .9rem 3rem;} .acctbtns .histbtn{min-height:40px;}}
   .idcard .idhint{font-size:.68rem;color:var(--muted);line-height:1.45;margin:-.1rem 0 .5rem;}
   /* per-answer feedback (accounts flag) — the W-taxonomy signal loop. The RESTING state is a
      one-line whisper (the top-toolbar thumbs already provide the prominent pair); the root-cause
@@ -1413,6 +1436,7 @@
         btn.textContent=NAMES[t]||NAMES.light;
         btn.title="Theme: "+(NAMES[t]||NAMES.light).slice(2)+" — click to switch"; } }
       label();
+      window.__setTheme = function(t){ if(ORDER.indexOf(t) >= 0){ apply(t); label(); } };   // account page prefs
       if(btn) btn.addEventListener("click", function(){
         apply(ORDER[(ORDER.indexOf(current())+1)%ORDER.length]);
         label();
@@ -1443,10 +1467,10 @@
     <button type="button" class="histbtn" id="vidbtn" style="margin-left:0;">Videos</button>
     <button type="button" class="histbtn" id="histbtn" style="margin-left:0;">Past Sessions</button>
     <button type="button" class="histbtn setbtn" id="setbtn" style="margin-left:0;" title="Product settings (admin)" aria-label="Product settings">⚙</button>
-    <button type="button" class="histbtn" id="signoutbtn" style="margin-left:0;" hidden title="Sign out of this account">Sign out</button>
+    <button type="button" class="histbtn" id="acctbtn" style="margin-left:0;" hidden title="Your account — who is signed in, preferences, sign out">◈ Account</button>
     <button type="button" class="histbtn pulsebtn" id="pulsebell" style="margin-left:0;" hidden
             title="Evidence changes on your watched topics" aria-label="Pulse inbox">◉ Pulse<span class="pbadge" id="pbadge" hidden></span></button>
-    <button type="button" class="histbtn" id="pplbtn" style="margin-left:0;"
+    <button type="button" class="histbtn" id="pplbtn" style="margin-left:0;" hidden
             title="Find the right specialist for a situation" aria-label="People">⧉ People</button>
     <button type="button" class="histbtn" id="termsbtn" style="margin-left:0;" hidden
             title="Every medical concept Noesis has explained — searchable, each linking to its related concepts" aria-label="Key Concepts">✦ Concepts</button>
@@ -1652,6 +1676,58 @@
 </div>
 
 <!-- identity gate: capture name + email at landing, stored against each session -->
+<!-- ACCOUNT page: who is signed in, preferences, privacy, sign out (same shell as roster) -->
+<section class="acctpage" id="acctpage" hidden aria-label="Your account">
+  <div class="acctwrap">
+    <div class="accttop">
+      <div class="acctid">
+        <div class="acctavatar" id="acctavatar">◈</div>
+        <div>
+          <h1 class="accth1" id="acctname">Your account</h1>
+          <div class="acctsub" id="acctemail"></div>
+          <div class="acctsub" id="acctmeta"></div>
+        </div>
+      </div>
+      <div class="acctbtns">
+        <button type="button" class="histbtn" id="acctsessions">⧗ Past Sessions</button>
+        <button type="button" class="histbtn" id="acctclose">← Back</button>
+      </div>
+    </div>
+    <div class="acctgrid">
+      <section class="acctcard">
+        <h3>Preferences</h3>
+        <div class="acctpref">
+          <label for="prefTheme">Theme</label>
+          <select id="prefTheme" aria-label="Theme">
+            <option value="editorial">Editorial</option><option value="light">Clinical light</option><option value="dark">Dark</option>
+          </select>
+        </div>
+        <div class="acctpref" id="prefInRow" hidden>
+          <label for="prefIn">Practice context</label>
+          <select id="prefIn" aria-label="Practice context">
+            <option value="">Account default</option><option value="on">India (IN sources first)</option><option value="off">Global</option>
+          </select>
+        </div>
+        <p class="acctcardsub" id="prefhint">Saved to your account — they follow you to any device you sign in on.</p>
+      </section>
+      <section class="acctcard">
+        <h3>Privacy <span class="acctmuted">per account</span></h3>
+        <p class="acctcardsub">Your questions, answers and videos are private to this account. Nothing you ask is visible to other accounts; a shared link opens only for you.</p>
+        <div class="acctcardbtns" style="align-items:center;gap:.6rem;">
+          <span id="acctcount" class="acctmuted" style="margin:0;">…</span>
+        </div>
+      </section>
+      <section class="acctcard acctwide">
+        <h3>Session</h3>
+        <p class="acctcardsub">Signing out revokes this device's token only; other signed-in devices stay signed in.</p>
+        <div class="acctcardbtns">
+          <button type="button" class="histbtn" id="logoutbtn">Sign out</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</section>
+
 <div class="idmodal" id="idmodal" hidden>
   <div class="idcard">
     <svg class="idlogo" viewBox="0 0 220 132" role="img" aria-label="Noesis"><use href="#noesis-logo"/></svg>
@@ -1662,6 +1738,7 @@
     <input id="idpassword" type="password" placeholder="Password" autocomplete="current-password" hidden />
     <div class="idtoggle" id="idtoggle" hidden style="font-size:.8rem;margin:.2rem 0 .1rem;">
       <a href="#" id="idswitch" style="color:var(--gold);text-decoration:none;">Already have an account? Sign in</a>
+      <div class="idhint" id="idlegacy" style="margin-top:.3rem;">Registered before passwords existed? Use <b>Create account</b> with the same email to set one.</div>
     </div>
     <div class="idextra" id="idextra" hidden>
       <select id="idprof" aria-label="Profession">
@@ -6136,8 +6213,8 @@ function authHeaders(){ return (USER && USER.token) ? {"x-noesis-token": USER.to
 function loggedIn(){ return !!(ACCOUNTS_ENABLED && USER && USER.token); }
 function updateAuthUI(){
   const go = $("#idgo"), sw = $("#idswitch"), nm = $("#idname"), pw = $("#idpassword"),
-        tg = $("#idtoggle"), ex = $("#idextra"), so = $("#signoutbtn");
-  if(so) so.hidden = !loggedIn();
+        tg = $("#idtoggle"), ex = $("#idextra"), ab = $("#acctbtn");
+  if(ab) ab.hidden = !loggedIn();
   if(!ACCOUNTS_ENABLED){ if(pw) pw.hidden = true; if(tg) tg.hidden = true; return; }
   if(pw) pw.hidden = false;
   if(tg) tg.hidden = false;
@@ -6156,9 +6233,48 @@ async function signOut(){
   USER = null;
   try{ localStorage.removeItem("noesis_user"); }catch(e){}
   updateAuthUI();
+  $("#acctpage").hidden = true;
   openAuth("login");
 }
-$("#signoutbtn").addEventListener("click", signOut);
+// ---- Account page: who is signed in, preferences (saved server-side), privacy, sign out ----
+async function openAccount(){
+  if(!loggedIn()){ openAuth("login"); return; }
+  const u = USER || {};
+  $("#acctname").textContent = u.name || "Your account";
+  $("#acctemail").textContent = u.email || "";
+  $("#acctavatar").textContent = ((u.name || u.email || "◈").trim()).slice(0,1);
+  const meta = [u.profession, u.verified ? "✓ verified clinician" : ""].filter(Boolean).join(" · ");
+  $("#acctmeta").textContent = meta;
+  $("#prefTheme").value = document.documentElement.getAttribute("data-theme") || "light";
+  $("#acctpage").hidden = false;
+  // server-side prefs (fresh: /me may carry more than the cached USER, e.g. a country set at signup)
+  try{
+    const r = await fetch("/me/settings", {headers: authHeaders()});
+    if(r.ok){ const d = await r.json();
+      $("#prefInRow").hidden = !d.in_mode_available;
+      $("#prefIn").value = d.in_mode || "";
+      if(d.country) $("#acctmeta").textContent = [meta, d.country].filter(Boolean).join(" · ");
+    }
+  }catch(e){}
+  try{
+    const r = await fetch("/sessions?tenant_id=demo&limit=300", {headers: authHeaders()});
+    const d = r.ok ? await r.json() : {sessions: []};
+    const n = (d.sessions || []).length;
+    $("#acctcount").textContent = n ? `${n}${n >= 300 ? "+" : ""} saved session${n === 1 ? "" : "s"} in this account` : "No saved sessions yet";
+  }catch(e){ $("#acctcount").textContent = ""; }
+}
+$("#acctbtn").addEventListener("click", openAccount);
+$("#acctclose").addEventListener("click", ()=>{ $("#acctpage").hidden = true; });
+$("#acctsessions").addEventListener("click", ()=>{ $("#acctpage").hidden = true; openSessions(); });
+$("#logoutbtn").addEventListener("click", signOut);
+$("#prefTheme").addEventListener("change", (e)=>{ if(window.__setTheme) window.__setTheme(e.target.value); });
+$("#prefIn").addEventListener("change", async (e)=>{
+  try{ const r = await fetch("/me/settings", {method:"POST", headers:{"content-type":"application/json", ...authHeaders()},
+        body: JSON.stringify({in_mode: e.target.value})});
+    $("#prefhint").textContent = r.ok ? "Saved." : "Could not save — try again."; }
+  catch(_){ $("#prefhint").textContent = "Could not save — try again."; }
+});
+document.addEventListener("keydown", e=>{ if(e.key === "Escape" && !$("#acctpage").hidden) $("#acctpage").hidden = true; });
 $("#idgo").addEventListener("click", async ()=>{
   const name = $("#idname").value.trim(), email = $("#idemail").value.trim();
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ $("#iderr").textContent = "Please enter a valid email."; return; }

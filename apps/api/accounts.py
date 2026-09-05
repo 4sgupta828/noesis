@@ -162,6 +162,15 @@ class AccountStore:
                 "SELECT 1 FROM noesis_user WHERE vertical=$1 AND email=$2",
                 self._vertical, email.lower().strip()))
 
+    async def has_password(self, email: str) -> bool:
+        """True only for an account that has SET a password. A pre-passwords (token-only) account
+        returns False — it may claim itself by creating a password (see /auth/register)."""
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            return bool(await conn.fetchval(
+                "SELECT 1 FROM noesis_user WHERE vertical=$1 AND email=$2 AND pw_hash IS NOT NULL AND pw_hash <> ''",
+                self._vertical, email.lower().strip()))
+
     async def register(self, *, email: str, name: str, profession: str = "", country: str = "",
                        npi: str = "", npi_verified: bool = False,
                        disclaimer_ack: bool = False,

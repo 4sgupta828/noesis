@@ -26,39 +26,76 @@ from noesis_kernel.contract.dto import (
 from noesis_kernel.retrieval.rank import Candidate, rank_candidates
 from noesis_kernel.retrieval.scoring import tokens as _tokens
 
-# lexical leg knobs (see PostgresRetrievalSource.search)
-_LEX_SPARSE = 8              # strict-AND rows below this → run the relaxed pairs leg too
-_RELAXED_CAP_MULT = 5        # relaxed leg ranks at most pool_n × this many GIN candidates
-_MAX_PAIR_TERMS = 8          # pairs leg enumerates C(n,2) over at most this many content terms
-# function words the english tsvector config would drop anyway — filtered here so a pair never
-# degenerates into a single common term (`(what & dose)` → `dose` → 150k rows)
-_FUNCTION_WORDS = frozenset("""the and for with that this from what which when where who whom whose why how are was were
-been being have has had does did doing will would shall should can could may might must not into onto
-over under between among about after before during than then there their them they these those such
-via per each any all some most more less many much very also just only same other than into out""".split())
+# ---- lexical candidate planning (document-frequency driven) -------------------------------------
+# Postgres cannot rank a full-text match from the GIN index (no RUM/BM25 index on the managed
+# image), so `WHERE tsv @@ q ORDER BY ts_rank_cd(...) LIMIT n` ranks EVERY matching row. With an
+# any-term OR over a 1.5M-block corpus that was a full-table scan per search (108 s in prod). The
+# principled fix is the one every inverted-index engine applies: RARE terms select candidates
+# (small postings), COMMON terms only contribute to ranking. Which terms are rare is not guessed
+# from a word list — it comes from the planner's own lexeme statistics (pg_stats.most_common_elems
+# for the tsv column, refreshed by ANALYZE), i.e. measured document frequency on THIS corpus.
+_LEX_RARE_DF = 0.005        # a lexeme in ≤ 0.5% of blocks may SELECT candidates (≤ ~7.5k rows/term at 1.5M)
+_LEX_TIMEOUT_MS = 12000     # any lexical query slower than this is skipped, never waited on (dense leg carries on)
+_DF_REFRESH_S = 900         # lexeme-frequency table is re-read from pg_stats at most this often
+import logging as _logging
+_log = _logging.getLogger(__name__)
 
 
-def _lexical_queries(terms: list[str]) -> tuple[str, str]:
-    """(strict, relaxed) tsquery strings for the lexical leg, or "" when there is nothing to match.
-    strict = AND of the CONTENT tokens (alphabetic, ≥3 chars; pure numbers such as '30'/'45' are far
-    too common to constrain anything — they only ever inflated the OR query). relaxed = any two
-    content tokens co-occurring: `(a & b) | (a & c) | ...` — still index-driven, far more selective
-    than any single common term, and only run when strict came back sparse."""
-    content: list[str] = []
-    for t in terms:
-        if t.isdigit() or len(t) < 3 or t in content or t in _FUNCTION_WORDS:
-            continue
-        content.append(t)
-    if not content:
-        content = [t for i, t in enumerate(terms) if t and t not in terms[:i]]
-    if not content:
-        return "", ""
-    strict = " & ".join(content)
-    head = content[:_MAX_PAIR_TERMS]
-    if len(head) < 2:
-        return strict, ""
-    pairs = [f"({a} & {b})" for i, a in enumerate(head) for b in head[i + 1:]]
-    return strict, " | ".join(pairs)
+def _parse_pg_text_array(raw: str | None) -> list[str]:
+    """Parse the text form of a Postgres array ('{a,b,"c d"}') — pg_stats.most_common_elems is
+    `anyarray`, which asyncpg cannot decode, so it is fetched as text."""
+    if not raw or len(raw) < 2 or raw == "{}":
+        return []
+    out: list[str] = []
+    buf: list[str] = []
+    quoted = escaped = False
+    for ch in raw[1:-1]:
+        if escaped:
+            buf.append(ch); escaped = False
+        elif ch == "\\":
+            escaped = True
+        elif ch == '"':
+            quoted = not quoted
+        elif ch == "," and not quoted:
+            out.append("".join(buf)); buf = []
+        else:
+            buf.append(ch)
+    out.append("".join(buf))
+    return out
+
+
+def plan_lexical(lexemes: list[str], df: dict[str, float], *, rare_df: float = _LEX_RARE_DF
+                 ) -> tuple[list[str], str]:
+    """Candidate-selection plan for the lexical leg.
+
+    Returns (select_queries, rank_query): `select_queries` are tried IN ORDER until the candidate
+    pool is full — each is a tsquery whose match set is small by construction; `rank_query` is the
+    FULL query (every lexeme OR'ed) used only inside ts_rank_cd, so common terms still shape the
+    order without ever driving a scan. Final ranking (BM25 + cosine fusion) happens in Python over
+    the returned pool, so the SQL's only job is a good, bounded candidate set.
+
+    - rare terms (df ≤ rare_df, or absent from the common-lexeme stats → rarer still) SELECT:
+        1. all rare terms together (most specific);  2. any rare term (union of small postings).
+    - if the query has NO rare term (all common), the intersection of ALL terms selects, then the
+      intersection of the two least-common — never a single common term on its own.
+    """
+    lex = [l for i, l in enumerate(lexemes) if l and l not in lexemes[:i]]
+    if not lex:
+        return [], ""
+    rank_q = " | ".join(lex)
+    rare = [l for l in lex if df.get(l, 0.0) <= rare_df]
+    plans: list[str] = []
+    if rare:
+        plans.append(" & ".join(rare))
+        if len(rare) > 1:
+            plans.append(" | ".join(rare))
+    else:
+        by_df = sorted(lex, key=lambda l: df.get(l, 0.0))
+        plans.append(" & ".join(lex))
+        if len(by_df) > 2:
+            plans.append(" & ".join(by_df[:2]))
+    return plans, rank_q
+
 
 DDL = """
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -89,6 +126,10 @@ CREATE INDEX IF NOT EXISTS {table}_emb_hnsw   ON {table} USING hnsw (embedding v
 ALTER TABLE {table} ADD COLUMN IF NOT EXISTS created_at timestamptz;
 ALTER TABLE {table} ALTER COLUMN created_at SET DEFAULT now();
 CREATE INDEX IF NOT EXISTS {table}_created ON {table} (created_at DESC);
+-- Planner statistics drive BOTH the query plans (bitmap vs seq scan) AND the lexical candidate
+-- planner (lexeme document frequencies from pg_stats). Default autovacuum thresholds (10% of a
+-- 1.5M-row table) let stats go stale for months; analyze after ~2% churn instead.
+ALTER TABLE {table} SET (autovacuum_analyze_scale_factor = 0.02, autovacuum_analyze_threshold = 5000);
 """
 
 
@@ -110,6 +151,8 @@ class PostgresRetrievalSource:
         self._dim = dim
         self._table = table
         self._covers = covers or {}
+        self._df: dict[str, float] = {}      # lexeme → fraction of blocks containing it (pg_stats)
+        self._df_at: float = 0.0
         self._pool = None
         self._schema_ready = False
         self._cache: dict[tuple[str, str, str], str] = {}
@@ -240,6 +283,50 @@ class PostgresRetrievalSource:
     # "Chinese Medical Journal"). Modality is now stamped as explicit at-ingest provenance via
     # `facet_overrides={"modality": ...}` on the chosen source. See learnings/cam-practitioner-corpus.md.
 
+    # --- lexical planning support ---
+    async def _query_lexemes(self, conn, query: str) -> list[str]:
+        """The query's lexemes under the SAME text-search config as the tsv column (stemmed,
+        stop-words removed) — so document-frequency lookups and the tsquery speak one vocabulary."""
+        try:
+            arr = await conn.fetchval("SELECT tsvector_to_array(to_tsvector('english', $1))", query)
+        except Exception:   # noqa: BLE001 — never let planning break retrieval
+            arr = None
+        if arr:
+            return [str(x) for x in arr]
+        return _tokens(query)
+
+    async def _lexeme_df(self, conn) -> dict[str, float]:
+        """lexeme → document frequency (fraction of blocks) for the corpus's common lexemes, from the
+        planner's ANALYZE statistics. Cached; refreshed every `_DF_REFRESH_S`. Absent → {} (every
+        term counts as rare — the strict-AND plan, still bounded)."""
+        import time as _time
+        now = _time.monotonic()
+        if self._df and now - self._df_at < _DF_REFRESH_S:
+            return self._df
+        try:
+            row = await conn.fetchrow(
+                "SELECT most_common_elems::text AS elems, most_common_elem_freqs::float8[] AS freqs "
+                "FROM pg_stats WHERE tablename = $1 AND attname = 'tsv'", self._table)
+            if row and row["elems"]:
+                elems = _parse_pg_text_array(row["elems"])
+                freqs = list(row["freqs"] or [])
+                self._df = {e: float(f) for e, f in zip(elems, freqs)}
+        except Exception as e:   # noqa: BLE001 — stats unavailable: plan as if all terms were rare
+            _log.warning("lexeme df stats unavailable for %s: %s", self._table, e)
+        self._df_at = now
+        return self._df
+
+    async def _fetch_bounded(self, conn, sql: str, params: list):
+        """Run a retrieval query under a statement timeout; a timeout yields [] (logged) instead of
+        stalling the answer — the dense leg and the other legs still produce evidence."""
+        try:
+            async with conn.transaction():
+                await conn.execute(f"SET LOCAL statement_timeout = {_LEX_TIMEOUT_MS}")
+                return await conn.fetch(sql, *params)
+        except Exception as e:   # noqa: BLE001
+            _log.warning("retrieval query skipped (%s): %s", type(e).__name__, str(e)[:160])
+            return []
+
     # --- port ---
     def capabilities(self) -> frozenset[Capability]:
         return frozenset({Capability.RETRIEVAL, Capability.PRECISION})
@@ -298,53 +385,51 @@ class PostgresRetrievalSource:
         #      capped BEFORE ranking so cost stays bounded (no rank-the-whole-corpus path exists).
         # The dense HNSW leg carries semantic recall regardless; the lexical leg's job is exact-term
         # recall (drug names, codes), which the strict AND preserves.
-        legs_sql: list[str] = []
-        q_terms = _tokens(req.query)
-        strict_q, relaxed_q = _lexical_queries(q_terms)
-        if strict_q:
-            params.append(strict_q)
-            q_idx = len(params)
-            legs_sql.append(
-                f"SELECT tenant_id, document_id, block_id, 'lex' AS leg FROM {self._table} "
-                f"WHERE ({where}) AND tsv @@ to_tsquery('english', ${q_idx}) "
-                f"ORDER BY ts_rank_cd(tsv, to_tsquery('english', ${q_idx})) DESC LIMIT {pool_n}")
-        if qvec is not None:
-            params.append(qvec)
-            v_idx = len(params)
-            legs_sql.append(
-                f"SELECT tenant_id, document_id, block_id, 'vec' AS leg FROM {self._table} "
-                f"WHERE ({where}) AND embedding IS NOT NULL "
-                f"ORDER BY embedding <=> ${v_idx} LIMIT {pool_n}")
-        if not legs_sql:
-            return []
-        # UNION ALL (not UNION): the leg tag makes rows distinct anyway; duplicates are dropped below,
-        # which also lets us count how many candidates the strict lexical leg actually produced.
-        cand_union = " UNION ALL ".join(f"({s})" for s in legs_sql)
-        # JOIN on the FULL primary key (tenant_id, document_id, block_id) so hydration can never
-        # cross-match the same content-addressed block under a different tenant (the cand legs are
-        # already tenant-scoped via ({where}), but the join must not re-open that scope).
-        hydrate = (f"SELECT t.block_id, t.document_id, t.text, t.embedding, t.facets, "
-                   f"t.document_title, t.content_type, t.source_key, cand.leg "
-                   f"FROM {self._table} t JOIN cand USING (tenant_id, document_id, block_id)")
-        sql = f"WITH cand AS ({cand_union}) {hydrate}"
         async with pool.acquire() as conn:
-            rows = list(await conn.fetch(sql, *params))
+            lexemes = await self._query_lexemes(conn, req.query)
+            plans, rank_q = plan_lexical(lexemes, await self._lexeme_df(conn))
+            legs_sql: list[str] = []
+            if plans:
+                params.append(plans[0]); s_idx = len(params)
+                params.append(rank_q);   r_idx = len(params)
+                legs_sql.append(
+                    f"SELECT tenant_id, document_id, block_id, 'lex' AS leg FROM {self._table} "
+                    f"WHERE ({where}) AND tsv @@ to_tsquery('english', ${s_idx}) "
+                    f"ORDER BY ts_rank_cd(tsv, to_tsquery('english', ${r_idx})) DESC LIMIT {pool_n}")
+            if qvec is not None:
+                params.append(qvec)
+                v_idx = len(params)
+                legs_sql.append(
+                    f"SELECT tenant_id, document_id, block_id, 'vec' AS leg FROM {self._table} "
+                    f"WHERE ({where}) AND embedding IS NOT NULL "
+                    f"ORDER BY embedding <=> ${v_idx} LIMIT {pool_n}")
+            if not legs_sql:
+                return []
+            # UNION ALL (not UNION): the leg tag makes rows distinct anyway; duplicates are dropped
+            # below, and the tag lets us see how many candidates the lexical leg produced.
+            cand_union = " UNION ALL ".join(f"({s})" for s in legs_sql)
+            # JOIN on the FULL primary key (tenant_id, document_id, block_id) so hydration can never
+            # cross-match the same content-addressed block under a different tenant.
+            hydrate = (f"SELECT t.block_id, t.document_id, t.text, t.embedding, t.facets, "
+                       f"t.document_title, t.content_type, t.source_key, cand.leg "
+                       f"FROM {self._table} t JOIN cand USING (tenant_id, document_id, block_id)")
+            rows = list(await self._fetch_bounded(conn, f"WITH cand AS ({cand_union}) {hydrate}", params))
             lex_n = sum(1 for r in rows if r["leg"] == "lex")
-            if relaxed_q and lex_n < _LEX_SPARSE:
-                # Sparse strict match → relaxed pairs leg. The inner LIMIT caps the candidate set
-                # the GIN scan hands to the ranker (bounded I/O); the base filter + tenant scope are
-                # identical to the strict leg.
+            # Second selection plan (union of rare postings / two least-common terms) only when the
+            # first left the lexical pool thin. Bounded by construction and by the statement timeout.
+            for sel_q in plans[1:]:
+                if lex_n >= pool_n // 2:
+                    break
                 where2, params2 = self._filter_sql(req)
-                params2.append(relaxed_q)
-                r_idx = len(params2)
-                relaxed_sql = (
-                    f"WITH cand AS (SELECT tenant_id, document_id, block_id, 'lex' AS leg FROM ("
-                    f"SELECT tenant_id, document_id, block_id, tsv FROM {self._table} "
-                    f"WHERE ({where2}) AND tsv @@ to_tsquery('english', ${r_idx}) "
-                    f"LIMIT {pool_n * _RELAXED_CAP_MULT}) sub "
-                    f"ORDER BY ts_rank_cd(sub.tsv, to_tsquery('english', ${r_idx})) DESC LIMIT {pool_n}) "
-                    f"{hydrate}")
-                rows += list(await conn.fetch(relaxed_sql, *params2))
+                params2.append(sel_q); s2 = len(params2)
+                params2.append(rank_q); r2 = len(params2)
+                more = await self._fetch_bounded(conn, (
+                    f"WITH cand AS (SELECT tenant_id, document_id, block_id, 'lex' AS leg FROM {self._table} "
+                    f"WHERE ({where2}) AND tsv @@ to_tsquery('english', ${s2}) "
+                    f"ORDER BY ts_rank_cd(tsv, to_tsquery('english', ${r2})) DESC LIMIT {pool_n}) {hydrate}"),
+                    params2)
+                rows += list(more)
+                lex_n += len(more)
         seen: set[tuple[str, str]] = set()
         deduped = []
         for r in rows:

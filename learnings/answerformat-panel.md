@@ -85,3 +85,17 @@ Slice: `evals/realworld/slices/slice-format-8-2026-09-05.jsonl`; checker: `evals
 - Product signal → the engine trace names the chosen kind; a persistent format badge is a follow-up.
 
 Panel transcripts are not retained; this doc is the record.
+
+## Result (2026-09-05, held-out slice, routed engine, Sonnet 5)
+
+First run: 6/8. All six general/mechanism/comparison/update questions took their own family (no
+Do now / Do if / Watch for anywhere), and the decision control kept its full plan with the mg figure.
+The two misses were structural, not routing: a one-line "Question coverage" on the single-question
+control, and two undated findings inside "What changed". Fixes: the coverage section is now appended
+by the kernel only when the scaffold found ≥2 sub-questions in the user's text; the update format
+sends undated findings to an "Also reported, undated" section. Recheck of those two: 2/2 → **8/8**.
+
+Runs: `run-slice-format-8-2026-09-05-env-20260905T064639Z.jsonl` (first pass),
+`run-slice-format-recheck-2-env-*.jsonl` (recheck). Spend ≈ $1.9 total. Formats observed per question:
+balanced-diet ×3 and SGLT2i-benefits → explainer; metformin mechanism → causal model; apixaban vs
+warfarin → head-to-head; HFpEF → dated change log; metformin dose → decision plan.

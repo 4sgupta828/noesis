@@ -146,3 +146,24 @@ def test_link_email_moves_sessions_and_claim_only_unowned() -> None:
         finally:
             await _cleanup(acc, sess)
     asyncio.run(body())
+
+
+def test_claim_many_attaches_only_unowned() -> None:
+    async def body():
+        acc = AccountStore(DSN, vertical=VERT)
+        sess = SessionStore(DSN, vertical=VERT)
+        try:
+            h, salt = hash_password("pw")
+            a, _ = await acc.register(email="bulk@x.io", name="Bulk", pw_hash=h, pw_salt=salt)
+            b, _ = await acc.register(email="other2@x.io", name="Other", pw_hash=h, pw_salt=salt)
+            common = dict(tenant_id="demo", workspace_id=None, answer="A", grounded=True, claims=[],
+                          source_stats={}, coverage_gaps=[], rejected=0, sources=None)
+            owned = await sess.save(question="owned", user_id=b["id"], **common)
+            free = [await sess.save(question=f"free{i}", **common) for i in range(3)]
+            assert await sess.claim_many(free + [owned, "nope"], user_id=a["id"]) == 3
+            assert {r["id"] for r in await sess.list(tenant_id="demo", user_id=a["id"])} == set(free)
+            assert {r["id"] for r in await sess.list(tenant_id="demo", user_id=b["id"])} == {owned}
+            assert await sess.claim_many([], user_id=a["id"]) == 0
+        finally:
+            await _cleanup(acc, sess)
+    asyncio.run(body())

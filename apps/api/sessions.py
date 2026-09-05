@@ -347,6 +347,20 @@ class SessionStore:
                 session_id, self._vertical, user_id)
         return res.endswith("1")
 
+    async def claim_many(self, session_ids: list[str], *, user_id: str) -> int:
+        """Attach a set of UNOWNED sessions to an account (bulk claim); owned rows are untouched."""
+        await self._ensure()
+        if not session_ids:
+            return 0
+        async with (await self._get_pool()).acquire() as conn:
+            res = await conn.execute(
+                "UPDATE noesis_research_session SET user_id=$2 WHERE vertical=$1 AND user_id IS NULL "
+                "AND id = ANY($3::text[])", self._vertical, user_id, list(session_ids)[:1000])
+        try:
+            return int(res.split()[-1])
+        except ValueError:
+            return 0
+
     async def claim_by_email(self, *, user_id: str, email: str) -> int:
         """Adopt pre-accounts sessions the asker saved under this email (no owner yet) into the
         account — one-time, idempotent; best-effort like everything here."""

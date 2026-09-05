@@ -1106,6 +1106,10 @@ class LinkEmailIn(BaseModel):
     password: str
 
 
+class ClaimManyIn(BaseModel):
+    session_ids: list[str]
+
+
 class CommentIn(BaseModel):
     name: str
     body: str
@@ -3749,6 +3753,21 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if st is None or not await st.claim(session_id, user_id=user["id"]):
             raise HTTPException(status_code=404, detail="session not found or already owned")
         return {"claimed": True}
+
+    @app.post("/sessions/claim-many")
+    async def claim_sessions_bulk(body: ClaimManyIn, x_noesis_token: str = Header(default=""),
+                                  x_admin_password: str = Header(default="")) -> dict:
+        """Admin attaches MANY unowned sessions to the signed-in account at once."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        user = await _user_from_token(x_noesis_token)
+        if user is None:
+            raise HTTPException(status_code=401, detail="sign in first")
+        st = _store()
+        if st is None:
+            raise HTTPException(status_code=404, detail="no session store")
+        n = await st.claim_many(body.session_ids, user_id=user["id"])
+        return {"claimed": n}
 
     @app.get("/me")
     async def me(x_noesis_token: str = Header(default="")) -> dict:

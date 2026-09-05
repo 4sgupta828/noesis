@@ -1767,7 +1767,13 @@
       </section>
       <section class="acctcard acctwide" id="unownedcard" hidden>
         <h3>Unclaimed sessions <span class="acctmuted">admin · saved with no account</span></h3>
-        <p class="acctcardsub">Sessions asked before accounts existed (or via the API). Claim the ones that are yours; they move into this account.</p>
+        <p class="acctcardsub">Sessions asked before accounts existed (or via the API). Tick the ones that are yours, or claim everything listed; they move into this account.</p>
+        <div class="acctcardbtns" style="margin-bottom:.6rem;align-items:center;">
+          <input id="unownedq" type="search" placeholder="Filter by question or email…" style="flex:1;min-width:12rem;background:var(--panel2);border:1px solid var(--hair);border-radius:9px;color:var(--ink);font:inherit;font-size:.86rem;padding:.4rem .6rem;min-height:40px;" />
+          <button type="button" class="histbtn" id="unownedAll">Select all</button>
+          <button type="button" class="histbtn" id="unownedClaim">Claim selected</button>
+          <span class="acctmuted" id="unownedmsg"></span>
+        </div>
         <div id="unownedbox"><span class="acctmuted">Loading…</span></div>
       </section>
       <section class="acctcard acctwide">
@@ -6453,6 +6459,25 @@ async function openAccount(){
   }catch(e){ $("#acctcount").textContent = ""; }
 }
 $("#acctbtn").addEventListener("click", openAccount);
+let _unownedTimer = null;
+$("#unownedq").addEventListener("input", ()=>{ clearTimeout(_unownedTimer); _unownedTimer = setTimeout(loadUnowned, 300); });
+$("#unownedAll").addEventListener("click", ()=>{
+  const cks = [...document.querySelectorAll("#unownedbox .claimck")]; const all = cks.every(c=>c.checked);
+  cks.forEach(c=>{ c.checked = !all; }); $("#unownedAll").textContent = all ? "Select all" : "Clear";
+});
+$("#unownedClaim").addEventListener("click", async ()=>{
+  const ids = [...document.querySelectorAll("#unownedbox .claimck:checked")].map(c=>c.closest("tr").dataset.id);
+  const msg = $("#unownedmsg");
+  if(!ids.length){ msg.textContent = "Tick the sessions to claim first."; return; }
+  if(!confirm(`Claim ${ids.length} session${ids.length===1?"":"s"} into this account?`)) return;
+  msg.textContent = "…";
+  try{
+    const r = await fetch("/sessions/claim-many", {method:"POST", headers:{"content-type":"application/json", "x-admin-password": sessionStorage.getItem("noesis_apw")||"", ...authHeaders()}, body: JSON.stringify({session_ids: ids})});
+    const d = await r.json().catch(()=>({}));
+    msg.textContent = r.ok ? `Claimed ${d.claimed}.` : (d.detail || "Couldn't claim.");
+    if(r.ok) loadUnowned();
+  }catch(e){ msg.textContent = "Network error — try again."; }
+});
 $("#linkgo").addEventListener("click", async ()=>{
   const email = $("#linkemail").value.trim(), password = $("#linkpw").value, msg = $("#linkmsg");
   if(!email || !password){ msg.textContent = "Enter the other email and its password."; return; }
@@ -6470,12 +6495,14 @@ async function loadUnowned(){
   const apw = sessionStorage.getItem("noesis_apw") || "";
   card.hidden = !apw; if(!apw) return;
   try{
-    const r = await fetch("/admin/sessions/unowned?limit=200", {headers:{"x-admin-password": apw}});
+    const q = ($("#unownedq") && $("#unownedq").value.trim()) || "";
+    const r = await fetch("/admin/sessions/unowned?limit=500&q="+encodeURIComponent(q), {headers:{"x-admin-password": apw}});
     const d = r.ok ? await r.json() : {sessions: []};
     if(!d.sessions.length){ box.innerHTML = `<span class="acctmuted">None left.</span>`; return; }
-    box.innerHTML = `<div style="overflow-x:auto;"><table class="acct-tbl"><thead><tr><th>When</th><th>Question</th><th>Saved as</th><th></th></tr></thead><tbody>`
-      + d.sessions.map(s=>`<tr data-id="${esc(s.id)}"><td>${esc(String(s.created_at).slice(0,10))}</td><td style="white-space:normal;min-width:16rem;">${esc((s.question||"").slice(0,110))}</td><td>${esc(s.user_email||s.user_name||"—")}</td><td><button type="button" class="histbtn claimbtn">Claim</button></td></tr>`).join("")
+    box.innerHTML = `<div style="overflow-x:auto;"><table class="acct-tbl"><thead><tr><th></th><th>When</th><th>Question</th><th>Saved as</th><th></th></tr></thead><tbody>`
+      + d.sessions.map(s=>`<tr data-id="${esc(s.id)}"><td><input type="checkbox" class="claimck" aria-label="Select"></td><td>${esc(String(s.created_at).slice(0,10))}</td><td style="white-space:normal;min-width:16rem;">${esc((s.question||"").slice(0,110))}</td><td>${esc(s.user_email||s.user_name||"—")}</td><td><button type="button" class="histbtn claimbtn">Claim</button></td></tr>`).join("")
       + `</tbody></table></div>`;
+    $("#unownedmsg").textContent = `${d.sessions.length} listed`;
     box.querySelectorAll(".claimbtn").forEach(b=>b.addEventListener("click", async ()=>{
       const tr = b.closest("tr"); b.disabled = true;
       try{ const r = await fetch("/sessions/"+encodeURIComponent(tr.dataset.id)+"/claim", {method:"POST", headers:{"x-admin-password": apw, ...authHeaders()}});

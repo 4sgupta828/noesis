@@ -26,6 +26,40 @@ from noesis_kernel.contract.dto import (
 from noesis_kernel.retrieval.rank import Candidate, rank_candidates
 from noesis_kernel.retrieval.scoring import tokens as _tokens
 
+# lexical leg knobs (see PostgresRetrievalSource.search)
+_LEX_SPARSE = 8              # strict-AND rows below this → run the relaxed pairs leg too
+_RELAXED_CAP_MULT = 5        # relaxed leg ranks at most pool_n × this many GIN candidates
+_MAX_PAIR_TERMS = 8          # pairs leg enumerates C(n,2) over at most this many content terms
+# function words the english tsvector config would drop anyway — filtered here so a pair never
+# degenerates into a single common term (`(what & dose)` → `dose` → 150k rows)
+_FUNCTION_WORDS = frozenset("""the and for with that this from what which when where who whom whose why how are was were
+been being have has had does did doing will would shall should can could may might must not into onto
+over under between among about after before during than then there their them they these those such
+via per each any all some most more less many much very also just only same other than into out""".split())
+
+
+def _lexical_queries(terms: list[str]) -> tuple[str, str]:
+    """(strict, relaxed) tsquery strings for the lexical leg, or "" when there is nothing to match.
+    strict = AND of the CONTENT tokens (alphabetic, ≥3 chars; pure numbers such as '30'/'45' are far
+    too common to constrain anything — they only ever inflated the OR query). relaxed = any two
+    content tokens co-occurring: `(a & b) | (a & c) | ...` — still index-driven, far more selective
+    than any single common term, and only run when strict came back sparse."""
+    content: list[str] = []
+    for t in terms:
+        if t.isdigit() or len(t) < 3 or t in content or t in _FUNCTION_WORDS:
+            continue
+        content.append(t)
+    if not content:
+        content = [t for i, t in enumerate(terms) if t and t not in terms[:i]]
+    if not content:
+        return "", ""
+    strict = " & ".join(content)
+    head = content[:_MAX_PAIR_TERMS]
+    if len(head) < 2:
+        return strict, ""
+    pairs = [f"({a} & {b})" for i, a in enumerate(head) for b in head[i + 1:]]
+    return strict, " | ".join(pairs)
+
 DDL = """
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE IF NOT EXISTS {table} (
@@ -255,36 +289,71 @@ class PostgresRetrievalSource:
         # corpus grew past 1M blocks. Filtering inline lets the planner push the ORDER BY into the HNSW
         # index (hnsw.ef_search set on the pool). Same distance metric + same LIMIT = same candidates,
         # just index-accelerated. A separate JOIN back to the base table hydrates the row payload.
+        # LEXICAL LEG (2026-09-04 rewrite): the old leg OR'ed every query token
+        # (`metformin | dose | 30 | 45`) and ranked ALL matches with ts_rank_cd. Common tokens match
+        # ~10% of a 1.5M-block corpus, so the planner ran a full sequential scan + TOAST reads (~10 GB
+        # of I/O, 108 s measured in prod) on EVERY search — the long pole of every answer. Now:
+        #   1. STRICT leg — AND of the content tokens → GIN bitmap scan, tens of rows, ~1 s.
+        #   2. RELAXED leg (only when strict is sparse) — any-2-of-N token pairs, candidate set
+        #      capped BEFORE ranking so cost stays bounded (no rank-the-whole-corpus path exists).
+        # The dense HNSW leg carries semantic recall regardless; the lexical leg's job is exact-term
+        # recall (drug names, codes), which the strict AND preserves.
         legs_sql: list[str] = []
         q_terms = _tokens(req.query)
-        if q_terms:
-            params.append(" | ".join(q_terms))          # OR query for recall (like factra)
+        strict_q, relaxed_q = _lexical_queries(q_terms)
+        if strict_q:
+            params.append(strict_q)
             q_idx = len(params)
             legs_sql.append(
-                f"SELECT tenant_id, document_id, block_id FROM {self._table} "
+                f"SELECT tenant_id, document_id, block_id, 'lex' AS leg FROM {self._table} "
                 f"WHERE ({where}) AND tsv @@ to_tsquery('english', ${q_idx}) "
                 f"ORDER BY ts_rank_cd(tsv, to_tsquery('english', ${q_idx})) DESC LIMIT {pool_n}")
         if qvec is not None:
             params.append(qvec)
             v_idx = len(params)
             legs_sql.append(
-                f"SELECT tenant_id, document_id, block_id FROM {self._table} "
+                f"SELECT tenant_id, document_id, block_id, 'vec' AS leg FROM {self._table} "
                 f"WHERE ({where}) AND embedding IS NOT NULL "
                 f"ORDER BY embedding <=> ${v_idx} LIMIT {pool_n}")
         if not legs_sql:
             return []
-        cand_union = " UNION ".join(f"({s})" for s in legs_sql)
+        # UNION ALL (not UNION): the leg tag makes rows distinct anyway; duplicates are dropped below,
+        # which also lets us count how many candidates the strict lexical leg actually produced.
+        cand_union = " UNION ALL ".join(f"({s})" for s in legs_sql)
         # JOIN on the FULL primary key (tenant_id, document_id, block_id) so hydration can never
         # cross-match the same content-addressed block under a different tenant (the cand legs are
         # already tenant-scoped via ({where}), but the join must not re-open that scope).
-        sql = f"""
-            WITH cand AS ({cand_union})
-            SELECT t.block_id, t.document_id, t.text, t.embedding, t.facets,
-                   t.document_title, t.content_type, t.source_key
-            FROM {self._table} t JOIN cand USING (tenant_id, document_id, block_id)
-        """
+        hydrate = (f"SELECT t.block_id, t.document_id, t.text, t.embedding, t.facets, "
+                   f"t.document_title, t.content_type, t.source_key, cand.leg "
+                   f"FROM {self._table} t JOIN cand USING (tenant_id, document_id, block_id)")
+        sql = f"WITH cand AS ({cand_union}) {hydrate}"
         async with pool.acquire() as conn:
-            rows = await conn.fetch(sql, *params)
+            rows = list(await conn.fetch(sql, *params))
+            lex_n = sum(1 for r in rows if r["leg"] == "lex")
+            if relaxed_q and lex_n < _LEX_SPARSE:
+                # Sparse strict match → relaxed pairs leg. The inner LIMIT caps the candidate set
+                # the GIN scan hands to the ranker (bounded I/O); the base filter + tenant scope are
+                # identical to the strict leg.
+                where2, params2 = self._filter_sql(req)
+                params2.append(relaxed_q)
+                r_idx = len(params2)
+                relaxed_sql = (
+                    f"WITH cand AS (SELECT tenant_id, document_id, block_id, 'lex' AS leg FROM ("
+                    f"SELECT tenant_id, document_id, block_id, tsv FROM {self._table} "
+                    f"WHERE ({where2}) AND tsv @@ to_tsquery('english', ${r_idx}) "
+                    f"LIMIT {pool_n * _RELAXED_CAP_MULT}) sub "
+                    f"ORDER BY ts_rank_cd(sub.tsv, to_tsquery('english', ${r_idx})) DESC LIMIT {pool_n}) "
+                    f"{hydrate}")
+                rows += list(await conn.fetch(relaxed_sql, *params2))
+        seen: set[tuple[str, str]] = set()
+        deduped = []
+        for r in rows:
+            key = (r["document_id"], r["block_id"])
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(r)
+        rows = deduped
 
         import json
         cands: list[Candidate] = []

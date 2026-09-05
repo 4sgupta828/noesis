@@ -9,6 +9,16 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+# Eager import on purpose: providers/connectors import httpx LAZILY inside coroutines, and the OpenAI
+# SDK imports it from an `asyncio.to_thread` worker. Two threads importing the same package for the
+# first time can hand one of them a *partially initialized* module (importlib's deadlock-avoidance
+# path) → "module 'httpx' has no attribute 'Timeout'" mid-request. Importing once at build time
+# guarantees the module is fully initialized before any concurrent lazy import runs.
+try:
+    import httpx  # noqa: F401
+except ImportError:                          # replay-only installs without the `serve` extra
+    pass
+
 from noesis_kernel.providers.anthropic_llm import AnthropicLLM
 from noesis_kernel.providers.base import ProviderMode, resolve_mode
 from noesis_kernel.providers.embeddings import (
@@ -73,19 +83,39 @@ def build_embedder(*, mode: ProviderMode | str | None = None, cassette_root: Pat
                             namespace="embed", dim=dim, mode=m)
 
 
+def _web_provider() -> str:
+    """Web-search seam. `NOESIS_WEB_PROVIDER` (brave / exa / tavily) selects explicitly; otherwise the
+    first funded key wins — Brave, then Exa, then Tavily. All three implement the same
+    WebSearchClient port and share the cassette namespace, so replay cassettes are provider-agnostic."""
+    explicit = os.environ.get("NOESIS_WEB_PROVIDER", "").strip().lower()
+    if explicit:
+        return explicit
+    if os.environ.get("BRAVE_API_KEY"):
+        return "brave"
+    if os.environ.get("EXA_API_KEY"):
+        return "exa"
+    return "tavily"
+
+
+def _build_inner_web(domains: tuple[str, ...] | list[str] | None = None) -> WebSearchClient:
+    # `domains` (from the vertical) restricts results to a trusted-sources whitelist.
+    provider = _web_provider()
+    if provider == "brave":
+        from noesis_kernel.providers.brave_web import BraveWebSearch
+        return BraveWebSearch(include_domains=list(domains or []))
+    if provider == "exa":
+        from noesis_kernel.providers.exa_web import ExaWebSearch
+        return ExaWebSearch(include_domains=list(domains or []))
+    if provider == "tavily":
+        return TavilyWebSearch()
+    raise ValueError(f"unknown NOESIS_WEB_PROVIDER={provider!r} (expected brave / exa / tavily)")
+
+
 def build_web(*, mode: ProviderMode | str | None = None,
               cassette_root: Path | None = None,
               domains: tuple[str, ...] | list[str] | None = None) -> WebSearchClient:
     m = resolve_mode(mode)
-    # Prefer Exa (neural search) when its key is set; else Tavily. Same WebSearchClient port.
-    # `domains` (from the vertical) restricts Exa to a trusted-sources whitelist.
-    inner = None
-    if m is not ProviderMode.REPLAY:
-        if os.environ.get("EXA_API_KEY"):
-            from noesis_kernel.providers.exa_web import ExaWebSearch
-            inner = ExaWebSearch(include_domains=list(domains or []))
-        else:
-            inner = TavilyWebSearch()
+    inner = None if m is ProviderMode.REPLAY else _build_inner_web(domains)
     return CassetteWebSearch(inner, cassette_root=cassette_root or default_cassette_root(),
                              namespace="web", mode=m)
 

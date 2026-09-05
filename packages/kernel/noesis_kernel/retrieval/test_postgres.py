@@ -130,3 +130,17 @@ def test_pg_parity_with_in_memory() -> None:
             query="approved target value", tenant_id="A", query_embedding=qv, k=5))]
         assert pg[0] == mm[0]                              # same top result → ranking parity
     asyncio.run(body())
+
+
+def test_relaxed_lexical_leg_when_strict_is_sparse() -> None:
+    """Strict AND over all content terms misses (no block carries every term) → the relaxed pairs
+    leg still surfaces the block that co-mentions two of them. query_embedding=None isolates the
+    lexical path (no dense leg to mask it)."""
+    async def body():
+        src = await _fresh_source()
+        hits = await src.search(RetrievalRequest(
+            query="committee target southern", query_embedding=None, tenant_id="A", k=5))
+        ids = [h.block_id for h in hits]
+        assert "ans" in ids                      # (committee & target) pair matched
+        assert "secret" not in ids               # tenant scope unchanged on the relaxed path
+    asyncio.run(body())

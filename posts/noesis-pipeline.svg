@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="420" viewBox="0 0 1180 420" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5b6470"/></marker>
+  </defs>
+  <rect width="1180" height="420" fill="#f7f9fc" rx="14"/>
+  <text x="590" y="42" text-anchor="middle" font-size="22" font-weight="700" fill="#14213d">How a Noesis answer is built</text>
+  <text x="590" y="66" text-anchor="middle" font-size="13" fill="#5b6470">find evidence → draft claims → verify every claim against its source → write in the shape the question deserves</text>
+
+  <!-- sources -->
+  <rect x="30" y="110" width="200" height="200" rx="12" fill="#ffffff" stroke="#c9d3e0"/>
+  <text x="130" y="138" text-anchor="middle" font-size="14" font-weight="700" fill="#14213d">Evidence</text>
+  <text x="130" y="162" text-anchor="middle" font-size="12" fill="#3a4450">1.5M curated passages</text>
+  <text x="130" y="184" text-anchor="middle" font-size="11.5" fill="#5b6470">Europe PMC · PubMed OA</text>
+  <text x="130" y="202" text-anchor="middle" font-size="11.5" fill="#5b6470">ClinicalTrials.gov</text>
+  <text x="130" y="220" text-anchor="middle" font-size="11.5" fill="#5b6470">FDA DailyMed · FAERS · CDC</text>
+  <text x="130" y="238" text-anchor="middle" font-size="11.5" fill="#5b6470">Society guidelines</text>
+  <text x="130" y="262" text-anchor="middle" font-size="11.5" fill="#5b6470">+ live literature (web)</text>
+  <text x="130" y="290" text-anchor="middle" font-size="11" fill="#8a94a3">hybrid retrieval: lexical + vector</text>
+
+  <!-- arrow -->
+  <line x1="232" y1="210" x2="286" y2="210" stroke="#5b6470" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- research loop -->
+  <rect x="290" y="110" width="200" height="200" rx="12" fill="#ffffff" stroke="#c9d3e0"/>
+  <text x="390" y="138" text-anchor="middle" font-size="14" font-weight="700" fill="#14213d">Research loop</text>
+  <text x="390" y="162" text-anchor="middle" font-size="12" fill="#3a4450">search → read → extract</text>
+  <text x="390" y="186" text-anchor="middle" font-size="11.5" fill="#5b6470">question classified by shape:</text>
+  <text x="390" y="204" text-anchor="middle" font-size="11.5" fill="#5b6470">decision · differential · mechanism</text>
+  <text x="390" y="222" text-anchor="middle" font-size="11.5" fill="#5b6470">explainer · comparison · update</text>
+  <text x="390" y="250" text-anchor="middle" font-size="11.5" fill="#5b6470">draft claims, each with</text>
+  <text x="390" y="268" text-anchor="middle" font-size="11.5" fill="#5b6470">the exact quote it rests on</text>
+
+  <line x1="492" y1="210" x2="546" y2="210" stroke="#5b6470" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- gates -->
+  <rect x="550" y="96" width="330" height="228" rx="12" fill="#ffffff" stroke="#c9d3e0"/>
+  <text x="715" y="124" text-anchor="middle" font-size="14" font-weight="700" fill="#14213d">Three gates, every claim</text>
+  <rect x="566" y="140" width="298" height="44" rx="8" fill="#e6f4ea" stroke="#3a9a5b"/>
+  <text x="715" y="158" text-anchor="middle" font-size="12" font-weight="700" fill="#1f6b3a">1 · Span check (deterministic)</text>
+  <text x="715" y="175" text-anchor="middle" font-size="11" fill="#2f5c40">the quote physically exists in the source passage</text>
+  <rect x="566" y="192" width="298" height="44" rx="8" fill="#e8f1fb" stroke="#2f6fb5"/>
+  <text x="715" y="210" text-anchor="middle" font-size="12" font-weight="700" fill="#1f4f87">2 · Entailment</text>
+  <text x="715" y="227" text-anchor="middle" font-size="11" fill="#2b4f78">the quote actually supports the claim</text>
+  <rect x="566" y="244" width="298" height="44" rx="8" fill="#e8f1fb" stroke="#2f6fb5"/>
+  <text x="715" y="262" text-anchor="middle" font-size="12" font-weight="700" fill="#1f4f87">3 · Binding</text>
+  <text x="715" y="279" text-anchor="middle" font-size="11" fill="#2b4f78">right subject, right document, right evidence kind</text>
+  <text x="715" y="310" text-anchor="middle" font-size="11" fill="#b4232c">fail any gate → the claim is dropped, never softened</text>
+
+  <line x1="882" y1="210" x2="936" y2="210" stroke="#5b6470" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- answer -->
+  <rect x="940" y="110" width="210" height="200" rx="12" fill="#ffffff" stroke="#c9d3e0"/>
+  <text x="1045" y="138" text-anchor="middle" font-size="14" font-weight="700" fill="#14213d">Answer</text>
+  <text x="1045" y="162" text-anchor="middle" font-size="12" fill="#3a4450">shaped for the question</text>
+  <text x="1045" y="186" text-anchor="middle" font-size="11.5" fill="#5b6470">Bottom line · Do now · Do if</text>
+  <text x="1045" y="204" text-anchor="middle" font-size="11.5" fill="#5b6470">or explainer / head-to-head /</text>
+  <text x="1045" y="222" text-anchor="middle" font-size="11.5" fill="#5b6470">dated change log</text>
+  <text x="1045" y="250" text-anchor="middle" font-size="11.5" fill="#5b6470">every line cites the passage;</text>
+  <text x="1045" y="268" text-anchor="middle" font-size="11.5" fill="#5b6470">click-through to the source</text>
+  <text x="1045" y="292" text-anchor="middle" font-size="11" fill="#8a94a3">~90 seconds</text>
+
+  <!-- footer -->
+  <line x1="30" y1="350" x2="1150" y2="350" stroke="#dbe2ec"/>
+  <text x="590" y="378" text-anchor="middle" font-size="12.5" fill="#3a4450">Domain-agnostic kernel (ingest · corpus · retrieval · verification · synthesis) — medicine is a plug-in; legal or regulatory research is the same engine with a different plug-in.</text>
+  <text x="590" y="400" text-anchor="middle" font-size="11" fill="#8a94a3">When the evidence does not settle a question, the answer says so.</text>
+</svg>

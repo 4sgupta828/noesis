@@ -505,8 +505,7 @@
     border-top:1px solid var(--hair);display:flex;align-items:center;gap:.55rem;}
   .answer.md .mdh::before{content:"";width:15px;height:2px;border-radius:2px;background:var(--gold);flex:none;}
   .answer.md .mdh:first-child{margin-top:0;padding-top:0;border-top:none;}
-  .answer.md .mdh:first-child + .mdp{font-family:var(--serif);font-size:1.14rem;line-height:1.5;
-    letter-spacing:-.011em;color:var(--ink);margin:.1rem 0 .5rem;}
+  .answer.md .mdh:first-child + .mdp{margin:.1rem 0 .5rem;}
   .answer.md .mdp{margin:.55rem 0;line-height:1.72;color:var(--ink);}
   .answer.md .mdl{margin:.55rem 0 .85rem;padding:0;list-style:none;}
   .answer.md .mdl li{position:relative;padding-left:1.2rem;margin:.42rem 0;line-height:1.64;}
@@ -1523,11 +1522,13 @@
     margin:2rem 0 .7rem;padding-top:0;border-top:0;display:block;}
   .answer.md .mdh::before{content:"";display:block;width:22px;height:3px;border-radius:2px;background:var(--gold);margin:0 0 .5rem;}
   .answer.md .mdh:first-child{margin-top:0;}
-  .answer.md .mdh:first-child + .mdp,.answer.md .mdh[data-sec="lead"] + .mdp{font-family:var(--serif);font-size:1.34rem;line-height:1.48;
+  .answer.md .mdp.mdlede{font-family:var(--serif);font-size:1.3rem;line-height:1.48;
     font-weight:400;letter-spacing:-.01em;color:var(--ink);background:var(--accent-soft);border-left:3px solid var(--gold);
     border-radius:0 12px 12px 0;padding:.85rem 1.1rem .85rem 1.1rem;margin:.2rem 0 1rem;}
-  .answer.md .mdh:first-child + .mdp strong,.answer.md .mdh[data-sec="lead"] + .mdp strong{font-weight:400;}
-  .answer.md .mdh.mdh-sub{font-size:.86rem;margin:1.1rem 0 .4rem;color:var(--muted);} .answer.md .mdh.mdh-sub::before{display:none;}
+  .answer.md .mdp.mdlede strong{font-weight:400;}
+  .answer.md .mdh.mdh-sub{font-family:var(--sans);font-size:.92rem;font-weight:600;margin:1.15rem 0 .35rem;color:var(--muted);}
+  .answer.md .mdh.mdh-sub::before{display:none;}
+  .answer.md .mdh.mdh-entry{color:var(--ink);font-size:1rem;margin-top:1.3rem;}
   .answer.md .mdp{margin:.55rem 0 .8rem;line-height:1.65;}
   .answer.md .mdp.basis{font-size:.82rem;color:var(--muted);margin:-.3rem 0 .9rem;padding-left:1rem;}
   .answer.md .mdp.mdstem{margin-bottom:.3rem;}
@@ -1556,6 +1557,9 @@
   .qfmt ul,.qfmt ol{margin:.3rem 0 .5rem 1.25rem;padding:0;} .qfmt li{margin:.2rem 0;}
   .qfmt.qlong{font-size:1.06rem;line-height:1.55;letter-spacing:0;}
   .qfmt.qlong p{margin-bottom:.55rem;}
+  .qfmt.qlong p.qctx{color:var(--muted);}
+  .qfmt.qlong p.qask{color:var(--ink);font-weight:500;}
+  .qfmt.qlong ul,.qfmt.qlong ol{color:var(--ink);}
   .qfmt strong,.qfmt b{font-weight:400;}
   /* ---- citation hover card: the finding + its full verbatim quote + source, from the ref's own evidence card ---- */
   #citehover{position:fixed;z-index:1300;max-width:min(460px,92vw);display:none;background:var(--panel);
@@ -2671,7 +2675,7 @@ function bulletLead(t){
 // ---- answer-format helpers (design panel 2026-09-05): split inline enumerations, demote sub-clauses ----
 function secAttr(title){
   const t = String(title||"").toLowerCase();
-  if(/^bottom line|^in brief|^in short|^answer\b/.test(t)) return ' data-sec="lead"';
+  if(/^bottom line|^in brief|^in short|^answer\b|^assessment|^verdict|^summary/.test(t)) return ' data-sec="lead"';
   if(/^watch for|^red flags|^monitor/.test(t)) return ' data-sec="watch"';
   if(/^not (established|covered|addressed)|^what (is|isn't|is not) (established|known)|^uncertaint|^gaps?\b|^limitations/.test(t)) return ' data-sec="gap"';
   return "";
@@ -2728,8 +2732,8 @@ function itemHtml(t){
 }
 function blockFromLine(line){
   let t = line.trim().replace(/^\(?[a-c]\)\s+(?=\S)/i, "");          // stray "(a) / (b) / (c)" labels never display
-  const subh = t.match(/^\*\*([^*\n]{2,60}?):?\*\*:?\s*$/);            // a line that is ONLY "**Label:**" is a sub-heading
-  if(subh) return [`<h5 class="mdh mdh-sub">${mdInline(subh[1].replace(/:$/,""))}</h5>`];
+  const subh = t.match(/^\*\*([^*\n]{2,220}?):?\*\*:?\s*$/);           // a line that is ONLY "**…**" is a sub-heading, never a bold paragraph
+  if(subh) return [`<h5 class="mdh mdh-sub${/^\d+[.)]\s/.test(subh[1]) ? " mdh-entry" : ""}">${mdInline(subh[1].replace(/:$/,""))}</h5>`];
   if(/^Basis:\s*/i.test(t)) return [`<p class="mdp basis">${mdInline(t.replace(/;\s+/g, " · "))}</p>`];
   const en = splitEnumeration(t) || splitSemicolons(t);
   if(en){
@@ -2752,10 +2756,12 @@ function questionHtml(q){
     if(!ln){ flush(); continue; }
     const li = ln.match(/^(?:[-*•]|\d+[.)])\s+(.*)$/);
     if(li){ const tag = /^\d/.test(ln) ? "ol" : "ul"; if(!list || list.tag !== tag){ flush(); list = {tag, items: []}; } list.items.push(esc(li[1])); continue; }
-    flush(); out.push(`<p>${esc(ln)}</p>`);
+    flush(); out.push(`<p class="${isAsk(ln) ? "qask" : "qctx"}">${esc(ln)}</p>`);
   }
   flush();
   const long = text.length > 220 || lines.length > 2;
+  // long question: the ASK stands out (ink, medium), the vignette/context recedes (muted) — no bold
+  function isAsk(l){ return /\?\s*$/.test(l) || /^(what|how|should|which|when|is|are|can|does|do|would|compare|please|assess|evaluate|recommend|suggest|explain|list|outline|discuss)\b/i.test(l); }
   return `<div class="qfmt${long ? " qlong" : ""}">${out.join("")}</div>`;
 }
 function mdToHtml(raw){
@@ -2781,7 +2787,13 @@ function mdToHtml(raw){
       continue;
     }
     const hm = line.match(/^(#{1,4})\s+(.*)$/);
-    if(hm){ const lvl = Math.min(6, hm[1].length+2); out.push(`<h${lvl} class="mdh"${secAttr(hm[2])}>${mdInline(hm[2])}</h${lvl}>`); i++; continue; }
+    if(hm){ const lvl = Math.min(6, hm[1].length+2); out.push(`<h${lvl} class="mdh"${secAttr(hm[2])}>${mdInline(hm[2])}</h${lvl}>`); i++;
+      // LEDE: the paragraph right after a lead-type heading (Bottom line / In brief / Assessment…) gets
+      // the set-apart treatment ONLY when it is short enough to be a verdict, never a long paragraph
+      if(secAttr(hm[2]) && i < lines.length && lines[i].trim() && !/^\s*[-*|#]|^\s*\d+[.)]\s|^\*\*[^*]+\*\*:?\s*$/.test(lines[i]) && lines[i].trim().length <= 360){
+        out.push(`<p class="mdp mdlede">${mdInline(lines[i].trim())}</p>`); i++;
+      }
+      continue; }
     if(/^\s*[-*]\s+/.test(line)){
       const items = [];
       while(i<lines.length && /^\s*[-*]\s+/.test(lines[i])){ items.push(itemHtml(lines[i].replace(/^\s*[-*]\s+/,""))); i++; }

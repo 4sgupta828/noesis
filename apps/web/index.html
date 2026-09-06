@@ -1928,9 +1928,9 @@
   </div>
   <div class="ssearchrow">
     <span class="cbera" id="cbera">
-      <button type="button" class="cbtab on" data-era="recent">Recent (1975–2025)</button>
+      <button type="button" class="cbtab on" data-era="active">Active Cases</button>
+      <button type="button" class="cbtab" data-era="recent">Recent (1975–2025)</button>
       <button type="button" class="cbtab" data-era="historical">Historical</button>
-      <button type="button" class="cbtab" data-era="active">Active Cases</button>
     </span>
     <input type="search" class="ssearch" id="cbsearch" placeholder="Search cases…" aria-label="Search cases" />
   </div>
@@ -6390,7 +6390,7 @@ async function loadSessionList(){
 }
 
 // ===== Case Board: curated landmark cases + Noesis answer + clinician rubric (its own page) =====
-let CASES_DATA = null, CB_ERA = "recent";      // Case Board opens on Recent
+let CASES_DATA = null, CB_ERA = "active";      // Case Board opens on Active Cases
 function _clusterLabel(key){ return ((CASES_DATA&&CASES_DATA.clusters)||[]).find(c=>c.key===key)?.label || key; }
 function closeCaseBoard(){ const cb=$("#caseboard"); if(cb) cb.hidden = true; document.body.style.overflow = ""; if(location.hash==="#cases") history.replaceState(null,"",location.pathname); }
 // phones show one screen at a time: the list, then the selected case (← returns to the list)

@@ -658,12 +658,14 @@ class SessionStore:
                 f"""SELECT case_id, kind, question, published_at,
                            left(snapshot->>'answer', 600) AS excerpt,
                            jsonb_array_length(COALESCE(snapshot->'thread', '[]'::jsonb)) AS n_turns,
-                           (snapshot->>'grounded')::boolean AS grounded
+                           (snapshot->>'grounded')::boolean AS grounded,
+                           jsonb_path_exists(snapshot, '$.thread[*].charts[0]') AS has_charts
                     FROM noesis_active_case WHERE {where}
                     ORDER BY published_at DESC LIMIT ${len(params)}""", *params)
         return [{"case_id": r["case_id"], "kind": r["kind"], "question": r["question"],
                  "excerpt": r["excerpt"] or "", "n_turns": r["n_turns"] or 1,
-                 "grounded": bool(r["grounded"]), "published_at": r["published_at"].isoformat()} for r in rows]
+                 "grounded": bool(r["grounded"]), "has_charts": bool(r["has_charts"]),
+                 "published_at": r["published_at"].isoformat()} for r in rows]
 
     async def active_session_id(self, case_id: str) -> str | None:
         """The source session behind a board case (admin refresh only — never exposed publicly)."""

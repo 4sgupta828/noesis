@@ -1371,6 +1371,14 @@
   #caseboard .ssearchrow{display:flex;align-items:center;gap:.2rem;flex-wrap:wrap;}
   /* Active Cases: anonymous board rows + the publish picker */
   #caseboard .acrow .sq{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+  /* does this case carry a chart? a quiet badge in the row, so a sweep's coverage is visible at a glance */
+  #caseboard .cvis{font-family:var(--mono);font-size:.58rem;letter-spacing:.04em;border:1px solid var(--hair);
+    border-radius:999px;padding:.08rem .4rem;color:var(--muted);}
+  #caseboard .cvis.on{color:var(--gold);border-color:rgba(var(--gold-rgb),.5);}
+  #caseboard .cvis.none{opacity:.55;}
+  .cregen{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.9rem 0 .2rem;}
+  .cregen .histbtn{margin-left:0;}
+  .cregen .cregmsg{font-family:var(--mono);font-size:.66rem;color:var(--muted);}
   #caseboard .ackind{font-family:var(--mono);font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border:1px solid var(--hair);border-radius:999px;padding:.08rem .45rem;}
   .acnote{font-family:var(--sans);font-size:.82rem;color:var(--muted);margin:.4rem 0 1rem;line-height:1.45;}
   .acpick{max-width:52rem;}

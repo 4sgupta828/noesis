@@ -1379,6 +1379,14 @@
   #caseboard .ssearchrow{display:flex;align-items:center;gap:.2rem;flex-wrap:wrap;}
   /* Active Cases: anonymous board rows + the publish picker */
   #caseboard .acrow .sq{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+  /* does this case carry a chart? a quiet badge in the row, so a sweep's coverage is visible at a glance */
+  #caseboard .cvis{font-family:var(--mono);font-size:.58rem;letter-spacing:.04em;border:1px solid var(--hair);
+    border-radius:999px;padding:.08rem .4rem;color:var(--muted);}
+  #caseboard .cvis.on{color:var(--gold);border-color:rgba(var(--gold-rgb),.5);}
+  #caseboard .cvis.none{opacity:.55;}
+  .cregen{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.9rem 0 .2rem;}
+  .cregen .histbtn{margin-left:0;}
+  .cregen .cregmsg{font-family:var(--mono);font-size:.66rem;color:var(--muted);}
   #caseboard .ackind{font-family:var(--mono);font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border:1px solid var(--hair);border-radius:999px;padding:.08rem .45rem;}
   .acnote{font-family:var(--sans);font-size:.82rem;color:var(--muted);margin:.4rem 0 1rem;line-height:1.45;}
   .acpick{max-width:52rem;}
@@ -6425,9 +6433,13 @@ async function loadCasesList(){
         const badge = c.eval ? `<span class="cverdict cv-${esc(c.eval.verdict||'reviewed')}">${esc(c.eval.verdict||"reviewed")}</span>`
                     : (c.run ? (c.run.answer ? `<span class="cstate cstate-ok">answered</span>` : `<span class="cstate cstate-none">gen failed</span>`)
                              : `<span class="cstate cstate-none">not generated</span>`);
+        const nch = ((c.run && c.run.payload && c.run.payload.charts) || []).length;
+        const tried = !!(c.run && c.run.payload && Array.isArray(c.run.payload.charts));
+        const vis = nch ? `<span class="cvis on" title="${nch} chart${nch===1?"":"s"} in this answer">▮ ${nch}</span>`
+                  : (tried ? `<span class="cvis none" title="Swept for visuals — the evidence had no chart-shaped numbers">▮ none</span>` : "");
         return `<button class="srow caserow" data-id="${esc(c.id)}">
           <div class="sq">${esc(c.title)}</div>
-          <div class="sm"><span>${c.year||""}</span>${badge}</div></button>`;
+          <div class="sm"><span>${c.year||""}</span>${badge}${vis}</div></button>`;
       }).join("");
     });
     list.innerHTML = html || `<div class="sempty">No cases match.</div>`;
@@ -6462,6 +6474,12 @@ function selectCase(id){
   } else {
     ans = `<div class="cempty">No Noesis answer generated yet — use “▷ Generate answers” above.</div>`;
   }
+  // admin (⚙ unlocked): re-run this one case — the way to retry a failed generation or to try again
+  // for a visual on a case that produced none.
+  const apw = sessionStorage.getItem("noesis_apw") || "";
+  const regen = apw ? `<div class="cregen">
+      <button type="button" class="histbtn" id="cregen">↻ Regenerate this case</button>
+      <span class="cregmsg" id="cregmsg">${((run && run.payload && run.payload.charts) || []).length ? "" : "no visual in this answer"}</span></div>` : "";
   det.innerHTML = `<div class="casedetail">
     <div class="ccluster">${esc(_clusterLabel(c.cluster))}</div>
     <h2 class="ctitle">${esc(c.title)}</h2>
@@ -6469,11 +6487,14 @@ function selectCase(id){
     <div class="cqa"><div class="cqa-h">Decision question posed to Noesis</div><div class="cq">${esc(c.question)}</div></div>
     <details class="cref"><summary>Reference — the historically-established correct decision</summary><div class="cref-b">${esc(c.reference)}</div></details>
     <div class="csec-h">◫ Noesis answer</div>
+    ${regen}
     ${ans}
     ${rubricHtml(c, ev)}
   </div>`;
   det.scrollTop = 0;
   wireRubric(det, c);
+  const rg = det.querySelector("#cregen");
+  if(rg) rg.addEventListener("click", ()=>regenerateOneCase(c.id, rg, det.querySelector("#cregmsg")));
   cbShowDetail();
 }
 // ---- Active Cases: anonymous, de-identified cases published from accounts ---------------------
@@ -6521,6 +6542,7 @@ async function loadActiveCases(){
         <div class="sq">${esc(c.question)}</div>
         <div class="sm"><span>${c.published_at ? new Date(c.published_at).toLocaleDateString([], {dateStyle:"medium"}) : ""}</span>
           <span class="ackind">${c.kind === "panel" ? "specialist panel" : "Q&amp;A"}${c.n_turns > 1 ? ` · ${c.n_turns} turns` : ""}</span>
+          ${c.has_charts ? `<span class="cvis on" title="This case carries a chart">▮ chart</span>` : `<span class="cvis none" title="No chart in this answer">▮ none</span>`}
           ${MY_ACTIVE[c.case_id] ? `<span class="ackind">yours</span>` : ""}</div></button>`).join("");
     list.querySelectorAll(".acrow").forEach(b=>b.addEventListener("click",()=>selectActiveCase(b.dataset.id)));
     const first = list.querySelector(".acrow");
@@ -6541,6 +6563,9 @@ async function selectActiveCase(id){
     det.innerHTML = `<div class="casedetail acdetail">
       <div class="achead"><span class="ccluster">Anonymous case</span><span>published ${esc(when)}</span><span>identifying details removed</span>
         ${canRetract ? `<button type="button" class="acun" data-id="${esc(id)}">Remove from board</button>` : ""}</div>
+      ${sessionStorage.getItem("noesis_apw") ? `<div class="cregen">
+        <button type="button" class="histbtn" id="acregen">↻ Try again for a visual</button>
+        <span class="cregmsg" id="acregmsg"></span></div>` : ""}
       <div class="pubq">${questionHtml(row.question||"")}</div>
       <div class="csec-h">◫ Noesis answer</div>
       <div class="acbody"></div></div>`;
@@ -6558,6 +6583,8 @@ async function selectActiveCase(id){
     }
     const un = det.querySelector(".acun");
     if(un) un.addEventListener("click", ()=>unpublishActive(id, un));
+    const ar = det.querySelector("#acregen");
+    if(ar) ar.addEventListener("click", ()=>retryActiveVisual(id, ar, det.querySelector("#acregmsg")));
     det.scrollTop = 0;
     cbShowDetail();
   }catch(e){ det.innerHTML = `<div class="cempty">This case is no longer on the board.</div>`; }
@@ -6647,6 +6674,57 @@ async function openActivePublish(acct){
       if(!isMobileSess()) $("#cbDetail").insertAdjacentHTML("afterbegin", `<div class="acnote">${esc(msg.textContent)}</div>`);
     }catch(e){ msg.textContent = "Couldn't publish: "+(e.message||e); go.disabled = false; }
   });
+}
+// Admin: re-run ONE curated case (retry a failed generation, or try again for a visual). Polls the
+// board rather than the status endpoint, which is per-replica and can report idle while a run is live.
+async function regenerateOneCase(caseId, btn, msg){
+  if(btn.dataset.busy) return;
+  btn.dataset.busy = "1"; btn.disabled = true;
+  const before = ((CASES_DATA&&CASES_DATA.cases)||[]).find(x=>x.id===caseId);
+  const stamp = (before && before.run && before.run.generated_at) || "";
+  if(msg) msg.textContent = "Regenerating… (a minute or two)";
+  try{
+    const r = await fetch("/cases/generate", {method:"POST", headers:{"content-type":"application/json","x-admin-password": sessionStorage.getItem("noesis_apw")||""}, body: JSON.stringify({case_ids:[caseId]})});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+    for(let i=0;i<60;i++){
+      await sleep(6000);
+      const d = await (await fetch("/cases")).json();
+      const now = (d.cases||[]).find(x=>x.id===caseId);
+      const gen = now && now.run && now.run.generated_at;
+      if(gen && gen !== stamp){
+        CASES_DATA = d;
+        const n = ((now.run.payload||{}).charts||[]).length;
+        if(msg) msg.textContent = now.run.error ? ("Failed: " + now.run.error.slice(0,120))
+                                : (n ? `Done — ${n} chart${n===1?"":"s"}.` : "Done — the evidence had no chart-shaped numbers.");
+        selectCase(caseId);
+        return;
+      }
+    }
+    if(msg) msg.textContent = "Still running — reopen the case shortly.";
+  }catch(e){ if(msg) msg.textContent = "Couldn't start: " + (e.message||e); }
+  finally{ btn.dataset.busy = ""; btn.disabled = false; }
+}
+// Admin: re-answer the session behind ONE board case, even if it was already swept and found nothing.
+async function retryActiveVisual(caseId, btn, msg){
+  if(btn.dataset.busy) return;
+  btn.dataset.busy = "1"; btn.disabled = true;
+  if(msg) msg.textContent = "Re-answering… (a minute or two)";
+  try{
+    const r = await fetch("/admin/active-cases/refresh", {method:"POST", headers:{"content-type":"application/json","x-admin-password": sessionStorage.getItem("noesis_apw")||""}, body: JSON.stringify({case_ids:[caseId], limit:1, retry_attempted:true})});
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || `HTTP ${r.status}`);
+    const res = await r.json();
+    if(!res.started){ if(msg) msg.textContent = "Nothing to do for this case."; return; }
+    for(let i=0;i<60;i++){
+      await sleep(6000);
+      const row = await (await fetch("/active-cases/"+encodeURIComponent(caseId))).json().catch(()=>null);
+      const n = row ? (row.thread||[]).reduce((a,t)=>a+((t.charts||[]).length),0) : 0;
+      if(n){ if(msg) msg.textContent = `Done — ${n} chart${n===1?"":"s"}.`; selectActiveCase(caseId); return; }
+      const st = await (await fetch("/admin/active-cases/refresh-status",{headers:{"x-admin-password": sessionStorage.getItem("noesis_apw")||""}})).json().catch(()=>({}));
+      if(st && st.refreshing === null){ if(msg) msg.textContent = "Done — the evidence had no chart-shaped numbers."; selectActiveCase(caseId); return; }
+    }
+    if(msg) msg.textContent = "Still running — reopen the case shortly.";
+  }catch(e){ if(msg) msg.textContent = "Couldn't start: " + (e.message||e); }
+  finally{ btn.dataset.busy = ""; btn.disabled = false; }
 }
 async function generateCaseAnswers(){
   const btn = $("#cbgen"), msg = $("#cbgenmsg");

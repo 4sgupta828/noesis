@@ -94,9 +94,12 @@ class CaseStore:
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             rows = await conn.fetch(
+                # PREFER THE LATEST SUCCESSFUL RUN: a failed regeneration must never hide the answer
+                # that was already on the board (12 cases went to "Generation failed" the day the
+                # Anthropic balance ran out, wiping working answers from the public board).
                 "SELECT DISTINCT ON (case_id) case_id, id, answer, grounded, citations, payload, "
                 "engine, error, created_at FROM noesis_case_run WHERE vertical=$1 "
-                "ORDER BY case_id, created_at DESC", self._vertical)
+                "ORDER BY case_id, (COALESCE(answer,'') <> '') DESC, created_at DESC", self._vertical)
         out: dict[str, dict] = {}
         for r in rows:
             out[r["case_id"]] = {

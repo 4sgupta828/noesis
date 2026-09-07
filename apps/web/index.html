@@ -3190,6 +3190,14 @@ function render(data, target, opts){
   // root-cause picker. Suppressed inside a duel tab (the A/B vote bar is the feedback there).
   if(showFb) parts.push(feedbackMarkup());
   if(!opts.noConvo) parts.push(convoActionsMarkup(data));
+  else if(data.visuals && data.visuals.length){
+    // A saved answer's flow diagrams live in the conversation block, which read-only views (Case
+    // Board, public share link) skip — so stored visuals never appeared on any of them. Render them
+    // here without the actions: there is nothing to regenerate from someone else's published case.
+    parts.push(`<div class="addons convobox"><details class="plain plain-d visuals-d" data-variation="0" open>`
+      + `<summary class="plain-h">◫ Visuals (${data.visuals.length})</summary>`
+      + `<div class="vzgrid">${data.visuals.map(visualCardHtml).join("")}</div></details></div>`);
+  }
   // per-answer responsibility footnote — only under a real answer (skips pending/clarification turns)
   if(data.answer && DISCLAIMER.answer) parts.push(`<div class="ansdisc">${esc(DISCLAIMER.answer)}</div>`);
   target.innerHTML = parts.join("");

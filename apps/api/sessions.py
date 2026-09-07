@@ -678,6 +678,7 @@ class SessionStore:
                 case_id, self._vertical)
 
     async def active_needing_charts(self, *, limit: int = 25, include_attempted: bool = False,
+                                    visuals_only: bool = False,
                                     case_ids: list[str] | None = None) -> list[dict[str, str]]:
         """Board cases whose SOURCE answer carries no chart — the only ones a refresh can improve.
 
@@ -686,10 +687,14 @@ class SessionStore:
         nothing. `$[*].charts[0]` is false for a missing key AND for an empty array, so "attempted and
         found none" is distinguishable only by the chart_attempt marker."""
         await self._ensure()
-        # needs a sweep when it has neither a chart NOR a flow diagram
-        where = ["a.vertical=$1", "NOT s.deleted",
-                 "NOT (jsonb_path_exists(s.thread, '$[*].charts[0]') "
-                 "AND jsonb_path_exists(s.thread, '$[*].visuals[0]'))"]
+        # a visuals-only pass wants everything missing DIAGRAMS (charts are irrelevant to it, and so
+        # is the chart attempt flag); a full pass wants anything missing either.
+        where = ["a.vertical=$1", "NOT s.deleted", "COALESCE(s.answer,'') <> ''"]
+        if visuals_only:
+            where.append("NOT jsonb_path_exists(s.thread, '$[*].visuals[0]')")
+        else:
+            where.append("NOT (jsonb_path_exists(s.thread, '$[*].charts[0]') "
+                         "AND jsonb_path_exists(s.thread, '$[*].visuals[0]'))")
         params: list[Any] = [self._vertical]
         if not include_attempted:
             where.append("NOT jsonb_path_exists(s.thread, '$[*].chart_attempt')")

@@ -1115,6 +1115,7 @@ class ActiveRefreshIn(BaseModel):
     limit: int = 25                      # tranche size; the batch is sequential and spends per case
     model: str = ""                      # per-batch model override (see CaseGenerateIn.model)
     retry_attempted: bool = False        # re-sweep cases already tried and found to have nothing to chart
+    visuals_only: bool = True            # build diagrams from the STORED answer — no re-answer, no charts
 
 
 class ClaimManyIn(BaseModel):
@@ -4515,8 +4516,9 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         # Cases already swept without producing a chart are skipped unless retry_attempted — their
         # evidence has no chart-shaped numbers, so paying to re-answer them buys nothing.
         picked = await store.active_needing_charts(
-            limit=max(1, body.limit), include_attempted=body.retry_attempted,
-            case_ids=body.case_ids or None)
+            limit=max(1, body.limit),
+            include_attempted=body.retry_attempted or body.visuals_only,
+            visuals_only=body.visuals_only, case_ids=body.case_ids or None)
         targets: list[tuple[str, str]] = [(p["case_id"], p["session_id"]) for p in picked]
         if not targets:
             return {"started": 0, "case_ids": [], "stats": await store.active_chart_stats()}
@@ -4533,6 +4535,21 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                         row = await store.get(sid)
                         if row is None:
                             raise RuntimeError("source session is gone")
+                        # DIAGRAMS ONLY: they are built FROM the finished answer, so a case that just
+                        # lacks visuals needs one cheap call — not a full re-answer. Re-answering is
+                        # only required to gain CHARTS, which come out of compose itself.
+                        if body.visuals_only:
+                            answer_text = row.get("answer") or ""
+                            n_vis = 0
+                            if answer_text and visual_augment_enabled() and getattr(svc, "visuals_prompt", None):
+                                vis = await svc.visualize(question=row["question"], answer=answer_text) or []
+                                if vis:
+                                    await store.save_turn_visuals(sid, 0, vis)
+                                n_vis = len(vis)
+                            await store.active_publish([sid], user_id=None, admin=True)
+                            print(f"[refresh] visuals {case_id} — visuals={n_vis}", flush=True)
+                            app.state.active_refreshing["done"] += 1
+                            continue
                         res = await svc.ask_reasoned(question=row["question"], tenant_id=row.get("tenant_id") or "demo")
                         claims = [{"text": c.text, "quote": c.quote,
                                    "source": c.document_title or c.source_key, "document_id": c.document_id}

@@ -1176,6 +1176,9 @@ class CaseEvalIn(BaseModel):
 class CaseGenerateIn(BaseModel):
     case_ids: list[str] | None = None    # None/empty → all curated cases
     engine: str = "reasoned"             # clinical-decision engine (reasoned) by default
+    model: str = ""                      # per-batch model override (e.g. "deepseek-chat"); "" → prod default.
+                                         # A model NAME picks its provider, so a bulk backfill can run on a
+                                         # cheaper model WITHOUT changing the model that answers live users.
 
 
 class VoiceTtsIn(BaseModel):
@@ -1275,8 +1278,11 @@ class ResearchOut(BaseModel):
     diagnostics: dict | None = None       # troubleshooting trace (None unless the diag-trace flag is on)
 
 
-def build_default_service() -> ResearchService:
+def build_default_service(model: str | None = None) -> ResearchService:
     """Assemble the service from the active vertical + env providers.
+
+    `model` overrides the compose/planner model for THIS service only (the name picks its provider,
+    see runtime/build._route_by_name) — used by bulk backfills that must not change what live users get.
 
     NOTE: the corpus source's embedding dimension must match the query embedder;
     in production the corpus is Postgres-backed with OpenAI embeddings (1536) and
@@ -1384,7 +1390,7 @@ def build_default_service() -> ResearchService:
     if patient_directive and reasoning_read_enabled() and getattr(manifest, "patient_reasoning_format", None):
         patient_directive = patient_directive + "\n\n" + manifest.patient_reasoning_format
     return ResearchService(
-        llm=build_llm(mode=mode), embedder=embedder, planner_llm=planner_llm,
+        llm=build_llm(mode=mode, model=model or None), embedder=embedder, planner_llm=planner_llm,
         graph_expander=_make_graph_expander(),
         claims_first=claims_first, extraction_lenses=getattr(manifest, "extraction_lenses", ()),
         evidence_select=evidence_select, atom_cap=atom_cap,
@@ -2542,7 +2548,9 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="no store configured")
         if app.state.service is None:
             app.state.service = build_default_service()
-        svc = app.state.service
+        # A per-batch model override builds its OWN service, so a cheap bulk backfill never changes the
+        # model answering live users (prod moved off DeepSeek deliberately — learnings/modelcomparison.md).
+        svc = build_default_service(body.model) if body.model else app.state.service
         ids = [c for c in (body.case_ids or [x["id"] for x in all_cases()]) if get_case(c) is not None]
         if not ids:
             raise HTTPException(status_code=400, detail="no valid case ids")
@@ -2558,7 +2566,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             try:
                 for cid in case_ids:
                     case = get_case(cid)
-                    print(f"[cases] start {cid}", flush=True)
+                    print(f"[cases] start {cid}{(' model=' + body.model) if body.model else ''}", flush=True)
                     try:
                         if engine == "standard":
                             res = await svc.ask(question=case["question"], tenant_id="demo")
@@ -2583,7 +2591,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                         await store.save_run(
                             case_id=cid, answer=getattr(res, "composed_answer", "") or "",
                             grounded=bool(getattr(res, "grounded", False)), citations=cites,
-                            payload=payload, engine=engine)
+                            payload=payload, engine=(f"{engine}:{body.model}" if body.model else engine))
                         print(f"[cases] stored {cid} — grounded={bool(getattr(res, 'grounded', False))} "
                               f"findings={len(cites)} charts={len(payload['charts'])}", flush=True)
                     # BaseException, not Exception: a CancelledError/timeout used to end the batch with

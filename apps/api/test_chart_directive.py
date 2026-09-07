@@ -68,3 +68,27 @@ def test_case_runs_persist_the_visual_layers() -> None:
     body = src[start:start + 4000]
     for field in ('"charts"', '"interpretation"', '"confidence"'):
         assert field in body, f"case run payload drops {field}"
+
+
+def test_batch_model_override_does_not_change_the_default_service(monkeypatch) -> None:
+    """A bulk backfill may run on a cheaper model; live answers must keep the prod model. The model
+    NAME picks its provider (runtime/build._route_by_name), so no env switch is involved."""
+    monkeypatch.setenv("NOESIS_PROVIDER_MODE", "replay")
+    monkeypatch.delenv("NOESIS_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("NOESIS_LLM_MODEL", raising=False)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+
+    default_svc = build_default_service()
+    cheap_svc = build_default_service("deepseek-chat")
+    assert default_svc.llm is not cheap_svc.llm
+
+    from noesis_kernel.runtime.build import _route_by_name
+    assert _route_by_name("deepseek-chat") == "deepseek"
+    assert _route_by_name("claude-sonnet-5") == "anthropic"
+    assert _route_by_name(None) is None
+
+
+def test_case_generate_accepts_a_model_override() -> None:
+    from api.app import CaseGenerateIn
+    assert CaseGenerateIn().model == ""
+    assert CaseGenerateIn(model="deepseek-chat").model == "deepseek-chat"

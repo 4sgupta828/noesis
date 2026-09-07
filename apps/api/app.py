@@ -1326,12 +1326,21 @@ def build_default_service() -> ResearchService:
     if answer_format and answer_visuals_enabled() and getattr(manifest, "visual_guidance", None):
         answer_format = answer_format + "\n\n" + manifest.visual_guidance
     # Chart emission (flag): compose may populate a grounded bar chart, validated in the kernel.
-    if answer_format and answer_charts_enabled() and getattr(manifest, "chart_guidance", None):
-        answer_format = answer_format + "\n\n" + manifest.chart_guidance
+    # The alternate engines REPLACE the compose directive (answer_format_override), so the guidance has
+    # to ride on EVERY clinician directive — appending it only to the base format left the reasoned
+    # (Clinical Decision) engine, the differential/family formats and the Case Board with no charts at
+    # all, however grounded their numbers were (found 2026-09-07).
+    def _with_charts(directive: str | None) -> str | None:
+        if not (directive and answer_charts_enabled() and getattr(manifest, "chart_guidance", None)):
+            return directive
+        directive = directive + "\n\n" + manifest.chart_guidance
         # Clinical-numeracy kinds (icon_array / range_band) — a second, independently-gated flag layered
         # on top of the chart guidance (requires answer-charts, since they're chart kinds).
         if clinical_charts_enabled() and getattr(manifest, "clinical_chart_guidance", None):
-            answer_format = answer_format + "\n" + manifest.clinical_chart_guidance
+            directive = directive + "\n" + manifest.clinical_chart_guidance
+        return directive
+
+    answer_format = _with_charts(answer_format)
     # Reasoning Read (flag): append the interpretation-layer directive so compose emits typed
     # interpretation + a confidence read (both validated in the kernel). Requires structured answers.
     if answer_format and reasoning_read_enabled() and getattr(manifest, "reasoning_format", None):
@@ -1352,6 +1361,11 @@ def build_default_service() -> ResearchService:
     # reasoned format (byte-identical). ON → diagnostic management questions get the differential format.
     differential_format = (getattr(manifest, "differential_answer_format", None)
                            if differential_format_enabled() else None)
+    # every alternate-engine directive carries the same chart guidance as the base format
+    reasoned_format = _with_charts(reasoned_format)
+    differential_format = _with_charts(differential_format)
+    understanding_format = _with_charts(getattr(manifest, "understanding_answer_format", None))
+    kind_formats = {k: _with_charts(v) for k, v in (getattr(manifest, "answer_formats", None) or {}).items()} or None
     # Use the BEST model for EVERY research step (planning + claim extraction + compose). A cheaper
     # planner (haiku) paraphrased quotes → span-verification rejected them (grounding regression),
     # so planner_llm is left unset and run_react uses `llm` throughout. Optional explicit override.
@@ -1415,8 +1429,8 @@ def build_default_service() -> ResearchService:
         alt_directive=getattr(manifest, "alt_directive", None),
         alt_query_hint=getattr(manifest, "alt_query_hint", None),
         integrative_query_hint=getattr(manifest, "integrative_query_hint", None),
-        understanding_answer_format=getattr(manifest, "understanding_answer_format", None),
-        answer_formats=getattr(manifest, "answer_formats", None),
+        understanding_answer_format=understanding_format,
+        answer_formats=kind_formats,
         reasoned_coverage_addendum=getattr(manifest, "reasoned_coverage_addendum", None),
         understanding_query_hint=getattr(manifest, "understanding_query_hint", None),
         vertical_name=manifest.name, ui=manifest.ui,
@@ -2551,9 +2565,19 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                         cites = [{"text": c.text, "quote": c.quote,
                                   "source": c.document_title or c.source_key, "document_id": c.document_id}
                                  for c in (getattr(res, "verified_claims", None) or [])]
+                        # The VISUAL layers persist with the run (they were dropped before 2026-09-07,
+                        # so every stored case answer rendered as prose only). Same flag gating as the
+                        # main answer path; charts are already code-validated against the findings.
                         payload = {"reasoning_conclusion": getattr(res, "reasoning_conclusion", "") or "",
                                    "coverage_gaps": list(getattr(res, "coverage_gaps", None) or []),
-                                   "n_verified": len(cites)}
+                                   "n_verified": len(cites),
+                                   "charts": (list(getattr(res, "charts", None) or [])
+                                              if answer_charts_enabled() else []),
+                                   "interpretation": (list(getattr(res, "interpretation", None) or [])
+                                                      if reasoning_read_enabled() else []),
+                                   "confidence": (getattr(res, "confidence", None)
+                                                  if reasoning_read_enabled() else None),
+                                   "reasoning_purpose": getattr(res, "reasoning_purpose", "") or ""}
                         await store.save_run(
                             case_id=cid, answer=getattr(res, "composed_answer", "") or "",
                             grounded=bool(getattr(res, "grounded", False)), citations=cites,

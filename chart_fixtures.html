@@ -467,12 +467,45 @@
 
   /* mission — the resting state */
   .about{max-width:40rem;margin:2.1rem auto 0;text-align:center;}
-  .about-lead{font-family:var(--serif);font-size:1.08rem;line-height:1.6;color:var(--ink);margin:0 0 1.2rem;}
-  .about-pts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;text-align:left;}
-  .about-pt{border-top:2px solid rgba(var(--gold-rgb),.55);padding-top:.6rem;min-width:0;}
-  .about-pt b{display:block;font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin-bottom:.3rem;}
-  .about-pt span{font-size:.86rem;line-height:1.5;color:var(--muted);}
-  @media (max-width:560px){ .about{margin-top:1.4rem;} .about-lead{font-size:.98rem;} .about-pts{grid-template-columns:1fr;gap:.8rem;} }
+  .about-mission{font-family:var(--serif);font-size:1.05rem;line-height:1.5;color:var(--ink);margin:.9rem auto 0;max-width:30rem;}
+  /* The decision scene: a clinician with a glowing assistant at their shoulder. Evidence streams in
+     and is absorbed; a bright answer card lands with a green check and a small burst; the clinician
+     lights up. Self-contained SVG+CSS, 6s cycle, always in
+     motion (the assistant breathes, the trace runs); theme colors via vars. */
+  .bedside{display:block;width:100%;max-width:300px;margin:1.6rem auto 0;overflow:visible;}
+  .bedside .bs-dr circle,.bedside .bs-dr path{fill:var(--muted);opacity:.65;}
+  .bedside .bs-dr .bs-steth{fill:none;stroke:var(--panel);stroke-width:1.5;stroke-linecap:round;opacity:.95;}
+  .bedside .bs-dr-on circle,.bedside .bs-dr-on path{fill:var(--gold);opacity:1;}
+  .bedside .bs-dr-on{opacity:0;animation:bsOn 6s ease-in-out infinite;}
+  .bedside .bs-orb{animation:bsBob 2.6s ease-in-out infinite alternate;}
+  .bedside .bs-orb-glow{fill:var(--gold);opacity:.16;transform-box:fill-box;transform-origin:center;animation:bsBreathe 1.8s ease-in-out infinite alternate, bsGlowUp 6s ease-in-out infinite;}
+  .bedside .bs-orb-star{fill:var(--gold);opacity:.9;transform-box:fill-box;transform-origin:center;animation:bsSpin 9s linear infinite;}
+  .bedside .bs-orb-core{fill:#fff;opacity:.95;}
+  .bedside .bs-chip rect{fill:var(--panel);stroke:var(--gold);stroke-width:1.2;}
+  .bedside .bs-chip text{fill:var(--gold);font-family:var(--mono);font-size:6.5px;font-weight:700;letter-spacing:.08em;}
+  .bedside .bs-chip{opacity:0;}
+  .bedside .bs-ch0{animation:bsCh0 6s ease-in-out infinite;} .bedside .bs-ch1{animation:bsCh1 6s ease-in-out infinite;} .bedside .bs-ch2{animation:bsCh2 6s ease-in-out infinite;}
+  .bedside .bs-card{opacity:0;transform-box:fill-box;transform-origin:center;animation:bsCard 6s ease-in-out infinite;}
+  .bedside .bs-cardbg{fill:var(--panel);stroke:var(--gold);stroke-width:1.2;}
+  .bedside .bs-okc{fill:var(--verified);} .bedside .bs-okp{fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .bedside .bs-l0{fill:var(--gold);} .bedside .bs-l1,.bedside .bs-l2{fill:var(--muted);opacity:.4;}
+  .bedside .bs-spark line{stroke:var(--gold);stroke-width:2;stroke-linecap:round;}
+  .bedside .bs-spark{opacity:0;transform-box:fill-box;transform-origin:center;animation:bsSpark 6s ease-out infinite;}
+  @keyframes bsOn{0%,54%{opacity:0}60%{opacity:1}92%{opacity:1}98%,100%{opacity:0}}
+  @keyframes bsBob{from{transform:translateY(-2px)}to{transform:translateY(2px)}}
+  @keyframes bsBreathe{from{transform:scale(1)}to{transform:scale(1.3)}}
+  @keyframes bsGlowUp{0%,44%{opacity:.16}52%{opacity:.5}60%{opacity:.16}100%{opacity:.16}}
+  @keyframes bsSpin{to{transform:rotate(360deg)}}
+  /* chips: fly from the right to the assistant (152,40) and shrink into it; staggered */
+  @keyframes bsCh0{0%{opacity:0;transform:translate(228px,14px) scale(1)}4%{opacity:1}26%{opacity:1;transform:translate(90px,36px) scale(.9)}32%,100%{opacity:0;transform:translate(82px,40px) scale(.2)}}
+  @keyframes bsCh1{0%,12%{opacity:0;transform:translate(236px,54px) scale(1)}16%{opacity:1}38%{opacity:1;transform:translate(90px,42px) scale(.9)}44%,100%{opacity:0;transform:translate(82px,40px) scale(.2)}}
+  @keyframes bsCh2{0%,24%{opacity:0;transform:translate(228px,94px) scale(1)}28%{opacity:1}50%{opacity:1;transform:translate(90px,46px) scale(.9)}56%,100%{opacity:0;transform:translate(82px,40px) scale(.2)}}
+  @keyframes bsCard{0%,54%{opacity:0;transform:translateX(-70px) scale(.6)}59%{opacity:1;transform:translateX(-70px) scale(1.08)}63%{transform:translateX(-70px) scale(1)}92%{opacity:1;transform:translateX(-70px) scale(1)}98%,100%{opacity:0;transform:translateX(-70px) scale(1)}}
+  @keyframes bsSpark{0%,56%{opacity:0;transform:translateX(-70px) scale(.4)}60%{opacity:1;transform:translateX(-70px) scale(1)}74%,100%{opacity:0;transform:translateX(-70px) scale(1.7)}}
+  @media (prefers-reduced-motion: reduce){   /* accessibility: freeze to the decided scene */
+    .bedside *{animation:none !important;}
+    .bedside .bs-card,.bedside .bs-dr-on{opacity:1;transform:translateX(-70px);} .bedside .bs-chip,.bedside .bs-spark{opacity:0;}}
+  @media (max-width:560px){ .about{margin-top:1.4rem;} .about-mission{font-size:.98rem;} }
   .motto{display:flex;align-items:flex-start;justify-content:center;gap:1.2rem;flex-wrap:wrap;
     margin-top:2.6rem;font-family:var(--mono);font-size:.72rem;letter-spacing:.3em;
     text-transform:uppercase;color:var(--gold);opacity:.75;}
@@ -1326,6 +1359,7 @@
   /* Case Board header generate control */
   #caseboard .shead #cbsub{font-family:var(--mono);font-size:.6rem;color:var(--muted);letter-spacing:.02em;}
   #caseboard .shead .cbgen{margin-left:auto;display:inline-flex;align-items:center;gap:.6rem;}
+  #caseboard .shead .cbgen[hidden]{display:none;}
   #caseboard .shead .cbgenmsg{font-family:var(--mono);font-size:.66rem;color:var(--muted);}
   @media (max-width:640px){ #caseboard .shead #cbsub{display:none;} }
   /* Case Board era toggle (Historical / Recent) */
@@ -1342,20 +1376,24 @@
   .acpick{max-width:52rem;}
   .acpick h2{font-family:var(--sans);font-size:1.15rem;font-weight:700;margin:0 0 .3rem;}
   .acpick .acbar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.6rem 0;}
+  .acpick .acacct{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;font-family:var(--sans);font-size:.84rem;font-weight:600;margin:.4rem 0;}
+  .acpick .acacct select{flex:1 1 14rem;min-width:0;max-width:100%;min-height:40px;padding:.35rem .6rem;border:1px solid var(--hair);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit;font-size:16px;}
   .acpick .acbar input[type=search]{flex:1 1 12rem;min-width:0;min-height:40px;padding:.4rem .7rem;border:1px solid var(--hair);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit;font-size:16px;}
   .acpick .acbar .histbtn{margin-left:0;min-height:40px;}
   .acpick .aclist{border:1px solid var(--hair);border-radius:10px;overflow:hidden;max-height:52vh;overflow-y:auto;}
   .acpick .acitem{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.6rem;align-items:start;padding:.55rem .7rem;border-bottom:1px solid var(--hair);background:var(--panel);}
   .acpick .acitem:last-child{border-bottom:0;}
-  .acpick .acitem input{width:20px;height:20px;margin-top:.15rem;accent-color:var(--accent);}
+  .acpick .acitem input{width:20px;height:20px;margin-top:.15rem;accent-color:var(--gold);}
   .acpick .acitem .acq{font-family:var(--sans);font-size:.88rem;line-height:1.35;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
   .acpick .acitem .acm{font-family:var(--mono);font-size:.6rem;color:var(--muted);margin-top:.2rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;}
   .acpick .acitem .acon{color:var(--verified-ink,var(--ink));background:var(--verified);border-radius:999px;padding:.05rem .45rem;font-weight:700;}
   .acpick .acitem .acun{font:inherit;font-family:var(--mono);font-size:.62rem;background:transparent;border:1px solid var(--hair);border-radius:6px;color:var(--muted);padding:.3rem .5rem;min-height:32px;cursor:pointer;}
   .acpick .acconfirm{display:flex;gap:.6rem;align-items:flex-start;margin:.9rem 0 .6rem;font-family:var(--sans);font-size:.84rem;line-height:1.4;color:var(--ink);}
-  .acpick .acconfirm input{width:20px;height:20px;flex:none;margin-top:.1rem;accent-color:var(--accent);}
+  .acpick .acconfirm input{width:20px;height:20px;flex:none;margin-top:.1rem;accent-color:var(--gold);}
   .acpick .acmsg{font-family:var(--mono);font-size:.68rem;color:var(--muted);margin-top:.5rem;min-height:1.2em;}
-  .acpick .acgo{font:inherit;font-family:var(--sans);font-weight:700;font-size:.9rem;min-height:42px;padding:.5rem 1rem;border:0;border-radius:9px;background:var(--accent);color:#fff;cursor:pointer;}
+  .acpick .acgo{font:inherit;font-family:var(--sans);font-weight:700;font-size:.9rem;min-height:42px;padding:.5rem 1rem;border:0;border-radius:9px;background:var(--gold);color:#fff;cursor:pointer;}
+  /* anonymous case view is read-only: no explain / visuals / feedback actions on a copy */
+  .acdetail .copybtn{display:none;}
   .acpick .acgo:disabled{opacity:.45;cursor:default;}
   .acdetail .achead{display:flex;flex-wrap:wrap;gap:.5rem .9rem;align-items:center;font-family:var(--mono);font-size:.62rem;color:var(--muted);margin-bottom:.6rem;}
   .acdetail .achead .acun{font:inherit;font-family:var(--mono);font-size:.62rem;background:transparent;border:1px solid var(--hair);border-radius:6px;color:var(--muted);padding:.3rem .5rem;min-height:32px;cursor:pointer;margin-left:auto;}
@@ -1507,8 +1545,11 @@
     border-radius:10px;padding:.48rem .85rem;min-height:38px;background:var(--panel);border:1px solid var(--hair);color:var(--ink);
     box-shadow:var(--sh-sm);transition:background .13s,border-color .13s,color .13s;}
   .histbtn:hover,.copybtn:hover,.sact:hover{background:var(--panel2);border-color:var(--muted);color:var(--ink);}
-  .newbtn,.newbtn:hover{background:var(--gold);color:var(--on-accent);border-color:var(--gold);font-weight:600;}
-  .newbtn:hover{background:var(--gold-strong);}
+  /* header / nav buttons: quiet, like roster — hairline outline, muted text, no fill, no shadow */
+  .histbtn{background:transparent;box-shadow:none;color:var(--muted);font-weight:550;font-size:.8rem;padding:.38rem .8rem;min-height:34px;border-radius:9px;}
+  .histbtn:hover{color:var(--ink);border-color:var(--muted);background:var(--panel2);}
+  .newbtn{color:var(--gold);border-color:rgba(var(--gold-rgb),.5);}
+  .newbtn:hover{color:var(--on-accent);background:var(--gold);border-color:var(--gold);}
   .copybtn{font-size:.78rem;padding:.38rem .7rem;min-height:34px;}
   .sact{font-size:.78rem;padding:.38rem .7rem;min-height:34px;}
   .sact-danger{color:var(--gap);}
@@ -1523,11 +1564,12 @@
   .themebtn{font-family:var(--sans);font-size:.72rem;letter-spacing:0;text-transform:none;font-weight:550;}
   /* ---- hero + composer ---- */
   h1{font-family:var(--serif);font-size:2.2rem;font-weight:500;letter-spacing:-.015em;line-height:1.12;font-variant-numeric:lining-nums;}
+  h1#heading{text-align:center;}
   .hsub{font-size:.98rem;line-height:1.5;max-width:36rem;}
   .field{border-radius:20px;padding:.95rem .95rem .95rem 1.2rem;box-shadow:var(--sh-md);}
   .field:focus-within{border-color:var(--gold);box-shadow:var(--sh-md),var(--ring);}
   textarea{font-size:1.06rem;line-height:1.5;}
-  .about-lead{font-size:1.12rem;}
+  .about-mission{font-size:1.12rem;}
   .about-pt b{font-family:var(--sans);font-size:.72rem;letter-spacing:.06em;}
   /* ---- answer: a reading measure, whitespace instead of rules ---- */
   /* the answer body reads in the serif — the journal voice; headings, tables and chrome stay sans */

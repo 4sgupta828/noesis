@@ -6447,7 +6447,15 @@ function selectCase(id){
     const cites = (run.citations||[]).filter(x=>x&&(x.source||x.quote));
     const citeHtml = cites.length ? `<details class="ccites"><summary>Evidence (${cites.length})</summary>`+
       cites.map(x=>`<div class="ccite"><span class="ccs">${esc(x.source||"source")}</span>${x.quote?`<span class="ccq">“${esc(x.quote)}”</span>`:""}</div>`).join("")+`</details>` : "";
-    ans = `<div class="answer md">${mdToHtml(run.answer)}</div>`+citeHtml+
+    // VISUALS: the grounded charts + reasoning layer stored with the run, in the same order the main
+    // answer view uses (answer → charts → reasoning → evidence). Older runs carry none (the fields
+    // were dropped before 2026-09-07) — they simply render as prose until the case is regenerated.
+    const pl = run.payload || {};
+    const chartsHtml = (Array.isArray(pl.charts) ? pl.charts : []).map(chartSvg).join("");
+    const rrHtml = reasoningMarkup({interpretation: pl.interpretation, confidence: pl.confidence,
+                                    reasoning_purpose: pl.reasoning_purpose,
+                                    reasoning_conclusion: pl.reasoning_conclusion});
+    ans = `<div class="answer md">${mdToHtml(run.answer)}</div>`+chartsHtml+rrHtml+citeHtml+
       `<div class="cmeta">${run.grounded?'<span class="sg">✓ grounded</span>':'<span>ungrounded</span>'} · engine: ${esc(run.engine||"reasoned")} · ${run.generated_at?new Date(run.generated_at).toLocaleString():""}</div>`;
   } else if(run){
     ans = `<div class="cempty">Generation failed: ${esc(run.error||"unknown error")}.</div>`;

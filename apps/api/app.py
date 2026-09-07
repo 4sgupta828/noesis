@@ -2595,12 +2595,24 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                                    "confidence": (getattr(res, "confidence", None)
                                                   if reasoning_read_enabled() else None),
                                    "reasoning_purpose": getattr(res, "reasoning_purpose", "") or ""}
+                        # FLOW DIAGRAMS ("Add visuals"): a curated case is never opened by the person
+                        # who asked it, so nobody is there to press the button — generate them with the
+                        # answer so every board case ships with its visuals.
+                        answer_text = getattr(res, "composed_answer", "") or ""
+                        if visual_augment_enabled() and getattr(svc, "visuals_prompt", None) and answer_text:
+                            try:
+                                payload["visuals"] = await svc.visualize(
+                                    question=case["question"], answer=answer_text) or []
+                            except Exception as ve:   # noqa: BLE001 — a missing diagram never loses the answer
+                                print(f"[cases] visuals failed {cid}: {type(ve).__name__}: {ve}", flush=True)
+                                payload["visuals"] = []
                         await store.save_run(
                             case_id=cid, answer=getattr(res, "composed_answer", "") or "",
                             grounded=bool(getattr(res, "grounded", False)), citations=cites,
                             payload=payload, engine=(f"{engine}:{body.model}" if body.model else engine))
                         print(f"[cases] stored {cid} — grounded={bool(getattr(res, 'grounded', False))} "
-                              f"findings={len(cites)} charts={len(payload['charts'])}", flush=True)
+                              f"findings={len(cites)} charts={len(payload['charts'])} "
+                              f"visuals={len(payload.get('visuals') or [])}", flush=True)
                     # BaseException, not Exception: a CancelledError/timeout used to end the batch with
                     # NOTHING stored and NOTHING logged (the 2026-08-18 empty batch, and again
                     # 2026-09-07). Record the failure for every cause, then re-raise the ones that must
@@ -4543,11 +4555,23 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                             reasoning_purpose=getattr(res, "reasoning_purpose", "") or "",
                             reasoning_conclusion=getattr(res, "reasoning_conclusion", "") or "",
                             chart_attempt=attempt)
+                        # flow diagrams for the board case too (same reason: nobody is there to press
+                        # the button on a published case)
+                        n_vis = 0
+                        answer_text = getattr(res, "composed_answer", "") or ""
+                        if visual_augment_enabled() and getattr(svc, "visuals_prompt", None) and answer_text:
+                            try:
+                                vis = await svc.visualize(question=row["question"], answer=answer_text) or []
+                                if vis:
+                                    await store.save_turn_visuals(sid, 0, vis)
+                                n_vis = len(vis)
+                            except Exception as ve:   # noqa: BLE001
+                                print(f"[refresh] visuals failed {case_id}: {type(ve).__name__}: {ve}", flush=True)
                         # re-copy the (now richer) session into its EXISTING board entry
                         await store.active_publish([sid], user_id=None, admin=True)
                         print(f"[refresh] stored {case_id} — updated={ok} findings={len(claims)} "
-                              f"charts={len(charts)}{' (flagged: nothing to chart)' if attempt else ''}",
-                              flush=True)
+                              f"charts={len(charts)} visuals={n_vis}"
+                              f"{' (flagged: nothing to chart)' if attempt else ''}", flush=True)
                     except BaseException as e:   # noqa: BLE001 — never die silently (see cases_generate)
                         import traceback
                         print(f"[refresh] FAILED {case_id}: {type(e).__name__}: {e}", flush=True)

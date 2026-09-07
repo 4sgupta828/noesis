@@ -659,12 +659,14 @@ class SessionStore:
                            left(snapshot->>'answer', 600) AS excerpt,
                            jsonb_array_length(COALESCE(snapshot->'thread', '[]'::jsonb)) AS n_turns,
                            (snapshot->>'grounded')::boolean AS grounded,
-                           jsonb_path_exists(snapshot, '$.thread[*].charts[0]') AS has_charts
+                           jsonb_path_exists(snapshot, '$.thread[*].charts[0]') AS has_charts,
+                           jsonb_path_exists(snapshot, '$.thread[*].visuals[0]') AS has_visuals
                     FROM noesis_active_case WHERE {where}
                     ORDER BY published_at DESC LIMIT ${len(params)}""", *params)
         return [{"case_id": r["case_id"], "kind": r["kind"], "question": r["question"],
                  "excerpt": r["excerpt"] or "", "n_turns": r["n_turns"] or 1,
                  "grounded": bool(r["grounded"]), "has_charts": bool(r["has_charts"]),
+                 "has_visuals": bool(r["has_visuals"]),
                  "published_at": r["published_at"].isoformat()} for r in rows]
 
     async def active_session_id(self, case_id: str) -> str | None:
@@ -684,7 +686,10 @@ class SessionStore:
         nothing. `$[*].charts[0]` is false for a missing key AND for an empty array, so "attempted and
         found none" is distinguishable only by the chart_attempt marker."""
         await self._ensure()
-        where = ["a.vertical=$1", "NOT s.deleted", "NOT jsonb_path_exists(s.thread, '$[*].charts[0]')"]
+        # needs a sweep when it has neither a chart NOR a flow diagram
+        where = ["a.vertical=$1", "NOT s.deleted",
+                 "NOT (jsonb_path_exists(s.thread, '$[*].charts[0]') "
+                 "AND jsonb_path_exists(s.thread, '$[*].visuals[0]'))"]
         params: list[Any] = [self._vertical]
         if not include_attempted:
             where.append("NOT jsonb_path_exists(s.thread, '$[*].chart_attempt')")
@@ -707,13 +712,14 @@ class SessionStore:
             r = await conn.fetchrow(
                 """SELECT count(*) AS total,
                           count(*) FILTER (WHERE jsonb_path_exists(s.thread, '$[*].charts[0]')) AS with_charts,
+                          count(*) FILTER (WHERE jsonb_path_exists(s.thread, '$[*].visuals[0]')) AS with_visuals,
                           count(*) FILTER (WHERE NOT jsonb_path_exists(s.thread, '$[*].charts[0]')
                                              AND jsonb_path_exists(s.thread, '$[*].chart_attempt')) AS attempted_none,
                           count(*) FILTER (WHERE NOT jsonb_path_exists(s.thread, '$[*].charts[0]')
                                              AND NOT jsonb_path_exists(s.thread, '$[*].chart_attempt')) AS untouched
                      FROM noesis_active_case a JOIN noesis_research_session s ON s.id = a.session_id
                     WHERE a.vertical=$1 AND NOT s.deleted""", self._vertical)
-        return {k: int(r[k] or 0) for k in ("total", "with_charts", "attempted_none", "untouched")}
+        return {k: int(r[k] or 0) for k in ("total", "with_charts", "with_visuals", "attempted_none", "untouched")}
 
     async def active_get(self, case_id: str) -> dict[str, Any] | None:
         await self._ensure()

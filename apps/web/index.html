@@ -6433,10 +6433,12 @@ async function loadCasesList(){
         const badge = c.eval ? `<span class="cverdict cv-${esc(c.eval.verdict||'reviewed')}">${esc(c.eval.verdict||"reviewed")}</span>`
                     : (c.run ? (c.run.answer ? `<span class="cstate cstate-ok">answered</span>` : `<span class="cstate cstate-none">gen failed</span>`)
                              : `<span class="cstate cstate-none">not generated</span>`);
-        const nch = ((c.run && c.run.payload && c.run.payload.charts) || []).length;
-        const tried = !!(c.run && c.run.payload && Array.isArray(c.run.payload.charts));
-        const vis = nch ? `<span class="cvis on" title="${nch} chart${nch===1?"":"s"} in this answer">▮ ${nch}</span>`
-                  : (tried ? `<span class="cvis none" title="Swept for visuals — the evidence had no chart-shaped numbers">▮ none</span>` : "");
+        const pl0 = (c.run && c.run.payload) || {};
+        const nch = (pl0.charts || []).length, nvz = (pl0.visuals || []).length;
+        const tried = Array.isArray(pl0.charts) || Array.isArray(pl0.visuals);
+        const vis = (nvz ? `<span class="cvis on" title="${nvz} flow diagram${nvz===1?"":"s"}">◫ ${nvz}</span>` : "")
+                  + (nch ? `<span class="cvis on" title="${nch} chart${nch===1?"":"s"}">▮ ${nch}</span>` : "")
+                  + ((!nvz && !nch && tried) ? `<span class="cvis none" title="Swept — nothing to draw from this evidence">◫ none</span>` : "");
         return `<button class="srow caserow" data-id="${esc(c.id)}">
           <div class="sq">${esc(c.title)}</div>
           <div class="sm"><span>${c.year||""}</span>${badge}${vis}</div></button>`;
@@ -6467,7 +6469,10 @@ function selectCase(id){
     const rrHtml = reasoningMarkup({interpretation: pl.interpretation, confidence: pl.confidence,
                                     reasoning_purpose: pl.reasoning_purpose,
                                     reasoning_conclusion: pl.reasoning_conclusion});
-    ans = `<div class="answer md">${mdToHtml(run.answer)}</div>`+chartsHtml+rrHtml+citeHtml+
+    const vzs = Array.isArray(pl.visuals) ? pl.visuals : [];
+    const visHtml = vzs.length
+      ? `<details class="plain plain-d visuals-d" data-variation="0" open>${_vzInner(vzs.map(visualCardHtml).join(""), vzs.length)}</details>` : "";
+    ans = `<div class="answer md">${mdToHtml(run.answer)}</div>`+chartsHtml+visHtml+rrHtml+citeHtml+
       `<div class="cmeta">${run.grounded?'<span class="sg">✓ grounded</span>':'<span>ungrounded</span>'} · engine: ${esc(run.engine||"reasoned")} · ${run.generated_at?new Date(run.generated_at).toLocaleString():""}</div>`;
   } else if(run){
     ans = `<div class="cempty">Generation failed: ${esc(run.error||"unknown error")}.</div>`;
@@ -6495,6 +6500,8 @@ function selectCase(id){
   wireRubric(det, c);
   const rg = det.querySelector("#cregen");
   if(rg) rg.addEventListener("click", ()=>regenerateOneCase(c.id, rg, det.querySelector("#cregmsg")));
+  const vd = det.querySelector(".visuals-d");   // ↻ rebuild a garbled/crowded diagram in place
+  if(vd) _wireVzRegen(vd, {question: c.question, answer: (run && run.answer) || ""});
   cbShowDetail();
 }
 // ---- Active Cases: anonymous, de-identified cases published from accounts ---------------------
@@ -6542,7 +6549,9 @@ async function loadActiveCases(){
         <div class="sq">${esc(c.question)}</div>
         <div class="sm"><span>${c.published_at ? new Date(c.published_at).toLocaleDateString([], {dateStyle:"medium"}) : ""}</span>
           <span class="ackind">${c.kind === "panel" ? "specialist panel" : "Q&amp;A"}${c.n_turns > 1 ? ` · ${c.n_turns} turns` : ""}</span>
-          ${c.has_charts ? `<span class="cvis on" title="This case carries a chart">▮ chart</span>` : `<span class="cvis none" title="No chart in this answer">▮ none</span>`}
+          ${c.has_visuals ? `<span class="cvis on" title="This case carries flow diagrams">◫ visuals</span>` : ""}
+          ${c.has_charts ? `<span class="cvis on" title="This case carries a chart">▮ chart</span>` : ""}
+          ${(!c.has_visuals && !c.has_charts) ? `<span class="cvis none" title="No visuals in this answer yet">◫ none</span>` : ""}
           ${MY_ACTIVE[c.case_id] ? `<span class="ackind">yours</span>` : ""}</div></button>`).join("");
     list.querySelectorAll(".acrow").forEach(b=>b.addEventListener("click",()=>selectActiveCase(b.dataset.id)));
     const first = list.querySelector(".acrow");

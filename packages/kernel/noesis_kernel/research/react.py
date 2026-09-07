@@ -210,6 +210,32 @@ class ComposedAnswer(BaseModel):
         "sentences, resting on the findings, no new fact. Populate only for a Reasoning Read.")
 
 
+# A figure is grounded when it appears in the finding — but "appears" must not turn on TYPOGRAPHY.
+# Models write "−14.9%" with a Unicode minus where the source has "-14.9%", or "1.7 kg" where the
+# source has "1.7kg", and a raw substring test threw those charts away as ungrounded. Normalising the
+# dash family and whitespace (and comparing a space-free variant) keeps the rule exactly as strict
+# about the NUMBER while no longer failing on how it was typed.
+_FIG_DASHES = "\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uff0d"   # ‐ ‑ ‒ – — ― − －
+_FIG_SPACES = "\u00a0\u202f\u2007\u2009\u200a"                        # nbsp, narrow/thin spaces
+
+
+def _norm_fig(s: str) -> str:
+    s = (s or "").strip().lower()
+    for d in _FIG_DASHES:
+        s = s.replace(d, "-")
+    for w in _FIG_SPACES:
+        s = s.replace(w, " ")
+    return _re.sub(r"\s+", " ", s)
+
+
+def _fig_in(needle: str, hay: str) -> bool:
+    """Is this figure present in that text, ignoring dash style and spacing?"""
+    n, h = _norm_fig(needle), _norm_fig(hay)
+    if not n:
+        return False
+    return n in h or n.replace(" ", "") in h.replace(" ", "")
+
+
 def _validate_charts(charts: list[ChartSpec], verified: list["VerifiedClaim"]) -> list[dict]:
     """Keep only charts whose EVERY plotted number is grounded: for each bar, the finding index is valid
     AND its `value_str` (and `low_str`/`high_str` when present) appears verbatim (case-insensitive) in
@@ -223,21 +249,18 @@ def _validate_charts(charts: list[ChartSpec], verified: list["VerifiedClaim"]) -
     grounded in DIFFERENT findings, since value and reference range often cite different sources).
     Returns dicts for the API."""
     def _grounded(s: str, finding: int) -> bool:
-        s = (s or "").strip().lower()
-        if not s or not (1 <= finding <= len(verified)):
+        if not (s or "").strip() or not (1 <= finding <= len(verified)):
             return False
-        src = (verified[finding - 1].text + " " + verified[finding - 1].quote).lower()
-        return s in src
+        return _fig_in(s, verified[finding - 1].text + " " + verified[finding - 1].quote)
 
     def _grounded_any(s: str) -> bool:
         # a figure is grounded if it appears verbatim in ANY verified finding. Used for range_band,
         # where the observed value and its reference range legitimately come from DIFFERENT findings
         # (the value from a clinical/case source, the normal range from a reference source) — unlike an
         # interval/forest CI where the point + bounds share one trial.
-        s = (s or "").strip().lower()
-        if not s:
+        if not (s or "").strip():
             return False
-        return any(s in (v.text + " " + v.quote).lower() for v in verified)
+        return any(_fig_in(s, v.text + " " + v.quote) for v in verified)
 
     out: list[dict] = []
     for ch in charts or []:
@@ -1690,7 +1713,12 @@ async def run_react(
             result.composed_answer = text
             # Grounded charts: keep only bars whose figure appears in the cited finding (drop the whole
             # chart otherwise). Empty when the charts flag isn't driving the directive → no-op.
-            result.charts = _validate_charts(getattr(parsed, "charts", []) or [], result.verified_claims)
+            _emitted = getattr(parsed, "charts", []) or []
+            result.charts = _validate_charts(_emitted, result.verified_claims)
+            if _emitted:
+                # Visible drop rate: a chart the model DREW but the grounding gate rejected is a
+                # different problem from a chart it never drew, and the two were indistinguishable.
+                print(f"[charts] emitted={len(_emitted)} kept={len(result.charts)}", flush=True)
             # Reasoning Read (flag): validate the interpretation layer (drop dangling/fabricated items)
             # and carry the confidence read. Gated on the flag so the OFF path never surfaces them even
             # if the model volunteered them; the guard is fail-safe (a fabricated inference is dropped).

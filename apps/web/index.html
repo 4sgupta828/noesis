@@ -3739,58 +3739,115 @@ function vzClip(cx, cy, tx, ty, hw, hh){
 // force-directed layout (deterministic circular seed → repulsion + edge springs + centering), so it
 // lays out any small graph — cycles and cross-links included — that flow/tree can't.
 function vzMap(v){
-  const nodes=v.nodes||[], edges=v.edges||[]; if(nodes.length<3) return "";
-  const idx={}; nodes.forEach((n,i)=>idx[n.id]=i);
-  const LH=14;
-  nodes.forEach(n=>{ n._lines=vzWrap(n.label,18);
-    n._w=Math.max(80, Math.min(186, Math.max(...n._lines.map(l=>l.length))*7.2+24)); n._h=n._lines.length*LH+16; });
-  const N=nodes.length, R=Math.max(150, N*32);
-  const P=nodes.map((n,i)=>({x:R*Math.cos(2*Math.PI*i/N), y:R*Math.sin(2*Math.PI*i/N)}));
-  const E=edges.map(e=>({s:idx[e.src], t:idx[e.dst]})).filter(e=>e.s!=null&&e.t!=null);
-  const L=210, kRep=17000, kSpr=0.02, center=0.005;
-  for(let it=0; it<300; it++){
-    const fx=new Array(N).fill(0), fy=new Array(N).fill(0);
-    for(let i=0;i<N;i++) for(let j=i+1;j<N;j++){
-      let dx=P[i].x-P[j].x, dy=P[i].y-P[j].y, d2=dx*dx+dy*dy+0.01, d=Math.sqrt(d2), f=kRep/d2;
-      fx[i]+=f*dx/d; fy[i]+=f*dy/d; fx[j]-=f*dx/d; fy[j]-=f*dy/d;
-    }
-    E.forEach(e=>{ let dx=P[e.t].x-P[e.s].x, dy=P[e.t].y-P[e.s].y, d=Math.sqrt(dx*dx+dy*dy)+0.01, f=kSpr*(d-L);
-      fx[e.s]+=f*dx/d; fy[e.s]+=f*dy/d; fx[e.t]-=f*dx/d; fy[e.t]-=f*dy/d; });
-    for(let i=0;i<N;i++){ fx[i]-=center*P[i].x; fy[i]-=center*P[i].y;
-      P[i].x+=Math.max(-16,Math.min(16,fx[i])); P[i].y+=Math.max(-16,Math.min(16,fy[i])); }
+  // A relationship map is a small DIRECTED graph, and a force layout scatters it: long crossing
+  // edges, boxes drifting to the rim, labels landing in space — which reads as dangling nodes.
+  // This lays it out in LAYERS instead (rank by dependency, order to cut crossings, short mostly
+  // vertical edges), the way such a diagram is drawn by hand.
+  const rawNodes = v.nodes || [], rawEdges = v.edges || [];
+  const byId = {}; rawNodes.forEach(n => { if(n && n.id != null) byId[n.id] = n; });
+  // an edge to a node that does not exist, and a node no edge touches, are both noise in a
+  // relationship map — drop them rather than draw a box wired to nothing
+  const edges = rawEdges.filter(e => e && byId[e.src] && byId[e.dst] && e.src !== e.dst);
+  const deg = {}; edges.forEach(e => { deg[e.src] = (deg[e.src]||0)+1; deg[e.dst] = (deg[e.dst]||0)+1; });
+  const nodes = rawNodes.filter(n => deg[n.id]);
+  if(nodes.length < 3 || !edges.length) return "";
+  const idx = {}; nodes.forEach((n,i) => idx[n.id] = i);
+  const N = nodes.length, LH = 14;
+  nodes.forEach(n => { n._lines = vzWrap(n.label, 18);
+    n._w = Math.max(84, Math.min(190, Math.max(...n._lines.map(l => l.length))*7.2 + 26));
+    n._h = n._lines.length*LH + 16; });
+  const E = edges.map(e => ({s: idx[e.src], t: idx[e.dst], label: e.label || ""}));
+  const out = Array.from({length:N}, () => []), inn = Array.from({length:N}, () => []);
+  E.forEach(e => { out[e.s].push(e.t); inn[e.t].push(e.s); });
+
+  // 1. rank: longest path from the sources, relaxed with a bound so a cycle cannot spin
+  const rank = new Array(N).fill(0);
+  for(let it = 0; it < N; it++){ let ch = false;
+    E.forEach(e => { if(rank[e.t] < rank[e.s] + 1 && rank[e.s] + 1 < N){ rank[e.t] = rank[e.s] + 1; ch = true; } });
+    if(!ch) break; }
+  const rows = {}; nodes.forEach((n,i) => { (rows[rank[i]] = rows[rank[i]] || []).push(i); });
+  const rk = Object.keys(rows).map(Number).sort((a,b) => a-b);
+
+  // 2. order within each rank by the barycentre of its neighbours — the standard crossing cut
+  const pos = new Array(N).fill(0);
+  rk.forEach(r => rows[r].forEach((i,k) => pos[i] = k));
+  for(let pass = 0; pass < 4; pass++){
+    const dir = pass % 2 ? rk.slice().reverse() : rk;
+    dir.forEach(r => {
+      const bary = i => { const nb = inn[i].concat(out[i]).filter(j => rank[j] !== r);
+        return nb.length ? nb.reduce((a,j) => a + pos[j], 0)/nb.length : pos[i]; };
+      rows[r] = rows[r].map(i => [i, bary(i)]).sort((a,b) => a[1]-b[1]).map(p => p[0]);
+      rows[r].forEach((i,k) => pos[i] = k);
+    });
   }
-  // COLLISION RESOLUTION: separate any overlapping node rectangles (with margin) by minimal
-  // translation, several passes — guarantees no node box sits on top of another.
-  const MX=16, MY=14;
-  for(let pass=0; pass<80; pass++){ let moved=false;
-    for(let i=0;i<N;i++) for(let j=i+1;j<N;j++){
-      const ox=(nodes[i]._w+nodes[j]._w)/2+MX-Math.abs(P[i].x-P[j].x);
-      const oy=(nodes[i]._h+nodes[j]._h)/2+MY-Math.abs(P[i].y-P[j].y);
-      if(ox>0 && oy>0){ moved=true;
-        if(ox<oy){ const s=(P[i].x<=P[j].x?-1:1)*ox/2; P[i].x+=s; P[j].x-=s; }
-        else { const s=(P[i].y<=P[j].y?-1:1)*oy/2; P[i].y+=s; P[j].y-=s; } }
-    }
-    if(!moved) break;
+
+  // 3. place: rows down the page, then pull each node toward its neighbours and undo overlaps
+  const GAPX = 30, GAPY = 52;
+  const X = new Array(N), Y = new Array(N), rowY = {};
+  let yy = 0;
+  rk.forEach(r => { const h = Math.max(...rows[r].map(i => nodes[i]._h));
+    rowY[r] = yy + h/2; yy += h + GAPY; });
+  rk.forEach(r => { const w = rows[r].reduce((a,i) => a + nodes[i]._w, 0) + GAPX*(rows[r].length-1);
+    let x = -w/2; rows[r].forEach(i => { X[i] = x + nodes[i]._w/2; x += nodes[i]._w + GAPX; Y[i] = rowY[r]; }); });
+  for(let pass = 0; pass < 6; pass++){
+    rk.forEach(r => {
+      rows[r].forEach(i => { const nb = inn[i].concat(out[i]).filter(j => rank[j] !== r);
+        if(nb.length) X[i] += (nb.reduce((a,j) => a + X[j], 0)/nb.length - X[i]) * 0.45; });
+      const ord = rows[r];                       // re-separate, keeping the settled order
+      for(let k = 1; k < ord.length; k++){
+        const a = ord[k-1], b = ord[k], need = (nodes[a]._w + nodes[b]._w)/2 + GAPX;
+        if(X[b] - X[a] < need) X[b] = X[a] + need;
+      }
+      for(let k = ord.length - 2; k >= 0; k--){
+        const a = ord[k], b = ord[k+1], need = (nodes[a]._w + nodes[b]._w)/2 + GAPX;
+        if(X[b] - X[a] < need) X[a] = X[b] - need;
+      }
+    });
   }
-  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
-  nodes.forEach((n,i)=>{ minX=Math.min(minX,P[i].x-n._w/2); maxX=Math.max(maxX,P[i].x+n._w/2);
-    minY=Math.min(minY,P[i].y-n._h/2); maxY=Math.max(maxY,P[i].y+n._h/2); });
-  const pad=18, W=(maxX-minX)+pad*2, H=(maxY-minY)+pad*2;
-  const px=i=>P[i].x-minX+pad, py=i=>P[i].y-minY+pad;
-  const rects=nodes.map((n,i)=>({x:px(i)-n._w/2, y:py(i)-n._h/2, w:n._w, h:n._h}));   // for label avoidance
-  let ed="", lbls="";   // lines under nodes; relationship labels ON TOP so they stay legible
-  E.forEach((e,k)=>{ const a=vzClip(px(e.s),py(e.s),px(e.t),py(e.t),nodes[e.s]._w/2+2,nodes[e.s]._h/2+2);
-    const b=vzClip(px(e.t),py(e.t),px(e.s),py(e.s),nodes[e.t]._w/2+2,nodes[e.t]._h/2+2);
-    ed+=`<line class="vzedge" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" marker-end="url(#vzarr)"/>`;
-    const lbl=edges[k].label; if(lbl){ const w=lbl.length*5.8+12;   // fit full text
-      const p=vzLabelPos((a.x+b.x)/2, (a.y+b.y)/2, w, 15, rects);   // keep the label off any node box
-      lbls+=`<rect class="vzedgelblbg" x="${(p.x-w/2).toFixed(1)}" y="${(p.y-8).toFixed(1)}" width="${w.toFixed(1)}" height="15" rx="7"/>`+
-            `<text class="vzedgelbl" x="${p.x.toFixed(1)}" y="${(p.y+3).toFixed(1)}">${esc(lbl)}</text>`; }
+
+  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+  nodes.forEach((n,i) => { minX = Math.min(minX, X[i]-n._w/2); maxX = Math.max(maxX, X[i]+n._w/2);
+    minY = Math.min(minY, Y[i]-n._h/2); maxY = Math.max(maxY, Y[i]+n._h/2); });
+  const pad = 20, W = (maxX-minX) + pad*2, H = (maxY-minY) + pad*2;
+  const px = i => X[i] - minX + pad, py = i => Y[i] - minY + pad;
+
+  // 4. edges: down the page between ranks, a side loop for a back edge; labels dodge each other
+  let ed = "", lbls = "";
+  const placed = [];
+  E.forEach(e => {
+    const sN = nodes[e.s], tN = nodes[e.t];
+    const down = rank[e.t] > rank[e.s];
+    const x1 = px(e.s), y1 = py(e.s) + (down ? sN._h/2 : 0);
+    const x2 = px(e.t), y2 = py(e.t) - (down ? tN._h/2 : 0);
+    let d, mx, my;
+    if(down){
+      const cy = (y1 + y2)/2;
+      d = `M${x1.toFixed(1)} ${y1.toFixed(1)} C ${x1.toFixed(1)} ${cy.toFixed(1)}, ${x2.toFixed(1)} ${cy.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+      mx = (x1 + x2)/2; my = cy;
+    } else {                                   // same rank or back edge: arc clear of the boxes
+      const side = (x2 >= x1 ? 1 : -1), lift = Math.max(sN._h, tN._h)/2 + 26;
+      const sx = x1 + side*sN._w/2, tx = x2 - side*tN._w/2;
+      d = `M${sx.toFixed(1)} ${y1.toFixed(1)} C ${(sx+side*40).toFixed(1)} ${(y1-lift).toFixed(1)}, ${(tx-side*40).toFixed(1)} ${(y2-lift).toFixed(1)}, ${tx.toFixed(1)} ${y2.toFixed(1)}`;
+      mx = (sx + tx)/2; my = (y1 + y2)/2 - lift*0.75;
+    }
+    ed += `<path class="vzedge" fill="none" d="${d}" marker-end="url(#vzarr)"/>`;
+    if(e.label){
+      const w = e.label.length*5.8 + 12;
+      let ly = my;                              // nudge off any label already placed
+      for(let g = 0; g < 12; g++){
+        const hit = placed.some(p => Math.abs(p.x - mx) < (p.w + w)/2 && Math.abs(p.y - ly) < 17);
+        if(!hit) break;
+        ly += 18;
+      }
+      placed.push({x: mx, y: ly, w});
+      lbls += `<rect class="vzedgelblbg" x="${(mx-w/2).toFixed(1)}" y="${(ly-8).toFixed(1)}" width="${w.toFixed(1)}" height="15" rx="7"/>`
+            + `<text class="vzedgelbl" x="${mx.toFixed(1)}" y="${(ly+3).toFixed(1)}">${esc(e.label)}</text>`;
+    }
   });
-  let nd="";
-  nodes.forEach((n,i)=>{ const x=px(i)-n._w/2, y=py(i)-n._h/2;
-    nd+=`<rect class="vznode vzt${i%6}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${n._w}" height="${n._h}" rx="${(n._h/2).toFixed(1)}"/>`;
-    nd+=vzTextLines(n._lines, px(i), y+16, "vzlabel", LH);
+  let nd = "";
+  nodes.forEach((n,i) => { const x = px(i) - n._w/2, y = py(i) - n._h/2;
+    nd += `<rect class="vznode vzt${i%6}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${n._w}" height="${n._h}" rx="${(n._h/2).toFixed(1)}"/>`;
+    nd += vzTextLines(n._lines, px(i), y + 16, "vzlabel", LH);
   });
   return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" width="${W.toFixed(0)}" height="${H.toFixed(0)}" role="img">${VZ_DEFS}${ed}${nd}${lbls}</svg></div>`;
 }

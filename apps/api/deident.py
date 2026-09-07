@@ -99,6 +99,7 @@ PRIVATE_KEYS = frozenset({
     "user_id", "user_name", "user_email", "tenant_id", "workspace_id", "share_token", "public",
     "published_at", "patient_ref", "real_patient", "attachments", "intake_transcript",
     "visual_observation", "video_filename", "video_title", "video_duration", "diagnostics",
+    "chart_attempt",   # internal: which model tried to draw a chart here, and found nothing to draw
 })
 
 

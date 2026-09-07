@@ -563,7 +563,8 @@ class SessionStore:
                             source_stats: dict, coverage_gaps: list[str], rejected: int,
                             charts: list[dict] | None = None, interpretation: list[dict] | None = None,
                             confidence: dict | None = None, reasoning_purpose: str = "",
-                            reasoning_conclusion: str = "") -> bool:
+                            reasoning_conclusion: str = "",
+                            chart_attempt: dict | None = None) -> bool:
         """Replace the FIRST turn's answer in place (flat columns + thread[0]), keeping the question,
         owner, patient reference and any later turns untouched.
 
@@ -576,6 +577,11 @@ class SessionStore:
                       "charts": list(charts or []), "interpretation": list(interpretation or []),
                       "confidence": confidence, "reasoning_purpose": reasoning_purpose,
                       "reasoning_conclusion": reasoning_conclusion}
+        if chart_attempt is not None:
+            # A run that drew NOTHING records who tried, so the next sweep skips it instead of paying
+            # for the same answer twice. The model is part of the record: a later, stronger pass can
+            # deliberately retry what a cheaper one could not chart.
+            turn_patch["chart_attempt"] = chart_attempt
         async with (await self._get_pool()).acquire() as conn:
             res = await conn.execute(
                 """UPDATE noesis_research_session
@@ -666,6 +672,46 @@ class SessionStore:
             return await conn.fetchval(
                 "SELECT session_id FROM noesis_active_case WHERE case_id=$1 AND vertical=$2",
                 case_id, self._vertical)
+
+    async def active_needing_charts(self, *, limit: int = 25, include_attempted: bool = False,
+                                    case_ids: list[str] | None = None) -> list[dict[str, str]]:
+        """Board cases whose SOURCE answer carries no chart — the only ones a refresh can improve.
+
+        Unless `include_attempted`, cases already swept without producing a chart are skipped: the
+        evidence there simply has no chart-shaped numbers, and paying to re-answer them again buys
+        nothing. `$[*].charts[0]` is false for a missing key AND for an empty array, so "attempted and
+        found none" is distinguishable only by the chart_attempt marker."""
+        await self._ensure()
+        where = ["a.vertical=$1", "NOT s.deleted", "NOT jsonb_path_exists(s.thread, '$[*].charts[0]')"]
+        params: list[Any] = [self._vertical]
+        if not include_attempted:
+            where.append("NOT jsonb_path_exists(s.thread, '$[*].chart_attempt')")
+        if case_ids:
+            params.append(list(case_ids))
+            where.append(f"a.case_id = ANY(${len(params)}::text[])")
+        params.append(int(limit))
+        async with (await self._get_pool()).acquire() as conn:
+            rows = await conn.fetch(
+                f"""SELECT a.case_id, a.session_id FROM noesis_active_case a
+                    JOIN noesis_research_session s ON s.id = a.session_id
+                    WHERE {' AND '.join(where)}
+                    ORDER BY a.published_at DESC LIMIT ${len(params)}""", *params)
+        return [{"case_id": r["case_id"], "session_id": r["session_id"]} for r in rows]
+
+    async def active_chart_stats(self) -> dict[str, int]:
+        """Board coverage: how many cases have a chart, were swept and found none, or are untouched."""
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            r = await conn.fetchrow(
+                """SELECT count(*) AS total,
+                          count(*) FILTER (WHERE jsonb_path_exists(s.thread, '$[*].charts[0]')) AS with_charts,
+                          count(*) FILTER (WHERE NOT jsonb_path_exists(s.thread, '$[*].charts[0]')
+                                             AND jsonb_path_exists(s.thread, '$[*].chart_attempt')) AS attempted_none,
+                          count(*) FILTER (WHERE NOT jsonb_path_exists(s.thread, '$[*].charts[0]')
+                                             AND NOT jsonb_path_exists(s.thread, '$[*].chart_attempt')) AS untouched
+                     FROM noesis_active_case a JOIN noesis_research_session s ON s.id = a.session_id
+                    WHERE a.vertical=$1 AND NOT s.deleted""", self._vertical)
+        return {k: int(r[k] or 0) for k in ("total", "with_charts", "attempted_none", "untouched")}
 
     async def active_get(self, case_id: str) -> dict[str, Any] | None:
         await self._ensure()

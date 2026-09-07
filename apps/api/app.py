@@ -1114,7 +1114,7 @@ class ActiveRefreshIn(BaseModel):
     case_ids: list[str] | None = None    # None → every board case whose answer has no chart
     limit: int = 25                      # tranche size; the batch is sequential and spends per case
     model: str = ""                      # per-batch model override (see CaseGenerateIn.model)
-    only_missing_charts: bool = True     # skip cases that already carry a chart
+    retry_attempted: bool = False        # re-sweep cases already tried and found to have nothing to chart
 
 
 class ClaimManyIn(BaseModel):
@@ -4499,32 +4499,22 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             app.state.service = build_default_service()
         svc = build_default_service(body.model) if body.model else app.state.service
 
-        rows = await store.active_list(limit=1000)
-        wanted = set(body.case_ids or [])
-        targets: list[tuple[str, str]] = []       # (case_id, session_id)
-        for r in rows:
-            if wanted and r["case_id"] not in wanted:
-                continue
-            snap = await store.active_get(r["case_id"])
-            if snap is None:
-                continue
-            if body.only_missing_charts and not wanted:
-                has = any((t or {}).get("charts") for t in (snap.get("thread") or [])) or snap.get("charts")
-                if has:
-                    continue
-            sid = await store.active_session_id(r["case_id"])
-            if sid:
-                targets.append((r["case_id"], sid))
-            if len(targets) >= max(1, body.limit):
-                break
+        # Selection is SOURCE-side: a board case can only gain a chart if its session answer gains one.
+        # Cases already swept without producing a chart are skipped unless retry_attempted — their
+        # evidence has no chart-shaped numbers, so paying to re-answer them buys nothing.
+        picked = await store.active_needing_charts(
+            limit=max(1, body.limit), include_attempted=body.retry_attempted,
+            case_ids=body.case_ids or None)
+        targets: list[tuple[str, str]] = [(p["case_id"], p["session_id"]) for p in picked]
         if not targets:
-            return {"started": 0, "case_ids": []}
+            return {"started": 0, "case_ids": [], "stats": await store.active_chart_stats()}
 
         import asyncio as _asyncio
 
         async def _run(pairs: list[tuple[str, str]]):
             app.state.active_refreshing = {"total": len(pairs), "done": 0}
             try:
+                import datetime as _dt
                 for case_id, sid in pairs:
                     print(f"[refresh] start {case_id}{(' model=' + body.model) if body.model else ''}", flush=True)
                     try:
@@ -4536,6 +4526,11 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                                    "source": c.document_title or c.source_key, "document_id": c.document_id}
                                   for c in (getattr(res, "verified_claims", None) or [])]
                         charts = (list(getattr(res, "charts", None) or []) if answer_charts_enabled() else [])
+                        # flag a sweep that drew nothing, so the next one skips it (the model is part of
+                        # the record, so a stronger pass can still retry deliberately)
+                        attempt = None if charts else {
+                            "at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+                            "model": body.model or "default", "charts": 0}
                         ok = await store.refresh_turn0(
                             sid, answer=getattr(res, "composed_answer", "") or "",
                             grounded=bool(getattr(res, "grounded", False)), claims=claims,
@@ -4546,11 +4541,13 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                                             if reasoning_read_enabled() else []),
                             confidence=(getattr(res, "confidence", None) if reasoning_read_enabled() else None),
                             reasoning_purpose=getattr(res, "reasoning_purpose", "") or "",
-                            reasoning_conclusion=getattr(res, "reasoning_conclusion", "") or "")
+                            reasoning_conclusion=getattr(res, "reasoning_conclusion", "") or "",
+                            chart_attempt=attempt)
                         # re-copy the (now richer) session into its EXISTING board entry
                         await store.active_publish([sid], user_id=None, admin=True)
                         print(f"[refresh] stored {case_id} — updated={ok} findings={len(claims)} "
-                              f"charts={len(charts)}", flush=True)
+                              f"charts={len(charts)}{' (flagged: nothing to chart)' if attempt else ''}",
+                              flush=True)
                     except BaseException as e:   # noqa: BLE001 — never die silently (see cases_generate)
                         import traceback
                         print(f"[refresh] FAILED {case_id}: {type(e).__name__}: {e}", flush=True)
@@ -4576,13 +4573,16 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         task = _asyncio.create_task(_run(targets))
         app.state.active_task = task
         task.add_done_callback(_done)
-        return {"started": len(targets), "case_ids": [c for c, _ in targets]}
+        return {"started": len(targets), "case_ids": [c for c, _ in targets],
+                "stats": await store.active_chart_stats()}
 
     @app.get("/admin/active-cases/refresh-status")
     async def admin_active_refresh_status(x_admin_password: str = Header(default="")) -> dict:
         if x_admin_password != _admin_ui_pw():
             raise HTTPException(status_code=401, detail="bad admin password")
-        return {"refreshing": getattr(app.state, "active_refreshing", None)}
+        store = _store()
+        return {"refreshing": getattr(app.state, "active_refreshing", None),
+                "stats": (await store.active_chart_stats()) if store is not None else {}}
 
     @app.delete("/active-cases/{case_id}")
     async def active_case_unpublish(case_id: str, x_noesis_token: str = Header(default=""),

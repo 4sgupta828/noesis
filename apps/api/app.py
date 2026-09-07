@@ -1110,6 +1110,13 @@ class ActivePublishIn(BaseModel):
     session_ids: list[str]
 
 
+class ActiveRefreshIn(BaseModel):
+    case_ids: list[str] | None = None    # None → every board case whose answer has no chart
+    limit: int = 25                      # tranche size; the batch is sequential and spends per case
+    model: str = ""                      # per-batch model override (see CaseGenerateIn.model)
+    only_missing_charts: bool = True     # skip cases that already carry a chart
+
+
 class ClaimManyIn(BaseModel):
     session_ids: list[str]
 
@@ -4471,6 +4478,111 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         if not body.session_ids:
             return {"published": [], "skipped": []}
         return await store.active_publish(body.session_ids[:500], user_id=user["id"])
+
+    @app.post("/admin/active-cases/refresh")
+    async def admin_active_refresh(body: ActiveRefreshIn, x_admin_password: str = Header(default="")) -> dict:
+        """RE-ANSWER the sessions behind board cases and re-publish their snapshots (SPENDS credits).
+
+        A board case is a de-identified COPY of a stored session, so a case can only gain visuals if
+        its source answer has them. Answers composed before the 2026-09-07 chart-directive fix have
+        none, and re-copying cannot create them — the source has to be re-run. This replaces the
+        session's first-turn ANSWER in place (question, owner and patient reference untouched) and
+        then refreshes the snapshot."""
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        store = _store()
+        if store is None:
+            raise HTTPException(status_code=404, detail="no session store")
+        if getattr(app.state, "active_refreshing", None):
+            raise HTTPException(status_code=409, detail="refresh already running")
+        if app.state.service is None:
+            app.state.service = build_default_service()
+        svc = build_default_service(body.model) if body.model else app.state.service
+
+        rows = await store.active_list(limit=1000)
+        wanted = set(body.case_ids or [])
+        targets: list[tuple[str, str]] = []       # (case_id, session_id)
+        for r in rows:
+            if wanted and r["case_id"] not in wanted:
+                continue
+            snap = await store.active_get(r["case_id"])
+            if snap is None:
+                continue
+            if body.only_missing_charts and not wanted:
+                has = any((t or {}).get("charts") for t in (snap.get("thread") or [])) or snap.get("charts")
+                if has:
+                    continue
+            sid = await store.active_session_id(r["case_id"])
+            if sid:
+                targets.append((r["case_id"], sid))
+            if len(targets) >= max(1, body.limit):
+                break
+        if not targets:
+            return {"started": 0, "case_ids": []}
+
+        import asyncio as _asyncio
+
+        async def _run(pairs: list[tuple[str, str]]):
+            app.state.active_refreshing = {"total": len(pairs), "done": 0}
+            try:
+                for case_id, sid in pairs:
+                    print(f"[refresh] start {case_id}{(' model=' + body.model) if body.model else ''}", flush=True)
+                    try:
+                        row = await store.get(sid)
+                        if row is None:
+                            raise RuntimeError("source session is gone")
+                        res = await svc.ask_reasoned(question=row["question"], tenant_id=row.get("tenant_id") or "demo")
+                        claims = [{"text": c.text, "quote": c.quote,
+                                   "source": c.document_title or c.source_key, "document_id": c.document_id}
+                                  for c in (getattr(res, "verified_claims", None) or [])]
+                        charts = (list(getattr(res, "charts", None) or []) if answer_charts_enabled() else [])
+                        ok = await store.refresh_turn0(
+                            sid, answer=getattr(res, "composed_answer", "") or "",
+                            grounded=bool(getattr(res, "grounded", False)), claims=claims,
+                            source_stats=dict(getattr(res, "source_stats", None) or {}),
+                            coverage_gaps=list(getattr(res, "coverage_gaps", None) or []),
+                            rejected=int(getattr(res, "rejected", 0) or 0), charts=charts,
+                            interpretation=(list(getattr(res, "interpretation", None) or [])
+                                            if reasoning_read_enabled() else []),
+                            confidence=(getattr(res, "confidence", None) if reasoning_read_enabled() else None),
+                            reasoning_purpose=getattr(res, "reasoning_purpose", "") or "",
+                            reasoning_conclusion=getattr(res, "reasoning_conclusion", "") or "")
+                        # re-copy the (now richer) session into its EXISTING board entry
+                        await store.active_publish([sid], user_id=None, admin=True)
+                        print(f"[refresh] stored {case_id} — updated={ok} findings={len(claims)} "
+                              f"charts={len(charts)}", flush=True)
+                    except BaseException as e:   # noqa: BLE001 — never die silently (see cases_generate)
+                        import traceback
+                        print(f"[refresh] FAILED {case_id}: {type(e).__name__}: {e}", flush=True)
+                        traceback.print_exc()
+                        if isinstance(e, (_asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
+                            raise
+                    app.state.active_refreshing["done"] += 1
+            finally:
+                app.state.active_refreshing = None
+
+        def _done(t):
+            app.state.active_task = None
+            try:
+                exc = t.exception()
+            except _asyncio.CancelledError:
+                print("[refresh] batch CANCELLED", flush=True)
+                return
+            if exc is not None:
+                import traceback
+                print(f"[refresh] batch DIED: {type(exc).__name__}: {exc}", flush=True)
+                traceback.print_exception(type(exc), exc, exc.__traceback__)
+
+        task = _asyncio.create_task(_run(targets))
+        app.state.active_task = task
+        task.add_done_callback(_done)
+        return {"started": len(targets), "case_ids": [c for c, _ in targets]}
+
+    @app.get("/admin/active-cases/refresh-status")
+    async def admin_active_refresh_status(x_admin_password: str = Header(default="")) -> dict:
+        if x_admin_password != _admin_ui_pw():
+            raise HTTPException(status_code=401, detail="bad admin password")
+        return {"refreshing": getattr(app.state, "active_refreshing", None)}
 
     @app.delete("/active-cases/{case_id}")
     async def active_case_unpublish(case_id: str, x_noesis_token: str = Header(default=""),

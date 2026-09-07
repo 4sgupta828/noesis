@@ -559,6 +559,37 @@ class SessionStore:
                                  "avg_claims": _avg(base)},
                 "top_leg_queries": sorted(top_queries.items(), key=lambda x: -x[1])[:10]}
 
+    async def refresh_turn0(self, session_id: str, *, answer: str, grounded: bool, claims: list[dict],
+                            source_stats: dict, coverage_gaps: list[str], rejected: int,
+                            charts: list[dict] | None = None, interpretation: list[dict] | None = None,
+                            confidence: dict | None = None, reasoning_purpose: str = "",
+                            reasoning_conclusion: str = "") -> bool:
+        """Replace the FIRST turn's answer in place (flat columns + thread[0]), keeping the question,
+        owner, patient reference and any later turns untouched.
+
+        Used to re-answer stored sessions after a compose fix — e.g. the 2026-09-07 chart-directive
+        bug, where every Clinical Decision answer was composed without chart guidance. Only the
+        answer-side fields move; nothing about WHO asked or WHAT was asked changes."""
+        await self._ensure()
+        turn_patch = {"answer": answer, "grounded": grounded, "claims": claims,
+                      "source_stats": source_stats, "coverage_gaps": coverage_gaps, "rejected": rejected,
+                      "charts": list(charts or []), "interpretation": list(interpretation or []),
+                      "confidence": confidence, "reasoning_purpose": reasoning_purpose,
+                      "reasoning_conclusion": reasoning_conclusion}
+        async with (await self._get_pool()).acquire() as conn:
+            res = await conn.execute(
+                """UPDATE noesis_research_session
+                      SET answer=$3, grounded=$4, claims=$5::jsonb, source_stats=$6::jsonb,
+                          coverage_gaps=$7::jsonb, rejected=$8,
+                          thread = jsonb_set(COALESCE(NULLIF(thread,'[]'::jsonb), '[{}]'::jsonb),
+                                             '{0}',
+                                             COALESCE(thread->0,'{}'::jsonb) || $9::jsonb)
+                    WHERE id=$1 AND vertical=$2 AND NOT deleted""",
+                session_id, self._vertical, answer, bool(grounded), json.dumps(claims),
+                json.dumps(source_stats), json.dumps(coverage_gaps), int(rejected),
+                json.dumps(turn_patch))
+        return res.endswith("1")
+
     # ---- Active Cases (anonymous publication to the public Case Board) --------------------------
     async def active_publish(self, session_ids: list[str], *, user_id: str | None,
                              admin: bool = False) -> dict[str, Any]:
@@ -627,6 +658,14 @@ class SessionStore:
         return [{"case_id": r["case_id"], "kind": r["kind"], "question": r["question"],
                  "excerpt": r["excerpt"] or "", "n_turns": r["n_turns"] or 1,
                  "grounded": bool(r["grounded"]), "published_at": r["published_at"].isoformat()} for r in rows]
+
+    async def active_session_id(self, case_id: str) -> str | None:
+        """The source session behind a board case (admin refresh only — never exposed publicly)."""
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            return await conn.fetchval(
+                "SELECT session_id FROM noesis_active_case WHERE case_id=$1 AND vertical=$2",
+                case_id, self._vertical)
 
     async def active_get(self, case_id: str) -> dict[str, Any] | None:
         await self._ensure()

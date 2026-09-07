@@ -106,3 +106,52 @@ def test_admin_publishes_any_account_and_unowned() -> None:
         finally:
             await _cleanup(sess)
     asyncio.run(body())
+
+
+def test_refresh_turn0_replaces_only_the_answer() -> None:
+    """Re-answering a stored session after a compose fix must move the ANSWER side only: the
+    question, owner, patient reference and later turns survive untouched."""
+    async def body():
+        sess = SessionStore(DSN, vertical=VERT)
+        try:
+            sid = await sess.save(tenant_id="demo", workspace_id=None, question="Original question?",
+                                  answer="old answer", grounded=False, claims=[{"text": "old"}],
+                                  source_stats={"a": 1}, coverage_gaps=["old gap"], rejected=1,
+                                  sources=[], user_name="Dr Who", user_email="who@clinic.org",
+                                  user_id="owner-7")
+            await sess.set_patient(sid, "Pat / 4242", user_id="owner-7")
+            await sess.append_turn(sid, {"question": "follow-up?", "answer": "second turn"},
+                                   user_id="owner-7")
+
+            ok = await sess.refresh_turn0(sid, answer="new answer [1]", grounded=True,
+                                          claims=[{"text": "new", "quote": "q"}], source_stats={"b": 2},
+                                          coverage_gaps=[], rejected=0,
+                                          charts=[{"kind": "bar", "title": "T", "bars": []}],
+                                          interpretation=[{"kind": "tension"}], confidence={"overall": "high"},
+                                          reasoning_purpose="why", reasoning_conclusion="so")
+            assert ok
+            row = await sess.get(sid)
+            # answer side replaced, flat columns and thread[0] in step
+            assert row["answer"] == "new answer [1]" and row["grounded"] is True
+            assert row["claims"] == [{"text": "new", "quote": "q"}]
+            assert row["coverage_gaps"] == [] and row["rejected"] == 0
+            t0 = row["thread"][0]
+            assert t0["answer"] == "new answer [1]" and len(t0["charts"]) == 1
+            assert t0["interpretation"] and t0["confidence"] == {"overall": "high"}
+            # identity and question untouched; the follow-up turn survives
+            assert row["question"] == "Original question?" and t0["question"] == "Original question?"
+            assert row["user_id"] == "owner-7" and row["user_email"] == "who@clinic.org"
+            assert row["patient_ref"] == "Pat / 4242"
+            assert len(row["thread"]) == 2 and row["thread"][1]["answer"] == "second turn"
+
+            # a refreshed session re-published keeps its case id and now carries the chart
+            cid = (await sess.active_publish([sid], user_id="owner-7"))["published"][0]["case_id"]
+            assert await sess.active_session_id(cid) == sid
+            snap = await sess.active_get(cid)
+            assert snap["thread"][0]["charts"] and "Pat" not in str(snap)
+
+            assert await sess.refresh_turn0("no-such-session", answer="x", grounded=False, claims=[],
+                                            source_stats={}, coverage_gaps=[], rejected=0) is False
+        finally:
+            await _cleanup(sess)
+    asyncio.run(body())

@@ -398,6 +398,12 @@ out of the denominator (e.g. 12), `value_str` = that figure exactly as the findi
 Put the denominator in `scale` (default 100; set it — with a grounded `scale_str` — only when the finding
 uses a different one like 1000). 1–4 outcomes. Do NOT compute NNT/NNH or convert a percent to a count
 yourself unless that exact figure is already in a finding — plot only what is written.
+  NOT an icon array: an EFFICACY, relative-risk-reduction, protection, response-rate or any other
+  "percent of effect" figure. Those describe how much an intervention changes risk, not how many people
+  out of the denominator had the outcome, and drawing them as filled people reads as "96 of 100 people
+  affected" when the evidence says the opposite. The test: could you say "N of every 100 PEOPLE had this
+  outcome" using that exact figure from the finding? If not, use a bar or interval chart instead. A
+  `value_str` that is a percentage of effect (e.g. "96%" for efficacy) is always the wrong kind here.
 - `kind:"range_band"` — a value-vs-REFERENCE-RANGE bullet chart ("is this value normal?"). WHENEVER the
 answer states a specific measured/observed value AND a normal / reference / target range for it (labs,
 vitals, scores — e.g. "potassium 5.5 mmol/L, normal 3.5–5.0" or "HbA1c 8.5% vs a target < 7%"), EMIT a

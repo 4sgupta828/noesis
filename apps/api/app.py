@@ -2552,11 +2552,13 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         # Each case is a full reasoned run (20-60s); a synchronous 10-case loop would exceed the
         # Railway edge timeout. Run in a DETACHED background task and store each run as it completes;
         # the client polls GET /cases to watch answers populate. Idempotent enough: latest run wins.
+        import asyncio as _asyncio
         async def _run(case_ids: list[str]):
             app.state.cases_generating = {"total": len(case_ids), "done": 0, "started": True}
             try:
                 for cid in case_ids:
                     case = get_case(cid)
+                    print(f"[cases] start {cid}", flush=True)
                     try:
                         if engine == "standard":
                             res = await svc.ask(question=case["question"], tenant_id="demo")
@@ -2582,22 +2584,46 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                             case_id=cid, answer=getattr(res, "composed_answer", "") or "",
                             grounded=bool(getattr(res, "grounded", False)), citations=cites,
                             payload=payload, engine=engine)
-                    except Exception as e:   # noqa: BLE001 — record + continue (one failure never aborts the batch)
+                        print(f"[cases] stored {cid} — grounded={bool(getattr(res, 'grounded', False))} "
+                              f"findings={len(cites)} charts={len(payload['charts'])}", flush=True)
+                    # BaseException, not Exception: a CancelledError/timeout used to end the batch with
+                    # NOTHING stored and NOTHING logged (the 2026-08-18 empty batch, and again
+                    # 2026-09-07). Record the failure for every cause, then re-raise the ones that must
+                    # not be swallowed so the loop actually stops.
+                    except BaseException as e:   # noqa: BLE001 — record + continue
+                        import traceback
+                        print(f"[cases] FAILED {cid}: {type(e).__name__}: {e}", flush=True)
+                        traceback.print_exc()
                         try:
                             await store.save_run(case_id=cid, answer="", grounded=False, engine=engine,
-                                                 error=str(e)[:500])
+                                                 error=f"{type(e).__name__}: {e}"[:500])
                         except Exception:
-                            pass
+                            print(f"[cases] could not store the failure for {cid}", flush=True)
+                        if isinstance(e, (_asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
+                            raise
                     app.state.cases_generating["done"] += 1
             finally:
                 app.state.cases_generating = None
-        import asyncio as _asyncio
         # KEEP A STRONG REFERENCE: the event loop only holds a weak ref to a bare create_task(), so an
         # unreferenced task gets garbage-collected and CANCELLED mid-run (CancelledError isn't caught by
         # `except Exception`, so it dies silently storing nothing — the 2026-08-18 empty-batch bug).
+        def _done(t):
+            app.state.cases_task = None
+            # RETRIEVE the exception: an un-retrieved task exception is only surfaced at GC time (or
+            # never), which is how a dead batch looked identical to a finished one.
+            try:
+                exc = t.exception()
+            except _asyncio.CancelledError:
+                print("[cases] batch CANCELLED", flush=True)
+                return
+            if exc is not None:
+                import traceback
+                print(f"[cases] batch DIED: {type(exc).__name__}: {exc}", flush=True)
+                traceback.print_exception(type(exc), exc, exc.__traceback__)
+
         task = _asyncio.create_task(_run(ids))
         app.state.cases_task = task
-        task.add_done_callback(lambda t: setattr(app.state, "cases_task", None))
+        task.add_done_callback(_done)
         return {"started": len(ids), "case_ids": ids}
 
     @app.get("/cases/status")

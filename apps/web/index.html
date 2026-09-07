@@ -6408,7 +6408,15 @@ async function loadSessionList(){
 // ===== Case Board: curated landmark cases + Noesis answer + clinician rubric (its own page) =====
 let CASES_DATA = null, CB_ERA = "active";      // Case Board opens on Active Cases
 function _clusterLabel(key){ return ((CASES_DATA&&CASES_DATA.clusters)||[]).find(c=>c.key===key)?.label || key; }
-function closeCaseBoard(){ const cb=$("#caseboard"); if(cb) cb.hidden = true; document.body.style.overflow = ""; if(location.hash==="#cases") history.replaceState(null,"",location.pathname); }
+function closeCaseBoard(){ const cb=$("#caseboard"); if(cb) cb.hidden = true; document.body.style.overflow = ""; if(location.hash.startsWith("#cases")) history.replaceState(null,"",location.pathname); }
+// Every case has its own address: #cases/c/<id> for a curated case, #cases/a/<id> for a board case.
+// Opening one of those links lands on the right tab with that case selected.
+function caseHash(kind, id){ return "#cases/" + kind + "/" + encodeURIComponent(id); }
+function caseUrl(kind, id){ return location.origin + location.pathname + caseHash(kind, id); }
+function setCaseHash(kind, id){
+  const h = caseHash(kind, id);
+  if(location.hash !== h) history.replaceState(null, "", h);
+}
 // phones show one screen at a time: the list, then the selected case (← returns to the list)
 function cbShowDetail(){ const cb=$("#caseboard"); if(cb && isMobileSess()){ cb.dataset.view = "detail"; $("#cbback").textContent = "← Cases"; } }
 function cbShowList(){ const cb=$("#caseboard"); if(cb){ cb.dataset.view = "list"; $("#cbback").textContent = "← Back"; } }
@@ -6418,7 +6426,7 @@ async function openCaseBoard(){
   try{ closeSessions(); }catch(e){} try{ closePulsePage(); }catch(e){} try{ closeTermsPage(); }catch(e){}
   cb.hidden = false; document.body.style.overflow = "hidden";
   cbShowList();
-  if(location.hash!=="#cases") history.replaceState(null,"","#cases");
+  if(!location.hash.startsWith("#cases")) history.replaceState(null,"","#cases");
   loadCasesList();
 }
 async function loadCasesList(){
@@ -6490,9 +6498,11 @@ function selectCase(id){
   // admin (⚙ unlocked): re-run this one case — the way to retry a failed generation or to try again
   // for a visual on a case that produced none.
   const apw = sessionStorage.getItem("noesis_apw") || "";
+  const linkOnly = `<div class="cregen"><button type="button" class="histbtn" id="ccopylink">🔗 Copy link</button></div>`;
   const regen = apw ? `<div class="cregen">
       <button type="button" class="histbtn" id="cregen">↻ Regenerate this case</button>
-      <span class="cregmsg" id="cregmsg">${((run && run.payload && run.payload.charts) || []).length ? "" : "no visual in this answer"}</span></div>` : "";
+      <button type="button" class="histbtn" id="ccopylink">🔗 Copy link</button>
+      <span class="cregmsg" id="cregmsg">${((run && run.payload && run.payload.charts) || []).length ? "" : "no visual in this answer"}</span></div>` : linkOnly;
   det.innerHTML = `<div class="casedetail">
     <div class="ccluster">${esc(_clusterLabel(c.cluster))}</div>
     <h2 class="ctitle">${esc(c.title)}</h2>
@@ -6505,7 +6515,10 @@ function selectCase(id){
     ${rubricHtml(c, ev)}
   </div>`;
   det.scrollTop = 0;
+  setCaseHash("c", c.id);
   wireRubric(det, c);
+  const cl = det.querySelector("#ccopylink");
+  if(cl) cl.addEventListener("click", ()=>copyLinkUrl(caseUrl("c", c.id), cl));
   const rg = det.querySelector("#cregen");
   if(rg) rg.addEventListener("click", ()=>regenerateOneCase(c.id, rg, det.querySelector("#cregmsg")));
   const vd = det.querySelector(".visuals-d");   // ↻ rebuild a garbled/crowded diagram in place
@@ -6580,9 +6593,9 @@ async function selectActiveCase(id){
     det.innerHTML = `<div class="casedetail acdetail">
       <div class="achead"><span class="ccluster">Anonymous case</span><span>published ${esc(when)}</span><span>identifying details removed</span>
         ${canRetract ? `<button type="button" class="acun" data-id="${esc(id)}">Remove from board</button>` : ""}</div>
-      ${sessionStorage.getItem("noesis_apw") ? `<div class="cregen">
-        <button type="button" class="histbtn" id="acregen">↻ Try again for a visual</button>
-        <span class="cregmsg" id="acregmsg"></span></div>` : ""}
+      <div class="cregen"><button type="button" class="histbtn" id="accopylink">🔗 Copy link</button>
+        ${sessionStorage.getItem("noesis_apw") ? `<button type="button" class="histbtn" id="acregen">↻ Try again for a visual</button>` : ""}
+        <span class="cregmsg" id="acregmsg"></span></div>
       <div class="pubq">${questionHtml(row.question||"")}</div>
       <div class="csec-h">◫ Noesis answer</div>
       <div class="acbody"></div></div>`;
@@ -6598,6 +6611,9 @@ async function selectActiveCase(id){
         render({...t, session_id: "case-"+id}, ans, {noLink:true, noConvo:true, noFeedback:true});
       });
     }
+    setCaseHash("a", id);
+    const acl = det.querySelector("#accopylink");
+    if(acl) acl.addEventListener("click", ()=>copyLinkUrl(caseUrl("a", id), acl));
     const un = det.querySelector(".acun");
     if(un) un.addEventListener("click", ()=>unpublishActive(id, un));
     const ar = det.querySelector("#acregen");
@@ -6742,6 +6758,21 @@ async function retryActiveVisual(caseId, btn, msg){
     if(msg) msg.textContent = "Still running — reopen the case shortly.";
   }catch(e){ if(msg) msg.textContent = "Couldn't start: " + (e.message||e); }
   finally{ btn.dataset.busy = ""; btn.disabled = false; }
+}
+// Land directly on one case from its own link: the right tab, loaded, that case selected.
+async function openCaseForLink(kind, id){
+  CB_ERA = (kind === "a") ? "active" : "recent";
+  const cb = $("#caseboard"); if(!cb) return;
+  try{ closeSessions(); }catch(e){} try{ closePulsePage(); }catch(e){} try{ closeTermsPage(); }catch(e){}
+  cb.hidden = false; document.body.style.overflow = "hidden";
+  cbShowList(); syncCaseGenVisibility();
+  if(kind === "a"){ await loadActiveCases(); await selectActiveCase(id); return; }
+  await loadCasesList();
+  // a curated case can sit in either era — switch tabs and reload when it is not in this one
+  if(!((CASES_DATA && CASES_DATA.cases) || []).some(x => x.id === id)){
+    CB_ERA = "historical"; await loadCasesList();
+  }
+  selectCase(id);
 }
 async function generateCaseAnswers(){
   const btn = $("#cbgen"), msg = $("#cbgenmsg");
@@ -7789,7 +7820,10 @@ function routeHash(){    // #s/<id> → Q&A answer/thread · #p/<id> → panel s
   else if(location.hash === "#ingest"){ openIngest(); }
   else if(location.hash === "#people"){ openPeople(); }
   else if(location.hash === "#terms"){ openTermsPage(); }
-  else if(location.hash === "#cases" && CASES_ENABLED){ openCaseBoard(); }
+  else if(location.hash.startsWith("#cases") && CASES_ENABLED){
+    const m = location.hash.match(/^#cases\/(c|a)\/(.+)$/);
+    if(m){ openCaseForLink(m[1], decodeURIComponent(m[2])); } else { openCaseBoard(); }
+  }
 }
 // route only AFTER config loads, so CONV_ENABLED is known (shared threads render as conversations)
 loadConfig().then(routeHash);

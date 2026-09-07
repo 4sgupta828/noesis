@@ -72,6 +72,10 @@ for(const [name, fx] of Object.entries({pjp, cycle, dirty, wide})){
   t(name + ': every node inside the viewBox',
     R.every(r => r.x >= -0.5 && r.y >= -0.5 && r.x + r.w <= B.w + 0.5 && r.y + r.h <= B.h + 0.5));
   t(name + ': edge labels do not collide', overlaps(L) === 0);
+  t(name + ': edge labels do not sit on a node box',
+    L.every(l => !R.some(r => l.x < r.x + r.w && r.x < l.x + l.w && l.y < r.y + r.h && r.y < l.y + l.h)));
+  t(name + ': no label escapes the viewBox',
+    L.every(l => l.x >= -0.5 && l.y >= -0.5 && l.x + l.w <= B.w + 0.5 && l.y + l.h <= B.h + 0.5));
 }
 
 // the dangling cases: an unconnected node and an edge to a missing node are not drawn
@@ -88,6 +92,12 @@ t('no edges: nothing renders',
 // layering: the PJP map should read top-down, not as a ring
 const pr = rects(vzMap(pjp));
 t('pjp: nodes sit in distinct rows (layered, not a ring)', new Set(pr.map(r => Math.round(r.y))).size >= 3);
+
+// a compound label breaks where it reads, not mid-word
+const wrapped = vzMap({kind: 'map',
+  nodes: [{id: 'a', label: 'Highest toxicity/discontinuation'}, {id: 'b', label: 'TMP-SMX'}, {id: 'c', label: 'Side effects'}],
+  edges: [{src: 'b', dst: 'a', label: 'has'}, {src: 'b', dst: 'c', label: 'causes'}]});
+t('compound word breaks after the slash, not mid-word', !/discontin\s*<\/tspan>/.test(wrapped) && /toxicity\//.test(wrapped));
 
 console.log(fails ? `${fails} FAILED` : 'ALL PASS');
 process.exit(fails ? 1 : 0);

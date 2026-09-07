@@ -3595,14 +3595,20 @@ function vzWrap(text, maxChars){
   // hard-break any single token longer than maxChars first — box width is sized to maxChars, so an
   // unbreakable word (a long drug name, a hyphen-less compound) would otherwise overflow / be clipped.
   const words = [];
-  for(const w of (text||"").trim().split(/\s+/)){
-    if(w.length<=maxChars) words.push(w);
-    else for(let i=0;i<w.length;i+=maxChars) words.push(w.slice(i, i+maxChars));
+  for(const w0 of (text||"").trim().split(/\s+/)){
+    // a compound breaks after its slash or dash ("toxicity/discontinuation"), never mid-word —
+    // "discontin uation" is the kind of thing that makes a diagram look broken
+    const pieces = w0.length<=maxChars ? [w0] : w0.split(/(?<=[/\-\u2013\u2014])/);
+    for(const w of pieces){
+      if(w.length<=maxChars) words.push(w);
+      else for(let i=0;i<w.length;i+=maxChars) words.push(w.slice(i, i+maxChars));
+    }
   }
   const lines=[]; let cur="";
   for(const w of words){
+    const glue = /[/\-\u2013\u2014]$/.test(cur) ? "" : " ";   // no space after the break character
     if(!cur) cur=w;
-    else if((cur+" "+w).length<=maxChars) cur+=" "+w;
+    else if((cur+glue+w).length<=maxChars) cur+=glue+w;
     else { lines.push(cur); cur=w; }
   }
   if(cur) lines.push(cur);
@@ -3805,50 +3811,66 @@ function vzMap(v){
     });
   }
 
-  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
-  nodes.forEach((n,i) => { minX = Math.min(minX, X[i]-n._w/2); maxX = Math.max(maxX, X[i]+n._w/2);
-    minY = Math.min(minY, Y[i]-n._h/2); maxY = Math.max(maxY, Y[i]+n._h/2); });
-  const pad = 20, W = (maxX-minX) + pad*2, H = (maxY-minY) + pad*2;
-  const px = i => X[i] - minX + pad, py = i => Y[i] - minY + pad;
-
-  // 4. edges: down the page between ranks, a side loop for a back edge; labels dodge each other
-  let ed = "", lbls = "";
-  const placed = [];
+  // 4. edges and labels, in RAW coordinates. A label goes in the band BETWEEN two rows, which is
+  // free of boxes by construction, so a label can never sit on a node; within the band it steps
+  // sideways (then down) only to clear another label. Bounds are taken over nodes AND labels, so a
+  // label can never be clipped either.
+  const rowTop = {}, rowBot = {};
+  rk.forEach(r => { rowTop[r] = Math.min(...rows[r].map(i => Y[i] - nodes[i]._h/2));
+    rowBot[r] = Math.max(...rows[r].map(i => Y[i] + nodes[i]._h/2)); });
+  const bandOf = r => {                       // the gap under row r (or over it, for the first row)
+    const nxt = rk.find(x => x > r);
+    if(nxt != null) return (rowBot[r] + rowTop[nxt])/2;
+    const prv = [...rk].reverse().find(x => x < r);
+    return prv != null ? (rowBot[prv] + rowTop[r])/2 : rowTop[r] - 30;
+  };
+  const drawn = [], labelRects = [];
   E.forEach(e => {
     const sN = nodes[e.s], tN = nodes[e.t];
     const down = rank[e.t] > rank[e.s];
-    const x1 = px(e.s), y1 = py(e.s) + (down ? sN._h/2 : 0);
-    const x2 = px(e.t), y2 = py(e.t) - (down ? tN._h/2 : 0);
-    let d, mx, my;
+    let d, ax, ay;
     if(down){
-      const cy = (y1 + y2)/2;
-      d = `M${x1.toFixed(1)} ${y1.toFixed(1)} C ${x1.toFixed(1)} ${cy.toFixed(1)}, ${x2.toFixed(1)} ${cy.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}`;
-      mx = (x1 + x2)/2; my = cy;
-    } else {                                   // same rank or back edge: arc clear of the boxes
-      const side = (x2 >= x1 ? 1 : -1), lift = Math.max(sN._h, tN._h)/2 + 26;
-      const sx = x1 + side*sN._w/2, tx = x2 - side*tN._w/2;
-      d = `M${sx.toFixed(1)} ${y1.toFixed(1)} C ${(sx+side*40).toFixed(1)} ${(y1-lift).toFixed(1)}, ${(tx-side*40).toFixed(1)} ${(y2-lift).toFixed(1)}, ${tx.toFixed(1)} ${y2.toFixed(1)}`;
-      mx = (sx + tx)/2; my = (y1 + y2)/2 - lift*0.75;
+      const y1 = Y[e.s] + sN._h/2, y2 = Y[e.t] - tN._h/2, cy = (y1 + y2)/2;
+      d = `M${X[e.s].toFixed(1)} ${y1.toFixed(1)} C ${X[e.s].toFixed(1)} ${cy.toFixed(1)}, ${X[e.t].toFixed(1)} ${cy.toFixed(1)}, ${X[e.t].toFixed(1)} ${y2.toFixed(1)}`;
+      ax = (X[e.s] + X[e.t])/2; ay = bandOf(rank[e.s]);
+    } else {                                  // same rank or a back edge: arc out to the side
+      const side = (X[e.t] >= X[e.s] ? 1 : -1);
+      const lift = Math.max(sN._h, tN._h)/2 + 30;
+      const sx = X[e.s] + side*sN._w/2, tx = X[e.t] - side*tN._w/2;
+      const y1 = Y[e.s], y2 = Y[e.t];
+      d = `M${sx.toFixed(1)} ${y1.toFixed(1)} C ${(sx + side*44).toFixed(1)} ${(y1 - lift).toFixed(1)}, ${(tx - side*44).toFixed(1)} ${(y2 - lift).toFixed(1)}, ${tx.toFixed(1)} ${y2.toFixed(1)}`;
+      ax = (sx + tx)/2; ay = Math.min(rowTop[rank[e.s]], rowTop[rank[e.t]]) - 22;
     }
-    ed += `<path class="vzedge" fill="none" d="${d}" marker-end="url(#vzarr)"/>`;
-    if(e.label){
-      const w = e.label.length*5.8 + 12;
-      let ly = my;                              // nudge off any label already placed
-      for(let g = 0; g < 12; g++){
-        const hit = placed.some(p => Math.abs(p.x - mx) < (p.w + w)/2 && Math.abs(p.y - ly) < 17);
-        if(!hit) break;
-        ly += 18;
-      }
-      placed.push({x: mx, y: ly, w});
-      lbls += `<rect class="vzedgelblbg" x="${(mx-w/2).toFixed(1)}" y="${(ly-8).toFixed(1)}" width="${w.toFixed(1)}" height="15" rx="7"/>`
-            + `<text class="vzedgelbl" x="${mx.toFixed(1)}" y="${(ly+3).toFixed(1)}">${esc(e.label)}</text>`;
-    }
+    drawn.push(d);
+    if(!e.label){ labelRects.push(null); return; }
+    const w = e.label.length*5.8 + 12, h = 15;
+    let lx = ax, ly = ay;
+    const hits = (x, y) => labelRects.some(r => r && Math.abs(r.cx - x) < (r.w + w)/2 + 5 && Math.abs(r.cy - y) < h + 3);
+    const steps = [[0,0]];
+    for(let k = 1; k <= 8; k++) steps.push([k*(w/2 + 8), 0], [-k*(w/2 + 8), 0]);
+    for(let k = 1; k <= 4; k++) steps.push([0, k*17], [0, -k*17]);
+    for(const [dx, dy] of steps){ if(!hits(ax + dx, ay + dy)){ lx = ax + dx; ly = ay + dy; break; } }
+    labelRects.push({cx: lx, cy: ly, w, h, text: e.label});
   });
-  let nd = "";
-  nodes.forEach((n,i) => { const x = px(i) - n._w/2, y = py(i) - n._h/2;
+
+  // 5. bounds over boxes AND labels, then emit with a single offset
+  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+  const grow = (x0, y0, x1, y1) => { minX = Math.min(minX, x0); minY = Math.min(minY, y0);
+    maxX = Math.max(maxX, x1); maxY = Math.max(maxY, y1); };
+  nodes.forEach((n,i) => grow(X[i]-n._w/2, Y[i]-n._h/2, X[i]+n._w/2, Y[i]+n._h/2));
+  labelRects.forEach(r => { if(r) grow(r.cx - r.w/2, r.cy - r.h/2, r.cx + r.w/2, r.cy + r.h/2); });
+  const pad = 20, W = (maxX-minX) + pad*2, H = (maxY-minY) + pad*2;
+  const ox = -minX + pad, oy = -minY + pad;
+
+  let ed = "", lbls = "", nd = "";
+  ed = drawn.map(d => `<path class="vzedge" fill="none" transform="translate(${ox.toFixed(1)},${oy.toFixed(1)})" d="${d}" marker-end="url(#vzarr)"/>`).join("");
+  labelRects.forEach(r => { if(!r) return;
+    const x = r.cx + ox, y = r.cy + oy;
+    lbls += `<rect class="vzedgelblbg" x="${(x - r.w/2).toFixed(1)}" y="${(y - r.h/2).toFixed(1)}" width="${r.w.toFixed(1)}" height="${r.h}" rx="7"/>`
+          + `<text class="vzedgelbl" x="${x.toFixed(1)}" y="${(y + 3.5).toFixed(1)}">${esc(r.text)}</text>`; });
+  nodes.forEach((n,i) => { const x = X[i] - n._w/2 + ox, y = Y[i] - n._h/2 + oy;
     nd += `<rect class="vznode vzt${i%6}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${n._w}" height="${n._h}" rx="${(n._h/2).toFixed(1)}"/>`;
-    nd += vzTextLines(n._lines, px(i), y + 16, "vzlabel", LH);
-  });
+    nd += vzTextLines(n._lines, x + n._w/2, y + 16, "vzlabel", LH); });
   return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" width="${W.toFixed(0)}" height="${H.toFixed(0)}" role="img">${VZ_DEFS}${ed}${nd}${lbls}</svg></div>`;
 }
 function visualCardHtml(v){

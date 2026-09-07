@@ -225,7 +225,7 @@ def _norm_fig(s: str) -> str:
         s = s.replace(d, "-")
     for w in _FIG_SPACES:
         s = s.replace(w, " ")
-    return _re.sub(r"\s+", " ", s)
+    return re.sub(r"\s+", " ", s)
 
 
 def _fig_in(needle: str, hay: str) -> bool:

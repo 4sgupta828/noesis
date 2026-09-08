@@ -61,6 +61,10 @@ _CUE = re.compile(r"(?P<a>(?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.,]\d{1,3})?)\s*-->\s*"
                   r"(?P<b>(?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.,]\d{1,3})?)")
 _SPEAKER = re.compile(r"^\s*(?:\[(?P<b>[^\]]{1,40})\]|(?P<p>[A-Z][A-Za-z .'-]{1,38})):\s*")
 _TAGS = re.compile(r"<[^>]+>")
+# a passage should END where a thought ends: breaking on length alone produced cards that begin
+# "in patients, we will still pherese" and stop mid-clause, which reads as incoherent however
+# relevant it is
+_ENDS_SENTENCE = re.compile(r"[.!?][\"'\u2019\u201d)\]]*\s*$")
 _ASR_HINT = re.compile(r"\b(ai[- ]generated|automated|machine[- ]generated)\s+transcript\b", re.I)
 # production slate and studio chatter: real strings that reached the surface as if they were speech
 _SLATE = re.compile(r"(?i)(take\s*\d+\s*[-–]|audio processed|[-_]esv\d|\bbg-\d+p\b|\bmusic-\d+p\b|"
@@ -177,12 +181,11 @@ def to_passages(cues: list[tuple[int, str]], *, target_chars: int = 700,
         if cur_start is None:
             cur_start, cur_speaker = start, speaker
         elif ((speaker and speaker != cur_speaker and len(" ".join(cur)) >= min_chars)
-              or len(" ".join(cur)) >= target_chars):
+              or (len(" ".join(cur)) >= target_chars and _ENDS_SENTENCE.search(cur[-1]))
+              or len(" ".join(cur)) >= max_chars):
             flush()
             cur_start, cur_speaker = start, speaker
         cur.append(line)
-        if len(" ".join(cur)) >= max_chars:
-            flush()
     flush()
     return [p for p in passages if is_speech(p.text)]
 

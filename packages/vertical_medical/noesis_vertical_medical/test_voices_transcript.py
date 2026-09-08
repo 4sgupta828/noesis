@@ -67,6 +67,24 @@ def test_a_fast_exchange_is_not_shredded_into_meaningless_turns():
     assert all(len(p.text) >= 40 for p in ps)
 
 
+def test_a_passage_ends_where_a_thought_ends():
+    """Breaking on length alone produced cards starting mid-clause — "in patients, we will still
+    pherese" — which read as incoherent however relevant they were."""
+    cues = []
+    for i in range(30):
+        cues.append((i * 6, "This clause runs on and on without stopping for quite a while indeed"))
+        cues.append((i * 6 + 3, "and then it finally reaches its end."))
+    ps = to_passages(cues, target_chars=200)
+    assert len(ps) > 3
+    assert all(p.text.rstrip().endswith((".", "!", "?")) for p in ps), [p.text[-40:] for p in ps]
+
+
+def test_a_passage_never_exceeds_the_hard_cap_even_without_punctuation():
+    cues = [(i * 5, "no punctuation here at all just words running on") for i in range(80)]
+    ps = to_passages(cues, target_chars=300, max_chars=900)
+    assert ps and all(len(p.text) <= 1000 for p in ps)
+
+
 def test_studio_furniture_never_reaches_the_surface():
     from noesis_vertical_medical.voices_transcript import is_speech
     assert not is_speech("BTK Episode 2 take 3 - Audio Processed-esv2-50p-bg-10p-music-10p ===")

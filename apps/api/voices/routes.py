@@ -10,7 +10,9 @@ import os
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
-from .search import KIND_SOURCES, VOICE_SOURCE_KEYS, build_query, dedupe, moment, terms, tsqueries
+from .search import (
+    KIND_SOURCES, VOICE_SOURCE_KEYS, build_query, dedupe, moment, one_per_show, terms, tsqueries,
+)
 
 
 def voices_enabled() -> bool:
@@ -24,6 +26,11 @@ class VoiceSearchIn(BaseModel):
     speaker: str = ""
     limit: int = 30
     order: str = "relevance"  # "relevance" | "recent"
+
+
+class VoiceRelatedIn(BaseModel):
+    question: str = ""
+    limit: int = 3
 
 
 class VoiceJobIn(BaseModel):
@@ -103,6 +110,33 @@ def build_router(pool_of, *, manifest=None, pg_source_of=None, tenant_id: str = 
         return {"moments": moments, "ranking": ranking, "terms": ws,
                 "counts": {"total": len(moments),
                            "quotable": sum(1 for m in moments if m["quotable"])}}
+
+    @router.post("/voices/related")
+    async def voices_related(body: VoiceRelatedIn) -> dict:
+        """A few things people have SAID near this question — to sit beside a finished answer.
+
+        Deliberately a SEPARATE lookup, not part of answering. The research path refuses these blocks
+        outright (they are declared non-evidence), and that must stay true: this is further listening
+        offered next to an answer, never a source the answer rests on. It runs after the answer, so a
+        failure here can never affect one.
+        """
+        pool = await pool_of()
+        q = (body.question or "").strip()
+        if pool is None or not q or embedder_of is None:
+            return {"moments": [], "basis": ""}
+        try:
+            vector = _vec_literal(embedder_of().embed([q])[0])
+        except Exception as e:      # noqa: BLE001
+            print(f"[voices] related embed failed: {type(e).__name__}: {e}", flush=True)
+            return {"moments": [], "basis": ""}
+        sql, params = build_query(vector=vector, limit=40, order="relevance")
+        async with pool.acquire() as conn:
+            rows = [dict(r) for r in await conn.fetch(sql, *params)]
+        # 0.30 cosine similarity is the point below which suggestions stop being about the question;
+        # an irrelevant recommendation under a clinical answer is worse than an empty section.
+        picks = one_per_show([moment(r) for r in rows],
+                             limit=max(1, min(int(body.limit or 3), 5)), floor=0.30)
+        return {"moments": picks, "basis": "commentary — not part of the evidence for this answer"}
 
     @router.get("/voices/sources")
     async def voices_sources() -> dict:

@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 
 from api.voices.search import (
-    VOICE_SOURCE_KEYS, build_query, dedupe, moment, terms, tsqueries,
+    VOICE_SOURCE_KEYS, build_query, dedupe, moment, one_per_show, terms, tsqueries,
 )
 
 
@@ -207,3 +207,27 @@ def test_without_a_vector_the_words_are_still_the_only_handle():
 def test_a_browse_needs_neither_vector_nor_words():
     sql, _ = build_query(order="recent")
     assert "embedding <=>" not in sql and "tsv @@" not in sql
+
+
+# ---- recommendations beside an answer ----
+
+def _sc(show, score, i=0):
+    return {"id": f"d{i}::b{i}", "show": show, "score": score}
+
+
+def test_a_recommendation_block_widens_the_view_rather_than_repeating_one_show():
+    ms = [_sc("Core IM", 0.9, 1), _sc("Core IM", 0.88, 2), _sc("Ground Truths", 0.8, 3),
+          _sc("GN in Ten", 0.7, 4)]
+    out = one_per_show(ms, limit=3)
+    assert [m["show"] for m in out] == ["Core IM", "Ground Truths", "GN in Ten"]
+
+
+def test_a_weak_match_is_dropped_rather_than_recommended():
+    ms = [_sc("Core IM", 0.9, 1), _sc("Ground Truths", 0.12, 2)]
+    assert [m["show"] for m in one_per_show(ms, limit=3, floor=0.30)] == ["Core IM"]
+    assert one_per_show([_sc("X", 0.05)], floor=0.30) == []
+
+
+def test_a_moment_carries_its_score_so_relevance_can_be_judged():
+    m = moment({**ROW, "rank": 0.71})
+    assert m["score"] == 0.71

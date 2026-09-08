@@ -5,6 +5,9 @@ Separate from answers by construction. The blocks this module searches carry
 retrieval source refuses them for every research request. Nothing here can ground a clinical claim;
 this surface answers a different question — who is saying what, and where practice is moving.
 """
-from .search import VOICE_SOURCE_KEYS, build_query, dedupe, moment, terms, tsqueries
+from .search import (
+    VOICE_SOURCE_KEYS, build_query, dedupe, moment, one_per_show, terms, tsqueries,
+)
 
-__all__ = ["VOICE_SOURCE_KEYS", "build_query", "dedupe", "moment", "terms", "tsqueries"]
+__all__ = ["VOICE_SOURCE_KEYS", "build_query", "dedupe", "moment", "one_per_show", "terms",
+           "tsqueries"]

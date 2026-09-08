@@ -221,7 +221,30 @@ def moment(row: dict) -> dict:
         "quotable": (not asr) and facets.get("source_kind") != "chapter",
         "writer": facets.get("writer") or "",
         "snippet": snip,
+        "score": float(row.get("rank") or 0.0),
     }
+
+
+def one_per_show(moments: list[dict], *, limit: int = 3, floor: float = 0.0) -> list[dict]:
+    """The best moment from each of several different sources.
+
+    A recommendation block should widen the reader's view, so five clips from one episode is a worse
+    answer than three from three shows. `floor` drops weak matches outright: an irrelevant suggestion
+    under a clinical answer is worse than no suggestion.
+    """
+    seen: set[str] = set()
+    out: list[dict] = []
+    for m in moments:
+        if m.get("score", 0.0) < floor:
+            continue
+        key = (m.get("show") or "").lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(m)
+        if len(out) >= limit:
+            break
+    return out
 
 
 def dedupe(moments: list[dict], *, per_episode: int = 2, per_show: int = 3) -> list[dict]:

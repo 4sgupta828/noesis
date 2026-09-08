@@ -1441,6 +1441,23 @@
   .answer.md .tw{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:.75rem 0 1.05rem;}
   .answer.md .tw .mdt{margin:0;}
 
+  /* Related voices under an answer: deliberately quiet and visually separate from the evidence
+     dossier, because it is commentary sitting NEXT TO an answer, not support for it. */
+  .relvoices{margin:1.2rem 0 .4rem;border-top:1px dashed var(--hair);padding-top:.9rem;}
+  .relvoices .rvh{font-family:var(--mono);font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--muted);display:flex;flex-wrap:wrap;gap:.5rem;align-items:baseline;}
+  .relvoices .rvh b{color:var(--ink);font-weight:700;}
+  .relvoices .rvnote{font-family:var(--sans);font-size:.76rem;color:var(--muted);margin:.25rem 0 .6rem;}
+  .relvoices .rvitem{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.55rem;align-items:start;
+    padding:.5rem 0;border-top:1px solid var(--hair);}
+  .relvoices .rvitem:first-of-type{border-top:0;}
+  .relvoices .rvk{font-family:var(--mono);font-size:.56rem;letter-spacing:.05em;text-transform:uppercase;
+    border:1px solid currentColor;border-radius:999px;padding:.04rem .36rem;color:var(--gold);white-space:nowrap;}
+  .relvoices .rvk.k-video{color:#C0392B;} .relvoices .rvk.k-essay{color:#1F7A52;}
+  .relvoices .rvt{font-family:var(--serif);font-size:.92rem;line-height:1.5;color:var(--ink);}
+  .relvoices .rvm{font-family:var(--mono);font-size:.58rem;color:var(--muted);margin-top:.2rem;}
+  .relvoices .rvm a{color:var(--gold);text-decoration:none;} .relvoices .rvm a:hover{text-decoration:underline;}
+
   /* ---- Voices: a card per moment — artwork, kicker, the words, then the action ---- */
   .voicesbody{display:none;}
   .voicesbody .vcfilters{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:center;margin:.2rem 0 .5rem;}
@@ -3297,6 +3314,8 @@ function render(data, target, opts){
   // per-answer responsibility footnote — only under a real answer (skips pending/clarification turns)
   if(data.answer && DISCLAIMER.answer) parts.push(`<div class="ansdisc">${esc(DISCLAIMER.answer)}</div>`);
   target.innerHTML = parts.join("");
+  // commentary alongside the finished answer — appended after, so it can never shape one
+  if(data.answer && !opts.noConvo) appendRelatedVoices(target, data.question || CURRENT_Q || "");
   wireFeedback(target, data);
   checkAnswerIntegrity(target, data);   // async, structural: banners answers citing changed sources
   // dossier tabs: Backing evidence ⇄ Coverage gaps/Strengthen
@@ -6728,6 +6747,36 @@ function selectCase(id){
   if(vd) _wireVzRegen(vd, {question: c.question, answer: (run && run.answer) || ""});
   cbShowDetail();
 }
+// Suggest a few things people have SAID near this question, UNDER a finished answer. This runs after
+// the answer is on screen and its result is never fed back into one: the research path refuses these
+// blocks outright, and this block is labelled so a reader cannot mistake it for the evidence.
+async function appendRelatedVoices(target, question){
+  if(!VOICES_ENABLED || !target || !(question||"").trim()) return;
+  if(target.querySelector(".relvoices")) return;
+  try{
+    const r = await fetch("/voices/related", {method:"POST", headers:{"content-type":"application/json"},
+      body: JSON.stringify({question: question, limit: 3})});
+    if(!r.ok) return;
+    const d = await r.json();
+    const ms = d.moments || [];
+    if(!ms.length) return;                      // nothing close enough is better than a weak guess
+    const item = m => {
+      const t = m.t_start ? vcClock(m.t_start) : "";
+      const label = m.kind === "video" ? "video" : m.kind === "essay" ? "essay" : "podcast";
+      const who = m.speaker || m.writer || m.show || "";
+      return `<div class="rvitem"><span class="rvk k-${esc(m.kind||"podcast")}">${esc(label)}</span>
+        <div><div class="rvt">${esc((m.text||"").slice(0, 180))}${(m.text||"").length>180?"…":""}</div>
+        <div class="rvm">${esc(who)}${m.show && who!==m.show?` · ${esc(m.show)}`:""}
+          ${m.url?` · <a href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">${t?`open at ${t}`:"open"} ↗</a>`:""}
+        </div></div></div>`;
+    };
+    target.insertAdjacentHTML("beforeend", `<section class="relvoices">
+      <div class="rvh"><b>◍ Also being discussed</b><span>${esc(d.basis||"")}</span></div>
+      <div class="rvnote">Clinicians talking about this on the record. Opinion and discussion — it is not evidence, and this answer does not rest on it.</div>
+      ${ms.map(item).join("")}</section>`);
+  }catch(e){ /* a suggestion block never disturbs an answer */ }
+}
+
 // ---- Voices: what clinicians have SAID. A MODE of the shell, never a source for an answer -------
 let VOICES_LAST = [], VOICES_REQ = 0, VOICES_KIND = "", VOICES_Q = "";
 const VC_LABEL = {podcast: "podcast", video: "video", essay: "essay"};

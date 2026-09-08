@@ -125,6 +125,16 @@ def test_a_video_chapter_plays_as_an_embed_at_its_offset():
     assert m["text"] == "Prerenal vs intrinsic"      # the link is not part of the title
 
 
+def test_a_chapter_link_never_leaks_into_the_displayed_title():
+    row = {"document_id": "voices_video:abc", "block_id": "b1",
+           "text": "[00:21:02] Sleep Apnea in PTSD — https://www.youtube.com/watch?v=abc&t=1262s",
+           "facets": {"source_kind": "chapter", "kind": "video", "show": "Mayo Clinic"},
+           "snippet": "[00:21:02] Sleep «Apnea» in PTSD — https://www.youtube.com/watch?v=abc&t=1262s"}
+    m = moment(row)
+    assert "http" not in m["text"] and "http" not in m["snippet"]
+    assert m["snippet"] == "Sleep «Apnea» in PTSD"
+
+
 def test_an_essay_has_nothing_to_play():
     row = {"document_id": "voices_essay:1", "block_id": "b1", "text": "A paragraph of argument.",
            "facets": {"source_kind": "essay", "kind": "essay", "show": "Sensible Medicine",

@@ -155,6 +155,8 @@ def moment(row: dict) -> dict:
     # The snippet comes from ts_headline over the RAW block, so it carries the same offset/speaker
     # prefix — which rendered inside the quotation as if the speaker had said their own timestamp.
     snip = (row.get("snippet") or "").strip()
+    # a chapter block ends "… — <deep link>"; the link is the card's action, never part of the title
+    snip = re.sub(r"\s+—\s+https?://\S*$", "", snip).strip()
     snip = _OFFSET.sub("", snip)
     ms2 = _SPEAKER.match(snip)
     if ms2 and (not speaker or ms2.group("who").strip() == speaker):

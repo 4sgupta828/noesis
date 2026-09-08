@@ -30,6 +30,8 @@ class VoiceJobIn(BaseModel):
     kind: str = "ingest"
     limit: int = 12           # episodes/videos/posts per source
     leg: str = ""             # "" = every leg; "podcast" | "video" | "essay"
+    purge: bool = False       # drop this leg's existing blocks first — an extraction fix does not
+                              # rewrite blocks whose ids it no longer produces, so junk would linger
     shows: list[str] | None = None
 
 
@@ -118,6 +120,17 @@ def build_router(pool_of, *, manifest=None, pg_source_of=None, tenant_id: str = 
             VOICE_SHOWS, PodcastTranscriptConnector,
         )
         n = max(1, min(int(body.limit or 12), 50))
+        keys = {"podcast": "voices_transcript", "video": "voices_video", "essay": "voices_essay"}
+        purged = {}
+        if body.purge:
+            want = [keys[body.leg]] if body.leg in keys else list(keys.values())
+            pool = await pool_of()
+            if pool is not None:
+                async with pool.acquire() as conn:
+                    for k in want:
+                        res = await conn.execute(
+                            "DELETE FROM rs_block WHERE source_key = $1", k)
+                        purged[k] = int(res.split()[-1]) if res.split()[-1].isdigit() else 0
         shows = {k: v for k, v in VOICE_SHOWS.items() if not body.shows or k in body.shows}
         legs = []
         if body.leg in ("", "podcast"):
@@ -138,6 +151,6 @@ def build_router(pool_of, *, manifest=None, pg_source_of=None, tenant_id: str = 
                 continue
             out[leg.key] = got
             blocks += got
-        return {"kind": "ingest", "blocks": blocks, "legs": out}
+        return {"kind": "ingest", "blocks": blocks, "legs": out, "purged": purged}
 
     return router

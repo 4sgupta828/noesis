@@ -225,17 +225,27 @@ def moment(row: dict) -> dict:
     }
 
 
-def one_per_show(moments: list[dict], *, limit: int = 3, floor: float = 0.0) -> list[dict]:
+def one_per_show(moments: list[dict], *, limit: int = 3, floor: float = 0.0,
+                 margin: float = 0.08) -> list[dict]:
     """The best moment from each of several different sources.
 
     A recommendation block should widen the reader's view, so five clips from one episode is a worse
-    answer than three from three shows. `floor` drops weak matches outright: an irrelevant suggestion
-    under a clinical answer is worse than no suggestion.
+    answer than three from three shows.
+
+    Relevance is judged BOTH ways, because one absolute cutoff is too crude for a corpus that covers
+    some questions well and others barely. A single number set high enough to reject a passage about
+    CSF drug penetration under a metformin question (0.39) also rejected a genuinely useful nephrology
+    passage (0.42). So: an absolute `floor` for "related to the question at all", and a `margin`
+    below the BEST match for "as good as what we found" — which adapts to how well the corpus covers
+    this particular question.
     """
+    scores = [m.get("score", 0.0) for m in moments]
+    top = max(scores) if scores else 0.0
+    cutoff = max(floor, top - margin)
     seen: set[str] = set()
     out: list[dict] = []
     for m in moments:
-        if m.get("score", 0.0) < floor:
+        if m.get("score", 0.0) < cutoff:
             continue
         key = (m.get("show") or "").lower()
         if key in seen:

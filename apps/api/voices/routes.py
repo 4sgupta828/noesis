@@ -132,11 +132,11 @@ def build_router(pool_of, *, manifest=None, pg_source_of=None, tenant_id: str = 
         sql, params = build_query(vector=vector, limit=40, order="relevance")
         async with pool.acquire() as conn:
             rows = [dict(r) for r in await conn.fetch(sql, *params)]
-        # Measured on prod: a genuinely on-topic suggestion scores 0.54-0.58, while 0.39 returned a
-        # passage about CSF drug penetration under a metformin question. 0.45 is where the block stops
-        # reaching — an irrelevant recommendation under a clinical answer is worse than no section.
+        # Measured on prod: on-topic suggestions score 0.54-0.58; 0.39 returned a passage about CSF
+        # drug penetration under a metformin question, while 0.42 on the same question was a useful
+        # nephrology passage. Hence both tests — an absolute floor and a margin below the best match.
         picks = one_per_show([moment(r) for r in rows],
-                             limit=max(1, min(int(body.limit or 3), 5)), floor=0.45)
+                             limit=max(1, min(int(body.limit or 3), 5)), floor=0.40, margin=0.08)
         return {"moments": picks, "basis": "commentary — not part of the evidence for this answer"}
 
     @router.get("/voices/sources")

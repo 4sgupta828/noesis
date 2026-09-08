@@ -228,6 +228,16 @@ def test_a_weak_match_is_dropped_rather_than_recommended():
     assert one_per_show([_sc("X", 0.05)], floor=0.30) == []
 
 
+def test_relevance_is_judged_against_the_best_match_as_well_as_a_floor():
+    # thin coverage: the best is modest, so a near-equal second still belongs
+    thin = [_sc("GN in Ten", 0.42, 1), _sc("Ground Truths", 0.40, 2), _sc("ID:IOTS", 0.39, 3)]
+    assert [m["show"] for m in one_per_show(thin, limit=3, floor=0.40, margin=0.08)] \
+        == ["GN in Ten", "Ground Truths"]
+    # strong coverage: the same 0.42 is now far off the pace and does not belong
+    strong = [_sc("A", 0.58, 1), _sc("B", 0.54, 2), _sc("C", 0.42, 3)]
+    assert [m["show"] for m in one_per_show(strong, limit=3, floor=0.40, margin=0.08)] == ["A", "B"]
+
+
 def test_a_moment_carries_its_score_so_relevance_can_be_judged():
     m = moment({**ROW, "rank": 0.71})
     assert m["score"] == 0.71

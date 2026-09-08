@@ -127,6 +127,11 @@ class VerticalManifest:
     # the standard adaptive synthesis. The kernel owns the kind names and the routing; the vertical
     # owns the words (answer-format panel, 2026-09-04: a general question must never get a plan).
     answer_formats: dict[str, str] | None = None
+    # Facet values whose blocks are NOT EVIDENCE and must never reach a grounded answer, however a
+    # caller phrases its request — the vertical names them, the kernel's retrieval source enforces
+    # them as a floor. Used for material a vertical ingests for BROWSING (commentary, opinion,
+    # pointers) which would be a category error as the basis of a claim.
+    non_evidence_facets: dict[str, tuple[str, ...]] | None = None
     # Optional addendum the kernel appends to the reasoned directive ONLY when the scaffold found ≥2
     # sub-questions in the user's own text (a per-sub-question coverage section). Opaque prose.
     reasoned_coverage_addendum: str | None = None

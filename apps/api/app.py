@@ -1311,7 +1311,8 @@ def build_default_service(model: str | None = None) -> ResearchService:
         covers = next((s.covers() for s in manifest.retrieval_sources.values()
                        if hasattr(s, "covers")), {})
         pg = PostgresRetrievalSource(dsn, dim=embedder.dim, table="rs_block", covers=covers,
-                                     currency_demote=pulse_enabled())
+                                     currency_demote=pulse_enabled(),
+                                     never_return=getattr(manifest, "non_evidence_facets", None))
         corpus_key = next(iter(manifest.retrieval_sources), "corpus")
         sources[corpus_key] = pg
         connectors = dict(manifest.connectors)
@@ -1705,6 +1706,30 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     if video_enabled():
         app.include_router(build_video_router(attach_video=_attach_video))
 
+    # VOICES — what clinicians have SAID (podcast transcripts), as a browsing surface. Structurally
+    # separate from answers: these blocks are declared non-evidence in the manifest, so the retrieval
+    # source refuses them for every research request. OFF is a true no-op.
+    from api.voices.routes import build_router as build_voices_router, voices_enabled
+    _voices_dsn = os.environ.get("NOESIS_CORPUS_DSN", "")
+    if voices_enabled() and _voices_dsn:
+        async def _voices_pool():
+            if getattr(app.state, "voices_pool", None) is None:
+                import asyncpg
+                app.state.voices_pool = await asyncpg.create_pool(_voices_dsn, min_size=1, max_size=4)
+            return app.state.voices_pool
+
+        def _voices_pg_source():
+            if app.state.service is None:
+                app.state.service = build_default_service()
+            for src in getattr(app.state.service, "sources", {}).values():
+                if isinstance(src, PostgresRetrievalSource):
+                    return src
+            return PostgresRetrievalSource(_voices_dsn, dim=build_embedder().dim, table="rs_block")
+
+        app.include_router(build_voices_router(
+            _voices_pool, pg_source_of=_voices_pg_source, tenant_id="demo",
+            admin_password_of=lambda: _admin_ui_pw()))
+
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok"}
@@ -1769,6 +1794,8 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "panel_differential_enabled": panel_differential_enabled(),
             "corpus_explorer_enabled": corpus_explorer_enabled(),
             "cases_enabled": cases_enabled(),
+            # Voices needs the corpus DSN as well as the flag: with no corpus there is nothing to browse
+            "voices_enabled": voices_enabled() and bool(os.environ.get("NOESIS_CORPUS_DSN", "")),
             "decision_mode_ui_enabled": decision_mode_ui_enabled(),
             "ask_panel_enabled": live_panel,
             "panel_specialists": ([

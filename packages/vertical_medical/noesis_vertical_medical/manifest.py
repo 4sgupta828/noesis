@@ -86,6 +86,12 @@ def build_manifest() -> VerticalManifest:
         answer_format=MEDICAL_ANSWER_FORMAT,
         clinical_answer_format=MEDICAL_CLINICAL_SYNTHESIS_FORMAT,
         patient_answer_format=MEDICAL_PATIENT_FORMAT,
+        # VOICES are commentary, never evidence. A podcast transcript is what a clinician SAID, which
+        # can never be the basis of a clinical claim — the evidence pyramid gives opinion no rank and
+        # the web whitelist already excludes non-peer-reviewed sources on purpose. Naming the facet
+        # here makes the retrieval source refuse these blocks for every request, so the browsing
+        # surface cannot leak into a grounded answer by omission.
+        non_evidence_facets={"source_kind": ("transcript",)},
         visual_guidance=MEDICAL_VISUAL_GUIDANCE,
         chart_guidance=MEDICAL_CHART_GUIDANCE,
         clinical_chart_guidance=MEDICAL_CLINICAL_CHART_GUIDANCE,

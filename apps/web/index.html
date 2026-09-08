@@ -1436,6 +1436,26 @@
   .answer.md .tw{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:.75rem 0 1.05rem;}
   .answer.md .tw .mdt{margin:0;}
 
+  /* ---- Voices: spoken passages, quoted and timestamped ---- */
+  #voicespage .vclist{flex:1;overflow-y:auto;padding:.4rem 1rem 3rem;max-width:52rem;margin:0 auto;width:100%;}
+  #voicespage .vcnote{max-width:52rem;margin:0 auto;padding:.2rem 1rem .5rem;font-family:var(--mono);
+    font-size:.64rem;letter-spacing:.03em;color:var(--muted);width:100%;}
+  .vcard{border:1px solid var(--hair);border-radius:12px;background:var(--panel);padding:.9rem 1rem;margin:.7rem 0;}
+  .vcard .vckick{font-family:var(--mono);font-size:.6rem;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--muted);display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.45rem;}
+  .vcard .vcwho{color:var(--gold);font-weight:700;}
+  .vcard .vcquote{font-family:var(--serif);font-size:1.02rem;line-height:1.55;color:var(--ink);margin:0 0 .5rem;}
+  .vcard .vcquote mark{background:rgba(var(--gold-rgb),.18);color:inherit;padding:0 .1em;border-radius:3px;}
+  .vcard .vcfoot{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;}
+  .vcard .vcgo{font-family:var(--sans);font-size:.78rem;font-weight:600;color:var(--gold);text-decoration:none;
+    border:1px solid rgba(var(--gold-rgb),.45);border-radius:8px;padding:.32rem .6rem;min-height:34px;
+    display:inline-flex;align-items:center;}
+  .vcard .vcgo:hover{background:var(--gold);color:var(--on-accent);}
+  .vcard .vcreg{font-family:var(--mono);font-size:.6rem;color:var(--muted);}
+  .vcard.vcasr{border-left:3px solid var(--gap);}
+  .vcard audio{width:100%;margin-top:.5rem;height:34px;}
+  @media (max-width:560px){ .vcard .vcquote{font-size:.98rem;} #voicespage .vclist{padding:.4rem .9rem 3rem;} }
+
   /* briefing videos — Netflix-style catalogue */
   .videos[hidden]{display:none;}
   .videos{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;
@@ -1743,6 +1763,8 @@
             title="Every medical concept Noesis has explained — searchable, each linking to its related concepts" aria-label="Key Concepts">✦ Concepts</button>
     <button type="button" class="histbtn" id="casesbtn" style="margin-left:0;" hidden
             title="Landmark real medical cases with a known correct decision — Noesis answers, reviewed by a clinician" aria-label="Case Board">⊞ Case Board</button>
+    <button type="button" class="histbtn" id="voicesbtn" style="margin-left:0;" hidden
+            title="What clinicians and researchers have said on the record — podcast transcripts, quoted and timestamped. Commentary, not evidence." aria-label="Voices">◍ Voices</button>
   </header>
 
   <h1 id="heading">What does the evidence show?</h1>
@@ -1947,6 +1969,19 @@
     <div class="sdrag" id="cbdrag" role="separator" aria-label="Resize panels"></div>
     <div class="sdetail" id="cbDetail"><div class="splaceholder">Select a case to view its answer.</div></div>
   </div>
+</section>
+
+<section class="sessions" id="voicespage" hidden aria-label="Voices">
+  <div class="shead">
+    <button type="button" class="sback" id="vcback">← Back</button>
+    <span class="stitle">◍ Voices</span>
+    <span class="ppsub" id="vcsub">What clinicians have said on the record · commentary, not evidence</span>
+  </div>
+  <div class="ssearchrow">
+    <input type="search" class="ssearch" id="vcsearch" placeholder="What have clinicians said about…?" aria-label="Search what clinicians have said" />
+  </div>
+  <div class="vcnote" id="vcnote"></div>
+  <div class="vclist" id="vclist"></div>
 </section>
 
 <!-- briefing videos catalogue (Netflix-style) across all sessions -->
@@ -2205,6 +2240,7 @@ let GUIDED_REFINED = false;     // one-shot: the Q&A box was filled from Guided 
 let REASONING_ENABLED = false;  // reasoning-read interpretation + confidence layer (server-validated)
 let ASK_PANEL_ENABLED = false;  // AI specialist panel (Alpha)
 let CASES_ENABLED = false;      // Historical Cases review tab under Past Sessions (Alpha)
+let VOICES_ENABLED = false;     // Voices: spoken commentary as a browsing surface (never evidence)
 let TRIAGE_ENABLED = false;     // guided-intake / triage mode (clarify → route)
 let ACCOUNTS_ENABLED = false;   // accounts + verified-clinician tier + per-answer feedback (W-taxonomy)
 let DUEL_ENABLED = false;       // A/B duel: fresh questions run standard + reasoned engines, user votes
@@ -2266,6 +2302,8 @@ async function loadConfig(){
           PULSE_ENABLED = !!f.pulse_enabled; maybeShowPulseBell();
           CASES_ENABLED = !!f.cases_enabled;   // reveal the Case Board button even on a stale-cache load
           { const cbb2 = $("#casesbtn"); if(cbb2 && CASES_ENABLED) cbb2.hidden = false; }
+          VOICES_ENABLED = !!f.voices_enabled;
+          { const vb2 = $("#voicesbtn"); if(vb2 && VOICES_ENABLED) vb2.hidden = false; }
           // integrative reveals a control row → wired on the next full load (not hot-applied)
         })
         .catch(()=>{});
@@ -2283,6 +2321,8 @@ async function loadConfig(){
     const tb = $("#termsbtn"); if(tb && TERMS_ENABLED) tb.hidden = false;
     CASES_ENABLED = !!c.cases_enabled;   // set before the un-hide below (global is also re-read later)
     const cbb = $("#casesbtn"); if(cbb && CASES_ENABLED) cbb.hidden = false;
+    VOICES_ENABLED = !!c.voices_enabled;
+    const vbb = $("#voicesbtn"); if(vbb && VOICES_ENABLED) vbb.hidden = false;
     VOICE_INTAKE_ENABLED = !!c.voice_intake_enabled;
     VOICE_EVERYWHERE = !!c.voice_everywhere_enabled;
     document.body.classList.toggle("voice-anywhere", VOICE_EVERYWHERE);   // reveal the mic in Q&A + Panel
@@ -6621,6 +6661,55 @@ function selectCase(id){
   if(vd) _wireVzRegen(vd, {question: c.question, answer: (run && run.answer) || ""});
   cbShowDetail();
 }
+// ---- Voices: what clinicians have SAID. A browsing surface, never a source for an answer --------
+let VOICES_LAST = [];
+function closeVoices(){ const p=$("#voicespage"); if(p) p.hidden = true; document.body.style.overflow=""; if(location.hash==="#voices") history.replaceState(null,"",location.pathname); }
+async function openVoices(){
+  const p = $("#voicespage"); if(!p) return;
+  try{ closeSessions(); }catch(e){} try{ closeCaseBoard(); }catch(e){} try{ closePulsePage(); }catch(e){}
+  p.hidden = false; document.body.style.overflow = "hidden";
+  if(location.hash !== "#voices") history.replaceState(null,"","#voices");
+  loadVoices();
+}
+function voiceCard(m){
+  const when = m.published ? String(m.published).replace(/\s*\d{2}:\d{2}:\d{2}.*$/, "") : "";
+  const t = m.t_start ? `${String(Math.floor(m.t_start/3600)).padStart(2,"0")}:${String(Math.floor((m.t_start%3600)/60)).padStart(2,"0")}:${String(m.t_start%60).padStart(2,"0")}` : "";
+  // the snippet carries the server's « » match markers; show them as highlights, escaped first
+  const body = m.snippet ? esc(m.snippet).replace(/«/g,"<mark>").replace(/»/g,"</mark>") : esc(m.text);
+  return `<article class="vcard${m.asr?" vcasr":""}">
+    <div class="vckick">${m.speaker?`<span class="vcwho">${esc(m.speaker)}</span>`:""}
+      <span>${esc(m.show||"")}</span>${when?`<span>${esc(when)}</span>`:""}${t?`<span>${t}</span>`:""}</div>
+    <p class="vcquote">${body}</p>
+    <div class="vcfoot">
+      ${m.url?`<a class="vcgo" href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">${t?`Listen from ${t}`:"Open"} ↗</a>`:""}
+      <span class="vcreg">${esc(m.register||"")}</span>
+    </div>
+    ${(m.url && /\.mp3|\.m4a/i.test(m.url))?`<audio controls preload="none" src="${esc(m.url)}"></audio>`:""}
+  </article>`;
+}
+async function loadVoices(){
+  const list = $("#vclist"), note = $("#vcnote");
+  if(!list) return;
+  list.innerHTML = `<div class="sempty">Loading…</div>`;
+  const q = ($("#vcsearch").value||"").trim();
+  try{
+    const r = await fetch("/voices/search", {method:"POST", headers:{"content-type":"application/json"},
+                                             body: JSON.stringify({q, limit: 40})});
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    VOICES_LAST = d.moments || [];
+    if(!VOICES_LAST.length){
+      list.innerHTML = `<div class="sempty">Nothing on the record about that yet.</div>`;
+      if(note) note.textContent = "";
+      return;
+    }
+    // say plainly how tight the match was, so a relaxed result is never passed off as a precise one
+    if(note) note.textContent = `${VOICES_LAST.length} passage${VOICES_LAST.length===1?"":"s"}`
+      + (d.ranking?` · ${d.ranking}`:"") + " · spoken commentary, not evidence — verify against the cited literature";
+    list.innerHTML = VOICES_LAST.map(voiceCard).join("");
+  }catch(e){ list.innerHTML = `<div class="sempty">Couldn't load voices.</div>`; }
+}
+
 // ---- Active Cases: anonymous, de-identified cases published from accounts ---------------------
 let ACTIVE_CASES = [], MY_ACTIVE = {}, MY_ACTIVE_BY_SID = {};   // case_id → session_id, and the reverse
 async function refreshMyActive(){
@@ -7867,6 +7956,9 @@ $("#pplback").addEventListener("click", closePeople);
 $("#pplbtn").addEventListener("click", openPeople);
 $("#termsbtn").addEventListener("click", ()=>openTermsPage());
 $("#casesbtn").addEventListener("click", openCaseBoard);
+$("#voicesbtn").addEventListener("click", openVoices);
+$("#vcback").addEventListener("click", closeVoices);
+{ let _vct; $("#vcsearch").addEventListener("input", ()=>{ clearTimeout(_vct); _vct=setTimeout(loadVoices, 260); }); }
 $("#cbback").addEventListener("click", ()=>{ const cb=$("#caseboard"); if(isMobileSess() && cb && cb.dataset.view === "detail") cbShowList(); else closeCaseBoard(); });
 $("#cbgen").addEventListener("click", generateCaseAnswers);
 // generation is admin-only: the control appears only once ⚙ settings has been unlocked in this tab
@@ -7916,6 +8008,7 @@ function routeHash(){    // #s/<id> → Q&A answer/thread · #p/<id> → panel s
   else if(location.hash === "#ingest"){ openIngest(); }
   else if(location.hash === "#people"){ openPeople(); }
   else if(location.hash === "#terms"){ openTermsPage(); }
+  else if(location.hash === "#voices" && VOICES_ENABLED){ openVoices(); }
   else if(location.hash.startsWith("#cases") && CASES_ENABLED){
     const m = location.hash.match(/^#cases\/(c|a)\/(.+)$/);
     if(m){ openCaseForLink(m[1], decodeURIComponent(m[2])); } else { openCaseBoard(); }

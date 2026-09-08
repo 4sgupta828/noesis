@@ -1428,6 +1428,26 @@
   .answer.md .tw{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:.75rem 0 1.05rem;}
   .answer.md .tw .mdt{margin:0;}
 
+  /* ---- Voices: spoken passages, quoted and timestamped ---- */
+  #voicespage .vclist{flex:1;overflow-y:auto;padding:.4rem 1rem 3rem;max-width:52rem;margin:0 auto;width:100%;}
+  #voicespage .vcnote{max-width:52rem;margin:0 auto;padding:.2rem 1rem .5rem;font-family:var(--mono);
+    font-size:.64rem;letter-spacing:.03em;color:var(--muted);width:100%;}
+  .vcard{border:1px solid var(--hair);border-radius:12px;background:var(--panel);padding:.9rem 1rem;margin:.7rem 0;}
+  .vcard .vckick{font-family:var(--mono);font-size:.6rem;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--muted);display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.45rem;}
+  .vcard .vcwho{color:var(--gold);font-weight:700;}
+  .vcard .vcquote{font-family:var(--serif);font-size:1.02rem;line-height:1.55;color:var(--ink);margin:0 0 .5rem;}
+  .vcard .vcquote mark{background:rgba(var(--gold-rgb),.18);color:inherit;padding:0 .1em;border-radius:3px;}
+  .vcard .vcfoot{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;}
+  .vcard .vcgo{font-family:var(--sans);font-size:.78rem;font-weight:600;color:var(--gold);text-decoration:none;
+    border:1px solid rgba(var(--gold-rgb),.45);border-radius:8px;padding:.32rem .6rem;min-height:34px;
+    display:inline-flex;align-items:center;}
+  .vcard .vcgo:hover{background:var(--gold);color:var(--on-accent);}
+  .vcard .vcreg{font-family:var(--mono);font-size:.6rem;color:var(--muted);}
+  .vcard.vcasr{border-left:3px solid var(--gap);}
+  .vcard audio{width:100%;margin-top:.5rem;height:34px;}
+  @media (max-width:560px){ .vcard .vcquote{font-size:.98rem;} #voicespage .vclist{padding:.4rem .9rem 3rem;} }
+
   /* briefing videos — Netflix-style catalogue */
   .videos[hidden]{display:none;}
   .videos{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;

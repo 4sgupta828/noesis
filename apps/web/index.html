@@ -1514,8 +1514,21 @@
     border-radius:9px;background:rgba(0,0,0,.34);color:#fff;font-size:.82rem;transition:background .13s;}
   .vcard .vcplay:hover .vcplayico,.vcard .vcplay:focus-visible .vcplayico{background:rgba(0,0,0,.62);}
   .vcard.playing .vcplayico{background:rgba(0,0,0,.62);}
-  /* the artwork is the only play control; a big translucent glyph makes that obvious at rest */
+  /* the artwork plays too — same control, so pressing either opens the player in place */
   .vcard .vcplayico{opacity:.92;}
+  .vcard .vcfoot .vcplay,.vcard .vcfoot .vcread{border:1px solid rgba(var(--gold-rgb),.45);
+    border-radius:999px;padding:.3rem .75rem;min-height:32px;display:inline-flex;align-items:center;
+    gap:.3rem;font-family:var(--sans);font-size:.76rem;font-weight:650;color:var(--gold);
+    background:transparent;cursor:pointer;}
+  .vcard .vcfoot .vcplay:hover,.vcard .vcfoot .vcread:hover{background:var(--gold);color:var(--on-accent);}
+  .vcard.k-video .vcfoot .vcplay{color:#C0392B;border-color:rgba(192,57,43,.45);}
+  .vcard.k-video .vcfoot .vcplay:hover{background:#C0392B;color:#fff;}
+  .vcard.k-essay .vcfoot .vcread{color:#1F7A52;border-color:rgba(31,122,82,.45);}
+  .vcard.k-essay .vcfoot .vcread:hover{background:#1F7A52;color:#fff;}
+  /* leaving the page is the fallback, so the outward link is an icon, not a button */
+  .vcard .vcout{font-family:var(--sans);font-size:.9rem;line-height:1;color:var(--muted);
+    text-decoration:none;padding:.3rem .35rem;border-radius:6px;}
+  .vcard .vcout:hover{color:var(--ink);background:var(--panel2);}
   .vcard .vcplayer{margin-top:.6rem;}
   .vcard .vcplayer audio{width:100%;height:34px;}
   .vcard .vcframe{position:relative;width:100%;padding-top:56.25%;border-radius:10px;overflow:hidden;
@@ -6812,13 +6825,17 @@ function voiceCard(m, i){
   // the artwork IS the play button — one obvious target, and no iframe or audio element is created
   // until it is pressed, so a page of 40 cards costs nothing to load
   const art = playable
-    ? `<button type="button" class="vcplay" data-i="${i}"
+    ? `<button type="button" class="vcplay vcart-play" data-i="${i}"
          aria-label="${esc(kind === "video" ? "Play video" : "Play audio")} from ${t||"the start"}"
          title="Play here from ${t||"the start"}">${inner}<span class="vcplayico">▶</span></button>`
     : inner;
   const cls = `vcard k-${kind}${m.asr?" vcasr":""}`;
-  // one play control — the artwork. The footer link goes OUT to the source, at the same moment.
-  const action = kind === "essay" ? "Read the post" : (t ? `Open at ${t}` : "Open");
+  // Playing HERE is the primary action; leaving the page is the fallback. The footer carries one
+  // prominent control that opens the player in place, and the outward link shrinks to an icon.
+  const action = kind === "essay" ? "Read here"
+               : kind === "video" ? (t ? `Play from ${t}` : "Play")
+               : (t ? `Listen from ${t}` : "Listen");
+  const outLabel = kind === "essay" ? "Open the post" : (t ? `Open at ${t} on the source` : "Open the source");
   return `<article class="${cls}">
     <div class="vcart">${art}</div>
     <div class="vcmain">
@@ -6828,8 +6845,10 @@ function voiceCard(m, i){
       ${m.episode?`<div class="vcep">${esc(m.episode)}</div>`:""}
       <p class="vcquote">${body}</p>
       <div class="vcfoot">
-        ${(!playable && m.text)?`<button type="button" class="vcgo vcread" data-i="${i}">☰ Read here</button>`:""}
-        ${m.url?`<a class="vcgo vcout" href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">${esc(action)} ↗</a>`:""}
+        ${playable?`<button type="button" class="vcgo vcplay" data-i="${i}">▶ ${esc(action)}</button>`:""}
+        ${(!playable && m.text)?`<button type="button" class="vcgo vcread" data-i="${i}">☰ ${esc(action)}</button>`:""}
+        ${m.url?`<a class="vcout" href="${esc(m.url)}" target="_blank" rel="noopener noreferrer"
+             title="${esc(outLabel)}" aria-label="${esc(outLabel)}">↗</a>`:""}
         <span class="vcreg">${esc(m.register||"")}</span>
       </div>
       <div class="vcplayer" hidden></div>
@@ -6841,7 +6860,10 @@ function voiceCard(m, i){
 function vcOpenPlayer(card, m){
   const box = card.querySelector(".vcplayer");
   if(!box || !m || !m.media) return;
-  if(!box.hidden){ box.hidden = true; box.innerHTML = ""; card.classList.remove("playing"); return; }
+  const btn = card.querySelector(".vcfoot .vcplay");
+  const setLabel = txt => { if(btn) btn.textContent = txt; };
+  if(!box.hidden){ box.hidden = true; box.innerHTML = ""; card.classList.remove("playing");
+    setLabel("▶ " + (btn ? btn.dataset.play || "Play" : "Play")); return; }
   const t = Math.max(0, parseInt(m.media.t || 0, 10) || 0);
   if(m.media.kind === "youtube"){
     box.innerHTML = `<div class="vcframe"><iframe src="https://www.youtube-nocookie.com/embed/`
@@ -6859,6 +6881,8 @@ function vcOpenPlayer(card, m){
   }
   box.hidden = false;
   card.classList.add("playing");
+  if(btn){ btn.dataset.play = btn.dataset.play || btn.textContent.replace(/^▶\s*/, ""); }
+  setLabel("✕ Close player");
   // only one thing plays at a time
   document.querySelectorAll("#vclist .vcard.playing").forEach(c => { if(c !== card){
     c.classList.remove("playing"); const b = c.querySelector(".vcplayer"); if(b){ b.hidden = true; b.innerHTML = ""; } } });

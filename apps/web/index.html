@@ -1492,7 +1492,28 @@
   .vcard.k-essay .vcgo:hover{background:#1F7A52;color:#fff;}
   .vcard .vcreg{font-family:var(--mono);font-size:.58rem;color:var(--muted);line-height:1.3;}
   .vcard.vcasr{background:linear-gradient(0deg, rgba(var(--gold-rgb),.03), rgba(var(--gold-rgb),.03)), var(--panel);}
-  .vcard audio{width:100%;margin-top:.55rem;height:32px;}
+  .vcard .vcplay{position:relative;display:block;padding:0;border:0;background:none;cursor:pointer;}
+  .vcard .vcplayico{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    border-radius:9px;background:rgba(0,0,0,.42);color:#fff;font-size:.8rem;opacity:0;transition:opacity .13s;}
+  .vcard .vcplay:hover .vcplayico,.vcard .vcplay:focus-visible .vcplayico{opacity:1;}
+  .vcard.playing .vcplayico{opacity:1;background:rgba(0,0,0,.55);}
+  .vcard .vcfoot .vcplay{border:1px solid rgba(var(--gold-rgb),.45);border-radius:999px;
+    padding:.3rem .7rem;min-height:32px;display:inline-flex;align-items:center;gap:.3rem;
+    font-family:var(--sans);font-size:.76rem;font-weight:650;color:var(--gold);background:transparent;}
+  .vcard .vcfoot .vcplay:hover{background:var(--gold);color:var(--on-accent);}
+  .vcard.k-video .vcfoot .vcplay{color:#C0392B;border-color:rgba(192,57,43,.45);}
+  .vcard.k-video .vcfoot .vcplay:hover{background:#C0392B;color:#fff;}
+  .vcard .vcout{font-weight:550;opacity:.85;}
+  .vcard .vcplayer{margin-top:.6rem;}
+  .vcard .vcplayer audio{width:100%;height:34px;}
+  .vcard .vcframe{position:relative;width:100%;padding-top:56.25%;border-radius:10px;overflow:hidden;
+    background:#000;border:1px solid var(--hair);}
+  .vcard .vcframe iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}
+  .vcard .vcfail{font-family:var(--mono);font-size:.66rem;color:var(--gap);}
+  .vcard .vcfull{font-family:var(--serif);font-size:.98rem;line-height:1.6;color:var(--ink);
+    border-left:2px solid var(--hair);padding-left:.8rem;}
+  .vcard .vcread{color:#1F7A52;border-color:rgba(31,122,82,.45);}
+  .vcard .vcread:hover{background:#1F7A52;color:#fff;}
   @media (max-width:560px){
     .vcard{grid-template-columns:52px minmax(0,1fr);}
     .vcard .vcart{padding:.8rem .1rem .8rem .7rem;} .vcard .vcart img,.vcard .vcart .vcph{width:40px;height:40px;}
@@ -6729,15 +6750,23 @@ function vcClock(sec){
   const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), x = sec%60;
   return (h?`${h}:${String(m).padStart(2,"0")}`:`${m}`) + ":" + String(x).padStart(2,"0");
 }
-function voiceCard(m){
+function voiceCard(m, i){
   const kind = m.kind || "podcast";
   const t = vcClock(m.t_start);
   const when = vcDate(m.published);
   // the snippet carries the server's « » match markers — escape first, then turn them into marks
   const body = m.snippet ? esc(m.snippet).replace(/«/g,"<mark>").replace(/»/g,"</mark>") : esc(m.text);
   const who = m.speaker || m.writer || "";
-  const art = m.art ? `<img src="${esc(m.art)}" alt="" loading="lazy">`
-                    : `<div class="vcph">${VC_ICON[kind]||"◍"}</div>`;
+  const playable = !!(m.media && (m.media.url || m.media.id));
+  const inner = m.art ? `<img src="${esc(m.art)}" alt="" loading="lazy">`
+                      : `<div class="vcph">${VC_ICON[kind]||"◍"}</div>`;
+  // the artwork IS the play button — one obvious target, and no iframe or audio element is created
+  // until it is pressed, so a page of 40 cards costs nothing to load
+  const art = playable
+    ? `<button type="button" class="vcplay" data-i="${i}"
+         aria-label="${esc(kind === "video" ? "Play video" : "Play audio")} from ${t||"the start"}"
+         title="Play here from ${t||"the start"}">${inner}<span class="vcplayico">▶</span></button>`
+    : inner;
   const cls = `vcard k-${kind}${m.asr?" vcasr":""}`;
   const action = kind === "video" ? (t?`Watch from ${t}`:"Watch")
                : kind === "essay" ? "Read the post"
@@ -6751,12 +6780,41 @@ function voiceCard(m){
       ${m.episode?`<div class="vcep">${esc(m.episode)}</div>`:""}
       <p class="vcquote">${body}</p>
       <div class="vcfoot">
-        ${m.url?`<a class="vcgo" href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">${esc(action)} ↗</a>`:""}
+        ${playable?`<button type="button" class="vcgo vcplay" data-i="${i}">▶ ${esc(action)}</button>`:""}
+        ${(!playable && m.text)?`<button type="button" class="vcgo vcread" data-i="${i}">☰ Read here</button>`:""}
+        ${m.url?`<a class="vcgo vcout" href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">Open ↗</a>`:""}
         <span class="vcreg">${esc(m.register||"")}</span>
       </div>
-      ${(m.url && /\.mp3|\.m4a/i.test(m.url))?`<audio controls preload="none" src="${esc(m.url)}"></audio>`:""}
+      <div class="vcplayer" hidden></div>
     </div>
   </article>`;
+}
+// Reveal the player inside the card. Audio seeks explicitly once metadata is in, because an <audio>
+// element does not reliably honour a #t= fragment across browsers and CDNs; YouTube takes ?start=.
+function vcOpenPlayer(card, m){
+  const box = card.querySelector(".vcplayer");
+  if(!box || !m || !m.media) return;
+  if(!box.hidden){ box.hidden = true; box.innerHTML = ""; card.classList.remove("playing"); return; }
+  const t = Math.max(0, parseInt(m.media.t || 0, 10) || 0);
+  if(m.media.kind === "youtube"){
+    box.innerHTML = `<div class="vcframe"><iframe src="https://www.youtube-nocookie.com/embed/`
+      + `${encodeURIComponent(m.media.id)}?start=${t}&autoplay=1&rel=0" title="${esc(m.episode||"Video")}"
+         allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowfullscreen
+         referrerpolicy="strict-origin-when-cross-origin" loading="lazy"></iframe></div>`;
+  } else {
+    box.innerHTML = `<audio controls autoplay preload="metadata" src="${esc(m.media.url)}"></audio>`;
+    const a = box.querySelector("audio");
+    const seek = ()=>{ try{ if(t && Math.abs(a.currentTime - t) > 1) a.currentTime = t; }catch(e){} };
+    a.addEventListener("loadedmetadata", seek, {once:true});
+    seek();                       // a cached file may already have metadata
+    a.addEventListener("error", ()=>{ box.innerHTML =
+      `<div class="vcfail">This episode won't play here — use Open ↗</div>`; }, {once:true});
+  }
+  box.hidden = false;
+  card.classList.add("playing");
+  // only one thing plays at a time
+  document.querySelectorAll("#vclist .vcard.playing").forEach(c => { if(c !== card){
+    c.classList.remove("playing"); const b = c.querySelector(".vcplayer"); if(b){ b.hidden = true; b.innerHTML = ""; } } });
 }
 async function loadVoices(){
   const list = $("#vclist"), note = $("#vcnote");
@@ -6781,6 +6839,22 @@ async function loadVoices(){
       + (d.ranking?` · ${d.ranking}`:"")
       + " · what people said, not what the evidence shows";
     list.innerHTML = VOICES_LAST.map(voiceCard).join("");
+    list.querySelectorAll(".vcplay").forEach(btn => btn.addEventListener("click", e => {
+      e.preventDefault();
+      const card = btn.closest(".vcard");
+      vcOpenPlayer(card, VOICES_LAST[parseInt(btn.dataset.i, 10)]);
+    }));
+    // an essay has nothing to play, so "inline" means reading the whole passage in place rather
+    // than the search snippet
+    list.querySelectorAll(".vcread").forEach(btn => btn.addEventListener("click", e => {
+      e.preventDefault();
+      const card = btn.closest(".vcard"), m = VOICES_LAST[parseInt(btn.dataset.i, 10)];
+      const box = card.querySelector(".vcplayer");
+      if(!box || !m) return;
+      if(!box.hidden){ box.hidden = true; box.innerHTML = ""; btn.textContent = "☰ Read here"; return; }
+      box.innerHTML = `<div class="vcfull">${esc(m.text||"")}</div>`;
+      box.hidden = false; btn.textContent = "☰ Collapse";
+    }));
   }catch(e){ if(req === VOICES_REQ) list.innerHTML = `<div class="sempty">Couldn't load voices.</div>`; }
 }
 function renderVoicesLanding(prefill){

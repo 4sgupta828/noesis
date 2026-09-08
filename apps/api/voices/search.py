@@ -166,8 +166,21 @@ def moment(row: dict) -> dict:
     asr = bool(facets.get("asr"))
     audio = facets.get("audio_url") or ""
     page = facets.get("episode_url") or ""
+    video_id = facets.get("video_id") or ""
     if chapter_link:
         audio, page = "", chapter_link      # a chapter already carries its own &t= deep link
+        mv = re.search(r"[?&]v=([\w-]{6,})", chapter_link)
+        if mv and not video_id:
+            video_id = mv.group(1)
+
+    # What the card can PLAY in place, and from which second. Kept as structured fields rather than a
+    # URL fragment: an <audio> element does not reliably honour #t=, so the client seeks explicitly.
+    if video_id:
+        media = {"kind": "youtube", "id": video_id, "t": t_start}
+    elif audio:
+        media = {"kind": "audio", "url": audio, "t": t_start}
+    else:
+        media = None
     return {
         "id": f"{row.get('document_id','')}::{row.get('block_id','')}",
         "kind": facets.get("kind") or "podcast",
@@ -180,6 +193,7 @@ def moment(row: dict) -> dict:
         "t_start": t_start,
         "url": (f"{audio}#t={t_start}" if audio else page),
         "art": facets.get("art") or "",
+        "media": media,
         "episode_url": page,
         "asr": asr,
         # The register line is printed verbatim by the surface. A machine transcript is not a

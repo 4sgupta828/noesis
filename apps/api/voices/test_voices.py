@@ -109,6 +109,30 @@ def test_a_moment_deep_links_to_the_second_it_was_said():
     assert moment(ROW)["url"] == "https://cdn.example/ep1.mp3#t=754"
 
 
+def test_a_podcast_moment_carries_what_to_play_and_from_where():
+    m = moment(ROW)
+    assert m["media"] == {"kind": "audio", "url": "https://cdn.example/ep1.mp3", "t": 754}
+
+
+def test_a_video_chapter_plays_as_an_embed_at_its_offset():
+    row = {"document_id": "voices_video:abc", "block_id": "b1",
+           "text": "[00:12:30] Prerenal vs intrinsic — https://www.youtube.com/watch?v=abc123&t=750s",
+           "facets": {"source_kind": "chapter", "kind": "video", "show": "Zero To Finals"},
+           "snippet": ""}
+    m = moment(row)
+    assert m["media"] == {"kind": "youtube", "id": "abc123", "t": 750}
+    assert m["quotable"] is False          # a chapter title is the publisher's, never a quotation
+    assert m["text"] == "Prerenal vs intrinsic"      # the link is not part of the title
+
+
+def test_an_essay_has_nothing_to_play():
+    row = {"document_id": "voices_essay:1", "block_id": "b1", "text": "A paragraph of argument.",
+           "facets": {"source_kind": "essay", "kind": "essay", "show": "Sensible Medicine",
+                      "episode_url": "https://blog.example/p/1"}, "snippet": ""}
+    m = moment(row)
+    assert m["media"] is None and m["url"] == "https://blog.example/p/1"
+
+
 def test_without_audio_a_moment_falls_back_to_the_episode_page():
     row = {**ROW, "facets": {**ROW["facets"], "audio_url": ""}}
     assert moment(row)["url"] == "https://show.example/1"

@@ -1456,7 +1456,20 @@
   .relvoices .rvk.k-video{color:#C0392B;} .relvoices .rvk.k-essay{color:#1F7A52;}
   .relvoices .rvt{font-family:var(--serif);font-size:.92rem;line-height:1.5;color:var(--ink);}
   .relvoices .rvm{font-family:var(--mono);font-size:.58rem;color:var(--muted);margin-top:.2rem;}
-  .relvoices .rvm a{color:var(--gold);text-decoration:none;} .relvoices .rvm a:hover{text-decoration:underline;}
+  .relvoices .rvact{display:flex;gap:.4rem;align-items:center;margin-top:.35rem;}
+  .relvoices .rvplay,.relvoices .rvread{font-family:var(--sans);font-size:.72rem;font-weight:650;
+    cursor:pointer;background:transparent;border:1px solid rgba(var(--gold-rgb),.45);border-radius:999px;
+    padding:.22rem .6rem;min-height:28px;color:var(--gold);}
+  .relvoices .rvplay:hover,.relvoices .rvread:hover{background:var(--gold);color:var(--on-accent);}
+  .relvoices .rvout{color:var(--muted);text-decoration:none;font-size:.85rem;padding:.2rem .3rem;border-radius:5px;}
+  .relvoices .rvout:hover{color:var(--ink);background:var(--panel2);}
+  .relvoices .vcplayer{margin-top:.45rem;}
+  .relvoices .vcplayer audio{width:100%;height:32px;}
+  .relvoices .vcframe{position:relative;width:100%;padding-top:56.25%;border-radius:10px;overflow:hidden;
+    background:#000;border:1px solid var(--hair);}
+  .relvoices .vcframe iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}
+  .relvoices .vcfull{font-family:var(--serif);font-size:.9rem;line-height:1.55;color:var(--ink);
+    border-left:2px solid var(--hair);padding-left:.7rem;}
 
   /* ---- Voices: a card per moment — artwork, kicker, the words, then the action ---- */
   .voicesbody{display:none;}
@@ -3329,7 +3342,10 @@ function render(data, target, opts){
   if(data.answer && DISCLAIMER.answer) parts.push(`<div class="ansdisc">${esc(DISCLAIMER.answer)}</div>`);
   target.innerHTML = parts.join("");
   // commentary alongside the finished answer — appended after, so it can never shape one
-  if(data.answer && (opts.related || !opts.noConvo))
+  // A single answer has its conversation box inside `parts`, so appending here already lands the
+  // block after the visuals. A thread and a session append theirs AFTER render() returns, so they
+  // position the slot themselves — see renderThread / the session view.
+  if(data.answer && !opts.noConvo)
     appendRelatedVoices(target, data.question || CURRENT_Q || "");
   wireFeedback(target, data);
   checkAnswerIntegrity(target, data);   // async, structural: banners answers citing changed sources
@@ -6493,7 +6509,7 @@ function renderThread(){
     out.appendChild(block);
     // the suggestion block belongs under the LATEST answer only — repeating it per turn would read
     // as part of each answer rather than as a footer to the conversation
-    render(t, ans, {noLink:true, noConvo:true, related: i === THREAD.turns.length - 1});
+    render(t, ans, {noLink:true, noConvo:true});
   });
   // Bottom stack, in deliberate order of prominence: slim transform row (this answer, other
   // formats) → the ONE "Where next" block (follow-ups + lens hops), sitting closest to the
@@ -6502,6 +6518,10 @@ function renderThread(){
   if(lt && !lt._pending && !lt.clarification && !lt.derived_from_prior){
     const act = document.createElement("div"); act.innerHTML = convoActionsMarkup(lt);
     if(act.firstChild){ out.appendChild(act); wireConvo(act, lt); }
+    // the slot is placed NOW so the block lands after the visuals and just above "Where next",
+    // whatever order the async fetch finishes in
+    const rv = document.createElement("div"); out.appendChild(rv);
+    appendRelatedVoices(rv, lt.question || CURRENT_Q || "");
     const wm = whereNextMarkup(lt);
     if(wm){ const wr = document.createElement("div"); wr.innerHTML = wm;
       out.appendChild(wr); wireEngineHops(wr, lt); }
@@ -6768,6 +6788,7 @@ function selectCase(id){
 // Suggest a few things people have SAID near this question, UNDER a finished answer. This runs after
 // the answer is on screen and its result is never fed back into one: the research path refuses these
 // blocks outright, and this block is labelled so a reader cannot mistake it for the evidence.
+let RELVOICES = [];
 async function appendRelatedVoices(target, question){
   if(!VOICES_ENABLED || !target || !(question||"").trim()) return;
   if(target.querySelector(".relvoices")) return;
@@ -6778,20 +6799,40 @@ async function appendRelatedVoices(target, question){
     const d = await r.json();
     const ms = d.moments || [];
     if(!ms.length) return;                      // nothing close enough is better than a weak guess
-    const item = m => {
+    RELVOICES = ms;
+    const item = (m, i) => {
       const t = m.t_start ? vcClock(m.t_start) : "";
       const label = m.kind === "video" ? "video" : m.kind === "essay" ? "essay" : "podcast";
       const who = m.speaker || m.writer || m.show || "";
+      const playable = !!(m.media && (m.media.url || m.media.id));
+      // the same rule as a Voices card: play it HERE, and only leave the page as a fallback
+      const act = playable
+        ? `<button type="button" class="rvplay" data-i="${i}">▶ ${t?`play from ${t}`:"play"}</button>`
+        : (m.text ? `<button type="button" class="rvread" data-i="${i}">☰ read here</button>` : "");
       return `<div class="rvitem"><span class="rvk k-${esc(m.kind||"podcast")}">${esc(label)}</span>
         <div><div class="rvt">${esc((m.text||"").slice(0, 180))}${(m.text||"").length>180?"…":""}</div>
-        <div class="rvm">${esc(who)}${m.show && who!==m.show?` · ${esc(m.show)}`:""}
-          ${m.url?` · <a href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">${t?`open at ${t}`:"open"} ↗</a>`:""}
-        </div></div></div>`;
+        <div class="rvm">${esc(who)}${m.show && who!==m.show?` · ${esc(m.show)}`:""}</div>
+        <div class="rvact">${act}${m.url?`<a class="rvout" href="${esc(m.url)}" target="_blank"
+          rel="noopener noreferrer" title="Open on the source">↗</a>`:""}</div>
+        <div class="vcplayer" hidden></div></div></div>`;
     };
     target.insertAdjacentHTML("beforeend", `<section class="relvoices">
       <div class="rvh"><b>◍ Also being discussed</b><span>${esc(d.basis||"")}</span></div>
       <div class="rvnote">Clinicians talking about this on the record. Opinion and discussion — it is not evidence, and this answer does not rest on it.</div>
       ${ms.map(item).join("")}</section>`);
+    target.querySelectorAll(".rvplay").forEach(btn => btn.addEventListener("click", e => {
+      e.preventDefault();
+      vcOpenPlayer(btn.closest(".rvitem"), RELVOICES[parseInt(btn.dataset.i, 10)]);
+    }));
+    target.querySelectorAll(".rvread").forEach(btn => btn.addEventListener("click", e => {
+      e.preventDefault();
+      const it = btn.closest(".rvitem"), m = RELVOICES[parseInt(btn.dataset.i, 10)];
+      const box = it.querySelector(".vcplayer");
+      if(!box || !m) return;
+      if(!box.hidden){ box.hidden = true; box.innerHTML = ""; btn.textContent = "☰ read here"; return; }
+      box.innerHTML = `<div class="vcfull">${esc(m.text||"")}</div>`;
+      box.hidden = false; btn.textContent = "☰ collapse";
+    }));
   }catch(e){ /* a suggestion block never disturbs an answer */ }
 }
 
@@ -6860,7 +6901,9 @@ function voiceCard(m, i){
 function vcOpenPlayer(card, m){
   const box = card.querySelector(".vcplayer");
   if(!box || !m || !m.media) return;
-  const btn = card.querySelector(".vcfoot .vcplay");
+  // the same helper serves a Voices card and a recommendation row, which label their control
+  // differently — find whichever this container has
+  const btn = card.querySelector(".vcfoot .vcplay, .rvact .rvplay");
   const setLabel = txt => { if(btn) btn.textContent = txt; };
   if(!box.hidden){ box.hidden = true; box.innerHTML = ""; card.classList.remove("playing");
     setLabel("▶ " + (btn ? btn.dataset.play || "Play" : "Play")); return; }
@@ -6884,8 +6927,11 @@ function vcOpenPlayer(card, m){
   if(btn){ btn.dataset.play = btn.dataset.play || btn.textContent.replace(/^▶\s*/, ""); }
   setLabel("✕ Close player");
   // only one thing plays at a time
-  document.querySelectorAll("#vclist .vcard.playing").forEach(c => { if(c !== card){
-    c.classList.remove("playing"); const b = c.querySelector(".vcplayer"); if(b){ b.hidden = true; b.innerHTML = ""; } } });
+  document.querySelectorAll(".vcard.playing, .rvitem.playing").forEach(c => { if(c !== card){
+    c.classList.remove("playing");
+    const b = c.querySelector(".vcplayer"); if(b){ b.hidden = true; b.innerHTML = ""; }
+    const ob = c.querySelector(".vcfoot .vcplay, .rvact .rvplay");
+    if(ob && ob.dataset.play) ob.textContent = "▶ " + ob.dataset.play; } });
 }
 async function loadVoices(){
   const list = $("#vclist"), note = $("#vcnote");
@@ -7327,8 +7373,7 @@ function showSessionDetail(row, rowEl){
     }
     const ans = document.createElement("div"); block.appendChild(ans);
     sdbody.appendChild(block);
-    render(t, ans, {noLink:true, noConvo:true, noTopbtns:i===0,
-                    related: i === turns.length - 1});   // Q1's action buttons go in #sactions
+    render(t, ans, {noLink:true, noConvo:true, noTopbtns:i===0});   // Q1's action buttons go in #sactions
     if(i===0) firstAns = ans;
   });
   buildSessionActions($("#sactions"), row, firstTurn, firstAns, rowEl);
@@ -7342,6 +7387,8 @@ function showSessionDetail(row, rowEl){
   LAST = {question: row.question, answer: (lastTurn.answer||row.answer||""), session_id: row.id};
   const act = document.createElement("div"); act.innerHTML = convoActionsMarkup(actData);
   if(act.firstChild){ sdbody.appendChild(act); wireConvo(act, actData); }
+  const rv = document.createElement("div"); sdbody.appendChild(rv);
+  appendRelatedVoices(rv, lastTurn.question || row.question || "");
   sessionWhereNext(sdbody, row, turns);
   sdetail.scrollTop = 0;
   if(isMobileSess()){ sessionsEl.dataset.view = "detail"; setSback("← Sessions"); }  // drill into the answer

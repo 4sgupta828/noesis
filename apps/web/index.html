@@ -3303,10 +3303,11 @@ function render(data, target, opts){
   // root-cause picker. Suppressed inside a duel tab (the A/B vote bar is the feedback there).
   if(showFb) parts.push(feedbackMarkup());
   if(!opts.noConvo) parts.push(convoActionsMarkup(data));
-  else if(data.visuals && data.visuals.length){
+  else if(opts.visuals && data.visuals && data.visuals.length){
     // A saved answer's flow diagrams live in the conversation block, which read-only views (Case
-    // Board, public share link) skip — so stored visuals never appeared on any of them. Render them
-    // here without the actions: there is nothing to regenerate from someone else's published case.
+    // Board, public share link) skip — so stored visuals never appeared on any of them. Those views
+    // ask for them explicitly with opts.visuals; inferring it from noConvo alone drew them TWICE in
+    // a thread, once under the last turn and again in the conversation box below it.
     parts.push(`<div class="addons convobox"><details class="plain plain-d visuals-d" data-variation="0" open>`
       + `<summary class="plain-h">◫ Visuals (${data.visuals.length})</summary>`
       + `<div class="vzgrid">${data.visuals.map(visualCardHtml).join("")}</div></details></div>`);
@@ -4454,7 +4455,8 @@ async function loadPublicSession(token){
         const div = document.createElement("div"); div.className = "pubturn";
         if(i > 0) div.innerHTML = `<div class="turnq">Q${i+1} · ${esc(t.question||"")}</div>`;
         const ans = document.createElement("div"); div.appendChild(ans); out.appendChild(div);
-        render({...t, session_id: row.id}, ans, {noLink:true, noConvo:true, noFeedback:true});
+        render({...t, session_id: row.id}, ans,
+               {noLink:true, noConvo:true, noFeedback:true, visuals:true});
       });
     }
     out.insertAdjacentHTML("beforeend", discussionMarkup(token, row.comments || [], row.id, canDelete));
@@ -6994,7 +6996,8 @@ async function selectActiveCase(id){
         const div = document.createElement("div"); div.className = "pubturn";
         if(i > 0) div.innerHTML = `<div class="turnq">Q${i+1} · ${esc(t.question||"")}</div>`;
         const ans = document.createElement("div"); div.appendChild(ans); body.appendChild(div);
-        render({...t, session_id: "case-"+id}, ans, {noLink:true, noConvo:true, noFeedback:true});
+        render({...t, session_id: "case-"+id}, ans,
+               {noLink:true, noConvo:true, noFeedback:true, visuals:true});
       });
     }
     setCaseHash("a", id);

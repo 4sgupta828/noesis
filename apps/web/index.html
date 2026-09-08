@@ -1444,6 +1444,7 @@
   .vcard .vckick{font-family:var(--mono);font-size:.6rem;letter-spacing:.05em;text-transform:uppercase;
     color:var(--muted);display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.45rem;}
   .vcard .vcwho{color:var(--gold);font-weight:700;}
+  .vcard .vcep{font-family:var(--sans);font-size:.76rem;color:var(--muted);margin:-.2rem 0 .4rem;}
   .vcard .vcquote{font-family:var(--serif);font-size:1.02rem;line-height:1.55;color:var(--ink);margin:0 0 .5rem;}
   .vcard .vcquote mark{background:rgba(var(--gold-rgb),.18);color:inherit;padding:0 .1em;border-radius:3px;}
   .vcard .vcfoot{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;}
@@ -6662,7 +6663,7 @@ function selectCase(id){
   cbShowDetail();
 }
 // ---- Voices: what clinicians have SAID. A browsing surface, never a source for an answer --------
-let VOICES_LAST = [];
+let VOICES_LAST = [], VOICES_REQ = 0;
 function closeVoices(){ const p=$("#voicespage"); if(p) p.hidden = true; document.body.style.overflow=""; if(location.hash==="#voices") history.replaceState(null,"",location.pathname); }
 async function openVoices(){
   const p = $("#voicespage"); if(!p) return;
@@ -6672,13 +6673,16 @@ async function openVoices(){
   loadVoices();
 }
 function voiceCard(m){
-  const when = m.published ? String(m.published).replace(/\s*\d{2}:\d{2}:\d{2}.*$/, "") : "";
+  // "Wed, 12 Aug 2026 00:17:32 +0000" → "12 Aug 2026": the time of day is noise, and it read as if
+  // it were the moment's own timestamp next to the real one
+  const when = m.published ? String(m.published).replace(/^[A-Za-z]{3},\s*/, "").replace(/\s*\d{1,2}:\d{2}(:\d{2})?.*$/, "").trim() : "";
   const t = m.t_start ? `${String(Math.floor(m.t_start/3600)).padStart(2,"0")}:${String(Math.floor((m.t_start%3600)/60)).padStart(2,"0")}:${String(m.t_start%60).padStart(2,"0")}` : "";
   // the snippet carries the server's « » match markers; show them as highlights, escaped first
   const body = m.snippet ? esc(m.snippet).replace(/«/g,"<mark>").replace(/»/g,"</mark>") : esc(m.text);
   return `<article class="vcard${m.asr?" vcasr":""}">
     <div class="vckick">${m.speaker?`<span class="vcwho">${esc(m.speaker)}</span>`:""}
-      <span>${esc(m.show||"")}</span>${when?`<span>${esc(when)}</span>`:""}${t?`<span>${t}</span>`:""}</div>
+      <span>${esc(m.show||"")}</span>${when?`<span>${esc(when)}</span>`:""}</div>
+    ${m.episode?`<div class="vcep">${esc(m.episode)}</div>`:""}
     <p class="vcquote">${body}</p>
     <div class="vcfoot">
       ${m.url?`<a class="vcgo" href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">${t?`Listen from ${t}`:"Open"} ↗</a>`:""}
@@ -6690,6 +6694,9 @@ function voiceCard(m){
 async function loadVoices(){
   const list = $("#vclist"), note = $("#vcnote");
   if(!list) return;
+  // Opening the page fires a browse while the user is already typing. Without a token the slower
+  // response wins and silently replaces the real search with "recent" — which is what shipped.
+  const req = ++VOICES_REQ;
   list.innerHTML = `<div class="sempty">Loading…</div>`;
   const q = ($("#vcsearch").value||"").trim();
   try{
@@ -6697,6 +6704,7 @@ async function loadVoices(){
                                              body: JSON.stringify({q, limit: 40})});
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
+    if(req !== VOICES_REQ) return;         // a newer search has already answered
     VOICES_LAST = d.moments || [];
     if(!VOICES_LAST.length){
       list.innerHTML = `<div class="sempty">Nothing on the record about that yet.</div>`;
@@ -6707,7 +6715,7 @@ async function loadVoices(){
     if(note) note.textContent = `${VOICES_LAST.length} passage${VOICES_LAST.length===1?"":"s"}`
       + (d.ranking?` · ${d.ranking}`:"") + " · spoken commentary, not evidence — verify against the cited literature";
     list.innerHTML = VOICES_LAST.map(voiceCard).join("");
-  }catch(e){ list.innerHTML = `<div class="sempty">Couldn't load voices.</div>`; }
+  }catch(e){ if(req === VOICES_REQ) list.innerHTML = `<div class="sempty">Couldn't load voices.</div>`; }
 }
 
 // ---- Active Cases: anonymous, de-identified cases published from accounts ---------------------

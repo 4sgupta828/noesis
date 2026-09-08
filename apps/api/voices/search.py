@@ -138,6 +138,17 @@ def moment(row: dict) -> dict:
         speaker = ms.group("who").strip()
         raw = raw[ms.end():]
 
+    # The snippet comes from ts_headline over the RAW block, so it carries the same offset/speaker
+    # prefix — which rendered inside the quotation as if the speaker had said their own timestamp.
+    snip = (row.get("snippet") or "").strip()
+    snip = _OFFSET.sub("", snip)
+    ms2 = _SPEAKER.match(snip)
+    if ms2 and (not speaker or ms2.group("who").strip() == speaker):
+        snip = snip[ms2.end():]
+
+    # A diarization label is not a name. Showing "SPEAKER_01" where a person belongs implies we know
+    # who spoke when we do not, so it is kept out of the attribution line.
+    anonymous = bool(re.fullmatch(r"SPEAKER[_ ]?\d+", speaker or "", re.I))
     asr = bool(facets.get("asr"))
     audio = facets.get("audio_url") or ""
     page = facets.get("episode_url") or ""
@@ -145,7 +156,8 @@ def moment(row: dict) -> dict:
         "id": f"{row.get('document_id','')}::{row.get('block_id','')}",
         "kind": facets.get("kind") or "podcast",
         "text": raw,
-        "speaker": speaker,
+        "speaker": "" if anonymous else speaker,
+        "speaker_anonymous": anonymous,
         "show": facets.get("show") or row.get("document_title") or "",
         "episode": facets.get("episode_title") or row.get("document_title") or "",
         "published": facets.get("published") or "",
@@ -158,7 +170,7 @@ def moment(row: dict) -> dict:
         "register": ("Machine-generated transcript — wording may be inexact; listen before quoting"
                      if asr else "Transcribed speech, attributed to the speaker on the recording"),
         "quotable": not asr,
-        "snippet": (row.get("snippet") or "").strip(),
+        "snippet": snip,
     }
 
 

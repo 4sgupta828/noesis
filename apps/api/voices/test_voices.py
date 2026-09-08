@@ -85,9 +85,22 @@ ROW = {"document_id": "voices_transcript:ep-1", "block_id": "b7",
        "snippet": "«creatinine»"}
 
 
+def test_a_diarization_label_is_not_shown_as_a_persons_name():
+    m = moment(ROW)
+    assert m["speaker"] == "" and m["speaker_anonymous"] is True
+    named = moment({**ROW, "text": "[00:12:34] Dr Reyes: The threshold people remember is creatinine."})
+    assert named["speaker"] == "Dr Reyes" and named["speaker_anonymous"] is False
+
+
+def test_the_snippet_never_shows_the_timestamp_inside_the_quotation():
+    m = moment({**ROW, "snippet": "[00:12:34] SPEAKER_01: the «creatinine» threshold"})
+    assert not m["snippet"].startswith("[")
+    assert "SPEAKER_01" not in m["snippet"] and "«creatinine»" in m["snippet"]
+
+
 def test_the_offset_and_speaker_are_read_back_out_of_the_passage_text():
     m = moment(ROW)
-    assert m["t_start"] == 754 and m["speaker"] == "SPEAKER_01"
+    assert m["t_start"] == 754
     assert m["text"].startswith("The threshold")          # metadata is not part of the quote
     assert "[00:12:34]" not in m["text"] and "SPEAKER_01" not in m["text"]
 

@@ -62,6 +62,20 @@ _CUE = re.compile(r"(?P<a>(?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.,]\d{1,3})?)\s*-->\s*"
 _SPEAKER = re.compile(r"^\s*(?:\[(?P<b>[^\]]{1,40})\]|(?P<p>[A-Z][A-Za-z .'-]{1,38})):\s*")
 _TAGS = re.compile(r"<[^>]+>")
 _ASR_HINT = re.compile(r"\b(ai[- ]generated|automated|machine[- ]generated)\s+transcript\b", re.I)
+# production slate and studio chatter: real strings that reached the surface as if they were speech
+_SLATE = re.compile(r"(?i)(take\s*\d+\s*[-–]|audio processed|[-_]esv\d|\bbg-\d+p\b|\bmusic-\d+p\b|"
+                    r"^\s*={2,}|\.(mp3|wav|aiff)\b|\bmix(down|ed)\b\s*v?\d)")
+# a turn that carries no content on its own — pleasantries, sign-offs, backchannel
+_FILLER = re.compile(r"(?i)^(yeah|yes|no|right|okay|ok|mm-?hm+|uh-?huh|exactly|absolutely|thank you|"
+                     r"thanks|welcome back|see you|bye)\b[\s,.!?]*$")
+
+
+def is_speech(text: str) -> bool:
+    """Is this passage something a clinician SAID, or studio furniture?"""
+    t = (text or "").strip()
+    if len(t) < 40 or _SLATE.search(t):
+        return False
+    return not _FILLER.match(t)
 
 
 def _secs(ts: str) -> int:
@@ -130,12 +144,14 @@ def plain_passages(text: str) -> list["Passage"]:
 
 
 def to_passages(cues: list[tuple[int, str]], *, target_chars: int = 700,
-                max_chars: int = 1200) -> list[Passage]:
+                max_chars: int = 1200, min_chars: int = 280) -> list[Passage]:
     """Group cues into readable passages, each keeping the second it starts at.
 
     A cue is a couple of seconds of speech — far too small to quote or to rank. Passages break on a
-    SPEAKER CHANGE first (a turn is the natural unit of "who said what") and otherwise at roughly
-    `target_chars`, so a passage is a coherent stretch of one person talking.
+    SPEAKER CHANGE, since a turn is the natural unit of "who said what", but ONLY once the passage
+    has enough substance to stand alone: in a fast dialogue every turn is a sentence, and breaking on
+    each one produced 19-word cards like "Yeah, that's a tough job" that read as gibberish out of
+    context. Below `min_chars` the exchange keeps running.
     """
     passages: list[Passage] = []
     cur: list[str] = []
@@ -160,14 +176,15 @@ def to_passages(cues: list[tuple[int, str]], *, target_chars: int = 700,
             continue
         if cur_start is None:
             cur_start, cur_speaker = start, speaker
-        elif (speaker and speaker != cur_speaker) or len(" ".join(cur)) >= target_chars:
+        elif ((speaker and speaker != cur_speaker and len(" ".join(cur)) >= min_chars)
+              or len(" ".join(cur)) >= target_chars):
             flush()
             cur_start, cur_speaker = start, speaker
         cur.append(line)
         if len(" ".join(cur)) >= max_chars:
             flush()
     flush()
-    return passages
+    return [p for p in passages if is_speech(p.text)]
 
 
 def episode_markdown(passages: list[Passage]) -> str:

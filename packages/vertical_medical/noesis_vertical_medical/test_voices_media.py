@@ -14,16 +14,24 @@ DESC = """In this video we cover acute kidney injury from first principles.
 1:45 Definitions and staging
 12:30 Prerenal vs intrinsic
 25:05 Management priorities
-
-Subscribe at https://example.com/join
+40:00 Resources
 """
 
 
 def test_a_chapter_list_is_read_in_order_with_its_offsets():
     chs = parse_chapters(DESC)
-    assert [t for t, _ in chs] == [0, 105, 750, 1505]
-    assert chs[1][1] == "Definitions and staging"
+    assert [t for t, _ in chs] == [105, 750, 1505]
+    assert chs[0][1] == "Definitions and staging"
     assert not any(t.lower().startswith("http") for _, t in chs)   # links are not chapters
+
+
+def test_navigation_chapters_are_not_clinical_moments():
+    from noesis_vertical_medical.voices_media import is_content_chapter
+    for nav in ("Introduction", "Outro", "Sponsor", "Resources", "Q&A",
+                "Cardiovascular CME Podcast Resources", "Subscribe"):
+        assert not is_content_chapter(nav), nav
+    for real in ("Prerenal vs intrinsic", "Expanding Cardioneuroablation Beyond Classic Syncope"):
+        assert is_content_chapter(real), real
 
 
 def test_a_single_stray_timestamp_in_prose_is_not_a_chapter_list():
@@ -34,9 +42,9 @@ def test_a_single_stray_timestamp_in_prose_is_not_a_chapter_list():
 def test_each_chapter_becomes_its_own_deep_linked_block():
     md = chapters_markdown(parse_chapters(DESC), "https://www.youtube.com/watch?v=abc")
     paras = [p for p in md.split("\n\n") if p.strip()]
-    assert len(paras) == 4
-    assert paras[2].startswith("[00:12:30] Prerenal vs intrinsic")
-    assert paras[2].endswith("watch?v=abc&t=750s")
+    assert len(paras) == 3
+    assert paras[1].startswith("[00:12:30] Prerenal vs intrinsic")
+    assert paras[1].endswith("watch?v=abc&t=750s")
 
 
 YT = """<?xml version="1.0"?>
@@ -48,7 +56,8 @@ YT = """<?xml version="1.0"?>
    <media:group>
      <media:description>0:00 Introduction
 1:45 Definitions and staging
-12:30 Prerenal vs intrinsic</media:description>
+12:30 Prerenal vs intrinsic
+25:05 Management priorities</media:description>
      <media:thumbnail url="https://i.ytimg.com/vi/abc123/hq.jpg"/>
    </media:group>
  </entry>
@@ -73,7 +82,7 @@ def test_the_video_artifact_is_one_chapter_per_paragraph():
     doc = asyncio.run(c.list_documents(asyncio.run(c.discover_entities({}))[0]))[0]
     md = asyncio.run(c.fetch_artifact(doc)).decode()
     assert len([p for p in md.split("\n\n") if p.strip()]) == 3
-    assert doc.facets["passages"] == 3 and doc.facets["duration_s"] == 750
+    assert doc.facets["passages"] == 3 and doc.facets["duration_s"] == 1505
     assert "description" not in doc.facets            # the raw blob does not ride into the corpus
 
 

@@ -186,3 +186,24 @@ def test_a_thin_result_set_is_not_starved_by_the_caps():
           _m("ep4", "Core IM", 0)]
     out = dedupe(ms, per_episode=1, per_show=2)
     assert len(out) == 4 and {m["id"] for m in out} == {m["id"] for m in ms}
+
+
+# ---- semantic ranking ----
+
+def test_with_a_vector_meaning_ranks_and_words_only_nudge():
+    sql, params = build_query(tsquery="kidney & failure", vector="[0.1,0.2]", limit=5)
+    assert "embedding <=>" in sql and "embedding IS NOT NULL" in sql
+    assert "[0.1,0.2]" in params
+    # the keyword clause must NOT gate the result set, or semantics cannot reach a paraphrase
+    assert "tsv @@" not in sql
+    assert "0.15 *" in sql          # exact wording is a bonus on top of similarity
+
+
+def test_without_a_vector_the_words_are_still_the_only_handle():
+    sql, _ = build_query(tsquery="kidney & failure")
+    assert "tsv @@" in sql and "embedding <=>" not in sql
+
+
+def test_a_browse_needs_neither_vector_nor_words():
+    sql, _ = build_query(order="recent")
+    assert "embedding <=>" not in sql and "tsv @@" not in sql

@@ -35,8 +35,12 @@ class VoiceJobIn(BaseModel):
     shows: list[str] | None = None
 
 
+def _vec_literal(v) -> str:
+    return "[" + ",".join(f"{float(x):.6f}" for x in v) + "]"
+
+
 def build_router(pool_of, *, manifest=None, pg_source_of=None, tenant_id: str = "demo",
-                 admin_password_of=None, embedder=None) -> APIRouter:
+                 admin_password_of=None, embedder=None, embedder_of=None) -> APIRouter:
     """`pool_of()` → an asyncpg pool; `pg_source_of()` → the corpus retrieval source (for ingest)."""
     router = APIRouter()
 
@@ -57,14 +61,28 @@ def build_router(pool_of, *, manifest=None, pg_source_of=None, tenant_id: str = 
         ws = terms(body.q)
         rungs = tsqueries(ws)
 
-        async def run(tsq: str, order: str):
+        # SEMANTIC leg: embed the question once. Failure is never fatal — the keyword ladder below
+        # still answers, which is what kept this surface working while there was no embedder at all.
+        vector = ""
+        if body.q.strip() and embedder_of is not None:
+            try:
+                vector = _vec_literal(embedder_of().embed([body.q.strip()])[0])
+            except Exception as e:      # noqa: BLE001
+                print(f"[voices] embed failed, falling back to keywords: {type(e).__name__}: {e}",
+                      flush=True)
+
+        async def run(tsq: str, order: str, vec: str = ""):
             sql, params = build_query(tsquery=tsq, kinds=kinds, show=body.show,
-                                      speaker=body.speaker, limit=limit, order=order)
+                                      speaker=body.speaker, limit=limit, order=order, vector=vec)
             async with pool.acquire() as conn:
                 return [dict(r) for r in await conn.fetch(sql, *params)]
 
         ranking, moments = "", []
-        if not rungs:                       # a browse: newest first, no ranking claim to make
+        if vector:
+            # one pass: meaning ranks, words only nudge. No ladder — there is nothing to relax.
+            moments = [moment(r) for r in await run(rungs[0][1] if rungs else "", body.order, vector)]
+            ranking = "by meaning"
+        elif not rungs:                     # a browse: newest first, no ranking claim to make
             moments = [moment(r) for r in await run("", "recent")]
             ranking = "recent"
         else:
@@ -143,8 +161,10 @@ def build_router(pool_of, *, manifest=None, pg_source_of=None, tenant_id: str = 
         for leg in legs:
             # one failing leg never costs the others their ingest
             try:
+                # embeddings are what make the search semantic; ~$0.03 for this whole corpus
                 got = await ingest_connector_to_postgres(
-                    leg, pg_source_of(), tenant_id=tenant_id, embedder=embedder,
+                    leg, pg_source_of(), tenant_id=tenant_id,
+                    embedder=(embedder_of() if embedder_of else embedder),
                     window={"limit": n})
             except Exception as e:      # noqa: BLE001
                 out[leg.key] = f"failed: {type(e).__name__}: {e}"[:200]

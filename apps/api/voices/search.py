@@ -77,8 +77,14 @@ def tsqueries(ws: list[str]) -> list[tuple[str, str]]:
 
 def build_query(*, tsquery: str = "", kinds: tuple[str, ...] = (), show: str = "",
                 speaker: str = "", limit: int = 30, table: str = "rs_block",
-                order: str = "relevance", since: str = "") -> tuple[str, list]:
-    """(sql, params) for a voices search. No I/O — the SQL is the unit under test."""
+                order: str = "relevance", since: str = "", vector: str = "") -> tuple[str, list]:
+    """(sql, params) for a voices search. No I/O — the SQL is the unit under test.
+
+    With `vector` (a pgvector literal for the query embedding) the search is SEMANTIC: passages are
+    ranked by meaning, so "what do people say about kidney failure" reaches a passage that only ever
+    says "renal impairment". Keyword rank is folded in as a bonus rather than a gate, because a
+    requirement on exact words is what made this feel like grep.
+    """
     keys = list(kinds) if kinds else list(VOICE_SOURCE_KEYS)
     params: list[Any] = [keys]
     preds = [f"source_key = ANY($1::text[])"]
@@ -95,18 +101,27 @@ def build_query(*, tsquery: str = "", kinds: tuple[str, ...] = (), show: str = "
         params.append(since)
         preds.append(f"(facets ->> 'published_at') >= ${len(params)}")
 
+    kw_rank, snippet = "0", "left(text, 400)"
     if tsquery:
         params.append(tsquery)
         tq = f"to_tsquery('english', ${len(params)})"
-        preds.append(f"tsv @@ {tq}")
         # normalisation flag 1 divides by document length: without it a long episode that says a
         # word twice outranks the passage that is ABOUT that word, and short passages never surface
-        rank = f"ts_rank(tsv, {tq}, 1)"
+        kw_rank = f"ts_rank(tsv, {tq}, 1)"
         snippet = (f"ts_headline('english', text, {tq}, "
                    "'MaxWords=48, MinWords=20, ShortWord=3, MaxFragments=1, StartSel=«, StopSel=»')")
+        if not vector:
+            preds.append(f"tsv @@ {tq}")     # keyword-only: the words are the only handle there is
+
+    if vector:
+        params.append(vector)
+        vp = f"${len(params)}::vector"
+        preds.append("embedding IS NOT NULL")
+        sim = f"(1 - (embedding <=> {vp}))"
+        # meaning leads, exact wording is a nudge — not a filter
+        rank = f"({sim} + 0.15 * {kw_rank})"
     else:
-        rank = "0"
-        snippet = "left(text, 400)"
+        rank = kw_rank
 
     order_sql = {
         "relevance": f"{rank} DESC, (facets ->> 'published_at') DESC NULLS LAST",

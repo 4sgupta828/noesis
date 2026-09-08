@@ -13,19 +13,19 @@ Language: en
 
 1
 00:00:02.000 --> 00:00:06.500
-[SPEAKER_00]: Welcome back to the show. Today we are talking about metformin in kidney disease.
+[SPEAKER_00]: Welcome back to the show. Today we are talking about metformin in chronic kidney disease, which comes up on rounds constantly and which almost everyone gets slightly wrong.
 
 2
 00:00:06.500 --> 00:00:11.000
-[SPEAKER_00]: The label changed in 2016 and a lot of us have not caught up with it.
+[SPEAKER_00]: The label changed in 2016 and a lot of us have not caught up with it, so we are still quoting a creatinine cutoff that has not been the guidance for years now.
 
 3
 00:01:04.250 --> 00:01:09.000
-[SPEAKER_01]: Right, and the threshold people remember is creatinine, which is the wrong number.
+[SPEAKER_01]: Right, and the threshold people remember is creatinine, which is the wrong number to be anchoring on when you are deciding whether this patient can stay on the drug at all.
 
 4
 00:01:09.000 --> 00:01:14.000
-[SPEAKER_01]: It is eGFR thirty that matters, not a creatinine cutoff.
+[SPEAKER_01]: It is eGFR thirty that matters, not a creatinine cutoff, and between thirty and forty-five you reduce the dose rather than stopping outright.
 """
 
 SRT = """1
@@ -56,6 +56,23 @@ def test_a_passage_breaks_on_a_speaker_change_and_keeps_its_offset():
     # the speaker tag is metadata, not part of the quote
     assert "[SPEAKER_00]" not in ps[0].text
     assert "label changed in 2016" in ps[0].text
+
+
+def test_a_fast_exchange_is_not_shredded_into_meaningless_turns():
+    """A dialogue that changes speaker every sentence produced 19-word cards like "Yeah, that's a
+    tough job" — true, but gibberish on its own. Turns keep running until they carry substance."""
+    cues = [(i * 4, f"[SPEAKER_0{i % 2}]: Short reply number {i}.") for i in range(12)]
+    ps = to_passages(cues)
+    assert len(ps) <= 3, [p.text for p in ps]
+    assert all(len(p.text) >= 40 for p in ps)
+
+
+def test_studio_furniture_never_reaches_the_surface():
+    from noesis_vertical_medical.voices_transcript import is_speech
+    assert not is_speech("BTK Episode 2 take 3 - Audio Processed-esv2-50p-bg-10p-music-10p ===")
+    assert not is_speech("Yeah.")
+    assert not is_speech("Thanks for having us here!")
+    assert is_speech("The label changed in 2016 and most of us are still quoting a creatinine cutoff.")
 
 
 def test_a_long_single_speaker_stretch_is_split_rather_than_left_unquotable():

@@ -60,8 +60,22 @@ def parse_chapters(description: str) -> list[tuple[int, str]]:
     """
     found = [(_secs(m.group("t")), " ".join(m.group("title").split()))
              for m in _CHAPTER.finditer(description or "")]
-    found = [(t, ti) for t, ti in found if ti and not ti.lower().startswith(("http", "www."))]
+    found = [(t, ti) for t, ti in found
+             if ti and not ti.lower().startswith(("http", "www.")) and is_content_chapter(ti)]
     return found if len(found) >= 3 else []
+
+
+# chapter titles that are navigation rather than content — they say nothing about medicine
+_NAV_CHAPTER = re.compile(r"(?i)^(intro(duction)?|outro|welcome|sponsor(s|ed)?|ad break|advert|"
+                          r"resources?|references?|links?|subscribe|disclaimer|credits|thanks?|"
+                          r"conclusion|summary|recap|q\s*&\s*a|questions?|takeaways?|"
+                          r".*\b(cme|podcast) resources\b.*|coming up|teaser|preview)\b[\s:–—-]*$")
+
+
+def is_content_chapter(title: str) -> bool:
+    """A chapter earns a card only if it names something clinical, not a section of the video."""
+    t = (title or "").strip()
+    return len(t.split()) >= 2 and not _NAV_CHAPTER.match(t)
 
 
 def chapters_markdown(chs: list[tuple[int, str]], video_url: str) -> str:

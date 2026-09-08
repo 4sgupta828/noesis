@@ -168,6 +168,25 @@ def test_html_entities_are_decoded_so_a_quote_reads_as_written():
     assert "didn\u2019t stop there" in out and "&#8217;" not in out
 
 
+def test_a_bibliography_entry_is_not_an_essay_paragraph():
+    ref = ("Ponemon Institute. Cost of a Data Breach Report 2025: The AI Oversight Gap. IBM Security; "
+           "2025. Accessed June 3, 2026. https://www.ibm.com/reports/data-breach")
+    assert not looks_like_prose(ref)
+    assert not looks_like_prose("Smith J, et al. Lancet 2024; 403(10441):1122 doi:10.1016/example")
+    assert looks_like_prose(PROSE1)
+
+
+def test_every_entity_is_decoded_so_an_apostrophe_never_becomes_a_space():
+    # the shape that shipped: "Jose&rsquo;s company" rendered as "Jose s company"
+    out = essay_text("<p>" + PROSE1 + " I had spent years helping keep Jose&rsquo;s company alive.</p>")
+    assert "Jose\u2019s company" in out and "Jose s company" not in out
+
+
+def test_superscript_reference_markers_are_not_glued_onto_words():
+    out = essay_text("<p>" + PROSE1 + " This holds for survivors of cancer.8-17 The rest follows.</p>")
+    assert "survivors of cancer. The rest" in out and "cancer.8-17" not in out
+
+
 def test_a_dead_essay_feed_is_skipped_rather_than_failing_the_sweep():
     def boom(u):
         raise OSError("down")

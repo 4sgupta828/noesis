@@ -18,6 +18,7 @@ clinicians, institutional medicine, and expert analysis — and each entry says 
 """
 from __future__ import annotations
 
+import html as _html
 import re
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -164,9 +165,11 @@ _WS = re.compile(r"[ \t ]+")
 _DROP_BLOCKS = re.compile(
     r"(?is)<(pre|code|script|style|table|figure|figcaption|svg|noscript)\b.*?</\1\s*>")
 _BLOCK_END = re.compile(r"(?i)</(p|div|li|h[1-6]|blockquote|tr)\s*>|<br\s*/?>")
-_ENTITIES = (("&nbsp;", " "), ("&#160;", " "), ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
-             ("&#8217;", "’"), ("&#8216;", "‘"), ("&quot;", '"'), ("&#8220;", "“"),
-             ("&#8221;", "”"), ("&#8212;", "—"), ("&#8211;", "–"), ("&#39;", "'"))
+# a reference-list entry is not writing: it is a citation, and it reads as gibberish on a card
+_REFERENCE = re.compile(r"(?i)(\bAccessed\s+\w+\s+\d{1,2},\s*\d{4}|\bdoi:|\bhttps?://\S+\s*$|"
+                        r"\b\d{4};\s*\d+\s*\(?\d*\)?:\s*\d+|\bet al\.\s*\w+\s*\d{4};)")
+# superscript citation markers survive tag-stripping glued to the word: "survivors of cancer.8-17"
+_CITE_GLUE = re.compile(r"(?<=[a-z])([.,])\d{1,3}(?:[-–]\d{1,3})?(?=\s|$)")
 # a line of code survives tag-stripping; this is what code looks like once the tags are gone
 _CODEY = re.compile(r"(<-\s|=>|\bfunction\s*\(|\}\s*$|;\s*$|^\s*[#$>]\s|::|\w+\(\)|"
                     r"\[\s*\d+\s*\]|\bdef\s+\w+\(|</?\w+>)")
@@ -192,6 +195,8 @@ def looks_like_prose(p: str) -> bool:
     # clinician, so a paragraph with several of these gaps is dropped rather than shipped.
     if _GAP.search(p):
         return False
+    if _REFERENCE.search(p):
+        return False                       # a bibliography entry, not an argument
     letters = sum(1 for c in p if c.isalpha() or c.isspace())
     if letters < len(p) * 0.78:
         return False
@@ -207,9 +212,10 @@ def essay_text(html: str) -> str:
     txt = _DROP_BLOCKS.sub("\n\n", html or "")
     txt = _BLOCK_END.sub("\n\n", txt)
     txt = _TAGS.sub("", txt)               # inline tags vanish; they never separated words
-    for a, b in _ENTITIES:
-        txt = txt.replace(a, b)
-    txt = re.sub(r"&[a-z]+;|&#\d+;", " ", txt)
+    # the standard unescape, not a hand-written table: an entity the table missed became a SPACE, so
+    # "Jose&rsquo;s company" shipped as "Jose s company"
+    txt = _html.unescape(_html.unescape(txt))
+    txt = _CITE_GLUE.sub(r"\1", txt)       # drop superscript reference numbers glued to a word
     paras = [_WS.sub(" ", p).strip() for p in re.split(r"\n\s*\n", txt)]
     return "\n\n".join(p for p in paras if looks_like_prose(p))
 

@@ -133,20 +133,27 @@ class YouTubeChapterConnector:
 
 # 19 blogs probed, 13 ship full text; these are the clinically-relevant ones — practising clinicians,
 # methodologists and research analysts writing under their own name.
-# feed url: (writer, publication, path the item link must contain)
-# The path filter is load-bearing: fharrell.com/index.xml is a SITE-wide feed whose recent items are
-# 9 talk pages and 11 posts, so without it an "essay" card links to a page whose content is a video.
-VOICE_ESSAYS: dict[str, tuple[str, str, str]] = {
-    "https://erictopol.substack.com/feed": ("Eric Topol", "Ground Truths", "/p/"),
-    "https://www.sensible-med.com/feed": ("Sensible Medicine", "evidence and clinical practice", "/p/"),
-    "https://insidemedicine.substack.com/feed": ("Jeremy Faust", "Inside Medicine", "/p/"),
+# feed url: (writer, publication, path an item link MUST contain, paths it must NOT contain)
+# Both filters are load-bearing, and each was added after a bad card reached the surface:
+#   fharrell.com/index.xml is SITE-wide — 9 talk pages to 11 posts — so an "essay" linked to a video.
+#   cancerletter.com mixes guest editorials with podcast pages AND sponsored articles; paid placement
+#   has no business on a clinical surface, whatever its word count.
+# DROPPED after reading the output: fharrell.com. The writing is first-rate and squarely medical
+# research, but the posts are built around inline maths, and with no way to render it the extraction
+# leaves sentences like "the indicator function is if is true, otherwise". Broken prose under a
+# named clinician is worse than a thinner roster, so the feed stays out until maths can be kept.
+VOICE_ESSAYS: dict[str, tuple[str, str, str, str]] = {
+    "https://erictopol.substack.com/feed": ("Eric Topol", "Ground Truths", "/p/", ""),
+    "https://www.sensible-med.com/feed":
+        ("Sensible Medicine", "evidence and clinical practice", "/p/", ""),
+    "https://insidemedicine.substack.com/feed": ("Jeremy Faust", "Inside Medicine", "/p/", ""),
     "https://yourlocalepidemiologist.substack.com/feed":
-        ("Katelyn Jetelina", "Your Local Epidemiologist", "/p/"),
-    "https://www.fharrell.com/index.xml": ("Frank Harrell", "statistical thinking", "/post/"),
-    "https://www.science.org/blogs/pipeline/feed": ("Derek Lowe", "In the Pipeline", ""),
-    "https://absolutelymaybe.plos.org/feed/": ("Hilda Bastian", "Absolutely Maybe", ""),
-    "https://bodyofevidence.substack.com/feed": ("The Body of Evidence", "clinical evidence", "/p/"),
-    "https://cancerletter.com/feed/": ("The Cancer Letter", "oncology research and policy", ""),
+        ("Katelyn Jetelina", "Your Local Epidemiologist", "/p/", ""),
+    "https://www.science.org/blogs/pipeline/feed": ("Derek Lowe", "In the Pipeline", "", ""),
+    "https://absolutelymaybe.plos.org/feed/": ("Hilda Bastian", "Absolutely Maybe", "", ""),
+    "https://bodyofevidence.substack.com/feed": ("The Body of Evidence", "clinical evidence", "/p/", ""),
+    "https://cancerletter.com/feed/":
+        ("The Cancer Letter", "oncology research and policy", "", "/podcastc/,/sponsored-article/"),
 }
 
 _TAGS = re.compile(r"<[^>]+>")
@@ -161,6 +168,8 @@ _ENTITIES = (("&nbsp;", " "), ("&#160;", " "), ("&amp;", "&"), ("&lt;", "<"), ("
 # a line of code survives tag-stripping; this is what code looks like once the tags are gone
 _CODEY = re.compile(r"(<-\s|=>|\bfunction\s*\(|\}\s*$|;\s*$|^\s*[#$>]\s|::|\w+\(\)|"
                     r"\[\s*\d+\s*\]|\bdef\s+\w+\(|</?\w+>)")
+# a hole left where inline maths or a figure was removed: space before punctuation, or "( )"
+_GAP = re.compile(r"\s[.,;:)]|\(\s*\)|\s{3,}")
 
 
 def looks_like_prose(p: str) -> bool:
@@ -176,6 +185,11 @@ def looks_like_prose(p: str) -> bool:
     symbols = sum(p.count(c) for c in "{}[]()<>=;|\\_$#")
     if symbols > len(p) * 0.06 or len(_CODEY.findall(p)) >= 2:
         return False                       # code is punctuation-dense
+    # Inline maths and figures leave HOLES when their markup is stripped: "a distribution function ."
+    # or "the outcome , means". The sentence survives the length test and reads as broken to a
+    # clinician, so a paragraph with several of these gaps is dropped rather than shipped.
+    if _GAP.search(p):
+        return False
     letters = sum(1 for c in p if c.isalpha() or c.isspace())
     if letters < len(p) * 0.78:
         return False
@@ -218,9 +232,10 @@ class ExpertEssayConnector:
     async def discover_entities(self, window: dict) -> list[_Ref]:
         out = []
         for url, spec in self._feeds.items():
-            spec = tuple(spec) + ("", "", "")
+            spec = tuple(spec) + ("", "", "", "")
             out.append(_Ref(source_key=self.key, native_id=url, title=spec[0],
-                            facets={"show": spec[1] or spec[0], "writer": spec[0], "path": spec[2]}))
+                            facets={"show": spec[1] or spec[0], "writer": spec[0], "path": spec[2],
+                             "not_path": spec[3]}))
         return out
 
     async def list_documents(self, entity: _Ref) -> list[_Ref]:
@@ -231,6 +246,7 @@ class ExpertEssayConnector:
         who = entity.title
         pub = entity.facets.get("show") or who
         need_path = entity.facets.get("path") or ""
+        ban_paths = [x for x in (entity.facets.get("not_path") or "").split(",") if x]
         docs: list[_Ref] = []
         for it in [e for e in root.iter() if e.tag.split("}")[-1] in ("item", "entry")]:
             title, link, published, body = "", "", "", ""
@@ -247,6 +263,8 @@ class ExpertEssayConnector:
                         body = el.text
             if need_path and need_path not in (link or ""):
                 continue           # a site-wide feed also carries talks and pages, not just posts
+            if any(b in (link or "") for b in ban_paths):
+                continue           # podcast pages and paid placement are not expert writing
             if not title or not (link or "").startswith("http"):
                 continue           # a card whose link does not resolve is worse than no card
             if len(essay_text(body)) < 600:

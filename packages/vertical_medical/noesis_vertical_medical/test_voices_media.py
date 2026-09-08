@@ -103,7 +103,7 @@ RSS = """<?xml version="1.0"?><rss xmlns:content="http://purl.org/rss/1.0/module
 
 
 def _essays(feeds=None):
-    return ExpertEssayConnector(feeds or {"https://f/x": ("Dr Writer", "The Blog", "")},
+    return ExpertEssayConnector(feeds or {"https://f/x": ("Dr Writer", "The Blog", "", "")},
                                 fetch=lambda u: RSS.encode())
 
 
@@ -127,15 +127,32 @@ def test_inline_tags_do_not_insert_spaces_inside_words():
 
 
 def test_a_site_wide_feed_is_filtered_to_posts_so_a_link_is_never_a_talk_page():
-    c = _essays({"https://f/x": ("Dr Writer", "The Blog", "/p/")})
+    c = _essays({"https://f/x": ("Dr Writer", "The Blog", "/p/", "")})
     docs = asyncio.run(c.list_documents(asyncio.run(c.discover_entities({}))[0]))
     assert [d.facets["episode_url"] for d in docs] == ["https://blog.example/p/1"]
     assert all("/talk/" not in d.facets["episode_url"] for d in docs)
 
 
+def test_paid_placement_and_podcast_pages_are_excluded_by_path():
+    rss = RSS.replace("https://blog.example/p/2", "https://blog.example/sponsored-article/x")
+    c = ExpertEssayConnector({"https://f/x": ("W", "B", "", "/sponsored-article/,/podcastc/")},
+                             fetch=lambda u: rss.encode())
+    docs = asyncio.run(c.list_documents(asyncio.run(c.discover_entities({}))[0]))
+    assert all("sponsored" not in d.facets["episode_url"] for d in docs)
+
+
+def test_a_paragraph_left_full_of_holes_by_stripped_maths_is_dropped():
+    # what Harrell's posts become once inline maths is removed
+    broken = ("Consider a continuous, discrete, or mixed-type random variable having a cumulative "
+              "distribution function . The empirical cumulative distribution function is the "
+              "nonparametric maximum likelihood estimator of , and it is defined for all values of .")
+    assert not looks_like_prose(broken)
+    assert looks_like_prose(PROSE2)
+
+
 def test_an_item_without_a_resolvable_link_is_dropped():
     rss = RSS.replace("<link>https://blog.example/p/1</link>", "<link></link>")
-    c = ExpertEssayConnector({"https://f/x": ("W", "B", "")}, fetch=lambda u: rss.encode())
+    c = ExpertEssayConnector({"https://f/x": ("W", "B", "", "")}, fetch=lambda u: rss.encode())
     docs = asyncio.run(c.list_documents(asyncio.run(c.discover_entities({}))[0]))
     assert all(d.facets["episode_url"].startswith("http") for d in docs)
 
@@ -154,5 +171,5 @@ def test_html_entities_are_decoded_so_a_quote_reads_as_written():
 def test_a_dead_essay_feed_is_skipped_rather_than_failing_the_sweep():
     def boom(u):
         raise OSError("down")
-    c = ExpertEssayConnector({"https://f/x": ("A", "B", "")}, fetch=boom)
+    c = ExpertEssayConnector({"https://f/x": ("A", "B", "", "")}, fetch=boom)
     assert asyncio.run(c.list_documents(asyncio.run(c.discover_entities({}))[0])) == []

@@ -1730,7 +1730,9 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             _voices_pool, pg_source_of=_voices_pg_source, tenant_id="demo",
             admin_password_of=lambda: _admin_ui_pw(),
             embedder=build_embedder(mode=resolve_mode()),
-            embedder_of=lambda: build_embedder(mode=resolve_mode())))
+            embedder_of=lambda: build_embedder(mode=resolve_mode()),
+            llm_of=lambda: build_llm(mode=resolve_mode(),
+                                     model=os.environ.get("NOESIS_VOICES_MODEL", "") or None)))
 
     @app.get("/health")
     def health() -> dict:

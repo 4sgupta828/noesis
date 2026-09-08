@@ -5,7 +5,9 @@ touched — so the feature cannot affect a deployment that has not asked for it.
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
@@ -33,6 +35,11 @@ class VoiceRelatedIn(BaseModel):
     limit: int = 3
 
 
+class VoiceSummaryIn(BaseModel):
+    id: str = ""              # "<document_id>::<block_id>" as returned by search
+    refresh: bool = False
+
+
 class VoiceJobIn(BaseModel):
     kind: str = "ingest"
     limit: int = 12           # episodes/videos/posts per source
@@ -47,7 +54,7 @@ def _vec_literal(v) -> str:
 
 
 def build_router(pool_of, *, manifest=None, pg_source_of=None, tenant_id: str = "demo",
-                 admin_password_of=None, embedder=None, embedder_of=None) -> APIRouter:
+                 admin_password_of=None, embedder=None, embedder_of=None, llm_of=None) -> APIRouter:
     """`pool_of()` → an asyncpg pool; `pg_source_of()` → the corpus retrieval source (for ingest)."""
     router = APIRouter()
 
@@ -138,6 +145,60 @@ def build_router(pool_of, *, manifest=None, pg_source_of=None, tenant_id: str = 
         picks = one_per_show([moment(r) for r in rows],
                              limit=max(1, min(int(body.limit or 3), 5)), floor=0.40, margin=0.08)
         return {"moments": picks, "basis": "commentary — not part of the evidence for this answer"}
+
+    @router.post("/voices/summary")
+    async def voices_summary(body: VoiceSummaryIn) -> dict:
+        """What a whole piece says, read in place.
+
+        Lazy and cached: nothing is summarised until a reader opens one, so spend follows attention.
+        """
+        pool = await pool_of()
+        doc = (body.id or "").split("::")[0].strip()
+        if pool is None or not doc:
+            return {"points": [], "basis": ""}
+        from .summarize import DDL, TTL_DAYS, VERSION, summarize
+
+        async with pool.acquire() as conn:
+            await conn.execute(DDL)
+            if not body.refresh:
+                row = await conn.fetchrow(
+                    "SELECT heading, points, quotes, basis, v, "
+                    "  (now() - made_at) < (make_interval(days => $2)) AS fresh "
+                    "FROM vo_summary WHERE document_id = $1", doc,
+                    max(TTL_DAYS.values()))
+                if row and row["v"] == VERSION and row["fresh"]:
+                    ttl = TTL_DAYS.get(row["basis"], 1)
+                    stale = await conn.fetchval(
+                        "SELECT (now() - made_at) > make_interval(days => $2) FROM vo_summary "
+                        "WHERE document_id = $1", doc, ttl)
+                    if not stale:
+                        return {"heading": row["heading"],
+                                "points": json.loads(row["points"]) if isinstance(row["points"], str) else row["points"],
+                                "quotes": json.loads(row["quotes"]) if isinstance(row["quotes"], str) else row["quotes"],
+                                "basis": row["basis"], "cached": True}
+            rows = await conn.fetch(
+                "SELECT text, document_title FROM rs_block WHERE document_id = $1 "
+                "ORDER BY block_id LIMIT 400", doc)
+        if not rows:
+            return {"points": [], "basis": ""}
+        title = rows[0]["document_title"] or ""
+        # strip the offset prefix so the model reads speech, not timestamps
+        body_text = "\n\n".join(re.sub(r"^\[\d{2}:\d{2}:\d{2}\]\s*", "", r["text"] or "")
+                                 for r in rows)
+        out = await summarize(title=title, source=body_text,
+                              llm=(llm_of() if llm_of else None))
+        if out.get("points"):
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "INSERT INTO vo_summary (document_id, heading, points, quotes, basis, v, made_at) "
+                    "VALUES ($1,$2,$3::jsonb,$4::jsonb,$5,$6, now()) "
+                    "ON CONFLICT (document_id) DO UPDATE SET heading=EXCLUDED.heading, "
+                    "points=EXCLUDED.points, quotes=EXCLUDED.quotes, basis=EXCLUDED.basis, "
+                    "v=EXCLUDED.v, made_at=now()",
+                    doc, out.get("heading", ""), json.dumps(out.get("points") or []),
+                    json.dumps(out.get("quotes") or []), out.get("basis", ""), VERSION)
+        out["cached"] = False
+        return out
 
     @router.get("/voices/sources")
     async def voices_sources() -> dict:

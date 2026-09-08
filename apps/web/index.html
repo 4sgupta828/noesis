@@ -1550,6 +1550,14 @@
   .vcard .vcfail{font-family:var(--mono);font-size:.66rem;color:var(--gap);}
   .vcard .vcfull{font-family:var(--serif);font-size:.98rem;line-height:1.6;color:var(--ink);
     border-left:2px solid var(--hair);padding-left:.8rem;}
+  .vcsum{border-left:2px solid rgba(31,122,82,.5);padding-left:.85rem;}
+  .vcsum-wait{font-family:var(--mono);font-size:.66rem;color:var(--muted);border:0;padding-left:0;}
+  .vcsum-h{font-family:var(--sans);font-size:.88rem;font-weight:700;color:var(--ink);margin-bottom:.35rem;}
+  .vcsum-l{margin:.2rem 0 .45rem;padding-left:1.1rem;}
+  .vcsum-l li{font-family:var(--sans);font-size:.86rem;line-height:1.5;color:var(--ink);margin:.22rem 0;}
+  .vcsq{margin:.35rem 0;padding-left:.7rem;border-left:2px solid var(--hair);
+    font-family:var(--serif);font-style:italic;font-size:.9rem;color:var(--muted);}
+  .vcsum-b{font-family:var(--mono);font-size:.58rem;color:var(--muted);margin-top:.35rem;}
   .vcard .vcread{color:#1F7A52;border-color:rgba(31,122,82,.45);}
   .vcard .vcread:hover{background:#1F7A52;color:#fff;}
   @media (max-width:560px){
@@ -6826,12 +6834,8 @@ async function appendRelatedVoices(target, question){
     }));
     target.querySelectorAll(".rvread").forEach(btn => btn.addEventListener("click", e => {
       e.preventDefault();
-      const it = btn.closest(".rvitem"), m = RELVOICES[parseInt(btn.dataset.i, 10)];
-      const box = it.querySelector(".vcplayer");
-      if(!box || !m) return;
-      if(!box.hidden){ box.hidden = true; box.innerHTML = ""; btn.textContent = "☰ read here"; return; }
-      box.innerHTML = `<div class="vcfull">${esc(m.text||"")}</div>`;
-      box.hidden = false; btn.textContent = "☰ collapse";
+      vcOpenSummary(btn.closest(".rvitem"), RELVOICES[parseInt(btn.dataset.i, 10)], btn,
+                    ["☰ read here", "☰ collapse"]);
     }));
   }catch(e){ /* a suggestion block never disturbs an answer */ }
 }
@@ -6933,6 +6937,36 @@ function vcOpenPlayer(card, m){
     const ob = c.querySelector(".vcfoot .vcplay, .rvact .rvplay");
     if(ob && ob.dataset.play) ob.textContent = "▶ " + ob.dataset.play; } });
 }
+// "Read here" used to re-show the passage the card already displayed, which did nothing. It now
+// fetches what the WHOLE piece says — lazily, so nothing is summarised until someone opens it.
+async function vcOpenSummary(container, m, btn, labels){
+  const box = container.querySelector(".vcplayer");
+  if(!box || !m) return;
+  if(!box.hidden){ box.hidden = true; box.innerHTML = ""; if(btn) btn.textContent = labels[0]; return; }
+  box.hidden = false;
+  box.innerHTML = `<div class="vcsum vcsum-wait">Reading the whole piece…</div>`;
+  if(btn) btn.textContent = labels[1];
+  try{
+    const r = await fetch("/voices/summary", {method:"POST", headers:{"content-type":"application/json"},
+      body: JSON.stringify({id: m.id})});
+    const d = r.ok ? await r.json() : {};
+    const pts = (d.points||[]);
+    if(!pts.length){   // no summary to be had — the passage itself is better than an error
+      box.innerHTML = `<div class="vcfull">${esc(m.text||"")}</div>`;
+      return;
+    }
+    const quotes = (d.quotes||[]).map(q=>`<blockquote class="vcsq">“${esc(q)}”</blockquote>`).join("");
+    // the basis is stated, because an extractive fallback is a different kind of claim from a read
+    const basis = d.basis === "model" ? "summary of the whole piece"
+                : d.basis === "extractive" ? "key sentences, taken verbatim from the piece" : "";
+    box.innerHTML = `<div class="vcsum">
+      ${d.heading?`<div class="vcsum-h">${esc(d.heading)}</div>`:""}
+      <ul class="vcsum-l">${pts.map(p=>`<li>${esc(p)}</li>`).join("")}</ul>
+      ${quotes}<div class="vcsum-b">${esc(basis)} · what the author claims, not a judgment of it</div>
+    </div>`;
+  }catch(e){ box.innerHTML = `<div class="vcfull">${esc(m.text||"")}</div>`; }
+}
+
 async function loadVoices(){
   const list = $("#vclist"), note = $("#vcnote");
   if(!list) return;
@@ -6965,12 +6999,8 @@ async function loadVoices(){
     // than the search snippet
     list.querySelectorAll(".vcread").forEach(btn => btn.addEventListener("click", e => {
       e.preventDefault();
-      const card = btn.closest(".vcard"), m = VOICES_LAST[parseInt(btn.dataset.i, 10)];
-      const box = card.querySelector(".vcplayer");
-      if(!box || !m) return;
-      if(!box.hidden){ box.hidden = true; box.innerHTML = ""; btn.textContent = "☰ Read here"; return; }
-      box.innerHTML = `<div class="vcfull">${esc(m.text||"")}</div>`;
-      box.hidden = false; btn.textContent = "☰ Collapse";
+      vcOpenSummary(btn.closest(".vcard"), VOICES_LAST[parseInt(btn.dataset.i, 10)], btn,
+                    ["☰ Read here", "☰ Collapse"]);
     }));
   }catch(e){ if(req === VOICES_REQ) list.innerHTML = `<div class="sempty">Couldn't load voices.</div>`; }
 }

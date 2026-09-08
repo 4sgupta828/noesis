@@ -3671,20 +3671,30 @@ function vzFlow(v){
   const W=Math.max(maxRowW,220)+20; const pos={}; let y=12;
   Ls.forEach(L=>{ const r=layers[L]; const rw=r.length*NW+(r.length-1)*colGap; let x=(W-rw)/2;
     r.forEach(n=>{ pos[n.id]={x,y,w:NW,h:H[n.id]}; x+=NW+colGap; }); y+=rowH[L]+rowGap; });
-  const totalH=y-rowGap+12;
+  let totalH=y-rowGap+12;
   const rects=Object.values(pos);   // node boxes, for edge-label collision avoidance
   const placedLbls=[];              // and the labels already placed, so two never stack
+  const lblData=[];                 // labels are emitted after the canvas is sized to fit them
   let ed="", lbls="";   // lines under the nodes; labels ON TOP so they're never hidden
   edges.forEach(e=>{ const a=pos[e.src], b=pos[e.dst]; if(!a||!b) return;
     const sx=a.x+a.w/2, sy=a.y+a.h, tx=b.x+b.w/2, ty=b.y; const mid=(sy+ty)/2;
     ed += `<path class="vzedge" d="M${sx} ${sy} C ${sx} ${mid} ${tx} ${mid} ${tx} ${ty}" marker-end="url(#vzarr)"/>`;
     if(e.label){ const w=e.label.length*6+12;   // fit full text, no truncation
       const p=vzLabelPos((sx+tx)/2, mid, w, 17, rects, placedLbls, W);   // off the boxes and off other labels
-      lbls += `<rect class="vzedgelblbg" x="${(p.x-w/2).toFixed(1)}" y="${(p.y-9).toFixed(1)}" width="${w.toFixed(1)}" height="17" rx="8"/>`+
-              `<text class="vzedgelbl" x="${p.x.toFixed(1)}" y="${(p.y+3).toFixed(1)}">${esc(e.label)}</text>`; }
+      lblData.push({x:p.x, y:p.y, w, text:e.label}); }
   });
+  // A label nudged past the last row would fall outside a canvas sized from the boxes alone and be
+  // clipped — grow the canvas (and shift down if one went above the top) so every label is visible.
+  let lminY=0, lmaxY=totalH;
+  lblData.forEach(l=>{ lminY=Math.min(lminY, l.y-9); lmaxY=Math.max(lmaxY, l.y+9); });
+  const shiftY = lminY < 0 ? -lminY + 6 : 0;
+  totalH = lmaxY + shiftY + 12;
+  lblData.forEach(l=>{
+    lbls += `<rect class="vzedgelblbg" x="${(l.x-l.w/2).toFixed(1)}" y="${(l.y-9).toFixed(1)}" width="${l.w.toFixed(1)}" height="17" rx="8"/>`+
+            `<text class="vzedgelbl" x="${l.x.toFixed(1)}" y="${(l.y+3).toFixed(1)}">${esc(l.text)}</text>`; });
   let nd=""; nodes.forEach(n=>nd+=vzNodeBox(n,pos[n.id],(indeg[n.id]||0)===0,"vzt"+((layer[n.id]||0)%6)));
-  return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W} ${totalH}" width="${W}" height="${totalH}" role="img">${VZ_DEFS}${ed}${nd}${lbls}</svg></div>`;
+  const g = shiftY ? `<g transform="translate(0,${shiftY.toFixed(1)})">${ed}${nd}${lbls}</g>` : `${ed}${nd}${lbls}`;
+  return `<div class="vzscroll"><svg class="vzsvg" viewBox="0 0 ${W} ${totalH.toFixed(0)}" width="${W}" height="${totalH.toFixed(0)}" role="img">${VZ_DEFS}${g}</svg></div>`;
 }
 function vzTree(v){
   const nodes=v.nodes||[]; if(nodes.length<2) return "";

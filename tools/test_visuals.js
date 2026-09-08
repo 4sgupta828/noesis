@@ -103,7 +103,7 @@ for(const [name, fx] of Object.entries(flows)){
   t('flow ' + name + ': no edge label sits on a node box',
     L.every(l => !R.some(r => l.x < r.x + r.w && r.x < l.x + l.w && l.y < r.y + r.h && r.y < l.y + l.h)));
   t('flow ' + name + ': no label escapes the canvas',
-    L.every(l => l.x >= -0.5 && l.x + l.w <= B.w + 0.5));
+    L.every(l => l.x >= -0.5 && l.x + l.w <= B.w + 0.5 && l.y >= -0.5 && l.y + l.h <= B.h + 0.5));
   t('flow ' + name + ': every label is drawn', L.length === fx.edges.length);
 }
 

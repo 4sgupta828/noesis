@@ -133,7 +133,9 @@ class YouTubeChapterConnector:
 
 # 19 blogs probed, 13 ship full text; these are the clinically-relevant ones — practising clinicians,
 # methodologists and research analysts writing under their own name.
-# feed url: (writer, publication, path an item link MUST contain, paths it must NOT contain)
+# feed url: (writer, PUBLICATION NAME, path an item link MUST contain, paths it must NOT contain)
+# The second field is the masthead the card shows, not a description of the beat — a card reading
+# "evidence and clinical practice" where a publication belongs looks like a bug, because it was one.
 # Both filters are load-bearing, and each was added after a bad card reached the surface:
 #   fharrell.com/index.xml is SITE-wide — 9 talk pages to 11 posts — so an "essay" linked to a video.
 #   cancerletter.com mixes guest editorials with podcast pages AND sponsored articles; paid placement
@@ -144,16 +146,16 @@ class YouTubeChapterConnector:
 # named clinician is worse than a thinner roster, so the feed stays out until maths can be kept.
 VOICE_ESSAYS: dict[str, tuple[str, str, str, str]] = {
     "https://erictopol.substack.com/feed": ("Eric Topol", "Ground Truths", "/p/", ""),
-    "https://www.sensible-med.com/feed":
-        ("Sensible Medicine", "evidence and clinical practice", "/p/", ""),
+    "https://www.sensible-med.com/feed": ("Sensible Medicine", "Sensible Medicine", "/p/", ""),
     "https://insidemedicine.substack.com/feed": ("Jeremy Faust", "Inside Medicine", "/p/", ""),
     "https://yourlocalepidemiologist.substack.com/feed":
         ("Katelyn Jetelina", "Your Local Epidemiologist", "/p/", ""),
     "https://www.science.org/blogs/pipeline/feed": ("Derek Lowe", "In the Pipeline", "", ""),
     "https://absolutelymaybe.plos.org/feed/": ("Hilda Bastian", "Absolutely Maybe", "", ""),
-    "https://bodyofevidence.substack.com/feed": ("The Body of Evidence", "clinical evidence", "/p/", ""),
+    "https://bodyofevidence.substack.com/feed":
+        ("The Body of Evidence", "The Body of Evidence", "/p/", ""),
     "https://cancerletter.com/feed/":
-        ("The Cancer Letter", "oncology research and policy", "", "/podcastc/,/sponsored-article/"),
+        ("The Cancer Letter", "The Cancer Letter", "", "/podcastc/,/sponsored-article/"),
 }
 
 _TAGS = re.compile(r"<[^>]+>")

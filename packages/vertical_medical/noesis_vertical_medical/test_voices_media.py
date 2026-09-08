@@ -4,7 +4,8 @@ from __future__ import annotations
 import asyncio
 
 from noesis_vertical_medical.voices_media import (
-    ExpertEssayConnector, YouTubeChapterConnector, chapters_markdown, essay_text, parse_chapters,
+    ExpertEssayConnector, YouTubeChapterConnector, chapters_markdown, essay_text, looks_like_prose,
+    parse_chapters,
 )
 
 DESC = """In this video we cover acute kidney injury from first principles.
@@ -78,34 +79,80 @@ def test_the_video_artifact_is_one_chapter_per_paragraph():
 
 # ---- essays ----
 
+PROSE1 = ("The trial randomised just over four thousand adults and reported a hazard ratio of 0.79 for "
+          "the primary composite endpoint, which is a larger effect than most of us expected given "
+          "the earlier observational work in this population.")
+PROSE2 = ("What matters clinically is whether that difference survives adjustment for baseline renal "
+          "function, because the subgroup with an eGFR below thirty was small and the confidence "
+          "interval there crosses one by a wide margin.")
+PROSE3 = ("None of this settles the question for an individual patient in front of you, but it does "
+          "change how much weight the guideline committee can put on a single trial when the "
+          "replication attempt is still running and the populations differ so much.")
+CODE = ("unpack &lt;- function (par) { list ( mu = par[ 1 ], sigma = exp (par[ 2 ]), "
+        "theta = if ( length (par) &gt; 2 ) par[ 3 : length (par)] else numeric ( 0 )) }")
+
 RSS = """<?xml version="1.0"?><rss xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel>
  <item><title>What the trial actually showed</title><link>https://blog.example/p/1</link>
   <pubDate>Mon, 01 Sep 2026 09:00:00 GMT</pubDate>
-  <content:encoded><![CDATA[<p>%s</p><p>%s</p><p>Subscribe</p>]]></content:encoded></item>
+  <content:encoded><![CDATA[<p>%s</p><pre><code>%s</code></pre><p>%s</p><p>%s</p><p>Subscribe</p>]]></content:encoded></item>
  <item><title>Teaser only</title><link>https://blog.example/p/2</link>
   <description>Read the rest at our site.</description></item>
-</channel></rss>""" % ("A" * 400, "B" * 300)
+ <item><title>A recorded talk</title><link>https://blog.example/talk/bthink/</link>
+  <content:encoded><![CDATA[<p>%s</p><p>%s</p><p>%s</p>]]></content:encoded></item>
+</channel></rss>""" % (PROSE1, CODE, PROSE2, PROSE3, PROSE1, PROSE2, PROSE3)
+
+
+def _essays(feeds=None):
+    return ExpertEssayConnector(feeds or {"https://f/x": ("Dr Writer", "The Blog", "")},
+                                fetch=lambda u: RSS.encode())
 
 
 def test_a_teaser_is_not_an_essay():
-    c = ExpertEssayConnector({"https://f/x": ("Dr Writer", "The Blog")}, fetch=lambda u: RSS.encode())
+    c = _essays()
     docs = asyncio.run(c.list_documents(asyncio.run(c.discover_entities({}))[0]))
-    assert [d.title for d in docs] == ["What the trial actually showed"]
+    assert "Teaser only" not in [d.title for d in docs]
     assert docs[0].facets["writer"] == "Dr Writer" and docs[0].facets["kind"] == "essay"
 
 
+def test_source_code_is_never_shipped_as_writing():
+    # the exact shape that reached production: R source, tag-stripped into "par[ 1 ]"
+    assert essay_text(f"<p>{PROSE1}</p><pre><code>{CODE}</code></pre>") == PROSE1
+    assert not looks_like_prose("unpack <- function (par) { list ( mu = par[ 1 ], sigma = exp (par[ 2 ]) ) }")
+    assert looks_like_prose(PROSE1)
+
+
+def test_inline_tags_do_not_insert_spaces_inside_words():
+    out = essay_text(f"<p>The <em>eGFR</em> threshold is thirty. {PROSE2}</p>")
+    assert "The eGFR threshold" in out and "e GFR" not in out
+
+
+def test_a_site_wide_feed_is_filtered_to_posts_so_a_link_is_never_a_talk_page():
+    c = _essays({"https://f/x": ("Dr Writer", "The Blog", "/p/")})
+    docs = asyncio.run(c.list_documents(asyncio.run(c.discover_entities({}))[0]))
+    assert [d.facets["episode_url"] for d in docs] == ["https://blog.example/p/1"]
+    assert all("/talk/" not in d.facets["episode_url"] for d in docs)
+
+
+def test_an_item_without_a_resolvable_link_is_dropped():
+    rss = RSS.replace("<link>https://blog.example/p/1</link>", "<link></link>")
+    c = ExpertEssayConnector({"https://f/x": ("W", "B", "")}, fetch=lambda u: rss.encode())
+    docs = asyncio.run(c.list_documents(asyncio.run(c.discover_entities({}))[0]))
+    assert all(d.facets["episode_url"].startswith("http") for d in docs)
+
+
 def test_navigation_fragments_are_dropped_and_paragraphs_survive():
-    txt = essay_text("<p>%s</p><p>Subscribe</p><p>%s</p>" % ("A" * 300, "B" * 300))
+    txt = essay_text(f"<p>{PROSE1}</p><p>Subscribe</p><p>{PROSE2}</p>")
     paras = [p for p in txt.split("\n\n") if p.strip()]
     assert len(paras) == 2 and "Subscribe" not in txt
 
 
 def test_html_entities_are_decoded_so_a_quote_reads_as_written():
-    assert "don't" in essay_text("<p>" + "x" * 130 + " don&#8217;t stop here</p>")
+    out = essay_text("<p>" + PROSE1 + " The author didn&#8217;t stop there.</p>")
+    assert "didn\u2019t stop there" in out and "&#8217;" not in out
 
 
 def test_a_dead_essay_feed_is_skipped_rather_than_failing_the_sweep():
     def boom(u):
         raise OSError("down")
-    c = ExpertEssayConnector({"https://f/x": ("A", "B")}, fetch=boom)
+    c = ExpertEssayConnector({"https://f/x": ("A", "B", "")}, fetch=boom)
     assert asyncio.run(c.list_documents(asyncio.run(c.discover_entities({}))[0])) == []

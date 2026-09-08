@@ -1494,16 +1494,11 @@
   .vcard.vcasr{background:linear-gradient(0deg, rgba(var(--gold-rgb),.03), rgba(var(--gold-rgb),.03)), var(--panel);}
   .vcard .vcplay{position:relative;display:block;padding:0;border:0;background:none;cursor:pointer;}
   .vcard .vcplayico{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    border-radius:9px;background:rgba(0,0,0,.42);color:#fff;font-size:.8rem;opacity:0;transition:opacity .13s;}
-  .vcard .vcplay:hover .vcplayico,.vcard .vcplay:focus-visible .vcplayico{opacity:1;}
-  .vcard.playing .vcplayico{opacity:1;background:rgba(0,0,0,.55);}
-  .vcard .vcfoot .vcplay{border:1px solid rgba(var(--gold-rgb),.45);border-radius:999px;
-    padding:.3rem .7rem;min-height:32px;display:inline-flex;align-items:center;gap:.3rem;
-    font-family:var(--sans);font-size:.76rem;font-weight:650;color:var(--gold);background:transparent;}
-  .vcard .vcfoot .vcplay:hover{background:var(--gold);color:var(--on-accent);}
-  .vcard.k-video .vcfoot .vcplay{color:#C0392B;border-color:rgba(192,57,43,.45);}
-  .vcard.k-video .vcfoot .vcplay:hover{background:#C0392B;color:#fff;}
-  .vcard .vcout{font-weight:550;opacity:.85;}
+    border-radius:9px;background:rgba(0,0,0,.34);color:#fff;font-size:.82rem;transition:background .13s;}
+  .vcard .vcplay:hover .vcplayico,.vcard .vcplay:focus-visible .vcplayico{background:rgba(0,0,0,.62);}
+  .vcard.playing .vcplayico{background:rgba(0,0,0,.62);}
+  /* the artwork is the only play control; a big translucent glyph makes that obvious at rest */
+  .vcard .vcplayico{opacity:.92;}
   .vcard .vcplayer{margin-top:.6rem;}
   .vcard .vcplayer audio{width:100%;height:34px;}
   .vcard .vcframe{position:relative;width:100%;padding-top:56.25%;border-radius:10px;overflow:hidden;
@@ -6768,9 +6763,8 @@ function voiceCard(m, i){
          title="Play here from ${t||"the start"}">${inner}<span class="vcplayico">▶</span></button>`
     : inner;
   const cls = `vcard k-${kind}${m.asr?" vcasr":""}`;
-  const action = kind === "video" ? (t?`Watch from ${t}`:"Watch")
-               : kind === "essay" ? "Read the post"
-               : (t?`Listen from ${t}`:"Listen");
+  // one play control — the artwork. The footer link goes OUT to the source, at the same moment.
+  const action = kind === "essay" ? "Read the post" : (t ? `Open at ${t}` : "Open");
   return `<article class="${cls}">
     <div class="vcart">${art}</div>
     <div class="vcmain">
@@ -6780,9 +6774,8 @@ function voiceCard(m, i){
       ${m.episode?`<div class="vcep">${esc(m.episode)}</div>`:""}
       <p class="vcquote">${body}</p>
       <div class="vcfoot">
-        ${playable?`<button type="button" class="vcgo vcplay" data-i="${i}">▶ ${esc(action)}</button>`:""}
         ${(!playable && m.text)?`<button type="button" class="vcgo vcread" data-i="${i}">☰ Read here</button>`:""}
-        ${m.url?`<a class="vcgo vcout" href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">Open ↗</a>`:""}
+        ${m.url?`<a class="vcgo vcout" href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">${esc(action)} ↗</a>`:""}
         <span class="vcreg">${esc(m.register||"")}</span>
       </div>
       <div class="vcplayer" hidden></div>

@@ -133,33 +133,69 @@ class YouTubeChapterConnector:
 
 # 19 blogs probed, 13 ship full text; these are the clinically-relevant ones — practising clinicians,
 # methodologists and research analysts writing under their own name.
-VOICE_ESSAYS: dict[str, tuple[str, str]] = {
-    # feed url: (writer, what they write about)
-    "https://erictopol.substack.com/feed": ("Eric Topol", "Ground Truths"),
-    "https://www.sensible-med.com/feed": ("Sensible Medicine", "evidence and clinical practice"),
-    "https://insidemedicine.substack.com/feed": ("Jeremy Faust", "Inside Medicine"),
-    "https://yourlocalepidemiologist.substack.com/feed": ("Katelyn Jetelina", "Your Local Epidemiologist"),
-    "https://www.fharrell.com/index.xml": ("Frank Harrell", "statistical thinking"),
-    "https://www.science.org/blogs/pipeline/feed": ("Derek Lowe", "In the Pipeline"),
-    "https://absolutelymaybe.plos.org/feed/": ("Hilda Bastian", "Absolutely Maybe"),
-    "https://bodyofevidence.substack.com/feed": ("The Body of Evidence", "clinical evidence"),
-    "https://cancerletter.com/feed/": ("The Cancer Letter", "oncology research and policy"),
+# feed url: (writer, publication, path the item link must contain)
+# The path filter is load-bearing: fharrell.com/index.xml is a SITE-wide feed whose recent items are
+# 9 talk pages and 11 posts, so without it an "essay" card links to a page whose content is a video.
+VOICE_ESSAYS: dict[str, tuple[str, str, str]] = {
+    "https://erictopol.substack.com/feed": ("Eric Topol", "Ground Truths", "/p/"),
+    "https://www.sensible-med.com/feed": ("Sensible Medicine", "evidence and clinical practice", "/p/"),
+    "https://insidemedicine.substack.com/feed": ("Jeremy Faust", "Inside Medicine", "/p/"),
+    "https://yourlocalepidemiologist.substack.com/feed":
+        ("Katelyn Jetelina", "Your Local Epidemiologist", "/p/"),
+    "https://www.fharrell.com/index.xml": ("Frank Harrell", "statistical thinking", "/post/"),
+    "https://www.science.org/blogs/pipeline/feed": ("Derek Lowe", "In the Pipeline", ""),
+    "https://absolutelymaybe.plos.org/feed/": ("Hilda Bastian", "Absolutely Maybe", ""),
+    "https://bodyofevidence.substack.com/feed": ("The Body of Evidence", "clinical evidence", "/p/"),
+    "https://cancerletter.com/feed/": ("The Cancer Letter", "oncology research and policy", ""),
 }
 
 _TAGS = re.compile(r"<[^>]+>")
 _WS = re.compile(r"[ \t ]+")
+# whole blocks that are never prose: source listings, output, figures, tables, markup furniture
+_DROP_BLOCKS = re.compile(
+    r"(?is)<(pre|code|script|style|table|figure|figcaption|svg|noscript)\b.*?</\1\s*>")
+_BLOCK_END = re.compile(r"(?i)</(p|div|li|h[1-6]|blockquote|tr)\s*>|<br\s*/?>")
+_ENTITIES = (("&nbsp;", " "), ("&#160;", " "), ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
+             ("&#8217;", "’"), ("&#8216;", "‘"), ("&quot;", '"'), ("&#8220;", "“"),
+             ("&#8221;", "”"), ("&#8212;", "—"), ("&#8211;", "–"), ("&#39;", "'"))
+# a line of code survives tag-stripping; this is what code looks like once the tags are gone
+_CODEY = re.compile(r"(<-\s|=>|\bfunction\s*\(|\}\s*$|;\s*$|^\s*[#$>]\s|::|\w+\(\)|"
+                    r"\[\s*\d+\s*\]|\bdef\s+\w+\(|</?\w+>)")
+
+
+def looks_like_prose(p: str) -> bool:
+    """Is this paragraph an ARGUMENT, or a code listing / caption / navigation fragment?
+
+    Half of Frank Harrell's posts are R source, and stripping tags turns `unpack <- function(par)`
+    into something that passes a length check but reads as nonsense to a clinician.
+    """
+    if len(p) < 120:
+        return False                       # a fragment is a caption or a subscribe prompt
+    if len(p.split()) < 18:
+        return False
+    symbols = sum(p.count(c) for c in "{}[]()<>=;|\\_$#")
+    if symbols > len(p) * 0.06 or len(_CODEY.findall(p)) >= 2:
+        return False                       # code is punctuation-dense
+    letters = sum(1 for c in p if c.isalpha() or c.isspace())
+    if letters < len(p) * 0.78:
+        return False
+    return (p.count(".") + p.count("?") + p.count("!")) >= 1
 
 
 def essay_text(html: str) -> str:
-    """RSS body HTML → paragraphs, one per blank-line-separated block."""
-    txt = re.sub(r"(?i)</p\s*>|<br\s*/?>|</div\s*>|</li\s*>", "\n\n", html or "")
-    txt = _TAGS.sub(" ", txt)
-    for a, b in (("&nbsp;", " "), ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&#8217;", "'"),
-                 ("&#8216;", "'"), ("&quot;", '"'), ("&#8220;", '"'), ("&#8221;", '"')):
+    """RSS body HTML → prose paragraphs only.
+
+    Code, output, tables and figures are removed as WHOLE BLOCKS before tags are stripped: replacing
+    every tag with a space turned `par[1]` into `par[ 1 ]` and shipped source as if it were writing.
+    """
+    txt = _DROP_BLOCKS.sub("\n\n", html or "")
+    txt = _BLOCK_END.sub("\n\n", txt)
+    txt = _TAGS.sub("", txt)               # inline tags vanish; they never separated words
+    for a, b in _ENTITIES:
         txt = txt.replace(a, b)
+    txt = re.sub(r"&[a-z]+;|&#\d+;", " ", txt)
     paras = [_WS.sub(" ", p).strip() for p in re.split(r"\n\s*\n", txt)]
-    # a one-line fragment is navigation or a subscribe prompt, not an argument
-    return "\n\n".join(p for p in paras if len(p) >= 120)
+    return "\n\n".join(p for p in paras if looks_like_prose(p))
 
 
 class ExpertEssayConnector:
@@ -168,7 +204,7 @@ class ExpertEssayConnector:
     key = "voices_essay"
     fetch_strategy = "poll"
 
-    def __init__(self, feeds: dict[str, tuple[str, str]] | None = None, *, fetch=None,
+    def __init__(self, feeds: dict[str, tuple[str, ...]] | None = None, *, fetch=None,
                  timeout: int = 30, max_posts: int = 12):
         self._feeds = dict(feeds or VOICE_ESSAYS)
         self._timeout = timeout
@@ -180,9 +216,12 @@ class ExpertEssayConnector:
                                       timeout=self._timeout).read()
 
     async def discover_entities(self, window: dict) -> list[_Ref]:
-        return [_Ref(source_key=self.key, native_id=url, title=who,
-                     facets={"show": pub, "writer": who})
-                for url, (who, pub) in self._feeds.items()]
+        out = []
+        for url, spec in self._feeds.items():
+            spec = tuple(spec) + ("", "", "")
+            out.append(_Ref(source_key=self.key, native_id=url, title=spec[0],
+                            facets={"show": spec[1] or spec[0], "writer": spec[0], "path": spec[2]}))
+        return out
 
     async def list_documents(self, entity: _Ref) -> list[_Ref]:
         try:
@@ -191,6 +230,7 @@ class ExpertEssayConnector:
             return []
         who = entity.title
         pub = entity.facets.get("show") or who
+        need_path = entity.facets.get("path") or ""
         docs: list[_Ref] = []
         for it in [e for e in root.iter() if e.tag.split("}")[-1] in ("item", "entry")]:
             title, link, published, body = "", "", "", ""
@@ -205,8 +245,12 @@ class ExpertEssayConnector:
                 elif tag in ("encoded", "content", "description", "summary") and el.text:
                     if len(el.text) > len(body):
                         body = el.text
-            if not title or len(essay_text(body)) < 600:
-                continue           # a teaser is not an essay
+            if need_path and need_path not in (link or ""):
+                continue           # a site-wide feed also carries talks and pages, not just posts
+            if not title or not (link or "").startswith("http"):
+                continue           # a card whose link does not resolve is worse than no card
+            if len(essay_text(body)) < 600:
+                continue           # a teaser, or a post that is mostly code, is not an essay
             docs.append(_Ref(
                 source_key=self.key, native_id=link or title, title=title,
                 facets={"source_kind": "essay", "kind": "essay", "show": pub, "writer": who,

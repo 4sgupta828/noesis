@@ -218,7 +218,7 @@ def _sc(show, score, i=0):
 def test_a_recommendation_block_widens_the_view_rather_than_repeating_one_show():
     ms = [_sc("Core IM", 0.9, 1), _sc("Core IM", 0.88, 2), _sc("Ground Truths", 0.8, 3),
           _sc("GN in Ten", 0.7, 4)]
-    out = one_per_show(ms, limit=3)
+    out = one_per_show(ms, limit=3, margin=1.0)   # margin wide open: this is about de-duplication
     assert [m["show"] for m in out] == ["Core IM", "Ground Truths", "GN in Ten"]
 
 

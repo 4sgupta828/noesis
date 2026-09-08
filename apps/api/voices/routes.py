@@ -28,7 +28,8 @@ class VoiceSearchIn(BaseModel):
 
 class VoiceJobIn(BaseModel):
     kind: str = "ingest"
-    limit: int = 12           # episodes per show
+    limit: int = 12           # episodes/videos/posts per source
+    leg: str = ""             # "" = every leg; "podcast" | "video" | "essay"
     shows: list[str] | None = None
 
 
@@ -110,14 +111,33 @@ def build_router(pool_of, *, manifest=None, pg_source_of=None, tenant_id: str = 
             raise HTTPException(status_code=503, detail="ingest not configured")
         from noesis_kernel.runtime.ingest import ingest_connector_to_postgres
 
+        from noesis_vertical_medical.voices_media import (
+            ExpertEssayConnector, YouTubeChapterConnector,
+        )
         from noesis_vertical_medical.voices_transcript import (
             VOICE_SHOWS, PodcastTranscriptConnector,
         )
+        n = max(1, min(int(body.limit or 12), 50))
         shows = {k: v for k, v in VOICE_SHOWS.items() if not body.shows or k in body.shows}
-        conn = PodcastTranscriptConnector(shows, max_episodes=max(1, min(int(body.limit or 12), 50)))
-        blocks = await ingest_connector_to_postgres(
-            conn, pg_source_of(), tenant_id=tenant_id, embedder=embedder,
-            window={"limit": body.limit})
-        return {"kind": "ingest", "shows": list(shows), "blocks": blocks}
+        legs = []
+        if body.leg in ("", "podcast"):
+            legs.append(PodcastTranscriptConnector(shows, max_episodes=n))
+        if body.leg in ("", "video"):
+            legs.append(YouTubeChapterConnector(max_videos=n))
+        if body.leg in ("", "essay"):
+            legs.append(ExpertEssayConnector(max_posts=n))
+        out, blocks = {}, 0
+        for leg in legs:
+            # one failing leg never costs the others their ingest
+            try:
+                got = await ingest_connector_to_postgres(
+                    leg, pg_source_of(), tenant_id=tenant_id, embedder=embedder,
+                    window={"limit": n})
+            except Exception as e:      # noqa: BLE001
+                out[leg.key] = f"failed: {type(e).__name__}: {e}"[:200]
+                continue
+            out[leg.key] = got
+            blocks += got
+        return {"kind": "ingest", "blocks": blocks, "legs": out}
 
     return router

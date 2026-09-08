@@ -37,16 +37,24 @@ _UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKi
 
 # Shows whose transcript coverage was MEASURED, with the number that earned the place. A show is
 # added by measuring it, never by reputation.
+# 65 shows probed, 11 clear the bar. Feed URLs are RESOLVED through the public iTunes lookup, never
+# hand-written: three of four guessed URLs 404'd, and a 404 reads exactly like a publisher who ships
+# no transcripts. The percentage is the share of the last 20 episodes carrying <podcast:transcript>.
 VOICE_SHOWS: dict[str, str] = {
-    # Feed URLs are RESOLVED through the public iTunes lookup, never hand-written: three of four
-    # guessed URLs 404'd, and a 404 reads exactly like a publisher who ships no transcripts.
     "Core IM | Internal Medicine Podcast":
-        "https://feeds.redcircle.com/2c03e755-c428-4b8e-9150-95ef1ed2492b",  # 85% of eps, VTT, diarized
+        "https://feeds.redcircle.com/2c03e755-c428-4b8e-9150-95ef1ed2492b",  # 85%, VTT, diarized
     "Healthcare Unfiltered": "https://rss.buzzsprout.com/2536939.rss",       # 100%, VTT
-    "Run the List": "https://feeds.redcircle.com/3afc5caf-efbb-4dc3-ae69-fb7f23cceb66",   # 55%, VTT
-    "The Lancet Voice": "https://feed.podbean.com/lancetvoice/feed.xml",     # 45%, SRT (ASR)
+    "GN in Ten": "https://feeds.transistor.fm/gn-in-ten",                    # 100% — glomerular disease
+    "Anesthesia Patient Safety Podcast": "https://rss.buzzsprout.com/1126925.rss",        # 100%
+    "ID:IOTS - Infectious Disease Insight Of Two Specialists":
+        "https://rss.buzzsprout.com/1782416.rss",                            # 100%
+    "The ASHE Podcast": "https://rss.buzzsprout.com/2627775.rss",            # 100% — healthcare epidemiology
     "Behind The Knife: The Surgery Podcast":
         "https://audioboom.com/channels/5046960.rss",                        # 95%, text/plain (uncued)
+    "The Oncology Podcast": "https://rss.buzzsprout.com/998212.rss",         # 95%
+    "Health Affairs This Week": "https://feeds.transistor.fm/health-affairs-this-week",   # 65%
+    "Run the List": "https://feeds.redcircle.com/3afc5caf-efbb-4dc3-ae69-fb7f23cceb66",   # 55%, VTT
+    "The Lancet Voice": "https://feed.podbean.com/lancetvoice/feed.xml",     # 45%, SRT (ASR)
 }
 
 _CUE = re.compile(r"(?P<a>(?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.,]\d{1,3})?)\s*-->\s*"
@@ -225,6 +233,14 @@ class PodcastTranscriptConnector:
             root = ET.fromstring(self._fetch(entity.native_id))
         except Exception:      # noqa: BLE001 — one dead feed never stops the sweep
             return []
+        art = ""
+        for el in root.iter():
+            tag = el.tag.split("}")[-1]
+            if tag == "image" and el.get("href"):        # itunes:image
+                art = el.get("href") or ""
+                break
+            if tag == "url" and not art and (el.text or "").strip().startswith("http"):
+                art = (el.text or "").strip()            # rss <image><url>
         docs: list[_Ref] = []
         limit = max(1, int(self._max))
         for item in [e for e in root.iter() if e.tag.split("}")[-1] == "item"]:
@@ -247,7 +263,7 @@ class PodcastTranscriptConnector:
             guid = _text(item, "guid") or url
             docs.append(_Ref(
                 source_key=self.key, native_id=guid, title=title,
-                facets={"source_kind": "transcript", "kind": "podcast", "show": show,
+                facets={"source_kind": "transcript", "kind": "podcast", "show": show, "art": art,
                         "episode_title": title, "episode_url": page, "audio_url": audio,
                         "transcript_url": url, "transcript_type": trs[0].get("type") or "",
                         "published": _text(item, "pubDate")},

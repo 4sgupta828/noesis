@@ -702,6 +702,11 @@
      conversation + hand-off card render into #triagebody. Q&A-only control rows are hidden here too. */
   #triagebody{display:none;padding:.4rem 0 3rem;max-width:44rem;margin:0 auto;}
   body[data-mode="triage"] #triagebody{display:block;}
+  body[data-mode="voices"] #voicesbody{display:block;}
+  body[data-mode="voices"] #out,
+  body[data-mode="voices"] #effort,
+  body[data-mode="voices"] #audsel,
+  body[data-mode="voices"] #dmodesel{display:none !important;}
   body[data-mode="triage"] #out,
   body[data-mode="triage"] #effort,
   body[data-mode="triage"] #audsel{display:none !important;}
@@ -1436,26 +1441,64 @@
   .answer.md .tw{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:.75rem 0 1.05rem;}
   .answer.md .tw .mdt{margin:0;}
 
-  /* ---- Voices: spoken passages, quoted and timestamped ---- */
-  #voicespage .vclist{flex:1;overflow-y:auto;padding:.4rem 1rem 3rem;max-width:52rem;margin:0 auto;width:100%;}
-  #voicespage .vcnote{max-width:52rem;margin:0 auto;padding:.2rem 1rem .5rem;font-family:var(--mono);
-    font-size:.64rem;letter-spacing:.03em;color:var(--muted);width:100%;}
-  .vcard{border:1px solid var(--hair);border-radius:12px;background:var(--panel);padding:.9rem 1rem;margin:.7rem 0;}
-  .vcard .vckick{font-family:var(--mono);font-size:.6rem;letter-spacing:.05em;text-transform:uppercase;
-    color:var(--muted);display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.45rem;}
-  .vcard .vcwho{color:var(--gold);font-weight:700;}
-  .vcard .vcep{font-family:var(--sans);font-size:.76rem;color:var(--muted);margin:-.2rem 0 .4rem;}
-  .vcard .vcquote{font-family:var(--serif);font-size:1.02rem;line-height:1.55;color:var(--ink);margin:0 0 .5rem;}
-  .vcard .vcquote mark{background:rgba(var(--gold-rgb),.18);color:inherit;padding:0 .1em;border-radius:3px;}
-  .vcard .vcfoot{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;}
-  .vcard .vcgo{font-family:var(--sans);font-size:.78rem;font-weight:600;color:var(--gold);text-decoration:none;
-    border:1px solid rgba(var(--gold-rgb),.45);border-radius:8px;padding:.32rem .6rem;min-height:34px;
-    display:inline-flex;align-items:center;}
+  /* ---- Voices: a card per moment — artwork, kicker, the words, then the action ---- */
+  .voicesbody{display:none;}
+  .voicesbody .vcfilters{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:center;margin:.2rem 0 .5rem;}
+  .voicesbody .vcchip{font-family:var(--sans);font-size:.78rem;font-weight:550;cursor:pointer;
+    background:transparent;border:1px solid var(--hair);border-radius:999px;padding:.32rem .8rem;
+    min-height:34px;color:var(--muted);transition:all .13s;}
+  .voicesbody .vcchip:hover{color:var(--ink);border-color:var(--muted);}
+  .voicesbody .vcchip.on{background:var(--gold);border-color:var(--gold);color:var(--on-accent);font-weight:650;}
+  .voicesbody .vcnote{font-family:var(--mono);font-size:.63rem;letter-spacing:.02em;color:var(--muted);
+    text-align:center;margin:.1rem 0 .9rem;}
+  .voicesbody .vclist{display:flex;flex-direction:column;gap:.9rem;}
+
+  .vcard{position:relative;border:1px solid var(--hair);border-radius:14px;background:var(--panel);
+    box-shadow:var(--sh-sm);overflow:hidden;display:grid;grid-template-columns:64px minmax(0,1fr);
+    gap:0;transition:border-color .14s, box-shadow .14s;}
+  .vcard:hover{border-color:var(--muted);box-shadow:0 6px 20px rgba(0,0,0,.07);}
+  /* a colour rail per kind: the eye sorts the feed before reading a word */
+  .vcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--gold);}
+  .vcard.k-video::before{background:#C0392B;}
+  .vcard.k-essay::before{background:#1F7A52;}
+  .vcard .vcart{padding:.95rem .2rem .95rem .85rem;}
+  .vcard .vcart img{width:46px;height:46px;border-radius:9px;object-fit:cover;display:block;
+    border:1px solid var(--hair);background:var(--panel2);}
+  .vcard .vcart .vcph{width:46px;height:46px;border-radius:9px;background:var(--panel2);
+    border:1px solid var(--hair);display:flex;align-items:center;justify-content:center;
+    font-size:1.05rem;color:var(--muted);}
+  .vcard .vcmain{padding:.9rem 1rem .85rem .55rem;min-width:0;}
+  .vcard .vckick{display:flex;flex-wrap:wrap;gap:.4rem .6rem;align-items:baseline;
+    font-family:var(--mono);font-size:.6rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);}
+  .vcard .vckind{border:1px solid currentColor;border-radius:999px;padding:.02rem .38rem;font-weight:700;
+    color:var(--gold);}
+  .vcard.k-video .vckind{color:#C0392B;} .vcard.k-essay .vckind{color:#1F7A52;}
+  .vcard .vcwho{color:var(--ink);font-weight:700;text-transform:none;letter-spacing:0;font-family:var(--sans);
+    font-size:.78rem;}
+  .vcard .vcep{font-family:var(--sans);font-size:.79rem;color:var(--muted);margin:.3rem 0 .1rem;
+    display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;}
+  .vcard .vcquote{font-family:var(--serif);font-size:1.02rem;line-height:1.55;color:var(--ink);
+    margin:.35rem 0 .6rem;}
+  .vcard .vcquote mark{background:rgba(var(--gold-rgb),.2);color:inherit;padding:0 .1em;border-radius:3px;}
+  .vcard.k-chapter .vcquote{font-family:var(--sans);font-size:.95rem;font-weight:600;}
+  .vcard .vcfoot{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center;}
+  .vcard .vcgo{font-family:var(--sans);font-size:.76rem;font-weight:650;color:var(--gold);text-decoration:none;
+    border:1px solid rgba(var(--gold-rgb),.45);border-radius:999px;padding:.3rem .7rem;min-height:32px;
+    display:inline-flex;align-items:center;gap:.3rem;}
   .vcard .vcgo:hover{background:var(--gold);color:var(--on-accent);}
-  .vcard .vcreg{font-family:var(--mono);font-size:.6rem;color:var(--muted);}
-  .vcard.vcasr{border-left:3px solid var(--gap);}
-  .vcard audio{width:100%;margin-top:.5rem;height:34px;}
-  @media (max-width:560px){ .vcard .vcquote{font-size:.98rem;} #voicespage .vclist{padding:.4rem .9rem 3rem;} }
+  .vcard.k-video .vcgo{color:#C0392B;border-color:rgba(192,57,43,.45);}
+  .vcard.k-video .vcgo:hover{background:#C0392B;color:#fff;}
+  .vcard.k-essay .vcgo{color:#1F7A52;border-color:rgba(31,122,82,.45);}
+  .vcard.k-essay .vcgo:hover{background:#1F7A52;color:#fff;}
+  .vcard .vcreg{font-family:var(--mono);font-size:.58rem;color:var(--muted);line-height:1.3;}
+  .vcard.vcasr{background:linear-gradient(0deg, rgba(var(--gold-rgb),.03), rgba(var(--gold-rgb),.03)), var(--panel);}
+  .vcard audio{width:100%;margin-top:.55rem;height:32px;}
+  @media (max-width:560px){
+    .vcard{grid-template-columns:52px minmax(0,1fr);}
+    .vcard .vcart{padding:.8rem .1rem .8rem .7rem;} .vcard .vcart img,.vcard .vcart .vcph{width:40px;height:40px;}
+    .vcard .vcmain{padding:.8rem .85rem .75rem .5rem;} .vcard .vcquote{font-size:.98rem;}
+    .voicesbody .vcchip{font-size:.74rem;padding:.3rem .65rem;}
+  }
 
   /* briefing videos — Netflix-style catalogue */
   .videos[hidden]{display:none;}
@@ -1764,8 +1807,6 @@
             title="Every medical concept Noesis has explained — searchable, each linking to its related concepts" aria-label="Key Concepts">✦ Concepts</button>
     <button type="button" class="histbtn" id="casesbtn" style="margin-left:0;" hidden
             title="Landmark real medical cases with a known correct decision — Noesis answers, reviewed by a clinician" aria-label="Case Board">⊞ Case Board</button>
-    <button type="button" class="histbtn" id="voicesbtn" style="margin-left:0;" hidden
-            title="What clinicians and researchers have said on the record — podcast transcripts, quoted and timestamped. Commentary, not evidence." aria-label="Voices">◍ Voices</button>
   </header>
 
   <h1 id="heading">What does the evidence show?</h1>
@@ -1775,6 +1816,7 @@
       <button type="button" class="mbtn" data-mode="triage" role="tab" aria-selected="false" hidden>◍ Guided</button>
       <button type="button" class="mbtn" data-mode="qa" role="tab" aria-selected="true">Quick Q&amp;A</button>
       <button type="button" class="mbtn" data-mode="panel" role="tab" aria-selected="false">◈ Specialist Panel</button>
+      <button type="button" class="mbtn" data-mode="voices" role="tab" aria-selected="false" hidden>◍ Voices</button>
     </div>
   </div>
   <form id="ask">
@@ -1925,6 +1967,16 @@
 
 <section class="panelbody" id="panelbody" hidden aria-label="Specialist panel"></section>
   <section class="triagebody" id="triagebody" hidden aria-label="Guided intake"></section>
+  <section class="voicesbody" id="voicesbody" hidden aria-label="Voices">
+    <div class="vcfilters" id="vcfilters" role="tablist" aria-label="Kind">
+      <button type="button" class="vcchip on" data-kind="">Everything</button>
+      <button type="button" class="vcchip" data-kind="podcast">🎧 Podcasts</button>
+      <button type="button" class="vcchip" data-kind="video">▶ Video</button>
+      <button type="button" class="vcchip" data-kind="essay">✎ Essays</button>
+    </div>
+    <div class="vcnote" id="vcnote"></div>
+    <div class="vclist" id="vclist"></div>
+  </section>
   <footer class="pagefoot" id="pagefoot" hidden></footer>
 </div>
 
@@ -1970,19 +2022,6 @@
     <div class="sdrag" id="cbdrag" role="separator" aria-label="Resize panels"></div>
     <div class="sdetail" id="cbDetail"><div class="splaceholder">Select a case to view its answer.</div></div>
   </div>
-</section>
-
-<section class="sessions" id="voicespage" hidden aria-label="Voices">
-  <div class="shead">
-    <button type="button" class="sback" id="vcback">← Back</button>
-    <span class="stitle">◍ Voices</span>
-    <span class="ppsub" id="vcsub">What clinicians have said on the record · commentary, not evidence</span>
-  </div>
-  <div class="ssearchrow">
-    <input type="search" class="ssearch" id="vcsearch" placeholder="What have clinicians said about…?" aria-label="Search what clinicians have said" />
-  </div>
-  <div class="vcnote" id="vcnote"></div>
-  <div class="vclist" id="vclist"></div>
 </section>
 
 <!-- briefing videos catalogue (Netflix-style) across all sessions -->
@@ -2304,7 +2343,7 @@ async function loadConfig(){
           CASES_ENABLED = !!f.cases_enabled;   // reveal the Case Board button even on a stale-cache load
           { const cbb2 = $("#casesbtn"); if(cbb2 && CASES_ENABLED) cbb2.hidden = false; }
           VOICES_ENABLED = !!f.voices_enabled;
-          { const vb2 = $("#voicesbtn"); if(vb2 && VOICES_ENABLED) vb2.hidden = false; }
+          { const vb2 = document.querySelector('.mbtn[data-mode="voices"]'); if(vb2 && VOICES_ENABLED) vb2.hidden = false; }
           // integrative reveals a control row → wired on the next full load (not hot-applied)
         })
         .catch(()=>{});
@@ -2323,7 +2362,7 @@ async function loadConfig(){
     CASES_ENABLED = !!c.cases_enabled;   // set before the un-hide below (global is also re-read later)
     const cbb = $("#casesbtn"); if(cbb && CASES_ENABLED) cbb.hidden = false;
     VOICES_ENABLED = !!c.voices_enabled;
-    const vbb = $("#voicesbtn"); if(vbb && VOICES_ENABLED) vbb.hidden = false;
+    { const vbb = document.querySelector('.mbtn[data-mode="voices"]'); if(vbb && VOICES_ENABLED) vbb.hidden = false; }
     VOICE_INTAKE_ENABLED = !!c.voice_intake_enabled;
     VOICE_EVERYWHERE = !!c.voice_everywhere_enabled;
     document.body.classList.toggle("voice-anywhere", VOICE_EVERYWHERE);   // reveal the mic in Q&A + Panel
@@ -4565,6 +4604,7 @@ $("#ask").addEventListener("submit", e=>{
   const question = q.value.trim();
   if(APP_MODE === "triage"){ submitTriage(question); return; }        // guided intake → next clarifying turn
   if(APP_MODE === "panel"){ submitPanelIntake(question); return; }   // panel mode → convene / follow-up
+  if(APP_MODE === "voices"){ submitVoices(question); return; }       // voices mode → search what was said
   if(CURRENT_ABORT) return;               // a question is in flight — Enter/submit is a no-op (use Stop)
   if(!question && ATTACHMENTS.length){    // attachment-only ask (e.g. a converted long paste IS the question)
     askQuestion("Analyze the attached material; if it contains a question, answer it.", {skipRefine: true});
@@ -4747,7 +4787,7 @@ function wireModeSwitch(el){
 // intake box are shared; only the answer surface (and Q&A-only control rows) swap. Typed text is preserved.
 function setMode(mode, opts){
   opts = opts || {};
-  mode = (mode === "panel" || mode === "triage") ? mode : "qa";
+  mode = (mode === "panel" || mode === "triage" || mode === "voices") ? mode : "qa";
   APP_MODE = mode;
   GUIDED_REFINED = false;   // any mode change clears the stale "skip refine" flag (routeTriage re-sets it)
   document.body.dataset.mode = mode;
@@ -4756,7 +4796,7 @@ function setMode(mode, opts){
   $("#modeswitch").querySelectorAll(".mbtn").forEach(b =>
     b.setAttribute("aria-selected", b.dataset.mode === mode ? "true" : "false"));
   ATTN_BOX = "#attns"; renderAttachments();   // one intake box → one attachment surface
-  const clearModeHash = () => { if(/^#(panel|triage)$/.test(location.hash) || location.hash.indexOf("#p/") === 0)
+  const clearModeHash = () => { if(/^#(panel|triage|voices)$/.test(location.hash) || location.hash.indexOf("#p/") === 0)
     history.replaceState(null, "", location.pathname + location.search); };
   if(mode === "panel"){
     document.body.classList.remove("chatting"); out.style.paddingBottom = "";
@@ -4766,6 +4806,15 @@ function setMode(mode, opts){
     // resume an in-progress conference (toggling modes preserves it, like Q&A preserves its thread)
     if(!opts.fresh && PANEL_THREAD && (PANEL_THREAD.turns||[]).length){ renderPanelConversation(); }
     else renderPanelLanding(opts.prefill !== undefined ? opts.prefill : (PANEL_CASE || ""));
+    q.focus();
+  } else if(mode === "voices"){
+    document.body.classList.remove("chatting"); out.style.paddingBottom = "";
+    $("#heading").textContent = "What have clinicians said?";
+    const sub = $("#hsub");
+    if(sub){ sub.textContent = "Podcasts, video and essays from the medical world — commentary, not evidence."; sub.hidden = false; }
+    q.setAttribute("placeholder", "e.g. what do people say about SGLT2 inhibitors in CKD?");
+    if(location.hash !== "#voices") history.pushState(null, "", "#voices");
+    renderVoicesLanding(opts.prefill);
     q.focus();
   } else if(mode === "triage"){
     document.body.classList.remove("chatting"); out.style.paddingBottom = "";
@@ -4789,6 +4838,7 @@ function applyDecisionMode(){
   if(!DECISION_MODE_UI) return;
   const sw = $("#dmodesel"), sub = $("#hsub");
   const inQA = APP_MODE === "qa";
+  if(APP_MODE === "voices") return;   // voices owns its own heading + sub-line
   if(sw) sw.hidden = !inQA;
   if(!inQA){ if(sub) sub.hidden = true; return; }
   const copy = DMODE_COPY[DECISION_MODE] || DMODE_COPY.clinical;
@@ -6662,60 +6712,84 @@ function selectCase(id){
   if(vd) _wireVzRegen(vd, {question: c.question, answer: (run && run.answer) || ""});
   cbShowDetail();
 }
-// ---- Voices: what clinicians have SAID. A browsing surface, never a source for an answer --------
-let VOICES_LAST = [], VOICES_REQ = 0;
-function closeVoices(){ const p=$("#voicespage"); if(p) p.hidden = true; document.body.style.overflow=""; if(location.hash==="#voices") history.replaceState(null,"",location.pathname); }
-async function openVoices(){
-  const p = $("#voicespage"); if(!p) return;
-  try{ closeSessions(); }catch(e){} try{ closeCaseBoard(); }catch(e){} try{ closePulsePage(); }catch(e){}
-  p.hidden = false; document.body.style.overflow = "hidden";
-  if(location.hash !== "#voices") history.replaceState(null,"","#voices");
-  loadVoices();
+// ---- Voices: what clinicians have SAID. A MODE of the shell, never a source for an answer -------
+let VOICES_LAST = [], VOICES_REQ = 0, VOICES_KIND = "", VOICES_Q = "";
+const VC_LABEL = {podcast: "podcast", video: "video", essay: "essay"};
+const VC_ICON = {podcast: "🎧", video: "▶", essay: "✎"};
+
+function vcDate(s){
+  // "Wed, 12 Aug 2026 00:17:32 +0000" / "2026-08-01T10:00:00+00:00" → "12 Aug 2026"
+  if(!s) return "";
+  const d = new Date(s);
+  if(!isNaN(d)) return d.toLocaleDateString([], {day:"numeric", month:"short", year:"numeric"});
+  return String(s).replace(/^[A-Za-z]{3},\s*/, "").replace(/\s*\d{1,2}:\d{2}(:\d{2})?.*$/, "").trim();
+}
+function vcClock(sec){
+  if(!sec) return "";
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), x = sec%60;
+  return (h?`${h}:${String(m).padStart(2,"0")}`:`${m}`) + ":" + String(x).padStart(2,"0");
 }
 function voiceCard(m){
-  // "Wed, 12 Aug 2026 00:17:32 +0000" → "12 Aug 2026": the time of day is noise, and it read as if
-  // it were the moment's own timestamp next to the real one
-  const when = m.published ? String(m.published).replace(/^[A-Za-z]{3},\s*/, "").replace(/\s*\d{1,2}:\d{2}(:\d{2})?.*$/, "").trim() : "";
-  const t = m.t_start ? `${String(Math.floor(m.t_start/3600)).padStart(2,"0")}:${String(Math.floor((m.t_start%3600)/60)).padStart(2,"0")}:${String(m.t_start%60).padStart(2,"0")}` : "";
-  // the snippet carries the server's « » match markers; show them as highlights, escaped first
+  const kind = m.kind || "podcast";
+  const t = vcClock(m.t_start);
+  const when = vcDate(m.published);
+  // the snippet carries the server's « » match markers — escape first, then turn them into marks
   const body = m.snippet ? esc(m.snippet).replace(/«/g,"<mark>").replace(/»/g,"</mark>") : esc(m.text);
-  return `<article class="vcard${m.asr?" vcasr":""}">
-    <div class="vckick">${m.speaker?`<span class="vcwho">${esc(m.speaker)}</span>`:""}
-      <span>${esc(m.show||"")}</span>${when?`<span>${esc(when)}</span>`:""}</div>
-    ${m.episode?`<div class="vcep">${esc(m.episode)}</div>`:""}
-    <p class="vcquote">${body}</p>
-    <div class="vcfoot">
-      ${m.url?`<a class="vcgo" href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">${t?`Listen from ${t}`:"Open"} ↗</a>`:""}
-      <span class="vcreg">${esc(m.register||"")}</span>
+  const who = m.speaker || m.writer || "";
+  const art = m.art ? `<img src="${esc(m.art)}" alt="" loading="lazy">`
+                    : `<div class="vcph">${VC_ICON[kind]||"◍"}</div>`;
+  const cls = `vcard k-${kind}${m.asr?" vcasr":""}`;
+  const action = kind === "video" ? (t?`Watch from ${t}`:"Watch")
+               : kind === "essay" ? "Read the post"
+               : (t?`Listen from ${t}`:"Listen");
+  return `<article class="${cls}">
+    <div class="vcart">${art}</div>
+    <div class="vcmain">
+      <div class="vckick"><span class="vckind">${esc(VC_LABEL[kind]||kind)}</span>
+        ${who?`<span class="vcwho">${esc(who)}</span>`:""}
+        <span>${esc(m.show||"")}</span>${when?`<span>${esc(when)}</span>`:""}${t?`<span>${t}</span>`:""}</div>
+      ${m.episode?`<div class="vcep">${esc(m.episode)}</div>`:""}
+      <p class="vcquote">${body}</p>
+      <div class="vcfoot">
+        ${m.url?`<a class="vcgo" href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">${esc(action)} ↗</a>`:""}
+        <span class="vcreg">${esc(m.register||"")}</span>
+      </div>
+      ${(m.url && /\.mp3|\.m4a/i.test(m.url))?`<audio controls preload="none" src="${esc(m.url)}"></audio>`:""}
     </div>
-    ${(m.url && /\.mp3|\.m4a/i.test(m.url))?`<audio controls preload="none" src="${esc(m.url)}"></audio>`:""}
   </article>`;
 }
 async function loadVoices(){
   const list = $("#vclist"), note = $("#vcnote");
   if(!list) return;
-  // Opening the page fires a browse while the user is already typing. Without a token the slower
-  // response wins and silently replaces the real search with "recent" — which is what shipped.
+  // Entering the mode fires a browse while the user may already be typing. Without a token the
+  // slower response wins and silently replaces the real search — which is what shipped once.
   const req = ++VOICES_REQ;
   list.innerHTML = `<div class="sempty">Loading…</div>`;
-  const q = ($("#vcsearch").value||"").trim();
   try{
     const r = await fetch("/voices/search", {method:"POST", headers:{"content-type":"application/json"},
-                                             body: JSON.stringify({q, limit: 40})});
+      body: JSON.stringify({q: VOICES_Q, kind: VOICES_KIND, limit: 40})});
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     if(req !== VOICES_REQ) return;         // a newer search has already answered
     VOICES_LAST = d.moments || [];
     if(!VOICES_LAST.length){
-      list.innerHTML = `<div class="sempty">Nothing on the record about that yet.</div>`;
+      list.innerHTML = `<div class="sempty">${VOICES_Q?"Nothing on the record about that yet.":"Nothing here yet."}</div>`;
       if(note) note.textContent = "";
       return;
     }
-    // say plainly how tight the match was, so a relaxed result is never passed off as a precise one
-    if(note) note.textContent = `${VOICES_LAST.length} passage${VOICES_LAST.length===1?"":"s"}`
-      + (d.ranking?` · ${d.ranking}`:"") + " · spoken commentary, not evidence — verify against the cited literature";
+    if(note) note.textContent = `${VOICES_LAST.length} moment${VOICES_LAST.length===1?"":"s"}`
+      + (d.ranking?` · ${d.ranking}`:"")
+      + " · what people said, not what the evidence shows";
     list.innerHTML = VOICES_LAST.map(voiceCard).join("");
   }catch(e){ if(req === VOICES_REQ) list.innerHTML = `<div class="sempty">Couldn't load voices.</div>`; }
+}
+function renderVoicesLanding(prefill){
+  VOICES_Q = (prefill !== undefined && prefill !== null) ? prefill : VOICES_Q;
+  loadVoices();
+}
+function submitVoices(question){
+  VOICES_Q = (question || "").trim();
+  loadVoices();
 }
 
 // ---- Active Cases: anonymous, de-identified cases published from accounts ---------------------
@@ -7964,9 +8038,11 @@ $("#pplback").addEventListener("click", closePeople);
 $("#pplbtn").addEventListener("click", openPeople);
 $("#termsbtn").addEventListener("click", ()=>openTermsPage());
 $("#casesbtn").addEventListener("click", openCaseBoard);
-$("#voicesbtn").addEventListener("click", openVoices);
-$("#vcback").addEventListener("click", closeVoices);
-{ let _vct; $("#vcsearch").addEventListener("input", ()=>{ clearTimeout(_vct); _vct=setTimeout(loadVoices, 260); }); }
+$("#vcfilters").querySelectorAll(".vcchip").forEach(b => b.addEventListener("click", ()=>{
+  VOICES_KIND = b.dataset.kind || "";
+  $("#vcfilters").querySelectorAll(".vcchip").forEach(x => x.classList.toggle("on", x === b));
+  loadVoices();
+}));
 $("#cbback").addEventListener("click", ()=>{ const cb=$("#caseboard"); if(isMobileSess() && cb && cb.dataset.view === "detail") cbShowList(); else closeCaseBoard(); });
 $("#cbgen").addEventListener("click", generateCaseAnswers);
 // generation is admin-only: the control appears only once ⚙ settings has been unlocked in this tab
@@ -8016,7 +8092,7 @@ function routeHash(){    // #s/<id> → Q&A answer/thread · #p/<id> → panel s
   else if(location.hash === "#ingest"){ openIngest(); }
   else if(location.hash === "#people"){ openPeople(); }
   else if(location.hash === "#terms"){ openTermsPage(); }
-  else if(location.hash === "#voices" && VOICES_ENABLED){ openVoices(); }
+  else if(location.hash === "#voices" && VOICES_ENABLED){ setMode("voices"); }
   else if(location.hash.startsWith("#cases") && CASES_ENABLED){
     const m = location.hash.match(/^#cases\/(c|a)\/(.+)$/);
     if(m){ openCaseForLink(m[1], decodeURIComponent(m[2])); } else { openCaseBoard(); }

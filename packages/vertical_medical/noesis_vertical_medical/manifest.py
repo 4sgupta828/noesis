@@ -91,7 +91,7 @@ def build_manifest() -> VerticalManifest:
         # the web whitelist already excludes non-peer-reviewed sources on purpose. Naming the facet
         # here makes the retrieval source refuse these blocks for every request, so the browsing
         # surface cannot leak into a grounded answer by omission.
-        non_evidence_facets={"source_kind": ("transcript",)},
+        non_evidence_facets={"source_kind": ("transcript", "chapter", "essay")},
         visual_guidance=MEDICAL_VISUAL_GUIDANCE,
         chart_guidance=MEDICAL_CHART_GUIDANCE,
         clinical_chart_guidance=MEDICAL_CLINICAL_CHART_GUIDANCE,

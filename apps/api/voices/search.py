@@ -14,10 +14,12 @@ from typing import Any
 
 # Only these source keys are voices. Naming them explicitly stops the surface from drifting into the
 # evidence corpus, which is a different kind of material answering a different question.
-VOICE_SOURCE_KEYS: tuple[str, ...] = ("voices_transcript",)
+VOICE_SOURCE_KEYS: tuple[str, ...] = ("voices_transcript", "voices_video", "voices_essay")
 
 KIND_SOURCES: dict[str, tuple[str, ...]] = {
     "podcast": ("voices_transcript",),
+    "video": ("voices_video",),
+    "essay": ("voices_essay",),
 }
 
 # grammar words, and words so common in clinical speech that they select nothing
@@ -26,6 +28,13 @@ _STOP = {"the", "a", "an", "of", "in", "on", "for", "to", "and", "or", "is", "ar
          "do", "does", "did", "can", "should", "would", "when", "which", "who", "about", "into"}
 _GENERIC = {"patient", "patients", "clinical", "doctor", "doctors", "medicine", "medical", "care",
             "health", "treatment", "disease", "study", "studies", "data", "evidence", "think"}
+
+_REGISTER = {
+    "transcript": "Transcribed speech, attributed to the speaker on the recording",
+    "asr": "Machine-generated transcript — wording may be inexact; listen before quoting",
+    "chapter": "Chapter written by the publisher — it marks where to watch, not what was said",
+    "essay": "First-person writing, attributed to its author",
+}
 
 _OFFSET = re.compile(r"^\[(?P<h>\d{2}):(?P<m>\d{2}):(?P<s>\d{2})\]\s*")
 _SPEAKER = re.compile(r"^(?P<who>[A-Za-z0-9_ .'\-]{1,40}):\s*")
@@ -127,6 +136,11 @@ def moment(row: dict) -> dict:
         except Exception:      # noqa: BLE001
             facets = {}
     raw = (row.get("text") or "").strip()
+    chapter_link = ""
+    mlink = re.search(r"\s+—\s+(https?://\S+)$", raw)
+    if mlink:
+        chapter_link = mlink.group(1)
+        raw = raw[:mlink.start()].strip()
     t_start = 0
     m = _OFFSET.match(raw)
     if m:
@@ -152,6 +166,8 @@ def moment(row: dict) -> dict:
     asr = bool(facets.get("asr"))
     audio = facets.get("audio_url") or ""
     page = facets.get("episode_url") or ""
+    if chapter_link:
+        audio, page = "", chapter_link      # a chapter already carries its own &t= deep link
     return {
         "id": f"{row.get('document_id','')}::{row.get('block_id','')}",
         "kind": facets.get("kind") or "podcast",
@@ -163,13 +179,16 @@ def moment(row: dict) -> dict:
         "published": facets.get("published") or "",
         "t_start": t_start,
         "url": (f"{audio}#t={t_start}" if audio else page),
+        "art": facets.get("art") or "",
         "episode_url": page,
         "asr": asr,
         # The register line is printed verbatim by the surface. A machine transcript is not a
         # quotation: a misheard word would become a misquote attributed to a named clinician.
-        "register": ("Machine-generated transcript — wording may be inexact; listen before quoting"
-                     if asr else "Transcribed speech, attributed to the speaker on the recording"),
-        "quotable": not asr,
+        "register": _REGISTER["asr" if asr else (facets.get("source_kind") or "transcript")],
+        # A chapter title is written by the publisher ABOUT the video — it says where to watch, never
+        # what was said, so it can never be set as a quotation.
+        "quotable": (not asr) and facets.get("source_kind") != "chapter",
+        "writer": facets.get("writer") or "",
         "snippet": snip,
     }
 

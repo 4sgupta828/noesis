@@ -3616,15 +3616,25 @@ function vzWrap(text, maxChars){
 }
 // Nudge an edge-label box off any node rectangle it would cover, so relationship labels sit in
 // clear space instead of on top of a box. Tries the true edge-midpoint first, then spirals outward.
-function vzLabelPos(mx, my, w, h, rects){
-  const hits=(x,y)=> rects.some(r=> x+w/2>r.x-2 && x-w/2<r.x+r.w+2 && y+h/2>r.y-2 && y-h/2<r.y+r.h+2);
-  if(!hits(mx,my)) return {x:mx, y:my};
-  for(let d=10; d<=96; d+=11){
-    for(const [ox,oy] of [[0,-d],[0,d],[-d,0],[d,0],[-d,-d],[d,-d],[-d,d],[d,d]]){
-      if(!hits(mx+ox, my+oy)) return {x:mx+ox, y:my+oy};
-    }
+// Place an edge label so it hides nothing. It must clear the node boxes AND every label already
+// placed — edges converging on one node share a midpoint, so avoiding only the boxes left labels
+// stacked on top of each other and unreadable. `placed` accumulates as a diagram is drawn; pass a
+// canvas width to keep a nudged label from sliding off the edge of a fixed-width canvas.
+function vzLabelPos(mx, my, w, h, rects, placed, W){
+  const P = placed || [];
+  const onBox = (x,y) => rects.some(r => x+w/2 > r.x-3 && x-w/2 < r.x+r.w+3 && y+h/2 > r.y-3 && y-h/2 < r.y+r.h+3);
+  const onLbl = (x,y) => P.some(r => Math.abs(r.x-x) < (r.w+w)/2 + 6 && Math.abs(r.y-y) < (r.h+h)/2 + 4);
+  const clamp = x => W ? Math.max(w/2+2, Math.min(W-w/2-2, x)) : x;
+  const steps = [[0,0]];
+  const sx = w/2 + 12, sy = h + 5;
+  for(let k = 1; k <= 10; k++) steps.push([k*sx, 0], [-k*sx, 0]);          // slide along the edge first
+  for(let k = 1; k <= 6; k++){ steps.push([0, k*sy], [0, -k*sy],           // then into the band above/below
+    [k*sx, k*sy], [-k*sx, k*sy], [k*sx, -k*sy], [-k*sx, -k*sy]); }
+  for(const [ox, oy] of steps){
+    const x = clamp(mx+ox), y = my+oy;
+    if(!onBox(x,y) && !onLbl(x,y)){ P.push({x, y, w, h}); return {x, y}; }
   }
-  return {x:mx, y:my};   // no clear spot found — fall back to the midpoint (still has a bg plate)
+  const x = clamp(mx), y = my; P.push({x, y, w, h}); return {x, y};   // nothing free: keep its own spot
 }
 function vzTextLines(lines, x, y, cls, lh){
   return `<text class="${cls}" x="${x}" y="${y}">`+
@@ -3663,12 +3673,13 @@ function vzFlow(v){
     r.forEach(n=>{ pos[n.id]={x,y,w:NW,h:H[n.id]}; x+=NW+colGap; }); y+=rowH[L]+rowGap; });
   const totalH=y-rowGap+12;
   const rects=Object.values(pos);   // node boxes, for edge-label collision avoidance
+  const placedLbls=[];              // and the labels already placed, so two never stack
   let ed="", lbls="";   // lines under the nodes; labels ON TOP so they're never hidden
   edges.forEach(e=>{ const a=pos[e.src], b=pos[e.dst]; if(!a||!b) return;
     const sx=a.x+a.w/2, sy=a.y+a.h, tx=b.x+b.w/2, ty=b.y; const mid=(sy+ty)/2;
     ed += `<path class="vzedge" d="M${sx} ${sy} C ${sx} ${mid} ${tx} ${mid} ${tx} ${ty}" marker-end="url(#vzarr)"/>`;
     if(e.label){ const w=e.label.length*6+12;   // fit full text, no truncation
-      const p=vzLabelPos((sx+tx)/2, mid, w, 17, rects);   // keep the label off any node box
+      const p=vzLabelPos((sx+tx)/2, mid, w, 17, rects, placedLbls, W);   // off the boxes and off other labels
       lbls += `<rect class="vzedgelblbg" x="${(p.x-w/2).toFixed(1)}" y="${(p.y-9).toFixed(1)}" width="${w.toFixed(1)}" height="17" rx="8"/>`+
               `<text class="vzedgelbl" x="${p.x.toFixed(1)}" y="${(p.y+3).toFixed(1)}">${esc(e.label)}</text>`; }
   });
@@ -3824,7 +3835,7 @@ function vzMap(v){
     const prv = [...rk].reverse().find(x => x < r);
     return prv != null ? (rowBot[prv] + rowTop[r])/2 : rowTop[r] - 30;
   };
-  const drawn = [], labelRects = [];
+  const drawn = [], labelRects = [], placedMap = [];
   E.forEach(e => {
     const sN = nodes[e.s], tN = nodes[e.t];
     const down = rank[e.t] > rank[e.s];
@@ -3844,13 +3855,9 @@ function vzMap(v){
     drawn.push(d);
     if(!e.label){ labelRects.push(null); return; }
     const w = e.label.length*5.8 + 12, h = 15;
-    let lx = ax, ly = ay;
-    const hits = (x, y) => labelRects.some(r => r && Math.abs(r.cx - x) < (r.w + w)/2 + 5 && Math.abs(r.cy - y) < h + 3);
-    const steps = [[0,0]];
-    for(let k = 1; k <= 8; k++) steps.push([k*(w/2 + 8), 0], [-k*(w/2 + 8), 0]);
-    for(let k = 1; k <= 4; k++) steps.push([0, k*17], [0, -k*17]);
-    for(const [dx, dy] of steps){ if(!hits(ax + dx, ay + dy)){ lx = ax + dx; ly = ay + dy; break; } }
-    labelRects.push({cx: lx, cy: ly, w, h, text: e.label});
+    const nodeBoxes = nodes.map((n,i) => ({x: X[i]-n._w/2, y: Y[i]-n._h/2, w: n._w, h: n._h}));
+    const p = vzLabelPos(ax, ay, w, h, nodeBoxes, placedMap);
+    labelRects.push({cx: p.x, cy: p.y, w, h, text: e.label});
   });
 
   // 5. bounds over boxes AND labels, then emit with a single offset

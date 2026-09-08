@@ -16,7 +16,7 @@ function fn(name){
     else if(js[k] === '}'){ depth--; if(!depth) return js.slice(i, k + 1); }
   }
 }
-const code = ['esc', 'VZ_DEFS', 'vzWrap', 'vzTextLines', 'vzMap'].map(fn).join('\n');
+const code = ['esc', 'VZ_DEFS', 'vzWrap', 'vzTextLines', 'vzLabelPos', 'vzNodeBox', 'vzFlow', 'vzMap'].map(fn).join('\n');
 global.document = {createElement: () => ({set textContent(v){ this._t = String(v); },
   get innerHTML(){ return this._t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }})};
 eval(code);
@@ -76,6 +76,35 @@ for(const [name, fx] of Object.entries({pjp, cycle, dirty, wide})){
     L.every(l => !R.some(r => l.x < r.x + r.w && r.x < l.x + l.w && l.y < r.y + r.h && r.y < l.y + l.h)));
   t(name + ': no label escapes the viewBox',
     L.every(l => l.x >= -0.5 && l.y >= -0.5 && l.x + l.w <= B.w + 0.5 && l.y + l.h <= B.h + 0.5));
+}
+
+// ---- FLOW diagrams: several edges converging on one node put their labels in the same band, which
+// is exactly where labels used to stack on top of each other and become unreadable.
+const flows = {
+  converge: {kind: 'flow',
+    nodes: [{id: 'a', label: 'Suspected PE'}, {id: 'b', label: 'Wells score'}, {id: 'c', label: 'D-dimer'},
+            {id: 'd', label: 'CT pulmonary angiography'}, {id: 'e', label: 'Anticoagulate'}],
+    edges: [{src: 'a', dst: 'b', label: 'assess pretest probability'}, {src: 'a', dst: 'c', label: 'if low risk'},
+            {src: 'b', dst: 'd', label: 'high probability'}, {src: 'c', dst: 'd', label: 'positive'},
+            {src: 'd', dst: 'e', label: 'confirmed'}, {src: 'c', dst: 'e', label: 'negative, stop'}]},
+  fanout: {kind: 'flow',
+    nodes: [{id: 'r', label: 'Initial assessment'}].concat(
+      Array.from({length: 5}, (_, i) => ({id: 'n' + i, label: 'Pathway option ' + i}))),
+    edges: Array.from({length: 5}, (_, i) => ({src: 'r', dst: 'n' + i, label: 'when criterion ' + i + ' is met'}))},
+  chain: {kind: 'flow',
+    nodes: Array.from({length: 5}, (_, i) => ({id: 's' + i, label: 'Step ' + i, note: 'a supporting note here'})),
+    edges: Array.from({length: 4}, (_, i) => ({src: 's' + i, dst: 's' + (i+1), label: 'then proceed to the next step'}))},
+};
+for(const [name, fx] of Object.entries(flows)){
+  const h = vzFlow(fx);
+  t('flow ' + name + ': renders', !!h && h.length > 200);
+  const R = rects(h), L = labels(h), B = box(h);
+  t('flow ' + name + ': no two edge labels overlap', overlaps(L) === 0);
+  t('flow ' + name + ': no edge label sits on a node box',
+    L.every(l => !R.some(r => l.x < r.x + r.w && r.x < l.x + l.w && l.y < r.y + r.h && r.y < l.y + l.h)));
+  t('flow ' + name + ': no label escapes the canvas',
+    L.every(l => l.x >= -0.5 && l.x + l.w <= B.w + 0.5));
+  t('flow ' + name + ': every label is drawn', L.length === fx.edges.length);
 }
 
 // the dangling cases: an unconnected node and an edge to a missing node are not drawn

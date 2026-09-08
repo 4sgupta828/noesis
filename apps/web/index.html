@@ -3315,7 +3315,8 @@ function render(data, target, opts){
   if(data.answer && DISCLAIMER.answer) parts.push(`<div class="ansdisc">${esc(DISCLAIMER.answer)}</div>`);
   target.innerHTML = parts.join("");
   // commentary alongside the finished answer — appended after, so it can never shape one
-  if(data.answer && !opts.noConvo) appendRelatedVoices(target, data.question || CURRENT_Q || "");
+  if(data.answer && (opts.related || !opts.noConvo))
+    appendRelatedVoices(target, data.question || CURRENT_Q || "");
   wireFeedback(target, data);
   checkAnswerIntegrity(target, data);   // async, structural: banners answers citing changed sources
   // dossier tabs: Backing evidence ⇄ Coverage gaps/Strengthen
@@ -6475,7 +6476,9 @@ function renderThread(){
     block.appendChild(qh);
     const ans = document.createElement("div"); block.appendChild(ans);
     out.appendChild(block);
-    render(t, ans, {noLink:true, noConvo:true});   // per-turn keeps its Evidence box; convo box is once, below
+    // the suggestion block belongs under the LATEST answer only — repeating it per turn would read
+    // as part of each answer rather than as a footer to the conversation
+    render(t, ans, {noLink:true, noConvo:true, related: i === THREAD.turns.length - 1});
   });
   // Bottom stack, in deliberate order of prominence: slim transform row (this answer, other
   // formats) → the ONE "Where next" block (follow-ups + lens hops), sitting closest to the
@@ -7297,7 +7300,8 @@ function showSessionDetail(row, rowEl){
     }
     const ans = document.createElement("div"); block.appendChild(ans);
     sdbody.appendChild(block);
-    render(t, ans, {noLink:true, noConvo:true, noTopbtns:i===0});   // Q1's action buttons go in #sactions
+    render(t, ans, {noLink:true, noConvo:true, noTopbtns:i===0,
+                    related: i === turns.length - 1});   // Q1's action buttons go in #sactions
     if(i===0) firstAns = ans;
   });
   buildSessionActions($("#sactions"), row, firstTurn, firstAns, rowEl);

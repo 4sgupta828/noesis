@@ -60,24 +60,25 @@ def build_router(pool_of, *, manifest=None, pg_source_of=None, tenant_id: str = 
             async with pool.acquire() as conn:
                 return [dict(r) for r in await conn.fetch(sql, *params)]
 
-        ranking, rows = "", []
+        ranking, moments = "", []
         if not rungs:                       # a browse: newest first, no ranking claim to make
-            rows = await run("", "recent")
+            moments = [moment(r) for r in await run("", "recent")]
             ranking = "recent"
         else:
+            # "enough to stop here" has to scale with what was ASKED for: demanding 6 rows when the
+            # caller wants 3 can never be met, and the ladder would walk to its loosest rung every
+            # time. Distinct shows are counted off the PARSED card, because facets come back from the
+            # driver as JSON text — reading .get on the raw row silently counted one show forever.
+            need = max(2, min(6, limit))
             for label, tsq in rungs:
-                rows = await run(tsq, body.order)
-                shows = {(r.get("facets") or {}).get("show") if isinstance(r.get("facets"), dict)
-                         else None for r in rows}
-                if len(rows) >= 6 and len(shows) >= 2:
-                    ranking = f"matched {label}"
+                cand = [moment(r) for r in await run(tsq, body.order)]
+                moments, ranking = cand, f"matched {label}"
+                if len(cand) >= need and len({m["show"] for m in cand}) >= 2:
                     break
-                ranking = f"matched {label}"
-            # nothing at any rung → fall back to a browse rather than an empty page
-            if not rows:
-                rows = await run("", "recent")
+            if not moments:
+                moments = [moment(r) for r in await run("", "recent")]
                 ranking = "no match — showing recent"
-        moments = dedupe([moment(r) for r in rows])
+        moments = dedupe(moments)
         return {"moments": moments, "ranking": ranking, "terms": ws,
                 "counts": {"total": len(moments),
                            "quotable": sum(1 for m in moments if m["quotable"])}}

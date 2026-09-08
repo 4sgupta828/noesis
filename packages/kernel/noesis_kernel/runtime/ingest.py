@@ -21,7 +21,7 @@ async def ingest_connector_to_postgres(
     pg_source,
     *,
     tenant_id: str,
-    embedder: Embedder,
+    embedder: Embedder | None = None,
     workspace_id: str | None = None,
     parsers: ParserRegistry | None = None,
     window: dict | None = None,
@@ -44,7 +44,11 @@ async def ingest_connector_to_postgres(
     # ONE batched pass — O(blocks/batch) API calls instead of one per document.
     for doc in repo.iter_documents():
         index_document(doc, store.get(doc.sha256), parsers=parsers, repo=repo)
-    embed_pending(repo, embedder, batch_size=embed_batch_size)
+    # embedder=None ingests WITHOUT vectors. The pg block table's tsvector is a generated column, so
+    # rows are keyword-searchable the moment they land and vectors can be backfilled later — which is
+    # what makes a corpus buildable while a model account is empty.
+    if embedder is not None:
+        embed_pending(repo, embedder, batch_size=embed_batch_size)
 
     await pg_source.ensure_schema()
     return await materialize_to_postgres(repo, pg_source, facet_overrides=facet_overrides)

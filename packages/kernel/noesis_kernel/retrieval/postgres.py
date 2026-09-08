@@ -145,12 +145,16 @@ _WRITE_LOCK_KEY = 5132101
 class PostgresRetrievalSource:
     def __init__(self, dsn: str, *, key: str = "postgres", dim: int = 1536,
                  table: str = "rs_block", covers: FacetFilter | None = None,
-                 currency_demote: bool = False):
+                 currency_demote: bool = False, never_return: FacetFilter | None = None):
         self.key = key
         self._dsn = dsn
         self._dim = dim
         self._table = table
         self._covers = covers or {}
+        # Facet values this source must NEVER return to the research loop, whatever a caller asks for.
+        # A per-request exclusion is a caller's promise to remember; this is the source's own floor —
+        # used to keep material that is not evidence (commentary, pointers) out of grounded answers.
+        self._never: FacetFilter = never_return or {}
         self._df: dict[str, float] = {}      # lexeme → fraction of blocks containing it (pg_stats)
         self._df_at: float = 0.0
         self._pool = None
@@ -354,7 +358,13 @@ class PostgresRetrievalSource:
             params.append(vals)
             preds.append(f"(facets ->> ${key_idx}) = ANY(${len(params)})")
         # exclusion: drop a block only if it HAS the key with a listed value (untagged passes)
-        for key, banned in getattr(req, "exclude_facets", {}).items():
+        _ex = dict(getattr(req, "exclude_facets", {}) or {})
+        for k, v in self._never.items():          # the source's own floor, merged over the request
+            have = _ex.get(k)
+            merged = ([have] if isinstance(have, str) else list(have or [])) + \
+                     ([v] if isinstance(v, str) else list(v))
+            _ex[k] = sorted(set(merged))
+        for key, banned in _ex.items():
             vals = [banned] if isinstance(banned, str) else list(banned)
             params.append(key)
             key_idx = len(params)

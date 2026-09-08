@@ -1184,6 +1184,7 @@ class CaseEvalIn(BaseModel):
 class CaseGenerateIn(BaseModel):
     case_ids: list[str] | None = None    # None/empty → all curated cases
     engine: str = "reasoned"             # clinical-decision engine (reasoned) by default
+    visuals_only: bool = False           # build diagrams from the STORED answer — no re-answer
     model: str = ""                      # per-batch model override (e.g. "deepseek-chat"); "" → prod default.
                                          # A model NAME picks its provider, so a bulk backfill can run on a
                                          # cheaper model WITHOUT changing the model that answers live users.
@@ -2560,6 +2561,10 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
         # model answering live users (prod moved off DeepSeek deliberately — learnings/modelcomparison.md).
         svc = build_default_service(body.model) if body.model else app.state.service
         ids = [c for c in (body.case_ids or [x["id"] for x in all_cases()]) if get_case(c) is not None]
+        if body.visuals_only:      # only cases that already have an answer and still lack diagrams
+            runs = await store.latest_runs()
+            ids = [c for c in ids if (runs.get(c) or {}).get("answer")
+                   and not ((runs.get(c) or {}).get("payload") or {}).get("visuals")]
         if not ids:
             raise HTTPException(status_code=400, detail="no valid case ids")
         engine = (body.engine or "reasoned").strip()
@@ -2574,8 +2579,20 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             try:
                 for cid in case_ids:
                     case = get_case(cid)
-                    print(f"[cases] start {cid}{(' model=' + body.model) if body.model else ''}", flush=True)
+                    print(f"[cases] start {cid}{(' model=' + body.model) if body.model else ''}"
+                          f"{' visuals-only' if body.visuals_only else ''}", flush=True)
                     try:
+                        if body.visuals_only:
+                            # diagrams are built FROM the finished answer: one cheap call, and the
+                            # answer already on the board is left exactly as it is
+                            prev = (await store.latest_runs()).get(cid) or {}
+                            vis = await svc.visualize(question=case["question"],
+                                                      answer=prev.get("answer") or "") or []
+                            if vis:
+                                await store.add_payload(cid, {"visuals": vis})
+                            print(f"[cases] visuals {cid} — visuals={len(vis)}", flush=True)
+                            app.state.cases_generating["done"] += 1
+                            continue
                         if engine == "standard":
                             res = await svc.ask(question=case["question"], tenant_id="demo")
                         else:

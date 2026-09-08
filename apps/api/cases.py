@@ -88,6 +88,21 @@ class CaseStore:
                 json.dumps(citations or []), json.dumps(payload or {}), engine or "", error)
         return rid
 
+    async def add_payload(self, case_id: str, patch: dict) -> bool:
+        """Merge fields into the case's latest run payload (used to attach diagrams to an answer that
+        is already good, so a visuals sweep costs one cheap call instead of a re-answer)."""
+        await self._ensure()
+        async with (await self._get_pool()).acquire() as conn:
+            rid = await conn.fetchval(
+                "SELECT id FROM noesis_case_run WHERE vertical=$1 AND case_id=$2 AND COALESCE(answer,'')<>'' "
+                "ORDER BY created_at DESC LIMIT 1", self._vertical, case_id)
+            if rid is None:
+                return False
+            await conn.execute(
+                "UPDATE noesis_case_run SET payload = COALESCE(payload,'{}'::jsonb) || $2::jsonb WHERE id=$1",
+                rid, json.dumps(patch))
+        return True
+
     async def latest_runs(self) -> dict[str, dict]:
         """Most-recent run per case_id → {case_id: run_dict}."""
         await self._ensure()

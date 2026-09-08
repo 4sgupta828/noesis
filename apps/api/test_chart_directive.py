@@ -65,8 +65,11 @@ def test_case_runs_persist_the_visual_layers() -> None:
     from api import app as app_mod
     src = inspect.getsource(app_mod)
     start = src.index("async def cases_generate")
-    body = src[start:start + 4000]
-    for field in ('"charts"', '"interpretation"', '"confidence"'):
+    # the whole route body, not a fixed window — the function grows and a window silently stops
+    # covering the payload it is meant to pin
+    end = src.index("@app.get(\"/cases/status\")", start)
+    body = src[start:end]
+    for field in ('"charts"', '"interpretation"', '"confidence"', '"visuals"'):
         assert field in body, f"case run payload drops {field}"
 
 

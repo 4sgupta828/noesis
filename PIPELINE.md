@@ -1,6 +1,7 @@
 # The evidence pipeline, as it runs today
 
 ← [Back to README](README.md) · Companion spec: [docs/specs/evidence-to-prose-contract.md](docs/specs/evidence-to-prose-contract.md)
+· Visual version: [docs/evidence-chain.html](docs/evidence-chain.html) *(open in a browser)*
 
 This is a **descriptive** document: what the code actually does right now, not what the design
 intends. The README's research-loop diagram is the *aspirational* shape; this one is the shape you

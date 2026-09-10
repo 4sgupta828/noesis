@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  The evidence chain — visual companion to ../PIPELINE.md.
+  Standalone: no build step, no external JS, fonts from Google Fonts with real fallbacks.
+  Open it directly in a browser, or read the published copy at
+  https://claude.ai/code/artifact/b8b8ef0b-aed0-4ffc-a692-65f4c89112d3
+  Keep this file and PIPELINE.md in sync — they state the same facts about the same code.
+-->
+<title>Noesis Evidence Chain</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+  :root {
+    color-scheme:light dark;
+    --paper:#eceff0;
+    --surface:#fbfcfb;
+    --surface-2:#f3f5f4;
+    --ink:#161b19;
+    --muted:#5b6763;
+    --rule:#d0d7d3;
+    --rule-soft:#e0e5e2;
+    --span:#e6ef9e;
+    --span-ink:#2e3410;
+    --pass:#2c6e4d;
+    --pass-bg:#e3efe7;
+    --drop:#a33526;
+    --drop-bg:#f6e5e2;
+    --demote:#8e6403;
+    --demote-bg:#f5ecd8;
+    --accent:#2f5d8a;
+
+    --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+    --f-body:"Source Serif 4",Georgia,"Times New Roman",serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+
+    --col:min(68ch,100%);
+    --wide:min(1060px,100%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#111512;
+      --surface:#191e1b;
+      --surface-2:#1f2522;
+      --ink:#e4eae5;
+      --muted:#93a29a;
+      --rule:#2c3733;
+      --rule-soft:#232b28;
+      --span:#4a5418;
+      --span-ink:#eef4cf;
+      --pass:#63bc8c;
+      --pass-bg:#172a20;
+      --drop:#e07d6c;
+      --drop-bg:#2e1a17;
+      --demote:#d7a940;
+      --demote-bg:#2b2313;
+      --accent:#7fb0dd;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#111512;
+    --surface:#191e1b;
+    --surface-2:#1f2522;
+    --ink:#e4eae5;
+    --muted:#93a29a;
+    --rule:#2c3733;
+    --rule-soft:#232b28;
+    --span:#4a5418;
+    --span-ink:#eef4cf;
+    --pass:#63bc8c;
+    --pass-bg:#172a20;
+    --drop:#e07d6c;
+    --drop-bg:#2e1a17;
+    --demote:#d7a940;
+    --demote-bg:#2b2313;
+    --accent:#7fb0dd;
+  }
+
+  *,*::before,*::after{box-sizing:border-box}
+
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--f-body);
+    font-size:17px;
+    line-height:1.6;
+    margin:0;
+    padding-block:0 72px;
+    padding-inline:20px;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .stack{
+    display:grid;
+    /* one full-width track: a max-content-sized centered column would make the 100% in
+       min(68ch,100%) resolve against 68ch, and the page scrolls sideways on a phone. */
+    grid-template-columns:minmax(0,1fr);
+    justify-items:center;
+    gap:0;
+  }
+  .col{width:var(--col)}
+  .wide{width:var(--wide)}
+
+  section{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    justify-items:center;
+    gap:22px;
+    width:100%;
+    padding-block:44px;
+    border-top:1px solid var(--rule-soft);
+  }
+  section:first-of-type{border-top:0}
+
+  h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+  h1{font-size:clamp(2.1rem,6vw,3.1rem);font-weight:700;letter-spacing:-.022em}
+  h2{font-size:clamp(1.35rem,3.4vw,1.75rem);font-weight:600;letter-spacing:-.014em}
+  h3{font-size:1.02rem;font-weight:600;letter-spacing:-.006em}
+  p{margin:0}
+  .col p + p{margin-top:14px}
+
+  .eyebrow{
+    font-family:var(--f-mono);
+    font-size:.68rem;
+    font-weight:500;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+
+  /* ---- masthead ---- */
+  .masthead{padding-block:56px 40px;gap:18px}
+  .lede{font-size:1.16rem;color:var(--muted);line-height:1.55}
+  .lede strong{color:var(--ink);font-weight:600}
+  .meta{
+    display:flex;flex-wrap:wrap;gap:8px 18px;
+    font-family:var(--f-mono);font-size:.74rem;color:var(--muted);
+  }
+  .meta span{white-space:nowrap}
+
+  /* ---- figures ---- */
+  figure{margin:0;width:100%;display:grid;grid-template-columns:minmax(0,1fr);gap:12px;justify-items:center}
+  .figframe{
+    width:100%;min-width:0;
+    background:var(--surface);
+    border:1px solid var(--rule);
+    padding:22px 18px;
+    overflow-x:auto;
+  }
+  figure svg{display:block;max-width:100%;height:auto;margin-inline:auto;color:var(--ink)}
+  figcaption{
+    font-family:var(--f-mono);font-size:.76rem;line-height:1.5;
+    color:var(--muted);max-width:62ch;text-align:center;
+  }
+
+  /* ---- gate cards ---- */
+  .gates{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:1px;
+    background:var(--rule);
+    border:1px solid var(--rule);
+    width:100%;
+  }
+  @media (min-width:720px){.gates{grid-template-columns:1fr 1fr}}
+  .gate{
+    background:var(--surface);
+    padding:18px 20px 20px;
+    display:grid;
+    gap:9px;
+    align-content:start;
+    border-left:3px solid var(--rule);
+  }
+  .gate[data-act="drop"]{border-left-color:var(--drop)}
+  .gate[data-act="demote"]{border-left-color:var(--demote)}
+  .gate[data-act="retry"]{border-left-color:var(--accent)}
+  .gate[data-act="report"]{border-left-color:var(--rule)}
+  .gate-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .gid{
+    font-family:var(--f-mono);font-size:.74rem;font-weight:600;
+    color:var(--muted);letter-spacing:.04em;
+  }
+  .gate .src{font-family:var(--f-mono);font-size:.72rem;color:var(--muted);word-break:break-word}
+  .gate p{font-size:.94rem;line-height:1.5}
+  .blind{font-size:.88rem;color:var(--muted);border-top:1px dashed var(--rule);padding-top:9px}
+  .blind b{font-family:var(--f-mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;font-weight:500;color:var(--muted);display:block;margin-bottom:2px}
+
+  .chip{
+    font-family:var(--f-mono);font-size:.68rem;font-weight:600;
+    letter-spacing:.08em;text-transform:uppercase;
+    padding:3px 9px;border-radius:2px;white-space:nowrap;
+    justify-self:start;
+  }
+  .chip[data-act="drop"]{background:var(--drop-bg);color:var(--drop);border:1px solid var(--drop)}
+  .chip[data-act="demote"]{background:var(--demote-bg);color:var(--demote);border:1px solid var(--demote)}
+  .chip[data-act="retry"]{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+  .chip[data-act="report"]{background:transparent;color:var(--muted);border:1px dashed var(--muted)}
+
+  /* ---- callout ---- */
+  .callout{
+    width:100%;
+    background:var(--surface-2);
+    border:1px solid var(--rule);
+    border-left:3px solid var(--accent);
+    padding:20px 22px;
+    display:grid;gap:10px;
+  }
+  .callout p{font-size:.98rem}
+
+  /* ---- tables ---- */
+  /* wide content scrolls inside its own container and must never widen the page */
+  .tablewrap{width:100%;min-width:0;overflow-x:auto;border:1px solid var(--rule);background:var(--surface)}
+  table{border-collapse:collapse;width:100%;font-size:.88rem;min-width:520px}
+  caption{
+    font-family:var(--f-mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);text-align:left;padding:14px 16px 0;
+  }
+  th,td{text-align:left;padding:10px 16px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+  th{
+    font-family:var(--f-mono);font-size:.7rem;font-weight:600;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--muted);
+  }
+  tbody tr:last-child td{border-bottom:0}
+  td.mono,th.mono{font-family:var(--f-mono);font-size:.8rem}
+  td.num{font-variant-numeric:tabular-nums}
+  .v-pass{color:var(--pass);font-weight:600}
+  .v-fail{color:var(--drop);font-weight:700}
+  tr[data-trap] td{background:var(--drop-bg)}
+
+  /* ---- evidence blocks ---- */
+  .listing{
+    width:100%;min-width:0;
+    background:var(--surface);
+    border:1px solid var(--rule);
+    padding:16px 18px;
+    overflow-x:auto;
+    font-family:var(--f-mono);
+    font-size:.78rem;
+    line-height:1.65;
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  .listing .n{color:var(--accent);font-weight:600}
+  .listing .tag{color:var(--muted)}
+  mark{background:var(--span);color:var(--span-ink);padding:0 2px;border-radius:1px}
+
+  .prose-out{
+    width:100%;
+    background:var(--surface);
+    border:1px solid var(--rule);
+    padding:22px 24px;
+    display:grid;gap:14px;
+  }
+  .prose-out p{font-size:1.02rem;line-height:1.65}
+  .flagged{
+    border-bottom:2px dotted var(--drop);
+    background:var(--drop-bg);
+    padding:1px 2px;
+  }
+  .note{
+    display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;
+    font-size:.86rem;color:var(--muted);
+    border-top:1px solid var(--rule-soft);padding-top:12px;
+  }
+  .note .mark{font-family:var(--f-mono);font-size:.7rem;font-weight:600;color:var(--drop);letter-spacing:.06em;white-space:nowrap}
+
+  /* ---- facts ---- */
+  .facts{display:grid;gap:26px;width:100%}
+  .fact{display:grid;gap:8px}
+  .fact p{font-size:.98rem}
+  code{
+    font-family:var(--f-mono);font-size:.84em;
+    background:var(--surface-2);padding:1px 5px;border-radius:2px;
+    border:1px solid var(--rule-soft);
+  }
+
+  .fixlist{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule);width:100%}
+  .fix{background:var(--surface);padding:16px 20px;display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:baseline}
+  .fix .p{font-family:var(--f-mono);font-size:.72rem;font-weight:600;color:var(--accent);letter-spacing:.08em}
+  .fix .t{font-size:.95rem}
+  .fix .t b{font-family:var(--f-display);font-weight:600}
+
+  footer{
+    width:var(--col);margin:0 auto;padding-top:40px;
+    border-top:1px solid var(--rule-soft);
+    font-family:var(--f-mono);font-size:.78rem;color:var(--muted);
+    display:grid;gap:7px;
+  }
+
+  a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:2px}
+  a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  @media (max-width:560px){
+    body{font-size:16px;padding-inline:16px}
+    section{padding-block:34px;gap:18px}
+    .masthead{padding-block:38px 28px}
+    .figframe{padding:14px 10px}
+    .gate{padding:16px}
+    .prose-out{padding:18px 16px}
+    .fix{grid-template-columns:1fr;gap:6px}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="stack">
+
+  <section class="masthead">
+    <div class="col" style="display:grid;gap:16px">
+      <p class="eyebrow">Noesis · research pipeline · as built, September 2026</p>
+      <h1>What we check between a quote and a sentence</h1>
+      <p class="lede">Noesis proves every claim's quote is real before it ships. That is <strong>provenance</strong>, and provenance is not correctness. This is the descriptive map of the chain — every gate that exists today, what each one is allowed to do about a failure, and the one handoff where nothing semantic is watching.</p>
+      <div class="meta">
+        <span>4 stages</span><span>8 gates</span><span>2 of them enforced at the prose layer</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="col"><p class="eyebrow">The chain of custody</p></div>
+    <div class="wide">
+      <figure>
+        <div class="figframe">
+          <svg viewBox="0 0 880 232" role="img" aria-label="Evidence becomes a claim, then a finding, then prose. The extract and verify handoffs are checked by semantic judges; the compose handoff into prose is checked only for citation markers and stray digits.">
+            <defs>
+              <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <polygon points="0,1 10,5 0,9" fill="currentColor"></polygon>
+              </marker>
+              <marker id="ahd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <polygon points="0,1 10,5 0,9" fill="var(--drop)"></polygon>
+              </marker>
+            </defs>
+
+            <g fill="none" stroke="currentColor" stroke-width="1.25">
+              <rect x="24" y="56" width="134" height="92" rx="2"></rect>
+              <rect x="262" y="56" width="134" height="92" rx="2"></rect>
+              <rect x="500" y="56" width="134" height="92" rx="2"></rect>
+              <rect x="738" y="56" width="134" height="92" rx="2"></rect>
+            </g>
+
+            <g font-family="Archivo, sans-serif" font-size="14" font-weight="600" fill="currentColor" text-anchor="middle">
+              <text x="91" y="88">Evidence</text>
+              <text x="329" y="88">Claim</text>
+              <text x="567" y="88">Finding</text>
+              <text x="805" y="88">Prose</text>
+            </g>
+            <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.66" text-anchor="middle">
+              <text x="91" y="110">a block of</text>
+              <text x="91" y="125">source text</text>
+              <text x="91" y="140">+ its identity</text>
+              <text x="329" y="110">one sentence</text>
+              <text x="329" y="125">+ one quote</text>
+              <text x="329" y="140">+ one atom id</text>
+              <text x="567" y="110">a verified claim,</text>
+              <text x="567" y="125">ranked and</text>
+              <text x="567" y="140">numbered [n]</text>
+              <text x="805" y="110">the answer,</text>
+              <text x="805" y="125">citing [n]</text>
+              <text x="805" y="140">inline</text>
+            </g>
+
+            <g stroke="currentColor" stroke-width="1.5" marker-end="url(#ah)" fill="none">
+              <line x1="164" y1="108" x2="254" y2="108"></line>
+              <line x1="402" y1="108" x2="492" y2="108"></line>
+            </g>
+            <line x1="640" y1="108" x2="730" y2="108" stroke="var(--drop)" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ahd)" fill="none"></line>
+
+            <g font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.72" text-anchor="middle">
+              <text x="210" y="82">extract</text>
+              <text x="210" y="95">LLM</text>
+              <text x="448" y="82">verify · rank</text>
+              <text x="448" y="95">cap at 30</text>
+            </g>
+            <g font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--drop)" text-anchor="middle">
+              <text x="686" y="82">compose</text>
+              <text x="686" y="95">LLM</text>
+            </g>
+
+            <line x1="640" y1="176" x2="732" y2="176" stroke="var(--drop)" stroke-width="1" stroke-dasharray="2 3"></line>
+            <text x="686" y="170" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--drop)" text-anchor="middle" font-weight="600">no semantic gate</text>
+            <text x="686" y="196" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.6" text-anchor="middle">citation markers and</text>
+            <text x="686" y="209" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.6" text-anchor="middle">stray digits only</text>
+          </svg>
+        </div>
+        <figcaption>Three transformations, each a place meaning can be lost. Two of them are judged for meaning. The third — the one that writes what the reader actually reads — is judged for punctuation.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <div class="col" style="display:grid;gap:14px">
+      <p class="eyebrow">The eight gates</p>
+      <h2>What each gate checks, and what it is allowed to do about a failure</h2>
+      <p>The left stripe and the chip encode the enforcement. A dashed chip means the gate observes and reports but never acts — a finding in the diagnostics box, not a change to the answer.</p>
+    </div>
+    <div class="wide">
+      <div class="gates">
+
+        <article class="gate" data-act="drop">
+          <div class="gate-head"><span class="gid">G1</span><h3>Span</h3></div>
+          <span class="src">provenance.py:44</span>
+          <p>The quote is a normalized substring of the block it cites.</p>
+          <span class="chip" data-act="drop">drops the claim</span>
+          <div class="blind"><b>Cannot catch</b>whether the block is relevant, or whose document it is.</div>
+        </article>
+
+        <article class="gate" data-act="drop">
+          <div class="gate-head"><span class="gid">G2</span><h3>Entailment</h3></div>
+          <span class="src">claims_first.py:56</span>
+          <p>The quote supports the specific claim, not merely the same topic.</p>
+          <span class="chip" data-act="drop">drops the claim</span>
+          <div class="blind"><b>Cannot catch</b>that the quote came from a document about something else entirely.</div>
+        </article>
+
+        <article class="gate" data-act="drop">
+          <div class="gate-head"><span class="gid">G3</span><h3>on_subject</h3></div>
+          <span class="src">claims_first.py:66</span>
+          <p>The claim attributes its content to the subject its source is actually about.</p>
+          <span class="chip" data-act="drop">drops the claim</span>
+          <div class="blind"><b>This is the sitagliptin fix</b>the gate that exists because a combination-product label's dosing once shipped as another drug's.</div>
+        </article>
+
+        <article class="gate" data-act="demote">
+          <div class="gate-head"><span class="gid">G4</span><h3>kind_ok</h3></div>
+          <span class="src">claims_first.py:66</span>
+          <p>The kind of assertion matches the kind of evidence — a safety claim cannot rest on efficacy data.</p>
+          <span class="chip" data-act="demote">demotes + annotates</span>
+          <div class="blind"><b>Deliberate softness</b>a mismatch is surfaced to the composer rather than removed, so it can be weighed honestly.</div>
+        </article>
+
+        <article class="gate" data-act="drop">
+          <div class="gate-head"><span class="gid">G5</span><h3>Chart grounding</h3></div>
+          <span class="src">react.py:239</span>
+          <p>Every plotted number appears in the finding its bar cites.</p>
+          <span class="chip" data-act="drop">drops the chart</span>
+          <div class="blind"><b>Cannot catch</b>a real number plotted under the wrong label.</div>
+        </article>
+
+        <article class="gate" data-act="drop">
+          <div class="gate-head"><span class="gid">G6</span><h3>Interpretation</h3></div>
+          <span class="src">react.py:385</span>
+          <p>Reasoning-Read items carry no dangling basis reference and introduce no new number, dose or date.</p>
+          <span class="chip" data-act="drop">drops the item</span>
+          <div class="blind"><b>Cannot catch</b>an invalid inference drawn over perfectly valid findings.</div>
+        </article>
+
+        <article class="gate" data-act="retry">
+          <div class="gate-head"><span class="gid">G7</span><h3>Citation validity</h3></div>
+          <span class="src">react.py:433</span>
+          <p>The prose cites at least one <code>[n]</code>, and every <code>[n]</code> resolves to a real finding.</p>
+          <span class="chip" data-act="retry">retries compose once</span>
+          <div class="blind"><b>Cannot catch</b>an <code>[n]</code> that resolves perfectly well to a finding that does not support the sentence.</div>
+        </article>
+
+        <article class="gate" data-act="report">
+          <div class="gate-head"><span class="gid">G8</span><h3>Prose hard tokens</h3></div>
+          <span class="src">react.py:1877</span>
+          <p>Numbers, doses, dates and percentages in the prose appear somewhere in the findings.</p>
+          <span class="chip" data-act="report">reports only — never acts</span>
+          <div class="blind"><b>Cannot catch</b>anything that is not a digit. Which is most of what a sentence says.</div>
+        </article>
+
+      </div>
+    </div>
+    <div class="col">
+      <div class="callout">
+        <h3>Only G1 is always on</h3>
+        <p>G2 arrives with <code>NOESIS_CLAIMS_FIRST</code>; G3 and G4 with <code>NOESIS_CLAIM_CONGRUENCE</code>; G5 and G6 only when their compose directives are driving. Every flag is default-OFF by standing rule. With all of them off, a claim emitted by the reasoning loop reaches the reader having proved exactly one thing: <strong>its quote is real</strong>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="col" style="display:grid;gap:14px">
+      <p class="eyebrow">Worked example</p>
+      <h2>Can metformin be continued at an eGFR of 35?</h2>
+      <p>Five atoms retrieved, five claims extracted, one of them a trap. Quotes below are illustrative rather than real label text — the mechanism is what matters.</p>
+    </div>
+
+    <div class="wide">
+      <div class="tablewrap">
+        <table>
+          <caption>Atoms in the store</caption>
+          <thead><tr><th class="mono">atom</th><th>document_title</th><th class="mono">source</th><th class="mono">evidence_kind</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">a3</td><td>Metformin Hydrochloride Tablets — Full Prescribing Information</td><td class="mono">dailymed</td><td class="mono">label-contraindications</td></tr>
+            <tr><td class="mono">a7</td><td>Metformin Hydrochloride Tablets — Full Prescribing Information</td><td class="mono">dailymed</td><td class="mono">label-dosing</td></tr>
+            <tr><td class="mono">a11</td><td>Metformin use and lactic acidosis in CKD stage 3b: a retrospective cohort</td><td class="mono">epmc</td><td class="mono">observational-cohort</td></tr>
+            <tr><td class="mono">a14</td><td>Standards of Care in Diabetes — Chronic Kidney Disease</td><td class="mono">guideline_org</td><td class="mono">guideline</td></tr>
+            <tr data-trap><td class="mono">a19</td><td><strong>Sitagliptin and</strong> Metformin HCl Tablets — Full Prescribing Information</td><td class="mono">dailymed</td><td class="mono">label-dosing</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="col"><p><code>a19</code> is the trap: a different document that shares nearly all of the same boilerplate vocabulary. Its quote is genuine and it genuinely supports the claim written from it.</p></div>
+
+    <div class="wide">
+      <div class="tablewrap">
+        <table>
+          <caption>Gate verdicts</caption>
+          <thead><tr><th class="mono">claim</th><th class="mono">G1 span</th><th class="mono">G2 entailed</th><th class="mono">G3 on_subject</th><th class="mono">G4 kind_ok</th><th>outcome</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">a3</td><td class="v-pass">✓</td><td class="v-pass">✓</td><td class="v-pass">✓</td><td class="v-pass">✓</td><td>kept</td></tr>
+            <tr><td class="mono">a7</td><td class="v-pass">✓</td><td class="v-pass">✓</td><td class="v-pass">✓</td><td class="v-pass">✓</td><td>kept</td></tr>
+            <tr><td class="mono">a11</td><td class="v-pass">✓</td><td class="v-pass">✓</td><td class="v-pass">✓</td><td class="v-pass">✓</td><td>kept</td></tr>
+            <tr><td class="mono">a14</td><td class="v-pass">✓</td><td class="v-pass">✓</td><td class="v-pass">✓</td><td class="v-pass">✓</td><td>kept</td></tr>
+            <tr data-trap><td class="mono">a19</td><td class="v-pass">✓</td><td class="v-pass">✓</td><td class="v-fail">✗</td><td class="v-pass">✓</td><td><strong>dropped</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="col"><p>G1 and G2 both bless <code>a19</code>. Only <code>on_subject</code> sees that a combination product's dosing has been presented as metformin's — the whole reason that gate was built.</p></div>
+
+    <div class="wide">
+      <figure>
+        <div class="listing"><span class="n">[1]</span> Metformin is contraindicated in patients with an eGFR below 30 mL/min/1.73m².
+    quote: <mark>"…below 30 mL/min/1.73 m2."</mark>
+    <span class="tag">source: dailymed ⟨Metformin Hydrochloride Tablets — dailymed⟩</span>
+
+<span class="n">[2]</span> At an eGFR of 30 to 45 mL/min/1.73m², the maximum metformin dose is 1000 mg daily.
+    quote: <mark>"…maximum recommended total daily dose is 1000 mg."</mark>
+    <span class="tag">source: dailymed ⟨Metformin Hydrochloride Tablets — dailymed⟩</span>
+
+<span class="n">[3]</span> In a retrospective cohort of 1,246 patients with eGFR 30-45, lactic acidosis
+    incidence did not differ between metformin users and non-users.
+    quote: <mark>"…0.9 per 1,000 person-years in metformin users versus 1.1 in non-users (p=0.62)."</mark>
+    <span class="tag">source: epmc ⟨Metformin use and lactic acidosis in CKD stage 3b — epmc⟩</span>
+
+<span class="n">[4]</span> Guidelines recommend against initiating metformin at an eGFR below 45 while
+    permitting continuation with dose reduction.
+    quote: <mark>"…continuation with a reduced dose is reasonable."</mark>
+    <span class="tag">source: guideline_org ⟨Standards of Care in Diabetes — CKD — guideline_org⟩</span></div>
+        <figcaption>The findings block the composer actually receives. Highlighted spans are the verbatim text G1 located in the source.</figcaption>
+      </figure>
+    </div>
+
+    <div class="wide">
+      <div class="prose-out">
+        <p class="eyebrow">Composed answer</p>
+        <p>Metformin is not contraindicated at an eGFR of 35 — the labeled contraindication threshold is an eGFR below 30 [1]. At an eGFR of 30–45 the maximum recommended dose is 1000 mg daily [2], and guidance permits continuing metformin in a patient already established on it, at a reduced dose, while advising against starting it below 45 [4]. <span class="flagged">Metformin does not increase the risk of lactic acidosis in reduced kidney function [3].</span> <span class="flagged">No trial has directly compared continuing versus stopping metformin at this eGFR.</span></p>
+        <div class="note">
+          <span class="mark">SENTENCE 3</span>
+          <span>Finding [3] is scoped to <em>eGFR 30–45</em>; the sentence says <em>reduced kidney function</em>, which includes eGFR below 30 — where finding [1] says the drug is contraindicated. It also drops the study design and converts <em>p=0.62</em> into a positive safety claim. G7 passes because [3] resolves. G8 is empty because no new digit was introduced. The answer contradicts its own finding [1], and nothing in the pipeline can see it.</span>
+        </div>
+        <div class="note">
+          <span class="mark">SENTENCE 4</span>
+          <span>True, useful, and impossible to express as a claim: absence of evidence has no atom to cite, and a claim must bind to exactly one. So it enters at compose time, uncited, and no gate touches it.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="col" style="display:grid;gap:14px">
+      <p class="eyebrow">The asymmetry</p>
+      <h2>Four semantic gates, then two string checks</h2>
+    </div>
+    <div class="wide">
+      <figure>
+        <div class="figframe">
+          <svg viewBox="0 0 740 256" role="img" aria-label="The claim layer applies four semantic gates. The thirty surviving findings then pass to the prose layer, which applies only two string checks, one of which never acts, before the answer ships.">
+            <g font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" letter-spacing="1.4" fill="currentColor" opacity="0.62">
+              <text x="16" y="34">CLAIM LAYER — 4 SEMANTIC GATES</text>
+              <text x="16" y="148">PROSE LAYER — 2 STRING CHECKS</text>
+            </g>
+
+            <rect x="16" y="44" width="600" height="70" rx="2" fill="var(--pass-bg)" stroke="var(--pass)" stroke-width="1"></rect>
+            <g fill="none" stroke="var(--pass)" stroke-width="1.25">
+              <rect x="36" y="62" width="132" height="36" rx="2"></rect>
+              <rect x="180" y="62" width="132" height="36" rx="2"></rect>
+              <rect x="324" y="62" width="132" height="36" rx="2"></rect>
+              <rect x="468" y="62" width="132" height="36" rx="2"></rect>
+            </g>
+            <g font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--pass)" text-anchor="middle" font-weight="500">
+              <text x="102" y="85">span</text>
+              <text x="246" y="85">entailed</text>
+              <text x="390" y="85">on_subject</text>
+              <text x="534" y="85">kind_ok</text>
+            </g>
+
+            <line x1="316" y1="114" x2="316" y2="156" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah2)" fill="none"></line>
+            <defs>
+              <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <polygon points="0,1 10,5 0,9" fill="currentColor"></polygon>
+              </marker>
+            </defs>
+            <text x="326" y="140" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity="0.7">30 findings</text>
+
+            <rect x="16" y="158" width="416" height="70" rx="2" fill="var(--drop-bg)" stroke="var(--drop)" stroke-width="1"></rect>
+            <rect x="36" y="176" width="184" height="36" rx="2" fill="none" stroke="var(--drop)" stroke-width="1.25"></rect>
+            <rect x="232" y="176" width="184" height="36" rx="2" fill="none" stroke="var(--drop)" stroke-width="1.25" stroke-dasharray="4 3"></rect>
+            <g font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--drop)" text-anchor="middle" font-weight="500">
+              <text x="128" y="193">cites a valid</text>
+              <text x="128" y="206">[n]?</text>
+              <text x="324" y="193">any new digits?</text>
+              <text x="324" y="206">never acts</text>
+            </g>
+
+            <line x1="440" y1="194" x2="486" y2="194" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah2)" fill="none"></line>
+            <rect x="494" y="176" width="230" height="36" rx="2" fill="none" stroke="currentColor" stroke-width="1.25"></rect>
+            <text x="609" y="199" font-family="Archivo, sans-serif" font-size="13" font-weight="600" fill="currentColor" text-anchor="middle">shipped answer</text>
+          </svg>
+        </div>
+        <figcaption>Evidence is typed at the claim boundary, then handed to a model that writes free prose — checked only for citation markers and stray digits before it reaches the reader.</figcaption>
+      </figure>
+    </div>
+
+    <div class="wide">
+      <div class="tablewrap">
+        <table>
+          <caption>What passes both checks while being wrong</caption>
+          <thead><tr><th>Failure at the prose layer</th><th>From the example above</th><th>Why the checks miss it</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Scope broadening</strong></td><td>eGFR 30–45 → “reduced kidney function”</td><td>no digit introduced; the citation resolves</td></tr>
+            <tr><td><strong>Design stripped</strong></td><td>retrospective cohort → stated as fact</td><td>G8 is numeric only</td></tr>
+            <tr><td><strong>Strength upgraded</strong></td><td>p=0.62 → “does not increase”</td><td>non-significance to negative claim is semantic</td></tr>
+            <tr><td><strong>Unbacked synthesis</strong></td><td>“no trial has compared…”</td><td>cannot be a claim, so it is never judged</td></tr>
+            <tr><td><strong>Internal contradiction</strong></td><td>the prose contradicts finding [1]</td><td>no check compares findings to each other</td></tr>
+            <tr><td><strong>Cherry-picking</strong></td><td>30 kept from a much larger pool</td><td>no check asks whether the 30 are representative</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="col"><p>The first two are the sitagliptin class one layer up. We fixed identity at the claim boundary and left the prose boundary string-checked.</p></div>
+  </section>
+
+  <section>
+    <div class="col" style="display:grid;gap:14px">
+      <p class="eyebrow">Three structural facts</p>
+      <h2>Not bugs — consequences of how the objects are defined</h2>
+      <div class="facts">
+        <div class="fact">
+          <h3>A claim binds exactly one atom</h3>
+          <p>The extractor is instructed: <em>one specific factual sentence supported by the SINGLE atom you cite.</em> Comparisons, trends, aggregates and absence-of-evidence therefore cannot be claims. They appear for the first time in prose, ungated — and they are usually the most decision-relevant sentences in the answer.</p>
+        </div>
+        <div class="fact">
+          <h3>A finding is a filter, not a fold</h3>
+          <p>Verified claims arrive at compose as a flat list. Findings [2] and [4] above both support <em>continue at 1000 mg</em> — one from a label, one from a guideline — and the system does not know they agree. Nothing merges corroborating claims, nothing represents disagreement, and the composer reconciles conflicts silently, with no record that it did.</p>
+        </div>
+        <div class="fact">
+          <h3>A diagnosed gap does not trigger work</h3>
+          <p>Under contract steering, entities that end with zero claims become honest coverage gaps. But the retrieval legs are speculative — computed up front, not triggered by an unfilled slot — and there is no re-retrieval between noticing the gap and composing. The gap planner plans corpus ingestion, offline; it never fires during an answer.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="col" style="display:grid;gap:14px">
+      <p class="eyebrow">What is proposed</p>
+      <h2>Five changes, in priority order</h2>
+      <p>Specced in full, with objects, judges, flags, fail-safes and the held-out eval cases each gate needs before it is allowed to enforce anything.</p>
+    </div>
+    <div class="wide">
+      <div class="fixlist">
+        <div class="fix"><span class="p">P1</span><span class="t"><b>A sentence-binding judge.</b> The claim-layer judge run one layer up, per sentence, over the findings it cites — plus a new <code>scope_ok</code> dimension for population, setting, timeframe and certainty. Shadow first, then repair, then enforce.</span></div>
+        <div class="fix"><span class="p">P2</span><span class="t"><b>Finding as a fold.</b> Group claims into propositions carrying supporting <em>and</em> contradicting claims, so corroboration is visible and a contested finding is rendered as contested instead of quietly resolved.</span></div>
+        <div class="fix"><span class="p">P3</span><span class="t"><b>A derived-claim tier.</b> Claims whose basis is a set of findings rather than one atom, judged on whether the inference follows — including <em>absence</em>, whose warrant is a fact about our own search.</span></div>
+        <div class="fix"><span class="p">P4</span><span class="t"><b>Gap-triggered re-retrieval.</b> One bounded round against exactly the unfilled slots, before composing, with a budget reserve so it can never starve the answer.</span></div>
+        <div class="fix"><span class="p">P5</span><span class="t"><b>A selection audit.</b> When the cap discards a claim that contradicts a selected finding, say so as a coverage gap. Deterministic, no model call, and it makes cherry-picking visible for the first time.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div>Source of record: <code>PIPELINE.md</code> · <code>docs/specs/evidence-to-prose-contract.md</code></div>
+    <div>Every gate above cites real code; file:line references are on the gate cards.</div>
+    <div>Governing directive: CLAUDE.md § Evidence Is Typed, Not Text.</div>
+  </footer>
+
+</div>
+</body>
+</html>

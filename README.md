@@ -361,6 +361,8 @@ setting row with an `/admin/...` endpoint (no redeploy).
 
 - [`PIPELINE.md`](PIPELINE.md) — the evidence pipeline as it runs today: every gate, what it
   can't catch, and a worked example (visual companion to this README)
+- [`docs/evidence-chain.html`](docs/evidence-chain.html) — the same material as a standalone
+  visual page: the chain of custody, the eight gates, and where nothing is watching
 - [`docs/specs/evidence-to-prose-contract.md`](docs/specs/evidence-to-prose-contract.md) — the
   specced improvements to that pipeline
 - `understand/01-architecture.md` — the kernel/vertical split and the layer stack

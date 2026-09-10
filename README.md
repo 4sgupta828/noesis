@@ -127,7 +127,10 @@ flowchart TD
   kept/rejected — so a wrong answer is debuggable without re-running blind.
 - **Bounded cost.** A cost governor caps steps/tokens per question.
 
-See `understand/03-answering-questions.md` for the line-by-line walkthrough.
+The diagram above is the *intended* shape. For the **descriptive** version — what the code
+actually does today, gate by gate, with a worked example and the places where the two differ —
+see **[PIPELINE.md](PIPELINE.md)**. See `understand/03-answering-questions.md` for the
+line-by-line walkthrough.
 
 ---
 
@@ -356,6 +359,10 @@ setting row with an `/admin/...` endpoint (no redeploy).
 
 ## Deeper reading
 
+- [`PIPELINE.md`](PIPELINE.md) — the evidence pipeline as it runs today: every gate, what it
+  can't catch, and a worked example (visual companion to this README)
+- [`docs/specs/evidence-to-prose-contract.md`](docs/specs/evidence-to-prose-contract.md) — the
+  specced improvements to that pipeline
 - `understand/01-architecture.md` — the kernel/vertical split and the layer stack
 - `understand/02-ingestion.md` — sources, connectors, the corpus spine
 - `understand/03-answering-questions.md` — the research loop, end to end

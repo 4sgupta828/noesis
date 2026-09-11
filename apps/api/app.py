@@ -1878,9 +1878,24 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
                             headers={**_NO_CACHE, "Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
         return Response(raw, media_type="text/html", headers=_NO_CACHE)
 
+    # PUBLIC FACE vs PRODUCT. "/" is the marketing landing page (what the panel does, how guided
+    # intake works, what the grounding guarantees are); the platform itself lives at "/app" and is
+    # reached from the "Open Noesis" link. Keeping them on one origin means one deploy, one cert,
+    # one domain — and the shell only uses location.pathname for share links, so it is path-agnostic.
+    # Old share links (#s/…, #p/…) that still point at "/" are forwarded to /app by landing.html.
     @app.get("/", response_class=HTMLResponse)
+    def landing(accept_encoding: str = Header(default="")):
+        return _html_response("landing.html", accept_encoding)
+
+    @app.get("/app", response_class=HTMLResponse)
     def index(accept_encoding: str = Header(default="")):
         return _html_response("index.html", accept_encoding)
+
+    @app.get("/about", response_class=HTMLResponse)
+    def about(accept_encoding: str = Header(default="")):
+        """Who builds this and why. Kept off the landing page so the front door stays about the
+        product; the founder bio lives here."""
+        return _html_response("about.html", accept_encoding)
 
     @app.get("/{name}.png")
     def web_png(name: str):

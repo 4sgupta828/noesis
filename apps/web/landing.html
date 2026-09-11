@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Noesis — a specialist panel for the case in front of you</title>
+<meta name="description" content="Noesis convenes specialist lenses over guidelines, trials, drug labels and adverse-event reports, and shows what each discipline finds — with the verbatim source behind every line, and the gaps named." />
+<meta property="og:title" content="Noesis" />
+<meta property="og:description" content="A specialist panel over the evidence — what each discipline finds, where they disagree, and what nobody has established." />
+<meta property="og:type" content="website" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+
+<!-- ═══════════════════════════════════════════════════════════════════════════════════════════
+     PRODUCT LANDING — the public front door. "/" is this page; the platform itself is "/app".
+     ───────────────────────────────────────────────────────────────────────────────────────────
+     Split the way the codebase is split: the MECHANICS at the bottom carry no domain vocabulary,
+     and every medical word lives in the SITE object in the block marked CONFIG.
+
+     DESIGN NOTE — the page has exactly one memorable element: the BOARD in the hero, which
+     convenes several specialist lenses on one case, gives each its own finding and evidence tier,
+     and ends on what is NOT established. That is the product's whole thesis (a panel, grounded,
+     honest about its gaps), so it gets the screen and everything else stays quiet. Deliberately
+     avoided: a feature-card grid, oversized step numerals, tick-circle lists, an all-caps label
+     above every heading, and an arrow glued to every button.
+
+     PALETTE — token VALUES are copied verbatim from index.html so a reader moving between / and
+     /app sees one continuous product: gold/blue accent, green = verified, amber = gap.
+     ═══════════════════════════════════════════════════════════════════════════════════════════ -->
+
+<script>
+/* Theme is shared with the platform shell under the same "noesis-theme" key, with the same three
+   values and the SAME default (clinical light for a first-time visitor). Applied here in <head> so
+   the page paints in the right theme instead of flashing. Keep in sync with index.html. */
+(function(){
+  try{
+    var saved = localStorage.getItem("noesis-theme");
+    if(saved === "dark" || saved === "editorial") document.documentElement.setAttribute("data-theme", saved);
+  }catch(e){}
+})();
+/* MIGRATION — the shell used to live at "/". Existing share links (#s/…, #p/…, #share/…) and deep
+   links land here with a dangling hash; send them on to /app so no shared answer 404s socially. */
+(function(){
+  try{
+    var h = location.hash || "";
+    if(/^#(s|p|share)\//.test(h) || /^#(panel|voices|triage|cases)\b/.test(h)){
+      location.replace("/app" + h);
+    }
+  }catch(e){}
+})();
+</script>
+
+<style>
+  /* CLINICAL LIGHT — default, matching the shell. */
+  :root{
+    color-scheme:light;
+    --bg:#EEF3F8; --panel:#FFFFFF; --panel2:#F4F8FC; --ink:#132430; --muted:#5A6B7B;
+    --gold:#1568B5; --gold-strong:#0F5497; --gold-rgb:21,104,181;
+    --verified:#137A54; --verified-bg:#E4F1EB;
+    --gap:#B26A1E; --gap-bg:#FAEEDC;
+    --on-accent:#FFFFFF;
+    --hair:#D2DEEA; --hair-soft:rgba(19,36,48,.06);
+    --sans:"Source Sans 3",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --serif:"Source Serif 4","Iowan Old Style",Palatino,Georgia,serif;
+    --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --bg:#060E1B; --panel:#0F1A2C; --panel2:#0C1524; --ink:#ECEBE3; --muted:#8B96A9;
+    --gold:#D3B37C; --gold-strong:#E7CB93; --gold-rgb:211,179,124;
+    --verified:#57B891; --verified-bg:#0E2A20;
+    --gap:#D6975A; --gap-bg:#2C1F10;
+    --on-accent:#1A1206;
+    --hair:#22304A; --hair-soft:rgba(255,255,255,.06);
+  }
+  :root[data-theme="editorial"]{
+    color-scheme:light;
+    --bg:#F6F3EA; --panel:#FDFBF5; --panel2:#F0ECE0; --ink:#221D12; --muted:#6E6550;
+    --gold:#8A6A1F; --gold-strong:#6E5314; --gold-rgb:138,106,31;
+    --verified:#2E6B4F; --verified-bg:#E4EDE4;
+    --gap:#A05C24; --gap-bg:#F3E7D6;
+    --on-accent:#FDF8EA;
+    --hair:#DCD4C0; --hair-soft:rgba(34,29,18,.06);
+    --serif:"Charter","Bitstream Charter",Cambria,"Source Serif 4",Georgia,serif;
+  }
+  :root[data-theme="editorial"] body{font-variant-numeric:lining-nums;}
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;font-size:15px;scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:1rem;line-height:1.58;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:62rem;margin:0 auto;padding-inline:1.2rem;}
+  a{color:var(--gold-strong);text-underline-offset:3px;}
+
+  h1,h2{font-family:var(--serif);font-weight:600;letter-spacing:-.014em;line-height:1.14;margin:0 0 .85rem;}
+  h1{font-size:clamp(2.1rem,4.3vw,3rem);line-height:1.07;letter-spacing:-.02em;text-wrap:balance;}
+  h2{font-size:clamp(1.55rem,3.3vw,2.15rem);}
+  h3{font-size:1.02rem;font-weight:600;margin:0 0 .3rem;font-family:var(--sans);}
+  p{margin:0 0 .9rem;}
+  .lede{font-size:clamp(1.05rem,1.9vw,1.16rem);color:var(--muted);max-width:34rem;}
+  .note{color:var(--muted);max-width:36rem;font-size:.95rem;}
+  section{padding-block:clamp(2.7rem,5.3vw,4.2rem);}
+  section + section{border-top:1px solid var(--hair);}
+
+  header.top{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--bg) 88%,transparent);
+    backdrop-filter:blur(10px);border-bottom:1px solid var(--hair);}
+  .topin{max-width:62rem;margin:0 auto;padding:.45rem 1.2rem;display:flex;align-items:center;gap:1.4rem;}
+  .logo{height:50px;width:auto;flex:none;}
+  .nav{display:flex;gap:1.25rem;margin-left:.4rem;}
+  .nav a{color:var(--muted);text-decoration:none;font-size:.88rem;font-weight:500;
+    display:inline-flex;align-items:center;min-height:40px;}
+  .nav a:hover{color:var(--ink);}
+  .topcta{margin-left:auto;opacity:0;transform:translateY(-4px);pointer-events:none;
+    transition:opacity .22s ease,transform .22s ease;}
+  .topcta.on{opacity:1;transform:none;pointer-events:auto;}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;
+    padding:.55rem 1.15rem;border-radius:7px;background:var(--gold);color:var(--on-accent);
+    text-decoration:none;font-weight:600;font-size:.94rem;border:1px solid var(--gold-strong);
+    transition:background .15s ease;}
+  .btn:hover{background:var(--gold-strong);}
+  .btn.quiet{background:transparent;color:var(--ink);border-color:var(--hair);}
+  .btn.quiet:hover{background:var(--panel2);border-color:var(--gold);}
+  .themebtn{min-height:40px;padding:.3rem .6rem;border-radius:6px;cursor:pointer;
+    background:transparent;border:1px solid var(--hair);color:var(--muted);font-size:.78rem;
+    font-family:var(--sans);}
+
+  .hero{padding-block:clamp(2.5rem,5.6vw,4.2rem) clamp(2.3rem,4.8vw,3.4rem);}
+  .heroGrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.12fr);
+    gap:clamp(1.6rem,4vw,2.9rem);align-items:start;}
+  .heroActs{display:flex;flex-wrap:wrap;gap:.65rem;margin-top:1.4rem;}
+
+  /* ---- THE BOARD: one case, several specialist lenses, and the gap ---- */
+  .board{background:var(--panel);border:1px solid var(--hair);border-radius:10px;
+    box-shadow:0 14px 34px -22px rgba(15,27,38,.45);overflow:hidden;}
+  .boardTabs{display:flex;border-bottom:1px solid var(--hair);background:var(--panel2);
+    overflow-x:auto;scrollbar-width:none;}
+  .boardTabs::-webkit-scrollbar{display:none}
+  .btab{flex:1 0 auto;min-height:44px;padding:.55rem .9rem;border:0;background:transparent;
+    cursor:pointer;font-family:var(--sans);font-size:.8rem;font-weight:500;color:var(--muted);
+    border-bottom:2px solid transparent;white-space:nowrap;}
+  .btab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--gold);background:var(--panel);}
+  .boardQ{padding:.95rem 1.05rem .85rem;font-family:var(--serif);font-size:1.08rem;
+    line-height:1.34;border-bottom:1px solid var(--hair);}
+  .convened{padding:.7rem 1.05rem;border-bottom:1px solid var(--hair);background:var(--panel2);}
+  .convHead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:.45rem;}
+  .chips{display:flex;flex-wrap:wrap;gap:.3rem;}
+  .chip{font-size:.74rem;font-weight:500;color:var(--gold-strong);background:var(--panel);
+    border:1px solid var(--hair);border-radius:20px;padding:.16rem .55rem;}
+  .findings{padding:.25rem 0;}
+  .find{display:grid;grid-template-columns:minmax(7.5rem,.62fr) minmax(0,1fr);gap:.2rem .9rem;
+    padding:.62rem 1.05rem;border-top:1px solid var(--hair-soft);align-items:baseline;}
+  .find:first-child{border-top:0;}
+  .findWho{font-size:.79rem;font-weight:600;color:var(--muted);line-height:1.35;}
+  .findWhat{font-size:.89rem;line-height:1.45;}
+  .cite{display:inline-block;margin-top:.3rem;font-family:var(--mono);font-size:.65rem;
+    border-radius:4px;padding:.07rem .34rem;background:var(--panel2);color:var(--muted);
+    border:1px solid var(--hair-soft);}
+  .cite.top{color:var(--verified);background:var(--verified-bg);border-color:transparent;}
+  .cite.weak{color:var(--gap);background:var(--gap-bg);border-color:transparent;}
+  .boardGap{padding:.72rem 1.05rem;border-top:1px solid var(--hair);background:var(--gap-bg);
+    font-size:.85rem;color:var(--ink);}
+  .boardGap b{color:var(--gap);font-weight:600;}
+  .boardFoot{padding:.5rem 1.05rem .65rem;border-top:1px solid var(--hair);
+    font-size:.72rem;color:var(--muted);background:var(--panel2);}
+
+  /* ---- generic blocks ---- */
+  .flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;
+    border:1px solid var(--hair);border-radius:10px;overflow:hidden;background:var(--panel);}
+  .fcell{padding:1.05rem 1.1rem;}
+  .fcell + .fcell{border-left:1px solid var(--hair);}
+  .fcell p{margin:0;color:var(--muted);font-size:.9rem;}
+
+  .roster{border:1px solid var(--hair);border-radius:10px;background:var(--panel);padding:1.05rem 1.1rem;}
+  .rosterHead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 .55rem;}
+  .rosterHead + .chips{margin-bottom:1.1rem;}
+  .chip.core{color:var(--verified);background:var(--verified-bg);border-color:transparent;font-weight:600;}
+  .chip.spec{color:var(--ink);background:var(--panel2);}
+
+  .shape{border:1px solid var(--hair);border-radius:10px;overflow:hidden;background:var(--panel);}
+  .shapeRow{display:grid;grid-template-columns:minmax(9.5rem,.75fr) minmax(0,2fr);gap:1rem;
+    padding:.72rem 1.05rem;border-top:1px solid var(--hair);align-items:baseline;}
+  .shapeRow:first-child{border-top:0;}
+  .shapeRow.last{background:var(--gap-bg);}
+  .shapeName{font-family:var(--mono);font-size:.8rem;font-weight:600;color:var(--gold-strong);}
+  .shapeRow.last .shapeName{color:var(--gap);}
+  .shapeWhat{font-size:.9rem;color:var(--muted);}
+
+  .srcTable{border:1px solid var(--hair);border-radius:10px;overflow:hidden;background:var(--panel);}
+  .srcRow{display:grid;grid-template-columns:minmax(9rem,.8fr) minmax(0,2fr);gap:1rem;
+    padding:.7rem 1.05rem;border-top:1px solid var(--hair);align-items:baseline;}
+  .srcRow:first-child{border-top:0;}
+  .srcRow.sig{background:var(--gap-bg);}
+  .srcName{font-weight:600;font-size:.92rem;}
+  .srcName small{display:block;font-weight:400;color:var(--muted);font-size:.76rem;margin-top:.1rem;}
+  .srcRow.sig .srcName{color:var(--gap);}
+  .feeds{display:flex;flex-wrap:wrap;gap:.3rem;}
+  .feed{font-family:var(--mono);font-size:.67rem;color:var(--muted);background:var(--panel2);
+    border:1px solid var(--hair);border-radius:4px;padding:.1rem .4rem;}
+  .srcRow.sig .feed{background:var(--panel);border-color:transparent;color:var(--gap);}
+
+  .roles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;
+    border:1px solid var(--hair);border-radius:10px;overflow:hidden;background:var(--panel);}
+  .role{padding:.95rem 1.1rem;border-top:1px solid var(--hair);}
+  .roles .role:nth-child(-n+2){border-top:0;}
+  .roles .role:nth-child(odd){border-right:1px solid var(--hair);}
+  .role b{display:block;font-size:.93rem;margin-bottom:.15rem;}
+  .role span{color:var(--muted);font-size:.88rem;}
+
+  .vs{border:1px solid var(--hair);border-radius:10px;overflow:hidden;background:var(--panel);}
+  .vsRow{display:grid;grid-template-columns:minmax(0,1.5fr) 7.5rem 7.5rem;
+    border-top:1px solid var(--hair);align-items:center;}
+  .vsRow:first-child{border-top:0;background:var(--panel2);}
+  .vsRow > *{padding:.7rem 1rem;}
+  .vsRow .c{text-align:center;font-weight:600;font-size:.9rem;border-left:1px solid var(--hair);}
+  .vsRow.head .c{font-size:.82rem;}
+  .yes{color:var(--verified);}
+  .no{color:var(--muted);}
+  .vsQ{font-size:.93rem;}
+
+  .pull{font-family:var(--serif);font-size:clamp(1.22rem,2.4vw,1.55rem);line-height:1.33;
+    border-left:3px solid var(--gold);padding-left:1rem;margin:0;max-width:32rem;}
+  .aboutGrid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:1.8rem;align-items:start;}
+  .facts{list-style:none;margin:0;padding:0;}
+  .facts li{padding:.5rem 0;border-top:1px solid var(--hair);color:var(--muted);font-size:.93rem;}
+  .facts li:first-child{border-top:0;}
+  .facts b{color:var(--ink);font-weight:600;}
+  .moreLink{display:inline-flex;align-items:center;min-height:40px;font-weight:500;}
+  .close{text-align:center;}
+  .close .lede{margin-inline:auto;}
+  .close .heroActs{justify-content:center;}
+
+  .disclaim{border:1px solid var(--hair);border-left:3px solid var(--gap);border-radius:8px;
+    background:var(--panel);padding:.9rem 1.05rem;font-size:.89rem;color:var(--muted);max-width:44rem;}
+  .disclaim b{color:var(--ink);}
+
+  footer{border-top:1px solid var(--hair);padding-block:1.5rem 2.4rem;color:var(--muted);font-size:.85rem;}
+  .footin{display:flex;flex-wrap:wrap;gap:.3rem 1.4rem;align-items:center;}
+  .footin .sp{margin-left:auto;}
+  .footin a{display:inline-flex;align-items:center;min-height:40px;}
+
+  :where(a,button,[tabindex]):focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:4px;}
+
+  @media (max-width:900px){
+    .heroGrid{grid-template-columns:1fr;gap:1.8rem;}
+    .lede,.note{max-width:none;}
+    .nav{display:none;}
+    .flow{grid-template-columns:1fr;}
+    .fcell + .fcell{border-left:0;border-top:1px solid var(--hair);}
+    .aboutGrid{grid-template-columns:1fr;gap:1.3rem;}
+  }
+  @media (max-width:620px){
+    html{font-size:14.5px}
+    .logo{height:40px;}
+    .topin{gap:.6rem;padding-inline:1rem;}
+    .wrap{padding-inline:1rem;}
+    .find{grid-template-columns:1fr;gap:.15rem;padding-inline:.9rem;}
+    .findWho{font-size:.74rem;letter-spacing:.03em;text-transform:uppercase;}
+    .shapeRow,.srcRow{grid-template-columns:1fr;gap:.45rem;}
+    .roles{grid-template-columns:1fr;}
+    .roles .role:nth-child(2){border-top:1px solid var(--hair);}
+    .roles .role:nth-child(odd){border-right:0;}
+    .vsRow{grid-template-columns:minmax(0,1fr) 4.4rem 4.4rem;}
+    .vsRow > *{padding:.6rem .7rem;}
+    .boardTabs{flex-wrap:wrap;overflow-x:visible;}
+    .btab{flex:1 1 auto;font-size:.76rem;padding-inline:.6rem;}
+    .footin .sp{margin-left:0;}
+  }
+  @media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} *{transition:none!important} }
+</style>
+</head>
+<body>
+
+<div id="brandmark"></div>
+<header class="top"><div class="topin" id="topbar"></div></header>
+<main id="main"></main>
+<footer><div class="wrap footin" id="foot"></div></footer>
+
+<script>
+/* ═══ CONFIG — the only domain-specific block in this file. ═══ */
+const SITE = {
+  brand: {
+    name: "Noesis",
+    appHref: "/app",
+    appLabel: "Open Noesis",
+    askLabel: "Bring a case",
+    contact: "sandeepgupta828@gmail.com",
+    nav: [
+      { label: "The panel", href: "#board" },
+      { label: "Guided intake", href: "#guided" },
+      { label: "Sources", href: "#sources" },
+      { label: "About", href: "/about" },
+    ],
+    markViewBox: "0 0 220 132",
+    markSvg: `
+      <path d="M120.1 15.0 A27 27 0 0 0 83.1 42.4" fill="none" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M85.1 50.6 A27 27 0 0 0 136.6 35.3" fill="none" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M84 46 C94 34 104 34 110 41 C116 48 122 34 132 20" fill="none" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M132 20 l-10 1 M132 20 l-1 10" fill="none" stroke="var(--gold)" stroke-width="2.4" stroke-linecap="round"/>
+      <circle cx="84" cy="46" r="3.1" fill="var(--gold)"/>
+      <text x="110" y="92" text-anchor="middle" font-family="var(--serif)" font-size="27" letter-spacing="7" fill="var(--ink)">NOESIS</text>
+      <text x="110" y="111" text-anchor="middle" font-family="var(--sans)" font-size="7.4" letter-spacing="3" fill="var(--gold)">DISCOVER · UNDERSTAND · ACT</text>`,
+  },
+
+  hero: {
+    title: "The hard cases need\nmore than one specialist.",
+    lede: "You can't put a pharmacologist, a geriatrician and a cardiologist in a room for every patient. Noesis reads the same evidence through each of their lenses in parallel — then shows you what each one found, where they pull against each other, and what nobody has established.",
+    secondary: { label: "How a panel forms", href: "#guided" },
+  },
+
+  board: {
+    gapLabel: "Not established:",
+    foot: "Illustrative — shows the shape of a panel answer. In the product every line opens to the source document and the verbatim sentence it came from.",
+    convenedLabel: "Panel convened",
+    cases: [
+      {
+        tab: "Polypharmacy",
+        q: "82-year-old on warfarin and amiodarone, now starting an SSRI. What does the evidence say about bleeding risk?",
+        convened: ["Clinical Pharmacology", "Cardiology", "Psychiatry", "Geriatrics", "Evidence-Based Medicine"],
+        rows: [
+          { who: "Clinical Pharmacology", what: "Amiodarone inhibits warfarin metabolism; the label directs INR monitoring and a dose reduction at initiation.", c: "Drug label", k: "" },
+          { who: "Psychiatry", what: "SSRIs carry an independent association with bleeding, and the association is larger in patients already anticoagulated.", c: "Systematic review", k: "top" },
+          { who: "Cardiology", what: "Anticoagulation guidance in atrial fibrillation addresses concurrent antiarrhythmic therapy directly.", c: "Practice guideline", k: "top" },
+          { who: "Geriatrics", what: "Falls risk and cumulative sedative burden shift the benefit–risk balance in frailty, independent of the interaction itself.", c: "Practice guideline", k: "top" },
+          { who: "Evidence-Based Medicine", what: "The interaction evidence here is label- and cohort-level. No randomized trial has tested this combination.", c: "Appraisal", k: "weak" },
+        ],
+        gap: "no trial has studied this three-drug combination in patients over 80. Every number below that age band is extrapolation, and the panel says so.",
+      },
+      {
+        tab: "Pregnancy",
+        q: "Second-trimester pregnancy, newly diagnosed hypothyroidism, long history of migraine. What's established about the drugs involved?",
+        convened: ["Obstetrics & Gynecology", "Endocrinology", "Neurology", "Clinical Pharmacology", "Evidence-Based Medicine"],
+        rows: [
+          { who: "Endocrinology", what: "Levothyroxine requirement rises in pregnancy; guidelines set trimester-specific TSH targets and a re-test interval.", c: "Practice guideline", k: "top" },
+          { who: "Obstetrics & Gynecology", what: "Labeled pregnancy and lactation data differ sharply across the migraine agents — some carry explicit trimester warnings.", c: "Drug label", k: "" },
+          { who: "Clinical Pharmacology", what: "Levothyroxine absorption is reduced by iron and calcium; the label specifies a dosing separation.", c: "Drug label", k: "" },
+          { who: "Neurology", what: "Acute and preventive migraine options narrow considerably in pregnancy; the evidence base is observational.", c: "Cohort", k: "" },
+          { who: "Evidence-Based Medicine", what: "Randomized data in pregnancy is near-absent by design. The safety record is registry and cohort, and should be read as such.", c: "Appraisal", k: "weak" },
+        ],
+        gap: "comparative safety between the preventive agents in pregnancy — the registries are not powered for a head-to-head.",
+      },
+      {
+        tab: "Pediatric ID",
+        q: "4-year-old with recurrent otitis media and a penicillin-allergy label on the chart. What does the evidence support?",
+        convened: ["Pediatrics", "Infectious Disease", "Allergy & Immunology", "Clinical Pharmacology"],
+        rows: [
+          { who: "Pediatrics", what: "Guidelines set explicit thresholds for observation versus immediate antibiotics by age, laterality and severity.", c: "Practice guideline", k: "top" },
+          { who: "Allergy & Immunology", what: "Most childhood penicillin-allergy labels are not confirmed on formal testing; delabeling changes the available options.", c: "Systematic review", k: "top" },
+          { who: "Infectious Disease", what: "Local resistance patterns drive the second-line choice, and they are surveillance data, not trial data.", c: "Surveillance", k: "" },
+          { who: "Clinical Pharmacology", what: "Weight-based dosing and the rationale for the high-dose regimen are stated on the label.", c: "Drug label", k: "" },
+        ],
+        gap: "head-to-head trials in the delabeled subgroup specifically — the delabeling evidence and the treatment evidence come from different populations.",
+      },
+    ],
+  },
+
+  guided: {
+    title: "It takes the history before it searches.",
+    lede: "Typing a good clinical question is its own skill, and a vague question retrieves vague evidence. Guided intake closes that gap in a couple of turns.",
+    steps: [
+      { h: "Describe it the way you'd say it out loud", p: "A patient, a situation, or a bare factual question. No syntax, no filters, no structured form. Dictation works if your hands are busy." },
+      { h: "Noesis asks only what would change the evidence", p: "Age, comorbidities, current drugs — but only when that detail would actually change what gets retrieved or how safety is handled. It does not interrogate you for a tidy record." },
+      { h: "It routes, then runs", p: "A clean single question goes to one focused grounded pass. A genuinely multi-system case convenes the panel. You see which route it chose and why." },
+    ],
+    note: "Guided intake is a query-formulation assistant, not a clinician. It does not diagnose, interpret findings, or recommend treatment — it works out what to go and read.",
+  },
+
+  roster: {
+    title: "Forty-four lenses. The case picks which ones sit.",
+    lede: "Each specialist is a different reading of the same corpus — its own system prompt and, more importantly, its own retrieval focus, so it genuinely surfaces different evidence rather than rewording the same passage. Triage picks the ones this case needs and names why.",
+    coreLabel: "Always on — the methodology backbone",
+    core: ["Clinical Pharmacology", "Evidence-Based Medicine", "Primary Care / Internal Medicine"],
+    specLabel: "Convened when the case calls for them",
+    specialties: [
+      "Pediatrics","Obstetrics & Gynecology","Cardiology","Psychiatry / Mental Health","Dermatology",
+      "Orthopedics / Musculoskeletal","Gastroenterology","Endocrinology","Infectious Disease","Nephrology",
+      "Pulmonology","Neurology","Oncology","Rheumatology","Hematology","Urology","Ophthalmology",
+      "Otolaryngology (ENT)","Allergy & Immunology","Geriatrics","Emergency & Critical Care","General Surgery",
+      "Palliative Care","Radiology / Imaging","Clinical Nutrition","Pain Medicine & Anesthesiology",
+      "Rehabilitation Medicine (PM&R)","Sleep Medicine","Medical Toxicology","Clinical Genetics",
+      "Transplant Medicine","Addiction Medicine","Obesity & Lifestyle Medicine","Oral Health / Dental Medicine",
+      "Vascular Medicine & Surgery","Neurosurgery","Sports Medicine","Preventive & Travel Medicine",
+      "Integrative & Complementary Medicine","Acupuncture & Acupressure","Ayurveda",
+    ],
+  },
+
+  shape: {
+    title: "It reads like a note, not a chat reply.",
+    lede: "One fixed structure, every time — and a section appears only when the retrieved evidence actually supports it. Nothing is written to fill a heading.",
+    rows: [
+      { n: "Bottom line", w: "One or two sentences that answer the question, each carrying its citation." },
+      { n: "Efficacy", w: "What the evidence shows about outcomes — as a table when the findings genuinely compare." },
+      { n: "Safety", w: "Reported adverse effects and risks, short-term separated from long-term where the evidence does." },
+      { n: "Population", w: "Which patients the evidence actually covers — and which it explicitly does not." },
+      { n: "Evidence quality", w: "What it relied on, placed on the pyramid: guideline and systematic review above trial, above observational, above case report." },
+      { n: "Not addressed", w: "What you asked that the evidence does not cover. Stated as a gap, never filled with an inference.", last: true },
+    ],
+  },
+
+  sources: {
+    title: "Read against the record, not the open web.",
+    note: "Everything downloadable is held and indexed here, so retrieval is ours to rank and tier. The live web is used only for what genuinely changes by the hour. Papers that have been retracted are detected from the publisher's own declaration and excluded from grounding.",
+    rows: [
+      { name: "Practice guidelines", sub: "controlling for practice", feeds: ["Global guideline set", "India guideline set"] },
+      { name: "Primary literature", sub: "systematic reviews, trials, cohorts", feeds: ["Europe PMC"] },
+      { name: "Trial registry", sub: "designed-to-test vs found, kept apart", feeds: ["ClinicalTrials.gov"] },
+      { name: "Drug labels", sub: "dosing, interactions, contraindications", feeds: ["DailyMed", "openFDA"] },
+      { name: "Drug nomenclature", sub: "brand, generic and ingredient resolution", feeds: ["RxNorm"] },
+      { name: "Public health", sub: "surveillance and population guidance", feeds: ["CDC"] },
+      { name: "Post-market signal", sub: "reported, not proven — labeled as signal", signal: true, feeds: ["FAERS"] },
+    ],
+  },
+
+  roles: {
+    title: "What it changes, by who's holding the case.",
+    items: [
+      { b: "The attending", s: "The multi-system case gets read by every relevant discipline at once, instead of waiting on three curbside consults that may not come back today." },
+      { b: "The resident", s: "The structure of a good clinical question, learned by watching it get built — and an answer whose evidence tier is stated, not assumed." },
+      { b: "The pharmacist", s: "Interaction and dose-adjustment evidence pulled from the labels themselves, with the verbatim sentence attached for the note." },
+      { b: "The nurse, NP or PA", s: "A plain restatement of what the evidence does and doesn't establish, in language that survives being repeated to a family." },
+      { b: "The MDT or tumor board", s: "A grounded pre-read before the meeting, so the discussion starts at the disagreement rather than at the literature search." },
+      { b: "Anyone on call at 3am", s: "The specialist you would have paged, available now — and honest when the literature can't answer the question you actually have." },
+    ],
+  },
+
+  compare: {
+    title: "Built to be checked.",
+    us: "Noesis", them: "General AI chat",
+    rows: [
+      { q: "Every sentence carries a verbatim quote from a source document", us: true, them: false },
+      { q: "Several specialist lenses read the same case independently", us: true, them: false },
+      { q: "Evidence tier stated — guideline, trial, cohort, case report", us: true, them: false },
+      { q: "Retracted papers detected and excluded from grounding", us: true, them: false },
+      { q: "Names what the evidence does not establish", us: true, them: false },
+      { q: "Answers instantly, on any topic", us: true, them: true },
+    ],
+  },
+
+  guards: {
+    title: "The discipline underneath.",
+    facts: [
+      "<b>No claim without a quote.</b> Every factual sentence is span-checked against the source text it cites. A sentence that cannot bind to a verbatim quote does not make it into the answer.",
+      "<b>Designed-to-test is not found.</b> A trial registration describes intent; results describe what happened. The two are read and labeled separately.",
+      "<b>Reported is not proven.</b> Adverse-event reports are a signal, shown as a signal — never promoted to established fact.",
+      "<b>Retractions are enforced, not noted.</b> Publisher-declared retractions are detected structurally and those passages are removed from the grounding pool.",
+      "<b>A gap is a finding.</b> Where the evidence isn't there you get a stated gap, not a confident guess.",
+    ],
+    disclaim: "<b>Noesis is research support for clinicians, not a diagnostic device and not medical advice.</b> It retrieves, appraises and cites published evidence. It does not diagnose a patient, interpret findings, or recommend treatment for an individual — the clinical judgment stays with the clinician, and every line is traceable to the document it came from precisely so that judgment can be exercised.",
+  },
+
+  about: {
+    title: "Why we built this.",
+    pull: "The evidence that answers the question usually exists. It's in a guideline, a label and a review that nobody has time to read at once.",
+    facts: [
+      "<b>Primary sources only.</b> No answer is assembled from a summary of a summary.",
+      "<b>The pyramid is respected.</b> A guideline and a systematic review outrank a single trial, and the answer says which it relied on.",
+      "<b>Explicit about the unknown.</b> A gap is reported as a gap. That is the most clinically useful thing a research tool can say.",
+    ],
+    more: { label: "About us and who builds it", href: "/about" },
+  },
+
+  close: {
+    title: "Bring the case that's been open in a tab all day.",
+    lede: "Then follow the citations back to the guideline yourself.",
+  },
+};
+
+/* ═══ MECHANICS — domain-free. ═══ */
+(function(){
+  const el = (id) => document.getElementById(id);
+  const h  = (s) => (s == null ? "" : String(s));
+  const B  = SITE.brand;
+
+  el("brandmark").innerHTML =
+    `<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+       <symbol id="brand-mark" viewBox="${h(B.markViewBox)}">${B.markSvg}</symbol></svg>`;
+
+  el("topbar").innerHTML = `
+    <a href="/" aria-label="${h(B.name)} home" style="display:flex;text-decoration:none">
+      <svg class="logo" viewBox="${h(B.markViewBox)}" role="img" aria-label="${h(B.name)}"><use href="#brand-mark"/></svg></a>
+    <nav class="nav">${(B.nav||[]).map(n=>`<a href="${h(n.href)}">${h(n.label)}</a>`).join("")}</nav>
+    <span class="topcta" id="topcta"><a class="btn" href="${h(B.appHref)}">${h(B.appLabel)}</a></span>
+    <button type="button" class="themebtn" id="themebtn" aria-label="Switch colour theme">Light</button>`;
+
+  const boardBody = (c) => `
+    <div class="convened">
+      <div class="convHead">${h(SITE.board.convenedLabel)}</div>
+      <div class="chips">${c.convened.map(s=>`<span class="chip">${h(s)}</span>`).join("")}</div>
+    </div>
+    <div class="findings">
+      ${c.rows.map(r=>`<div class="find">
+        <div class="findWho">${h(r.who)}</div>
+        <div class="findWhat">${h(r.what)}<br><span class="cite ${h(r.k)}">${h(r.c)}</span></div>
+      </div>`).join("")}
+    </div>
+    <div class="boardGap"><b>${h(SITE.board.gapLabel)}</b> ${h(c.gap)}</div>
+    <div class="boardFoot">${h(SITE.board.foot)}</div>`;
+
+  const heroHtml = () => {
+    const H = SITE.hero, D = SITE.board;
+    return `<section class="hero"><div class="wrap"><div class="heroGrid">
+      <div>
+        <h1>${h(H.title).replace(/\n/g,"<br>")}</h1>
+        <p class="lede">${h(H.lede)}</p>
+        <div class="heroActs">
+          <a class="btn" href="${h(B.appHref)}">${h(B.askLabel)}</a>
+          ${H.secondary ? `<a class="btn quiet" href="${h(H.secondary.href)}">${h(H.secondary.label)}</a>` : ""}
+        </div>
+      </div>
+      <div class="board" id="board">
+        <div class="boardTabs" role="tablist" aria-label="Example cases">
+          ${D.cases.map((c,i)=>`<button class="btab" role="tab" aria-selected="${i===0}" data-i="${i}">${h(c.tab)}</button>`).join("")}
+        </div>
+        <div>
+          <div class="boardQ">${h(D.cases[0].q)}</div>
+          <div id="boardBody">${boardBody(D.cases[0])}</div>
+        </div>
+      </div>
+    </div></div></section>`;
+  };
+
+  const guidedHtml = () => { const G = SITE.guided; if(!G) return "";
+    return `<section id="guided"><div class="wrap"><h2>${h(G.title)}</h2>
+      <p class="lede" style="margin-bottom:1.5rem">${h(G.lede)}</p>
+      <div class="flow">${G.steps.map(s=>`<div class="fcell"><h3>${h(s.h)}</h3><p>${h(s.p)}</p></div>`).join("")}</div>
+      ${G.note?`<p class="note" style="margin-top:1rem">${h(G.note)}</p>`:""}
+    </div></section>`; };
+
+  const rosterHtml = () => { const R = SITE.roster; if(!R) return "";
+    return `<section><div class="wrap"><h2>${h(R.title)}</h2>
+      <p class="lede" style="margin-bottom:1.5rem">${h(R.lede)}</p>
+      <div class="roster">
+        <p class="rosterHead">${h(R.coreLabel)}</p>
+        <div class="chips">${R.core.map(s=>`<span class="chip core">${h(s)}</span>`).join("")}</div>
+        <p class="rosterHead">${h(R.specLabel)}</p>
+        <div class="chips">${R.specialties.map(s=>`<span class="chip spec">${h(s)}</span>`).join("")}</div>
+      </div>
+    </div></section>`; };
+
+  const shapeHtml = () => { const S = SITE.shape; if(!S) return "";
+    return `<section><div class="wrap"><h2>${h(S.title)}</h2>
+      <p class="lede" style="margin-bottom:1.5rem">${h(S.lede)}</p>
+      <div class="shape">${S.rows.map(r=>`<div class="shapeRow${r.last?" last":""}">
+        <div class="shapeName">${h(r.n)}</div><div class="shapeWhat">${h(r.w)}</div></div>`).join("")}</div>
+    </div></section>`; };
+
+  const sourcesHtml = () => { const S = SITE.sources; if(!S) return "";
+    return `<section id="sources"><div class="wrap"><h2>${h(S.title)}</h2>
+      <div class="srcTable">${S.rows.map(r=>`
+        <div class="srcRow${r.signal?" sig":""}">
+          <div class="srcName">${h(r.name)}<small>${h(r.sub)}</small></div>
+          <div class="feeds">${r.feeds.map(f=>`<span class="feed">${h(f)}</span>`).join("")}</div>
+        </div>`).join("")}</div>
+      ${S.note?`<p class="note" style="margin-top:1rem">${h(S.note)}</p>`:""}
+    </div></section>`; };
+
+  const rolesHtml = () => { const R = SITE.roles; if(!R) return "";
+    return `<section><div class="wrap"><h2>${h(R.title)}</h2>
+      <div class="roles">${R.items.map(i=>`<div class="role"><b>${h(i.b)}</b><span>${h(i.s)}</span></div>`).join("")}</div>
+    </div></section>`; };
+
+  const compareHtml = () => { const C = SITE.compare; if(!C) return "";
+    const mark = (v) => v ? `<span class="yes">Yes</span>` : `<span class="no">No</span>`;
+    return `<section><div class="wrap"><h2>${h(C.title)}</h2>
+      <div class="vs">
+        <div class="vsRow head"><div class="vsQ"></div><div class="c">${h(C.us)}</div><div class="c">${h(C.them)}</div></div>
+        ${C.rows.map(r=>`<div class="vsRow"><div class="vsQ">${h(r.q)}</div>
+          <div class="c">${mark(r.us)}</div><div class="c">${mark(r.them)}</div></div>`).join("")}
+      </div>
+    </div></section>`; };
+
+  const guardsHtml = () => { const G = SITE.guards; if(!G) return "";
+    return `<section><div class="wrap"><h2>${h(G.title)}</h2>
+      <ul class="facts" style="max-width:44rem">${G.facts.map(f=>`<li>${f}</li>`).join("")}</ul>
+      ${G.disclaim?`<p class="disclaim" style="margin-top:1.4rem">${G.disclaim}</p>`:""}
+    </div></section>`; };
+
+  const aboutHtml = () => { const A = SITE.about; if(!A) return "";
+    return `<section id="about"><div class="wrap"><h2>${h(A.title)}</h2>
+      <div class="aboutGrid">
+        <p class="pull">${h(A.pull)}</p>
+        <div><ul class="facts">${A.facts.map(f=>`<li>${f}</li>`).join("")}</ul>
+        ${A.more?`<p style="margin:.5rem 0 0"><a class="moreLink" href="${h(A.more.href)}">${h(A.more.label)}</a></p>`:""}</div>
+      </div></div></section>`; };
+
+  const closeHtml = () => { const C = SITE.close; if(!C) return "";
+    return `<section class="close"><div class="wrap">
+      <h2>${h(C.title)}</h2><p class="lede">${h(C.lede)}</p>
+      <div class="heroActs"><a class="btn" href="${h(B.appHref)}">${h(B.appLabel)}</a></div>
+    </div></section>`; };
+
+  el("main").innerHTML = heroHtml() + guidedHtml() + rosterHtml() + shapeHtml()
+                       + sourcesHtml() + rolesHtml() + compareHtml() + guardsHtml()
+                       + aboutHtml() + closeHtml();
+
+  el("foot").innerHTML = `
+    <span>&copy; <span id="yr"></span> ${h(B.name)}</span>
+    <span class="sp"><a href="${h(B.appHref)}">Platform</a></span>
+    <span><a href="/about">About</a></span>
+    ${B.contact?`<span><a href="mailto:${h(B.contact)}">Contact</a></span>`:""}`;
+  el("yr").textContent = new Date().getFullYear();
+
+  const tabs = [...document.querySelectorAll(".btab")];
+  const showCase = (i) => {
+    const c = SITE.board.cases[i];
+    document.querySelector(".boardQ").textContent = c.q;
+    el("boardBody").innerHTML = boardBody(c);
+    tabs.forEach((t,n) => t.setAttribute("aria-selected", String(n === i)));
+  };
+  tabs.forEach(t => {
+    t.addEventListener("click", () => showCase(Number(t.dataset.i)));
+    t.addEventListener("keydown", (e) => {
+      const i = Number(t.dataset.i);
+      if(e.key === "ArrowRight" || e.key === "ArrowLeft"){
+        e.preventDefault();
+        const n = (i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
+        tabs[n].focus(); showCase(n);
+      }
+    });
+  });
+
+  const sentinel = document.querySelector(".hero");
+  const topcta = el("topcta");
+  if(sentinel && "IntersectionObserver" in window){
+    new IntersectionObserver(([e]) => topcta.classList.toggle("on", !e.isIntersecting),
+      {rootMargin: "-70px 0px 0px 0px"}).observe(sentinel);
+  } else { topcta.classList.add("on"); }
+
+  /* Same cycle, order, key and labels as the platform shell: light -> dark -> editorial. */
+  const ORDER = ["light","dark","editorial"];
+  const NAMES = {light:"☀ Light", dark:"\u{1F319} Dark", editorial:"❡ Editorial"};
+  const btn = el("themebtn");
+  const current = () => document.documentElement.getAttribute("data-theme") || "light";
+  const apply = (t) => {
+    if(t === "light") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", t);
+    try{ localStorage.setItem("noesis-theme", t); }catch(e){}
+    btn.textContent = NAMES[t] || NAMES.light;
+    btn.title = "Theme: " + (NAMES[t] || NAMES.light).slice(2) + " — click to switch";
+  };
+  apply(current());
+  btn.addEventListener("click", () => apply(ORDER[(ORDER.indexOf(current()) + 1) % ORDER.length]));
+})();
+</script>
+</body>
+</html>

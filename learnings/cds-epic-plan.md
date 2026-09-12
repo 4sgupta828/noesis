@@ -395,3 +395,146 @@ convergence → dissent → what changed.
 
 **Verdict:** proceed to **Phase 0 only** — regulatory opinion + P0 proof-of-value on a design partner's
 data + FHIR/hook reality-check on a real site — gated on a go/no-go before any heavy integration build.
+
+---
+
+# PART II — The India variant: a real-time prescription-safety CDSS (the stronger wedge)
+
+**Status: DRAFT (2026-09-12), grounded in two India research streams (market/regulatory/EHR; drug-safety/
+data/RWE) + `learnings/noesisindia.md`. Needs its own clinical + CDSCO-counsel panel before build.**
+User direction: build a point-of-prescribing CDSS for India (greenfield), checking prescription
+correctness, patient-adaptation, cross-comorbidity concurrency/interactions, and evidence-anchored
+divergence — real-time, advisory, **not diagnosis**. Assume EHR/patient-data access is granted.
+
+## II.1 Why India is a stronger wedge than the US play
+- **It dissolves the US killer.** The US plan died on the fact that a third party cannot touch Epic's
+  native FDB/Medi-Span alerting. India is **greenfield — there is no incumbent alerting layer to sit
+  under; you BE the layer**, embedded via ABDM's national FHIR R4 rails (an India-wide SMART-on-FHIR
+  analog: ABHA IDs, HIE-CM consent manager, HIP/HIU) or directly inside an EMR/HIS.
+- **The pain is enormous and quantified** (the market rationale the US play lacked): >90% of antibiotic
+  FDCs judged irrational; one OPD study found **98.9%** of prescriptions deviated from standard treatment;
+  ~22% inpatient medication-error rate; 33.7% elderly polypharmacy — all feeding AMR.
+- **Noesis already has India infrastructure built** (`noesisindia.md`, deployed dark): an FDC/strength-
+  aware **abstaining brand→generic resolver**, CDSCO FDC-ban/approved lists + NLEM + MoHFW/ICMR treatment
+  guidance as ranked evidence, Indian web domains, tier-aware country boost, per-user profiles + auth on
+  the research route, an India eval slice. The prescription checker is an *extension* of this, not a cold
+  start.
+- **The core moat fits the market exactly.** The one competitor already shipping — HealthPlix's in-EMR DDI
+  (14k+ doctors) — is "good enough," not India-localized or evidence-grounded. Global engines (Medi-Span/
+  FDB/Micromedex) aren't localized to Indian brands/FDCs. Noesis's differentiator (every flag carries a
+  congruent, cited, correctly-attributed basis; abstains when data/evidence won't support it) is what
+  turns a checker from "another override" into a trusted second read.
+
+## II.2 The regulatory 180° (the load-bearing finding)
+- **India has NO US-style "non-device CDS" safe harbor.** CDSCO's **Draft Guidance on Medical Device
+  Software (21 Oct 2025)**, IMDRF-aligned, explicitly names "standalone clinical decision support tools"
+  and software that "synthesizes or interprets patient data" as **SaMD requiring a license.** There is no
+  Cures-Act-§520(o) independent-review carve-out and no ONC-style transparency rule to lean on.
+- So the US strategy inverts: **in India you embrace being a regulated device.** Prescription-checking
+  that informs/drives management in serious situations plausibly lands **Class B–C (possibly C/D → central
+  CDSCO licensing)** under Medical Device Rules 2017. This is a **moat (barrier to entry) and a cost/
+  timeline**; AI/ML manufacturers must disclose training-set composition, bias, generalizability, and run
+  post-market monitoring. **Exact class is the load-bearing unknown — get a CDSCO/counsel read in Phase 0
+  before committing** (verify whether the Oct-2025 guidance is still draft or finalized).
+- **Liability posture = advisory.** NMC/Telemedicine rules: only a registered practitioner prescribes and
+  owns the decision. Keep the CDSS **advisory, clinician-retains-authority** (already Noesis's non-
+  autonomous stance; eSanjeevani deploys advisory AI-CDSS at national scale). "Not diagnosis" helps
+  liability but does **not** exempt it from SaMD licensing.
+
+## II.3 DPDP Act 2023 — and the sharp edge on "learn from similar patients"
+- DPDP Act 2023 + **DPDP Rules 2025 (notified 13 Nov 2025, phase-in to ~mid-2027)**: consent must be free/
+  specific/informed; providers get limited care-exemptions from *verifiable* consent for delivering care;
+  data-fiduciary duties, likely **Significant Data Fiduciary** status (India DPO, DPIA, independent audit).
+  **Design for data residency in India.**
+- **The population-learning feature is a distinct purpose.** You **cannot** re-use treatment data for model
+  training under the care exemption — it needs its own lawful basis (explicit consent or robust
+  de-identification). This gates the divergence/anomaly feature behind a consent/de-id pipeline —
+  `noesisindia.md` already flags this ("real user cases … require a DPDP consent/de-identification
+  pipeline, its own spec with its own panel review").
+
+## II.4 The safety mechanic the India data forces: evidence-anchored divergence, never peer-conformity
+**The validity trap (central risk).** Because guideline deviation is the *norm* in India (~99% in one
+study; antibiotic/FDC overuse is majority behaviour), **peer-conformity is a broken oracle** — "diverges
+from what similar patients get" frequently means "diverges from a bad majority," and a naïve peer-
+comparison model would flag the *correct* minority prescription as the anomaly and **entrench irrational
+prescribing.** Rule (non-negotiable): **every divergence flag resolves to a congruent guideline/evidence
+citation** (NLEM, ICMR AMSP/AWaRe, STGs, WHO) — peer patterns may be used *only* for hypothesis generation
+/ case-finding, never as the correctness signal. This is Noesis's standing "conformity ≠ correctness"
+discipline applied directly (the sitagliptin lesson). Plus §5.1 (silence-≠-clearance) and §5.2 (context-
+quality gate) carry over verbatim — and matter more here, since Indian chart completeness is the real
+bottleneck even with access granted.
+
+## II.5 Capability → feasibility map (the user's exact list)
+1. **Prescription correctness** (drug/dose/route/freq) — feasible. Needs brand→molecule+strength+form
+   normalization (Noesis resolver seed + build; the hard, defensible core given 60k–100k+ brands, FDC-
+   heavy, no central DB) + NLEM/NFI dosing + guideline anchors.
+2. **Patient-adaptation** (age/weight/renal/hepatic/pregnancy/allergy) — feasible where data exists; the
+   differential engine's non-citable patient-facts ledger is the seam. **Hard dependency: Indian EHR
+   completeness** — even with access, structured eGFR/weight/allergy are not safe to assume. Degrade
+   gracefully ("cannot verify renal function → cannot confirm dose"), never assume normal.
+3. **Cross-comorbidity concurrency / polypharmacy DDI** — feasible, but requires **licensing a global DDI
+   *chemistry* database** (DrugBank/Lexicomp/FDB — no Indian equivalent exists; RxNorm interaction API
+   discontinued 2024, DrugBank free checker retiring Mar 2026). Noesis adds India localization + the
+   evidence-grounded, congruent rationale on top.
+4. **Real-time feedback** — the **latency** problem, now core (not deferrable). Two-tier: **deterministic
+   rule checks** (dose bounds, allergy, banned-FDC, DDI severity) fire **<1s** from structured data + the
+   licensed DB, **no LLM**; the **evidence/reasoning layer** (guideline-appropriateness, the cited "why")
+   runs asynchronously to enrich, or on-demand behind a tap. Never block prescribing on a reasoning
+   round-trip.
+5. **Rule out interactions** — same as (3).
+6. **Learn from similar patients → flag divergence** — most novel, most valuable long-term, most fraught.
+   Governed by II.4 (evidence-anchored only) + II.3 (DPDP consent/de-id). **Stage it last.**
+7. **Not diagnosis** — keeps it advisory; does not change SaMD licensing.
+
+## II.6 Go-to-market (India-specific)
+- **Willingness-to-pay for standalone clinical software is weak** (HMS/EMR ~₹500–5,000/bed/user/mo,
+  price-sensitive buyers). **Best path = OEM/embed as a component (API) into Indian EMR/HIS vendors**
+  (Eka.care — ABDM-native; HealthPlix; KareXpert; Napier; Bahmni for public/NGO) who need differentiation
+  — not direct-to-doctor. **Bundle into e-Rx/CPOE, not a standalone alert box.**
+- Secondary buyers: large private chains (Apollo/Fortis/Max/Manipal — patient-safety + **NABH**
+  accreditation angle, real budgets, long cycles); government/NHM/ABDM (huge scale, brutal procurement,
+  lowest price); pharmacy chains (dispensing-side). **NABH + SaMD licensing become both moat and cost.**
+
+## II.7 What Noesis reuses vs must build (India prescription CDSS)
+- **Reuse:** the four evidence gates (span/entailment/on_subject/kind — the congruence engine that makes
+  divergence safe), the patient-facts ledger seam, currency/Pulse (FDC-ban notifications = change events),
+  the India-mode content/brand/boost/profile stack, the eval harness.
+- **Build:** (a) a **licensed DDI database integration** + Indian product mapping onto it; (b) a
+  **deterministic real-time safety-rules engine** (<1s, no-LLM) for dose/allergy/FDC/DDI; (c) the
+  **brand→molecule+strength+form normalizer** hardened well past the current ~97-row v1 (the core moat);
+  (d) **ABDM/FHIR R4 HIP-HIU integration** + consent-manager flow; (e) **DPDP data-residency + consent/
+  de-id pipeline** (gates the divergence feature); (f) SaMD **quality system + licensing + post-market
+  monitoring**; (g) the evidence-anchored divergence layer (last).
+
+## II.8 Sequencing (India)
+- **Phase 0 (de-risk):** CDSCO class determination + counsel opinion (load-bearing); DPDP/data-residency
+  architecture; **license the DDI chemistry**; sign an **EMR-vendor design partner**; validate real EHR
+  data completeness on their data (can we actually get eGFR/weight/allergy at prescribing time?).
+- **Phase 1:** the **deterministic real-time safety core** (correctness + dosing + interactions + patient-
+  adaptation with graceful degradation), evidence-grounded rationale, embedded in one EMR partner. SaMD
+  licensing track started.
+- **Phase 2:** the **guideline-appropriateness layer** (evidence-grounded "is this the right drug per
+  NLEM/ICMR/AWaRe" — where the Noesis engine shines, congruent + cited).
+- **Phase 3:** the **evidence-anchored divergence/anomaly layer** (DPDP-compliant, guideline-anchored,
+  hypothesis-generation only).
+
+## II.9 India risks (delta from Part I)
+1. **SaMD licensing (Class B/C/D) is mandatory — no non-device escape** → embrace it as a moat; get the
+   class read in Phase 0; build the quality system early.
+2. **Validity trap** (peer-conformity is inverted in India) → evidence-anchored divergence only (II.4).
+3. **DPDP on population learning** → consent/de-id pipeline + India residency; stage the feature last.
+4. **Latency at prescribing** → deterministic <1s core, async reasoning (II.5#4).
+5. **Indian EHR data completeness** (even with access) → graceful degradation, explicit "cannot verify".
+6. **Licensed DDI-DB dependency + cost** (DrugBank/Lexicomp/FDB) → budget it; it's the interaction
+   chemistry we don't own.
+7. **Weak WTP / "good-enough" incumbent (HealthPlix)** → OEM-embed + evidence-grounded differentiation +
+   NABH/AMR-stewardship angle, not a standalone alert box.
+8. **Brand normalization is the make-or-break engineering problem** (60k–100k+ brands, FDCs) → it's also
+   the moat; invest accordingly.
+
+## II.10 Open questions for the India panel (clinical-safety + CDSCO-counsel + India-GTM)
+- Exact SaMD class for a prescription CDSS, and whether an "inform-only" scoping lowers it.
+- Which DDI database to license (coverage vs cost vs India-mappability).
+- Real point-of-prescribing availability of structured renal/weight/allergy data in a partner EMR.
+- The divergence feature's lawful basis under DPDP (consent vs de-identification) and residency design.
+- OEM economics with an EMR partner vs direct hospital-chain sales.

@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Noesis Rx-CDS — prescription safety check</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --ink:#131720; --muted:#5b6472; --line:#e4e7ec;
+    --brand:#12603b; --brand-ink:#0b4429;
+    --s-contra:#8a1c1c; --s-major:#b42318; --s-unverif:#8a5a00; --s-mod:#b25e09;
+    --s-minor:#5b6472; --s-info:#356;
+    --chip:#eef1f4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{background:var(--brand);color:#fff;padding:14px 16px}
+  header .t{font-weight:700;font-size:17px}
+  header .s{opacity:.85;font-size:12.5px}
+  .wrap{max-width:1000px;margin:0 auto;padding:16px;display:grid;gap:16px;grid-template-columns:1fr 1fr}
+  .col{display:grid;gap:16px;align-content:start}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .card h2{margin:0 0 10px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  label{display:block;font-size:12.5px;color:var(--muted);margin:8px 0 3px}
+  input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:9px;
+    font:inherit;background:#fff;min-height:42px}
+  textarea{min-height:70px;resize:vertical}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>div{flex:1 1 120px}
+  .rx-line{display:flex;gap:8px;margin-bottom:8px}
+  .rx-line input{flex:1}
+  .btn{appearance:none;border:0;border-radius:10px;padding:12px 16px;font:inherit;font-weight:600;
+    cursor:pointer;min-height:46px}
+  .btn.primary{background:var(--brand);color:#fff;width:100%}
+  .btn.primary:active{background:var(--brand-ink)}
+  .btn.ghost{background:var(--chip);color:var(--ink)}
+  .btn.mini{padding:8px 10px;min-height:42px;background:var(--chip);color:var(--ink)}
+  .hint{font-size:12px;color:var(--muted)}
+  .summary{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+  .pill{border-radius:999px;padding:4px 10px;font-weight:700;font-size:12px;color:#fff}
+  .finding{border:1px solid var(--line);border-left-width:5px;border-radius:10px;padding:11px 12px;margin-bottom:10px}
+  .finding .fh{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .finding .ft{font-weight:650}
+  .finding .sev{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+  .finding .fd{margin:5px 0;font-size:14px}
+  .finding .mg{font-size:13px;color:var(--ink);background:#f3f6f4;border-radius:8px;padding:7px 9px;margin-top:6px}
+  .finding .basis{font-size:11.5px;color:var(--muted);margin-top:7px;border-top:1px dashed var(--line);padding-top:6px}
+  .sev-contraindicated{border-left-color:var(--s-contra)} .sev-contraindicated .sev{color:var(--s-contra)}
+  .sev-major{border-left-color:var(--s-major)} .sev-major .sev{color:var(--s-major)}
+  .sev-unverifiable{border-left-color:var(--s-unverif)} .sev-unverifiable .sev{color:var(--s-unverif)}
+  .sev-moderate{border-left-color:var(--s-mod)} .sev-moderate .sev{color:var(--s-mod)}
+  .sev-minor{border-left-color:var(--s-minor)} .sev-minor .sev{color:var(--s-minor)}
+  .gap{background:#fff8ec;border:1px solid #f0e0c0;border-left:5px solid var(--s-unverif);
+    border-radius:10px;padding:10px 12px;margin-bottom:9px;font-size:13.5px}
+  .gap b{color:var(--s-unverif)}
+  .cov{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .cov span{font-size:11.5px;border-radius:6px;padding:3px 7px;background:var(--chip)}
+  .cov .miss{background:#fff1f0;color:var(--s-major)}
+  .cov .have{background:#eef7f1;color:var(--brand)}
+  .norm{font-size:12px;color:var(--muted);margin-top:8px}
+  .norm code{background:var(--chip);padding:1px 5px;border-radius:5px}
+  .foot{font-size:11.5px;color:var(--muted);margin-top:6px}
+  .empty{color:var(--muted);font-size:14px}
+  @media (max-width:720px){
+    .wrap{grid-template-columns:1fr;padding:12px;gap:12px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="t">Noesis Rx-CDS</div>
+  <div class="s">Real-time prescription safety — every flag carries a cited basis · advisory only</div>
+</header>
+<div class="wrap">
+  <div class="col">
+    <div class="card">
+      <h2>Prescription</h2>
+      <div id="rx"></div>
+      <div class="row">
+        <button class="btn mini" onclick="addLine()">+ Add medicine</button>
+        <span class="hint" id="known"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Patient context</h2>
+      <div class="row">
+        <div><label>Age (yrs)</label><input id="age" type="number" inputmode="numeric"></div>
+        <div><label>Weight (kg)</label><input id="wt" type="number" inputmode="numeric"></div>
+        <div><label>Sex</label><select id="sex"><option value="">—</option><option>male</option><option>female</option></select></div>
+      </div>
+      <div class="row">
+        <div><label>eGFR (mL/min)</label><input id="egfr" type="number" inputmode="numeric" placeholder="leave blank if unknown"></div>
+        <div><label>Hepatic</label><select id="hep"><option value="">unknown</option><option>none</option><option>mild</option><option>moderate</option><option>severe</option></select></div>
+        <div><label>Pregnant</label><select id="preg"><option value="">unknown</option><option value="true">yes</option><option value="false">no</option></select></div>
+      </div>
+      <label>Allergies (comma-separated molecule/class, e.g. penicillin)</label>
+      <input id="allergies" placeholder="e.g. penicillin, nsaid">
+      <label>Comorbidities (comma-separated, e.g. CKD, peptic ulcer)</label>
+      <input id="conditions" placeholder="e.g. ckd, heart failure">
+      <label>Current medicines (comma-separated brands/molecules)</label>
+      <input id="current" placeholder="e.g. Warf 5, Lasix 40">
+    </div>
+    <button class="btn primary" onclick="run()">Check prescription</button>
+    <div class="foot">Tier-1 deterministic engine · illustrative seed knowledge base (not a licensed clinical DB).</div>
+  </div>
+
+  <div class="col">
+    <div class="card">
+      <h2>Result</h2>
+      <div id="summary" class="summary"><span class="empty">Enter a prescription and press “Check”.</span></div>
+      <div id="cov"></div>
+    </div>
+    <div class="card" id="gapsCard" hidden>
+      <h2>Could not verify (not clearance)</h2>
+      <div id="gaps"></div>
+    </div>
+    <div class="card" id="findCard" hidden>
+      <h2>Findings</h2>
+      <div id="findings"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SEV_LABEL = {contraindicated:"contraindicated",major:"major",unverifiable:"check",moderate:"moderate",minor:"minor",info:"info"};
+const SEV_COLOR = {contraindicated:"#8a1c1c",major:"#b42318","unverifiable":"#8a5a00",moderate:"#b25e09",minor:"#5b6472",info:"#356",none:"#12603b"};
+
+function addLine(val){
+  const rx=document.getElementById('rx');
+  const d=document.createElement('div'); d.className='rx-line';
+  d.innerHTML='<input placeholder="e.g. Dolo 650" list="brands"><button class="btn mini" onclick="this.parentNode.remove()">✕</button>';
+  if(val) d.querySelector('input').value=val;
+  rx.appendChild(d);
+}
+function listVal(id){return document.getElementById(id).value.split(',').map(s=>s.trim()).filter(Boolean);}
+
+async function loadFormulary(){
+  try{
+    const r=await fetch('/rx/formulary'); const j=await r.json();
+    const dl=document.createElement('datalist'); dl.id='brands';
+    j.brands.concat(j.molecules).forEach(b=>{const o=document.createElement('option');o.value=b;dl.appendChild(o);});
+    document.body.appendChild(dl);
+    document.getElementById('known').textContent=j.brands.length+' brands known';
+  }catch(e){}
+}
+
+// prefilled high-signal demo: warfarin patient, CKD, unknown eGFR, interacting Rx
+function seed(){
+  addLine('Augmentin 625'); addLine('Hifenac'); addLine('Clarithro 500'); addLine('Storvas 10');
+  document.getElementById('age').value=72; document.getElementById('sex').value='male';
+  document.getElementById('conditions').value='ckd';
+  document.getElementById('current').value='Warf 5';
+}
+
+async function run(){
+  const prescription=[...document.querySelectorAll('#rx .rx-line input')].map(i=>i.value.trim()).filter(Boolean).map(t=>({text:t}));
+  const pregSel=document.getElementById('preg').value;
+  const patient={
+    age_years:parseFloat(document.getElementById('age').value)||null,
+    weight_kg:parseFloat(document.getElementById('wt').value)||null,
+    sex:document.getElementById('sex').value||null,
+    pregnant: pregSel===''?null:(pregSel==='true'),
+    egfr: document.getElementById('egfr').value===''?null:parseFloat(document.getElementById('egfr').value),
+    hepatic_impairment:document.getElementById('hep').value||null,
+    allergies:listVal('allergies'), conditions:listVal('conditions'), current_meds:listVal('current')
+  };
+  const r=await fetch('/rx/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prescription,patient})});
+  render(await r.json());
+}
+
+function esc(s){return (s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+
+function render(res){
+  const sev=res.summary.max_severity;
+  const sum=document.getElementById('summary');
+  sum.innerHTML=`<span class="pill" style="background:${SEV_COLOR[sev]||'#356'}">${esc(SEV_LABEL[sev]||sev)}</span>
+    <span>${res.summary.finding_count} finding(s)</span>
+    <span class="hint">· ${res.latency_ms} ms</span>`;
+
+  // coverage row
+  const cp=res.coverage.context_present; const cov=document.getElementById('cov');
+  cov.innerHTML='<div class="cov">'+Object.entries(cp).map(([k,v])=>
+    `<span class="${v?'have':'miss'}">${v?'✓':'—'} ${esc(k)}</span>`).join('')+'</div>';
+
+  // gaps (silence != clearance)
+  const gaps=res.coverage.unverifiable||[];
+  document.getElementById('gapsCard').hidden=gaps.length===0;
+  document.getElementById('gaps').innerHTML=gaps.map(g=>
+    `<div class="gap"><b>${esc(g.molecule)}</b> — ${esc(g.why)}</div>`).join('');
+
+  // findings
+  const f=res.findings||[];
+  document.getElementById('findCard').hidden=f.length===0 && gaps.length===0;
+  const norm=res.normalization.map(n=>{
+    const mols=n.components.map(c=>`${c.molecule}${c.strength?(' '+c.strength+(c.unit||'')):''}`).join(' + ');
+    return `<code>${esc(n.raw)}</code> → ${n.resolved?esc(mols):'<i>not resolved</i>'}`;
+  }).join(' · ');
+  let html = f.map(x=>`
+    <div class="finding sev-${x.severity}">
+      <div class="fh"><span class="ft">${esc(x.title)}</span><span class="sev">${esc(x.severity)}</span></div>
+      <div class="fd">${esc(x.detail)}</div>
+      ${x.management?`<div class="mg">→ ${esc(x.management)}</div>`:''}
+      <div class="basis">Basis — ${esc(x.basis.source)}: ${esc(x.basis.citation)}</div>
+    </div>`).join('');
+  if(!f.length) html='<div class="empty">No rule-based findings. Review the coverage gaps above — absence of a finding is not a guarantee of safety.</div>';
+  html += `<div class="norm">Normalisation: ${norm||'—'}</div>`;
+  html += `<div class="foot">${esc(res.disclaimer)}</div>`;
+  document.getElementById('findings').innerHTML=html;
+  document.getElementById('findCard').hidden=false;
+}
+
+loadFormulary(); seed();
+</script>
+</body>
+</html>

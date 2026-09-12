@@ -1734,6 +1734,13 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             llm_of=lambda: build_llm(mode=resolve_mode(),
                                      model=os.environ.get("NOESIS_VOICES_MODEL", "") or None)))
 
+    # Rx-CDS — a real-time, deterministic (LLM-free) prescription-safety sub-app for India
+    # (see learnings/cds-epic-plan.md Part II). Additive + isolated under /rx: it never touches
+    # the research/answer path. Flag NOESIS_RXCDS (default ON); NOESIS_RXCDS=0 is a true no-op.
+    from api.rxcds import build_router as build_rxcds_router, rxcds_enabled
+    if rxcds_enabled():
+        app.include_router(build_rxcds_router())
+
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok"}

@@ -16,6 +16,9 @@
   body{margin:0;background:var(--bg);color:var(--ink);
     font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
   header{background:var(--brand);color:#fff;padding:14px 16px}
+  header .back{display:inline-block;color:#fff;opacity:.85;text-decoration:none;font-size:13px;
+    font-weight:600;margin-bottom:6px}
+  header .back:hover{opacity:1;text-decoration:underline}
   header .t{font-weight:700;font-size:17px}
   header .s{opacity:.85;font-size:12.5px}
   .wrap{max-width:1000px;margin:0 auto;padding:16px;display:grid;gap:16px;grid-template-columns:1fr 1fr}
@@ -76,6 +79,7 @@
 </head>
 <body>
 <header>
+  <a class="back" href="/app">← Noesis</a>
   <div class="t">Noesis Rx-CDS</div>
   <div class="s">Real-time prescription safety — every flag carries a cited basis · advisory only</div>
 </header>

@@ -1765,6 +1765,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "search_facets": ui.search_facets() if ui else [],
             "console": console,
             "video_enabled": video_enabled(),
+            "rxcds_enabled": rxcds_enabled(),
             "structured_answers": structured_answers(),
             "clinical_synthesis": clinical_synthesis() and structured_answers(),
             "evidence_select": bool(getattr(svc, "evidence_select", False)),

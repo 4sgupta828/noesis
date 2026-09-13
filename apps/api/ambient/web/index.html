@@ -64,6 +64,23 @@
   .code .c{font-weight:700;font-family:ui-monospace,Menlo,monospace} .code .d{font-size:13px;color:var(--muted)}
   .sub{font-size:12px;color:var(--muted);margin:2px 0 8px}
   .empty{color:var(--muted);font-size:14px} .foot{font-size:11.5px;color:var(--muted);margin-top:8px}
+  .picture{font-size:15.5px;line-height:1.6;color:var(--ink)}
+  .gdmt{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .gdmt .p{font-size:12px;border-radius:999px;padding:4px 10px;border:1px solid var(--line)}
+  .gdmt .p.have{background:var(--ok);color:var(--brand);border-color:#cfe7d8}
+  .gdmt .p.miss{background:#fff1f0;color:var(--s-major);border-color:#f4d3d0}
+  .gdmt .lead{font-size:12px;color:var(--muted);width:100%;margin-bottom:2px}
+  .pnote{font-size:13.5px;color:var(--muted);border-left:3px solid var(--line);padding:2px 0 2px 10px;margin-bottom:10px}
+  .prio{display:grid;gap:10px}
+  .pr{display:grid;grid-template-columns:26px 1fr;gap:10px;border:1px solid var(--line);border-radius:10px;padding:11px 12px}
+  .pr .rk{width:24px;height:24px;border-radius:50%;background:var(--brand);color:#fff;font-weight:700;font-size:12.5px;display:flex;align-items:center;justify-content:center}
+  .pr.safety .rk{background:var(--s-major)}
+  .pr .when{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  .pr .ttl{font-weight:650;margin:1px 0 2px}
+  .pr .why{font-size:13.5px;color:var(--ink)}
+  .pr .why b{color:var(--brand)}
+  .pr .bs{font-size:11px;color:var(--muted);margin-top:5px}
+  .pr.safety .why b{color:var(--s-major)}
   @media (max-width:760px){ .wrap{grid-template-columns:1fr;padding:12px} .case{flex:1 1 100%} }
 </style>
 </head>
@@ -112,16 +129,29 @@
       <h2>Result</h2>
       <div id="summary" class="summary"><span class="empty">Load a case or paste a transcript, then Analyze.</span></div>
     </div>
+    <div class="card" id="pictureCard" hidden>
+      <h2>Clinical picture</h2>
+      <div id="picture" class="picture"></div>
+      <div id="gdmt" class="gdmt"></div>
+    </div>
+    <div class="card" id="prioCard" hidden>
+      <h2>What to do — and why</h2>
+      <div class="sub">One prioritized thread across the visit. Each step says why it matters and when.</div>
+      <div id="prio" class="prio"></div>
+    </div>
     <div class="card" id="preCard" hidden>
       <h2><span class="ph">Pre-visit</span> — brief &amp; care gaps</h2>
+      <div class="pnote" id="preNote"></div>
       <div id="pre"></div>
     </div>
     <div class="card" id="encCard" hidden>
       <h2><span class="ph">Encounter</span> — real-time CDS</h2>
+      <div class="pnote" id="encNote"></div>
       <div id="enc"></div>
     </div>
     <div class="card" id="postCard" hidden>
       <h2><span class="ph">Post-visit</span> — <span id="postLabel">coding</span></h2>
+      <div class="pnote" id="postNote"></div>
       <div id="post"></div>
     </div>
     <div class="card" id="covCard" hidden>
@@ -194,16 +224,46 @@ function render(res){
      <span>${S.safety_findings} safety</span> · <span>${S.care_gaps} care-gap(s)</span>
      <span class="hint">· ${res.latency_ms} ms</span>`;
 
-  // PRE-VISIT
+  // CLINICAL PICTURE
+  document.getElementById('picture').textContent = res.clinical_picture || '';
+  const gd=res.gdmt; const gdEl=document.getElementById('gdmt');
+  if(gd){
+    gdEl.innerHTML = `<span class="lead">Heart-failure GDMT pillars — ${gd.n_have} of ${gd.n_total} present</span>`+
+      gd.have.map(h=>`<span class="p have">✓ ${esc(h)}</span>`).join('')+
+      gd.missing.map(m=>`<span class="p miss">✗ ${esc(m)}</span>`).join('');
+  } else { gdEl.innerHTML=''; }
+  document.getElementById('pictureCard').hidden=false;
+
+  // PRIORITIES — the spine (what to do and why)
+  const prio=res.priorities||[];
+  document.getElementById('prio').innerHTML = prio.map(p=>`
+    <div class="pr ${p.kind==='safety'?'safety':''}">
+      <div class="rk">${p.rank}</div>
+      <div>
+        <div class="when">${esc(p.when)}</div>
+        <div class="ttl">${esc(p.title)}</div>
+        <div class="why"><b>Why:</b> ${esc(p.why)}</div>
+        ${p.basis?`<div class="bs">${esc(p.basis.source)}${p.basis.citation?' · '+esc(p.basis.citation):''}</div>`:''}
+      </div>
+    </div>`).join('') || '<div class="empty">No prioritized actions — see the phases below.</div>';
+  document.getElementById('prioCard').hidden = prio.length===0;
+
+  // phase framing notes
+  const pn=res.phase_notes||{};
+  document.getElementById('preNote').textContent = pn.pre||'';
+  document.getElementById('encNote').textContent = pn.encounter||'';
+  document.getElementById('postNote').textContent = pn.post||'';
+
+  // PRE-VISIT — the factual brief (the actionable gaps live in the priorities spine above)
   const pv=res.pre_visit;
   let pre='';
-  pre+=`<div class="sub">Conditions</div><div class="chips">${pv.conditions.map(c=>`<span class="chip">${esc(c.label)}</span>`).join('')||'<span class="empty">none detected</span>'}</div>`;
-  pre+=`<div class="sub">Guideline therapies present</div><div class="chips">${pv.present_therapies.map(t=>`<span class="chip ok">✓ ${esc(t)}</span>`).join('')||'<span class="hint">none detected</span>'}</div>`;
-  pre+=`<div class="sub" style="margin-top:10px">Care gaps (evidence-anchored, not peer-conformity)</div>`;
-  pre+= pv.care_gaps.length ? pv.care_gaps.map(g=>itemHTML(g.severity,g.label,g.note,g.basis,null)).join('')
-        : '<div class="chip ok">✓ No guideline gaps found for the detected conditions</div>';
-  if(pv.actions.length){ pre+=`<div class="sub" style="margin-top:10px">To confirm / act on</div>`+
-    pv.actions.map(a=>itemHTML(a.severity,a.label,a.note,a.basis,null)).join(''); }
+  pre+=`<div class="sub">Active problems (grounded in the encounter/chart)</div>`;
+  pre+= pv.conditions.length ? pv.conditions.map(c=>{
+      const ev=(c.evidence||[])[0]||{};
+      return `<div class="item sev-info"><div class="it">${esc(c.label)}</div>`+
+        (ev.text?`<div class="link">${ev.source==='transcript'?'from the conversation':'from the chart'}: <em>${esc(ev.text)}</em></div>`:'')+`</div>`;
+    }).join('') : '<span class="empty">none detected</span>';
+  pre+=`<div class="sub" style="margin-top:10px">Guideline therapies already on board</div><div class="chips">${pv.present_therapies.map(t=>`<span class="chip ok">✓ ${esc(t)}</span>`).join('')||'<span class="hint">none detected</span>'}</div>`;
   document.getElementById('pre').innerHTML=pre; document.getElementById('preCard').hidden=false;
 
   // ENCOUNTER

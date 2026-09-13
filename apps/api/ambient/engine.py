@@ -23,6 +23,7 @@ from api.rxcds import data as rxdata
 from api.rxcds.engine import PatientContext, check_prescription, normalize
 
 from . import data as adata
+from . import synthesis
 from .modes import MODES, resolve_mode
 
 logger = logging.getLogger("noesis.ambient")
@@ -225,8 +226,20 @@ def analyze_encounter(transcript: str, patient: PatientContext, mode: str = "US"
 
     present_readout = sorted(present_classes.intersection(adata.GDMT_CLASSES),
                              key=lambda c: adata.GDMT_CLASSES.index(c))
+
+    # --- synthesis: the doctor-readable read (picture + ranked why + phase framing) ---
+    synth = synthesis.build(
+        patient, conds, present_classes,
+        {"care_gaps": gaps["gaps"], "actions": gaps["actions"]},
+        findings, post, recent_hospitalization,
+    )
+
     return {
         "mode": mode, "mode_label": cfg["label"],
+        "clinical_picture": synth["clinical_picture"],
+        "gdmt": synth["gdmt"],
+        "priorities": synth["priorities"],
+        "phase_notes": synth["phase_notes"],
         "pre_visit": {
             "conditions": conds,
             "present_therapies": [adata.CLASS_LABEL.get(c, c) for c in present_readout],

@@ -538,3 +538,162 @@ bottleneck even with access granted.
 - Real point-of-prescribing availability of structured renal/weight/allergy data in a partner EMR.
 - The divergence feature's lawful basis under DPDP (consent vs de-identification) and residency design.
 - OEM economics with an EMR partner vs direct hospital-chain sales.
+
+---
+
+# PART III — The ambient encounter layer: an evidence-grounded CDS on top of the scribe
+
+**Status: SPEC / EVALUATION (2026-09-13), grounded in two research streams (Abridge product deep-dive;
+ambient-CDS technical + regulatory landscape). Needs its own clinical-safety + FDA-counsel + Epic panel
+before build.** User direction: "build what Abridge has for CDSS" (pre-visit summary → real-time encounter
+CDS + care-gaps + orders → post-visit note/coding/orders). This part evaluates Abridge and specs the
+version worth building. It reuses the shipped Rx-CDS engine (`apps/api/rxcds/`) and the Part I/II theses.
+
+## III.1 Evaluation — what Abridge actually is (vs what it markets)
+- **A "single intelligence layer" across pre/encounter/post**, not just a scribe. Real capabilities:
+  pre-visit summary + pre-filled calculators; real-time note that forms *during* the visit; ambient
+  **orders** (meds/labs/imaging/referrals); post-visit finalized note + **ICD-10/HCC coding + auto E/M
+  level** + patient after-visit summary.
+- **Three genuine moats:** (1) real-time medical ASR + note-gen; (2) **Linked Evidence** — every note line
+  traces back to a transcript span / EHR field (auditable, verify-don't-trust); (3) **coding/CDI — where
+  the ROI is** (E/M leveling + HCC/RAF uplift); plus deep **Epic embedding** ("Abridge Inside": capture in
+  Haiku → note in Hyperdrive) and distribution (300+ systems, ~$100M ARR, $5.3B).
+- **The "CDS" is thin.** It is context-aware **evidence *surfacing*** over a **licensed UpToDate**
+  dependency (much still "preview"), plus **coding dressed as decision support** ("Care Signals" optimises
+  risk-adjustment revenue, not safety). **No drug-interaction / dosing / contraindication safety logic, no
+  abstention.** Strong on **provenance** (the quote exists / traces to transcript), weak on **congruence /
+  correctness** (whether the evidence's subject/kind/population matches the claim) — the sitagliptin gap.
+- **Faithfulness is unsolved even for the note:** independent data — omissions ~18%, hallucinations
+  ~11.5%, and **~5.3% of notes carry a serious-harm-risk error if uncorrected**; speaker misattribution is
+  a named failure. Abridge's "97% confabulation catch" is internal/unaudited.
+
+## III.2 The two structural cracks that define our opening
+1. **The scribe is commoditised and Epic is nativing it.** **Epic native AI Charting went GA Feb 2026**
+   (Dragon ASR, full-chart context, no third-party audio egress, no separate contract) — the "Sherlocked"
+   moment; Doximity ships a free scribe. Transcription is table stakes; **differentiation has moved *after*
+   the transcript.** Survival bar for a standalone: "radically, not marginally, better."
+2. **The coding-uplift wedge is fragile.** Ambient scribes raise billing/HCC intensity → payer
+   countermeasures (Cigna auto-downcoding L4–5 E/M); the "coding arms race" policy brief frames uplift as a
+   *risk*, not a durable moat. **Do not build the wedge on coding maximisation.**
+
+## III.3 The durable wedge — double-grounded, abstaining, safety-grade CDS (reconciling the Part I panel)
+The Part I panel said **"stay out of ambient scribing — solved, incumbent-locked."** That holds **for the
+scribe.** It does **not** hold for the layer *above* the transcript, which is exactly where Abridge and Epic
+are both still at "preview" and where neither does safety logic or abstention. The differentiated product
+is not a better scribe; it is the **CDS/evidence/safety layer that rides on any ambient stream** (ours,
+Abridge's, or Epic-native) — the Part I "verification layer for clinical AI" thesis applied to the
+encounter. Its spine is **double grounding**:
+- **The note is grounded in the conversation** (Linked-Evidence parity — every clinical line traces to a
+  transcript span; unsupported lines are flagged, not silently emitted).
+- **Every CDS suggestion is grounded in congruent, typed, cited medical evidence — or it abstains**
+  (the Noesis moat: subject/kind/population congruence, not just a real quote; silence is shown as an
+  explicit gap, never as clearance).
+Plus the two things Abridge structurally lacks: **real safety logic** (drug-interaction / dosing /
+contraindication / allergy — the shipped `apps/api/rxcds/` engine *is* this, real-time and deterministic)
+and **defensible (not maximal) coding** (MEAT-compliant, evidence-in-note-required, the anti-arms-race
+posture that survives payer downcoding).
+
+## III.4 Product spec — the three phases, reusing Noesis
+Positioning: **"The scribe writes it down. We make sure it's right — and we say nothing rather than guess."**
+
+**PRE-VISIT — the grounded patient brief + care-gap set.**
+- Patient summary from EHR/FHIR (problem list, meds, labs, recent hospitalisation) via the differential
+  engine's **non-citable patient-facts ledger** (Part I/II seam) — *what changed since last visit*, active
+  problems, meds, gaps.
+- **Care-gap detection** anchored to guideline/currency, not revenue: overdue screenings, guideline
+  supersessions touching this patient (reuse **currency/Pulse**), missing monitoring for active meds. Every
+  gap carries a cited basis; unverifiable context (missing labs) is shown, not assumed.
+- Discussion checklist the clinician walks in with.
+
+**ENCOUNTER — real-time, latency-tiered, silence-≠-clearance CDS.**
+- Ambient capture (ASR + diarization) → live structured facts (spoken meds, symptoms, plan).
+- **Tier-1 deterministic (<1s, no LLM):** the shipped Rx-CDS engine fires on spoken/ordered meds —
+  interaction / dosing / contraindication / allergy / banned-FDC — additive, evidence-cited, abstaining on
+  unknowns. This is the safety layer Abridge lacks.
+- **Tier-2 evidence-grounded guidance (async, behind the flow):** context-aware management guidance
+  bound to **congruent** guideline evidence (reuse the retrieval + four gates + differential engine) —
+  surfaced as *reviewable options with transparent basis*, never a single time-critical directive (keeps
+  it non-device, FDA Criterion 4). Fires only on congruent evidence; otherwise stays silent *and says so*.
+- **Anti-alert-fatigue by construction:** fewer, higher-trust, cited prompts; the ~90%-override failure is
+  attacked by congruence + abstention, not more alerts.
+
+**POST-VISIT — double-grounded note + defensible coding + orders.**
+- **Note generation grounded in the transcript** (Linked-Evidence parity): clinical claims carry a
+  transcript span; **omission-first QA** (the dominant failure) — flag likely-omitted actives/meds rather
+  than only policing fabrication. Clinical assertions in the note additionally ride the **congruence gate**
+  (a stated dose/interaction must bind congruent evidence, or it is flagged for review).
+- **Defensible coding:** suggest ICD-10/HCC/E-M with the **MEAT evidence in the note quoted as the basis**;
+  never suggest a code the note doesn't support (survives payer downcoding; avoids the arms-race liability).
+- **Orders + patient summary** written back via FHIR with a preserved **review-and-sign gate**.
+
+## III.5 Reuse-vs-build map (kernel-first)
+- **Reuse (Noesis, shipped):** the four congruence gates; retrieval/fusion/rerank; the differential engine
+  + patient-facts ledger; **currency/Pulse** (care-gaps); the **Rx-CDS engine** (`apps/api/rxcds/`, the
+  Tier-1 safety layer — already live); the panel; the eval harness (extend with note-faithfulness +
+  abstention slices). India mode for the India variant.
+- **Buy / partner (commoditised — do NOT build):** real-time **medical ASR** (Deepgram Nova-3 Medical /
+  AssemblyAI / NVIDIA Parakeet-Canary / AWS/Azure) and **diarization** (the genuinely hard part; real-world
+  conversational WER is 18–63% in noisy rooms — a vendor problem, not our differentiator).
+- **Build (the product):** the streaming encounter pipeline (partials → structured facts); **note-gen with
+  transcript-linking + omission-first QA**; the **defensible-coding** module (MEAT-bound ICD/HCC/E-M);
+  **FHIR write-back** (DocumentReference / ServiceRequest / MedicationRequest / Condition via SMART on FHIR,
+  review-and-sign preserved); the encounter UI (mobile — Haiku/Canto class); the Tier-2 congruent-guidance
+  binder over the existing engine.
+
+## III.6 Regulatory posture
+- **The scribe itself is generally non-device** (documentation carve-out) — keep note-gen documentation-only.
+- **The CDS layer is the device line.** Keep US surfaces **non-device**: reviewable *options* with
+  transparent basis (Criterion 4), never a single time-critical directive at the point of the live
+  conversation; recommendations the clinician can review, abstention when evidence is wrong-shaped. A
+  specific/time-critical/diagnostic directive = a regulated device — avoid it (or, India, embrace SaMD per
+  Part II). **Preserve review-and-sign** (learned-intermediary shield). **Coding compliance:** MEAT-bound,
+  defensible-not-maximal — the anti-downcoding, anti-False-Claims posture. Never publish an unaudited
+  accuracy metric (Part I risk #4 / the Pieces lesson); publish faithfulness + abstention *methodology* and
+  seek external validation (the gap Abridge leaves open).
+
+## III.7 Two go-to-market options
+- **Option A — US "layer on ambient" (fastest, uncopyable).** Do not fight the scribe. Be the
+  evidence-grounded **safety + congruent-guidance + defensible-coding layer that plugs onto any ambient
+  stream** — Abridge's, Epic-native AI Charting, or a partner's. Sells to the CMIO/patient-safety office
+  (Part I buyer) as *"make your scribe's output safe and its CDS real."* Incumbents can't copy it without
+  policing their own output; Epic's generalist tool won't build safety logic + abstention.
+- **Option B — India full-stack (ties the session together).** Build the whole loop (ambient + CDS +
+  Rx-safety) for **India greenfield** — no Abridge, no Epic-native, ABDM/FHIR rails, the **already-built
+  Rx-CDS engine + India mode** (Part II), vernacular ASR. The ambient stream feeds the Part II
+  prescription-safety engine directly. Bigger build, but no incumbent and a coherent full product.
+- **Recommendation:** lead with the **CDS/safety layer** (the durable, differentiated, non-device-friendly
+  wedge) regardless of market; pick A for speed/defensibility in the US, B if the appetite is a full-stack
+  India product. Do **not** lead with the scribe or with coding-maximisation.
+
+## III.8 Phased roadmap
+- **Phase 0 (de-risk):** FDA-counsel opinion on the Tier-2 encounter-CDS device line; pick an ASR/
+  diarization vendor and measure real-world WER on target-setting audio; note-faithfulness + abstention
+  eval slices; a design-partner (a health system for A, an EMR/hospital for B).
+- **Phase 1:** POST-VISIT double-grounded note QA + defensible-coding + the Tier-1 Rx-safety layer over a
+  *partner's* transcript (Option A) — ship the differentiated layer without owning the scribe.
+- **Phase 2:** ENCOUNTER Tier-2 congruent-guidance (reviewable options) + care-gap (Pulse) + FHIR orders
+  write-back with review-and-sign.
+- **Phase 3:** PRE-VISIT grounded brief; own the ambient capture only if a market needs it (Option B/India).
+- Eval-gated throughout (note faithfulness, abstention, safety-catch, *defensible* coding accuracy).
+
+## III.9 Risks (delta from Parts I/II)
+1. **Epic natives the whole loop** → be the cross-EHR, safety-grade, abstaining layer Epic's generalist
+   tool won't build; ride on top of Epic-native rather than against it (Option A).
+2. **ASR real-world WER 18–63% in noisy rooms** → vendor problem; degrade gracefully, never emit a
+   low-confidence clinical fact as grounded; transcript-link everything.
+3. **Note omissions (18%) > fabrications** → omission-first QA, not just anti-hallucination.
+4. **Encounter-time CDS = FDA device risk** → reviewable options, non-directive, review-and-sign (III.6).
+5. **Coding arms race / False Claims exposure** → MEAT-bound defensible coding, never maximal.
+6. **Competing with a $5.3B incumbent + Epic** → don't compete as a scribe; the layer is additive and
+   uncopyable; the safety logic + abstention + external validation are the "radically better" bar.
+7. **Faithfulness overclaim** → publish methodology + external validation, never an unaudited %.
+
+## III.10 Open questions for the ambient panel (clinical-safety + FDA-counsel + Epic-partnership)
+- Does encounter-time Tier-2 guidance stay non-device if strictly "reviewable options + basis," or does the
+  live-conversation timing push it over Criterion 4 regardless?
+- Option A economics: will a scribe incumbent (or Epic) allow a third-party CDS/safety layer on its stream,
+  or is the only route owning the capture (Option B)?
+- Which ASR/diarization vendor clears the real-world-WER bar for the target setting, at what cost?
+- Is "defensible coding" a sellable wedge on its own (payer-downcoding-proof), or only a note feature?
+- For India (Option B), does the Part II SaMD/DPDP analysis extend cleanly to ambient audio (consent to
+  record, audio residency)?

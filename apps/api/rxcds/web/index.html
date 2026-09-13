@@ -62,8 +62,15 @@
   .norm code{background:var(--chip);padding:1px 5px;border-radius:5px}
   .foot{font-size:11.5px;color:var(--muted);margin-top:6px}
   .empty{color:var(--muted);font-size:14px}
+  .cases{display:flex;flex-wrap:wrap;gap:8px}
+  .case{appearance:none;cursor:pointer;text-align:left;flex:1 1 46%;min-width:150px;
+    border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:#fbfcfd;font:inherit}
+  .case:active{background:var(--chip)}
+  .case b{display:block;font-size:13.5px;color:var(--ink)}
+  .case span{font-size:11.5px;color:var(--muted)}
   @media (max-width:720px){
     .wrap{grid-template-columns:1fr;padding:12px;gap:12px}
+    .case{flex:1 1 100%}
   }
 </style>
 </head>
@@ -74,6 +81,14 @@
 </header>
 <div class="wrap">
   <div class="col">
+    <div class="card">
+      <h2>Example cases — one click to load &amp; check</h2>
+      <div class="cases" id="cases"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn mini" onclick="clearForm()">Clear</button>
+        <span class="hint">Pick a case, tweak anything, or build your own below.</span>
+      </div>
+    </div>
     <div class="card">
       <h2>Prescription</h2>
       <div id="rx"></div>
@@ -145,12 +160,55 @@ async function loadFormulary(){
   }catch(e){}
 }
 
-// prefilled high-signal demo: warfarin patient, CKD, unknown eGFR, interacting Rx
-function seed(){
-  addLine('Augmentin 625'); addLine('Hifenac'); addLine('Clarithro 500'); addLine('Storvas 10');
-  document.getElementById('age').value=72; document.getElementById('sex').value='male';
-  document.getElementById('conditions').value='ckd';
-  document.getElementById('current').value='Warf 5';
+// One-click example cases. Each populates the whole form and runs the check.
+const CASES = [
+  {key:'warfarin', title:'Warfarin + polypharmacy', sub:'72y, CKD — interactions, comorbidity, geriatric, gaps',
+   rx:['Augmentin 625','Hifenac','Clarithro 500','Storvas 10'],
+   p:{age:72, sex:'male', conditions:'ckd', current:'Warf 5'}},
+  {key:'allergy', title:'Penicillin allergy', sub:'Augmentin ordered for a penicillin-allergic patient',
+   rx:['Augmentin 625'],
+   p:{age:34, sex:'female', allergies:'penicillin'}},
+  {key:'renal', title:'Renal dosing', sub:'Metformin at eGFR 20 — contraindicated',
+   rx:['Glycomet 500'],
+   p:{age:66, sex:'male', egfr:20, conditions:'type 2 diabetes'}},
+  {key:'renal_unknown', title:'Missing data ≠ safe', sub:'Metformin, eGFR not recorded — “could not verify”',
+   rx:['Glycomet 500'],
+   p:{age:66, sex:'male'}},
+  {key:'pregnancy', title:'Pregnancy risk', sub:'ACE-inhibitor + statin in a pregnant patient',
+   rx:['Cardace 5','Storvas 10'],
+   p:{age:29, sex:'female', preg:'true'}},
+  {key:'fdc_dup', title:'Hidden FDC duplication', sub:'Paracetamol in both Dolo and Ultracet',
+   rx:['Dolo 650','Ultracet'],
+   p:{age:40, sex:'male'}},
+  {key:'quiet', title:'Low-risk (stays quiet)', sub:'A clean Rx with full context — few/no flags',
+   rx:['Amlong 5','Thyronorm 50'],
+   p:{age:52, sex:'female', egfr:95, hep:'none', preg:'false', allergies:'', conditions:'hypertension'}},
+];
+
+function clearForm(){
+  document.getElementById('rx').innerHTML='';
+  ['age','wt','egfr','allergies','conditions','current'].forEach(id=>document.getElementById(id).value='');
+  ['sex','hep','preg'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('summary').innerHTML='<span class="empty">Enter a prescription and press “Check”.</span>';
+  document.getElementById('cov').innerHTML='';
+  document.getElementById('gapsCard').hidden=true; document.getElementById('findCard').hidden=true;
+}
+
+function loadCase(key){
+  const c=CASES.find(x=>x.key===key); if(!c) return;
+  clearForm();
+  c.rx.forEach(addLine);
+  const p=c.p||{};
+  const set=(id,v)=>{if(v!==undefined&&v!==null) document.getElementById(id).value=v;};
+  set('age',p.age); set('wt',p.wt); set('sex',p.sex); set('egfr',p.egfr);
+  set('hep',p.hep); set('preg',p.preg); set('allergies',p.allergies);
+  set('conditions',p.conditions); set('current',p.current);
+  run();
+}
+
+function renderCases(){
+  document.getElementById('cases').innerHTML = CASES.map(c=>
+    `<button class="case" onclick="loadCase('${c.key}')"><b>${c.title}</b><span>${c.sub}</span></button>`).join('');
 }
 
 async function run(){
@@ -210,7 +268,7 @@ function render(res){
   document.getElementById('findCard').hidden=false;
 }
 
-loadFormulary(); seed();
+loadFormulary(); renderCases(); loadCase('warfarin');
 </script>
 </body>
 </html>

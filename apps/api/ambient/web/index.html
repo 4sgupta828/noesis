@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Noesis Ambient CDS — encounter intelligence</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --ink:#131720; --muted:#5b6472; --line:#e4e7ec;
+    --brand:#12603b; --brand-ink:#0b4429; --accent:#2559c9;
+    --s-contra:#8a1c1c; --s-major:#b42318; --s-mod:#b25e09; --s-minor:#5b6472; --s-info:#356;
+    --chip:#eef1f4; --ok:#eef7f1; --gap:#fff8ec; --gapln:#8a5a00;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{background:var(--brand);color:#fff;padding:14px 16px}
+  header .back{display:inline-block;color:#fff;opacity:.85;text-decoration:none;font-size:13px;font-weight:600;margin-bottom:6px}
+  header .back:hover{opacity:1;text-decoration:underline}
+  header .t{font-weight:700;font-size:17px}
+  header .s{opacity:.85;font-size:12.5px}
+  .wrap{max-width:1040px;margin:0 auto;padding:16px;display:grid;gap:14px;grid-template-columns:1fr 1fr}
+  .col{display:grid;gap:14px;align-content:start}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .card h2{margin:0 0 4px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .card h2 .ph{color:var(--accent);font-weight:800}
+  label{display:block;font-size:12.5px;color:var(--muted);margin:8px 0 3px}
+  input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:9px;font:inherit;background:#fff;min-height:42px}
+  textarea{min-height:120px;resize:vertical;line-height:1.5}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>div{flex:1 1 110px}
+  .btn{appearance:none;border:0;border-radius:10px;padding:12px 16px;font:inherit;font-weight:600;cursor:pointer;min-height:46px}
+  .btn.primary{background:var(--brand);color:#fff;width:100%}
+  .btn.primary:active{background:var(--brand-ink)}
+  .btn.mini{padding:8px 10px;min-height:42px;background:var(--chip);color:var(--ink)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:#fff}
+  .seg button{appearance:none;border:0;background:#fff;padding:8px 16px;font:inherit;font-weight:600;cursor:pointer;color:var(--muted);min-height:40px}
+  .seg button.on{background:var(--brand);color:#fff}
+  .cases{display:flex;flex-wrap:wrap;gap:8px}
+  .case{appearance:none;cursor:pointer;text-align:left;flex:1 1 46%;min-width:150px;border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:#fbfcfd;font:inherit}
+  .case:active{background:var(--chip)}
+  .case b{display:block;font-size:13.5px;color:var(--ink)} .case span{font-size:11.5px;color:var(--muted)}
+  .hint{font-size:12px;color:var(--muted)}
+  .summary{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+  .pill{border-radius:999px;padding:4px 10px;font-weight:700;font-size:12px;color:#fff}
+  .item{border:1px solid var(--line);border-left-width:5px;border-radius:10px;padding:10px 12px;margin-bottom:9px}
+  .item .ih{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .item .it{font-weight:650} .item .sev{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+  .item .nd{margin:4px 0;font-size:13.5px;color:var(--ink)}
+  .item .basis{font-size:11.5px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--line);padding-top:6px}
+  .item .link{font-size:11.5px;color:var(--accent);margin-top:4px}
+  .item .link em{color:var(--ink);font-style:normal;background:#eef3fd;border-radius:4px;padding:1px 4px}
+  .sev-contraindicated{border-left-color:var(--s-contra)} .sev-contraindicated .sev{color:var(--s-contra)}
+  .sev-major{border-left-color:var(--s-major)} .sev-major .sev{color:var(--s-major)}
+  .sev-moderate{border-left-color:var(--s-mod)} .sev-moderate .sev{color:var(--s-mod)}
+  .sev-minor{border-left-color:var(--s-minor)} .sev-minor .sev{color:var(--s-minor)}
+  .sev-info{border-left-color:var(--s-info)} .sev-info .sev{color:var(--s-info)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}
+  .chip{font-size:12px;border-radius:999px;padding:3px 10px;background:var(--chip);color:var(--ink)}
+  .chip.ok{background:var(--ok);color:var(--brand)}
+  .gap{background:var(--gap);border:1px solid #f0e0c0;border-left:5px solid var(--gapln);border-radius:10px;padding:9px 12px;margin-bottom:8px;font-size:13.5px}
+  .gap b{color:var(--gapln)}
+  .code{display:flex;justify-content:space-between;gap:8px;border:1px solid var(--line);border-radius:9px;padding:8px 11px;margin-bottom:7px}
+  .code .c{font-weight:700;font-family:ui-monospace,Menlo,monospace} .code .d{font-size:13px;color:var(--muted)}
+  .sub{font-size:12px;color:var(--muted);margin:2px 0 8px}
+  .empty{color:var(--muted);font-size:14px} .foot{font-size:11.5px;color:var(--muted);margin-top:8px}
+  @media (max-width:760px){ .wrap{grid-template-columns:1fr;padding:12px} .case{flex:1 1 100%} }
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="/app">← Noesis</a>
+  <div class="t">Noesis Ambient CDS</div>
+  <div class="s">The safety &amp; correctness layer over the scribe — grounded in the conversation, cited to guidelines, silent when unsure</div>
+</header>
+<div class="wrap">
+  <div class="col">
+    <div class="card">
+      <h2>Mode &amp; example cases</h2>
+      <div class="row" style="align-items:center;justify-content:space-between">
+        <div class="seg" id="modeseg">
+          <button data-mode="US" class="on" onclick="setMode('US')">🇺🇸 US</button>
+          <button data-mode="IN" onclick="setMode('IN')">🇮🇳 India</button>
+        </div>
+        <span class="hint" id="modehint">US: guideline CDS + defensible coding</span>
+      </div>
+      <div class="cases" id="cases" style="margin-top:10px"></div>
+    </div>
+    <div class="card">
+      <h2>Encounter transcript</h2>
+      <div class="sub">Paste (or dictate into) what was said — the note-taker's job. We read it and check it.</div>
+      <textarea id="tx" placeholder="e.g. Since your heart failure hospitalization you've been on furosemide and lisinopril, and we're continuing metformin for diabetes. You're still smoking…"></textarea>
+    </div>
+    <div class="card">
+      <h2>Patient context</h2>
+      <div class="row">
+        <div><label>Age</label><input id="age" type="number" inputmode="numeric"></div>
+        <div><label>Sex</label><select id="sex"><option value="">—</option><option>male</option><option>female</option></select></div>
+        <div><label>eGFR</label><input id="egfr" type="number" inputmode="numeric" placeholder="blank=unknown"></div>
+      </div>
+      <label>Allergies (comma-separated)</label><input id="allergies" placeholder="e.g. penicillin">
+      <label>Current medicines (comma-separated)</label><input id="current" placeholder="e.g. furosemide, lisinopril">
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:14px;color:var(--ink)">
+        <input type="checkbox" id="hosp" style="width:auto;min-height:auto"> Recently hospitalized (transitions of care)</label>
+    </div>
+    <button class="btn primary" onclick="run()">Analyze encounter</button>
+    <div class="foot">Deterministic core · reuses the Rx-CDS safety engine · illustrative seed knowledge (not a licensed clinical/coding DB).</div>
+  </div>
+
+  <div class="col">
+    <div class="card">
+      <h2>Result</h2>
+      <div id="summary" class="summary"><span class="empty">Load a case or paste a transcript, then Analyze.</span></div>
+    </div>
+    <div class="card" id="preCard" hidden>
+      <h2><span class="ph">Pre-visit</span> — brief &amp; care gaps</h2>
+      <div id="pre"></div>
+    </div>
+    <div class="card" id="encCard" hidden>
+      <h2><span class="ph">Encounter</span> — real-time CDS</h2>
+      <div id="enc"></div>
+    </div>
+    <div class="card" id="postCard" hidden>
+      <h2><span class="ph">Post-visit</span> — <span id="postLabel">coding</span></h2>
+      <div id="post"></div>
+    </div>
+    <div class="card" id="covCard" hidden>
+      <h2>Could not verify (not clearance)</h2>
+      <div id="cov"></div>
+    </div>
+    <div class="foot" id="disc"></div>
+  </div>
+</div>
+
+<script>
+let MODE='US';
+const SEV_COLOR={contraindicated:"#8a1c1c",major:"#b42318",moderate:"#b25e09",minor:"#5b6472",info:"#356",none:"#12603b"};
+function esc(s){return (s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+
+const CASES=[
+  {key:'alyssa', mode:'US', title:'Alyssa, 64 — HF + diabetes', sub:'GDMT gaps, defensible coding, transitions',
+   tx:"So since your heart failure hospitalization last month you've been on furosemide and lisinopril, and we're continuing metformin for your diabetes. You mentioned you're still smoking about half a pack a day. Your breathing is better but let's review your medications.",
+   age:64, sex:'female', hosp:true},
+  {key:'warfarin', mode:'US', title:'Warfarin safety', sub:'Real-time interaction caught mid-visit',
+   tx:"You're on warfarin for your clot. For this dental infection I'm going to start you on clarithromycin, and take some ibuprofen for the pain.",
+   age:70, sex:'male'},
+  {key:'india', mode:'IN', title:'India — brands + CKD', sub:'Indian brands, safety + gaps, summary',
+   tx:"We'll continue Glycomet for your diabetes and Cardace for the heart. For your knee pain start Hifenac. You also have chronic kidney disease.",
+   age:62, sex:'male', conditions:'ckd'},
+  {key:'quiet', mode:'US', title:'Low-risk (stays quiet)', sub:'Well-managed — few flags, honest gaps',
+   tx:"Here for a routine check. Feeling well, no new symptoms. Continuing lisinopril for blood pressure.",
+   age:50, sex:'female', egfr:90},
+];
+
+function setMode(m){ MODE=m; document.querySelectorAll('#modeseg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));
+  document.getElementById('modehint').textContent = m==='US' ? 'US: guideline CDS + defensible coding' : 'India: guideline CDS + patient summary (no HCC)'; }
+function listVal(id){return document.getElementById(id).value.split(',').map(s=>s.trim()).filter(Boolean);}
+
+function loadCase(k){ const c=CASES.find(x=>x.key===k); if(!c)return;
+  setMode(c.mode||'US');
+  document.getElementById('tx').value=c.tx||'';
+  document.getElementById('age').value=c.age||''; document.getElementById('sex').value=c.sex||'';
+  document.getElementById('egfr').value=c.egfr||''; document.getElementById('allergies').value=c.allergies||'';
+  document.getElementById('current').value=c.current||''; document.getElementById('hosp').checked=!!c.hosp;
+  // note: comorbidities not on transcript go via current context; we fold them into the transcript-free path
+  window._extraConditions = c.conditions ? c.conditions.split(',').map(s=>s.trim()) : [];
+  run();
+}
+function renderCases(){ document.getElementById('cases').innerHTML = CASES.map(c=>
+  `<button class="case" onclick="loadCase('${c.key}')"><b>${esc(c.title)}</b><span>${esc(c.sub)} · ${c.mode}</span></button>`).join(''); }
+
+async function run(){
+  const patient={ age_years:parseFloat(document.getElementById('age').value)||null,
+    sex:document.getElementById('sex').value||null,
+    egfr:document.getElementById('egfr').value===''?null:parseFloat(document.getElementById('egfr').value),
+    allergies:listVal('allergies'), conditions:(window._extraConditions||[]), current_meds:listVal('current') };
+  const body={ transcript:document.getElementById('tx').value, patient, mode:MODE, recent_hospitalization:document.getElementById('hosp').checked };
+  const r=await fetch('/ambient/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  render(await r.json()); window._extraConditions=[];
+}
+
+function itemHTML(sev,title,note,basis,link){
+  return `<div class="item sev-${sev}"><div class="ih"><span class="it">${esc(title)}</span><span class="sev">${esc(sev)}</span></div>
+    ${note?`<div class="nd">${esc(note)}</div>`:''}
+    ${link?`<div class="link">from the conversation: <em>${esc(link)}</em></div>`:''}
+    ${basis?`<div class="basis">Basis — ${esc(basis.source)}: ${esc(basis.citation)}</div>`:''}</div>`;
+}
+
+function render(res){
+  const S=res.summary;
+  document.getElementById('summary').innerHTML=
+    `<span class="pill" style="background:${S.care_gaps_major?SEV_COLOR.major:(res.encounter.safety_findings.length?SEV_COLOR.major:SEV_COLOR.none)}">${res.mode_label}</span>
+     <span>${S.conditions} condition(s)</span> · <span>${S.medications} med(s)</span> ·
+     <span>${S.safety_findings} safety</span> · <span>${S.care_gaps} care-gap(s)</span>
+     <span class="hint">· ${res.latency_ms} ms</span>`;
+
+  // PRE-VISIT
+  const pv=res.pre_visit;
+  let pre='';
+  pre+=`<div class="sub">Conditions</div><div class="chips">${pv.conditions.map(c=>`<span class="chip">${esc(c.label)}</span>`).join('')||'<span class="empty">none detected</span>'}</div>`;
+  pre+=`<div class="sub">Guideline therapies present</div><div class="chips">${pv.present_therapies.map(t=>`<span class="chip ok">✓ ${esc(t)}</span>`).join('')||'<span class="hint">none detected</span>'}</div>`;
+  pre+=`<div class="sub" style="margin-top:10px">Care gaps (evidence-anchored, not peer-conformity)</div>`;
+  pre+= pv.care_gaps.length ? pv.care_gaps.map(g=>itemHTML(g.severity,g.label,g.note,g.basis,null)).join('')
+        : '<div class="chip ok">✓ No guideline gaps found for the detected conditions</div>';
+  if(pv.actions.length){ pre+=`<div class="sub" style="margin-top:10px">To confirm / act on</div>`+
+    pv.actions.map(a=>itemHTML(a.severity,a.label,a.note,a.basis,null)).join(''); }
+  document.getElementById('pre').innerHTML=pre; document.getElementById('preCard').hidden=false;
+
+  // ENCOUNTER
+  const ec=res.encounter; let enc='';
+  enc+=`<div class="sub">Medications heard</div>`;
+  enc+= ec.medications.length ? ec.medications.map(m=>
+     `<div class="item sev-info"><div class="it">${esc(m.mention)} <span class="hint">→ ${esc(m.molecules.join(' + '))}</span></div>
+       ${m.text?`<div class="link">from the conversation: <em>${esc(m.text)}</em></div>`:`<div class="hint">from the chart</div>`}</div>`).join('')
+     : '<span class="hint">none detected</span>';
+  enc+=`<div class="sub" style="margin-top:10px">Real-time safety (Rx-CDS)</div>`;
+  enc+= ec.safety_findings.length ? ec.safety_findings.map(f=>itemHTML(f.severity,f.title,f.detail,f.basis,null)).join('')
+        : '<div class="chip ok">✓ No drug-safety findings on the medications heard</div>';
+  document.getElementById('enc').innerHTML=enc; document.getElementById('encCard').hidden=false;
+
+  // POST-VISIT
+  const post=res.post_visit; let ph='';
+  document.getElementById('postLabel').textContent = post.kind==='coding' ? 'defensible coding' : 'patient summary';
+  if(post.kind==='coding'){
+    ph+=`<div class="sub">Suggested ICD-10 (only where the encounter supports it — MEAT)</div>`;
+    ph+= post.icd10.map(c=>`<div class="code"><span><span class="c">${esc(c.code)}</span> <span class="d">${esc(c.desc)}</span></span></div>
+        <div class="basis" style="margin:-4px 0 8px">Basis — ${esc(c.basis.citation)}</div>`).join('') || '<span class="hint">no coding-supportable conditions</span>';
+    ph+=`<div class="sub">E/M complexity (advisory)</div><div class="item sev-info"><div class="it">${esc(post.em.suggestion)}</div><div class="basis">Basis — ${esc(post.em.basis.citation)}</div></div>`;
+  } else {
+    ph+=`<div class="sub">Patient summary</div>`+post.summary.map(s=>`<div class="item sev-info"><div class="it">${esc(s.line)}</div><div class="basis">Basis — ${esc(s.basis.citation)}</div></div>`).join('');
+  }
+  document.getElementById('post').innerHTML=ph; document.getElementById('postCard').hidden=false;
+
+  // COVERAGE
+  const gaps=res.coverage.unverifiable||[];
+  document.getElementById('covCard').hidden=gaps.length===0;
+  document.getElementById('cov').innerHTML=gaps.map(g=>`<div class="gap"><b>${esc(g.molecule)}</b> — ${esc(g.why)}</div>`).join('');
+  document.getElementById('disc').textContent=res.disclaimer;
+}
+
+renderCases(); loadCase('alyssa');
+</script>
+</body>
+</html>

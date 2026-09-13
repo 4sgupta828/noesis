@@ -112,6 +112,21 @@ class Finding:
 
 # --- Normalisation ------------------------------------------------------------
 
+_MOLECULES_CACHE: Optional[set] = None
+
+
+def _known_molecules() -> set:
+    """All molecule names the engine knows (from brand components + class map). Cached."""
+    global _MOLECULES_CACHE
+    if _MOLECULES_CACHE is None:
+        mols = set(data.MOLECULE_CLASSES.keys())
+        for entry in data.BRANDS.values():
+            for c in entry["components"]:
+                mols.add(c["molecule"])
+        _MOLECULES_CACHE = mols
+    return _MOLECULES_CACHE
+
+
 def _classes_of(molecule: str) -> List[str]:
     return data.MOLECULE_CLASSES.get(molecule, [])
 
@@ -141,6 +156,13 @@ def normalize(raw: str) -> NormalizedItem:
             item.resolved = False
             item.ambiguity = ("recognised brand family but the exact strength/formulation is not in "
                               "the table — not resolved (no strength guess).")
+            return item
+        # generic molecule name (e.g. "spironolactone", "warfarin") — resolve to the molecule itself.
+        # Strength is legitimately absent for a bare molecule name; interaction/contraindication
+        # screening needs the molecule, not the strength (dose checks simply abstain without a dose).
+        if key in _known_molecules():
+            item = NormalizedItem(raw=raw, resolved=True)
+            item.components = [Component(molecule=key)]
             return item
         return NormalizedItem(raw=raw, resolved=False,
                               ambiguity="brand not in the normaliser table — could not resolve to a molecule.")

@@ -37,7 +37,20 @@ MOLECULE_CLASSES: Dict[str, List[str]] = {
     "furosemide": ["loop-diuretic"],
     "clopidogrel": ["antiplatelet"],
     "glimepiride": ["sulfonylurea"],
+    # cardiometabolic / GDMT classes (used by the ambient care-gap engine)
+    "lisinopril": ["acei"],
+    "losartan": ["arb"],
+    "sacubitril/valsartan": ["arni"],
+    "metoprolol": ["beta-blocker", "gdmt-betablocker"],
+    "carvedilol": ["beta-blocker", "gdmt-betablocker"],
+    "bisoprolol": ["beta-blocker", "gdmt-betablocker"],
+    "empagliflozin": ["sglt2"],
+    "dapagliflozin": ["sglt2"],
+    "eplerenone": ["potassium-sparing-diuretic", "mra"],
+    "insulin glargine": ["insulin"],
 }
+# spironolactone is also an MRA (GDMT pillar) in addition to its class above
+MOLECULE_CLASSES.setdefault("spironolactone", []).append("mra")
 
 # --- Indian brand -> components (the normaliser seed) -------------------------
 # key: lowercase brand token (with or without strength). value: list of components
@@ -85,6 +98,26 @@ BRANDS: Dict[str, Dict] = {
     "lanoxin": {"components": [{"molecule": "digoxin", "strength": 0.25, "unit": "mg", "form": "tablet"}]},
     "lasix 40": {"components": [{"molecule": "furosemide", "strength": 40, "unit": "mg", "form": "tablet"}]},
     "thyronorm 50": {"components": [{"molecule": "levothyroxine", "strength": 50, "unit": "mcg", "form": "tablet"}]},
+    # --- US generic names (molecule == "brand"); lets the ambient engine resolve US-mode meds.
+    # Single-molecule generics resolve WITHOUT a strength (a transcript says "lisinopril", not a dose):
+    # interaction/contraindication screening needs the molecule, not the strength. Dose-range checks
+    # simply don't fire without dose_mg (that is correct — they abstain, surfaced as a coverage note).
+    "lisinopril": {"components": [{"molecule": "lisinopril", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "losartan": {"components": [{"molecule": "losartan", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "metoprolol": {"components": [{"molecule": "metoprolol", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "carvedilol": {"components": [{"molecule": "carvedilol", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "bisoprolol": {"components": [{"molecule": "bisoprolol", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "empagliflozin": {"components": [{"molecule": "empagliflozin", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "jardiance": {"components": [{"molecule": "empagliflozin", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "dapagliflozin": {"components": [{"molecule": "dapagliflozin", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "farxiga": {"components": [{"molecule": "dapagliflozin", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "sacubitril/valsartan": {"components": [{"molecule": "sacubitril/valsartan", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "entresto": {"components": [{"molecule": "sacubitril/valsartan", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "eplerenone": {"components": [{"molecule": "eplerenone", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "metformin": {"components": [{"molecule": "metformin", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "atorvastatin": {"components": [{"molecule": "atorvastatin", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "furosemide": {"components": [{"molecule": "furosemide", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "insulin glargine": {"components": [{"molecule": "insulin glargine", "strength": None, "unit": "unit", "form": "injection"}]},
 }
 
 # --- CDSCO banned fixed-dose combinations (illustrative) ----------------------
@@ -150,6 +183,10 @@ DDI_PAIRS: List[Dict] = [
      "mechanism": "Loop-diuretic-induced hypokalemia potentiates digoxin toxicity.",
      "management": "Monitor potassium and digoxin level; replace potassium as needed.",
      "basis": {"source": "Drug interaction reference", "citation": "Digoxin–diuretic hypokalemia interaction — illustrative."}},
+    {"pair": frozenset({"arni", "acei"}), "is_class": True, "severity": "contraindicated",
+     "mechanism": "Sacubitril/valsartan (ARNI) with an ACE inhibitor → additive bradykinin, angioedema risk.",
+     "management": "Do not co-prescribe; allow a 36-hour washout when switching between ACEi and ARNI.",
+     "basis": {"source": "Label / guideline", "citation": "ARNI contraindicated with ACEi (angioedema) — illustrative."}},
 ]
 
 # --- Drug-disease contraindications (comorbidity concurrency) ------------------

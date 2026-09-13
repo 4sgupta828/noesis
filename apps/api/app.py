@@ -1741,6 +1741,12 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
     if rxcds_enabled():
         app.include_router(build_rxcds_router())
 
+    # Ambient CDS — the encounter-intelligence layer over the scribe (US + India modes), reusing the
+    # Rx-CDS safety engine. Additive + isolated under /ambient; NOESIS_AMBIENT=0 is a true no-op.
+    from api.ambient import build_router as build_ambient_router, ambient_enabled
+    if ambient_enabled():
+        app.include_router(build_ambient_router())
+
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok"}
@@ -1766,6 +1772,7 @@ def create_app(service: ResearchService | None = None) -> FastAPI:
             "console": console,
             "video_enabled": video_enabled(),
             "rxcds_enabled": rxcds_enabled(),
+            "ambient_enabled": ambient_enabled(),
             "structured_answers": structured_answers(),
             "clinical_synthesis": clinical_synthesis() and structured_answers(),
             "evidence_select": bool(getattr(svc, "evidence_select", False)),

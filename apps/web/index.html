@@ -1884,6 +1884,7 @@
       <button type="button" class="mbtn" data-mode="qa" role="tab" aria-selected="true">Quick Q&amp;A</button>
       <button type="button" class="mbtn" data-mode="panel" role="tab" aria-selected="false">◈ Specialist Panel</button>
       <button type="button" class="mbtn" data-mode="rxcds" role="tab" aria-selected="false" hidden>◇ Rx Check</button>
+      <button type="button" class="mbtn" data-mode="ambient" role="tab" aria-selected="false" hidden>◎ Encounter</button>
       <button type="button" class="mbtn" data-mode="voices" role="tab" aria-selected="false" hidden>◍ Voices</button>
     </div>
   </div>
@@ -2351,6 +2352,7 @@ let CASES_ENABLED = false;      // Historical Cases review tab under Past Sessio
 let VOICES_ENABLED = false;     // Voices: spoken commentary as a browsing surface (never evidence)
 let TRIAGE_ENABLED = false;     // guided-intake / triage mode (clarify → route)
 let RXCDS_ENABLED = false;      // Rx Check: deterministic prescription-safety sub-app (opens /rx)
+let AMBIENT_ENABLED = false;    // Encounter: ambient CDS sub-app (opens /ambient)
 let ACCOUNTS_ENABLED = false;   // accounts + verified-clinician tier + per-answer feedback (W-taxonomy)
 let DUEL_ENABLED = false;       // A/B duel: fresh questions run standard + reasoned engines, user votes
 let INTEGRATIVE_ENABLED = false;
@@ -2449,6 +2451,7 @@ async function loadConfig(){
     CASES_ENABLED = !!c.cases_enabled;
     TRIAGE_ENABLED = !!c.triage_enabled;
     RXCDS_ENABLED = !!c.rxcds_enabled;
+    AMBIENT_ENABLED = !!c.ambient_enabled;
     ACCOUNTS_ENABLED = !!c.accounts_enabled;
     if(typeof updateAuthUI === "function"){
       // accounts on + no token (pre-accounts local identity, or signed out) → sign in / create account
@@ -2482,7 +2485,7 @@ async function loadConfig(){
     }
     PANEL_SPECIALISTS = c.panel_specialists || [];
     PANEL_EXAMPLES = c.panel_examples || [];
-    if(ASK_PANEL_ENABLED || TRIAGE_ENABLED || RXCDS_ENABLED){
+    if(ASK_PANEL_ENABLED || TRIAGE_ENABLED || RXCDS_ENABLED || AMBIENT_ENABLED){
       // One shell, several modes (Guided intake ⇄ Quick Q&A ⇄ Specialist Panel ⇄ Rx Check), switched in the
       // same place under the heading. Only the enabled modes' buttons show; the shared box carries across them.
       // Rx Check is a separate sub-app: its button navigates to /rx rather than swapping in place.
@@ -2490,6 +2493,7 @@ async function loadConfig(){
       const pbtn = $("#modeswitch .mbtn[data-mode='panel']"); if(pbtn) pbtn.hidden = !ASK_PANEL_ENABLED;
       const tbtn = $("#modeswitch .mbtn[data-mode='triage']"); if(tbtn) tbtn.hidden = !TRIAGE_ENABLED;
       const rbtn = $("#modeswitch .mbtn[data-mode='rxcds']"); if(rbtn) rbtn.hidden = !RXCDS_ENABLED;
+      const abtn = $("#modeswitch .mbtn[data-mode='ambient']"); if(abtn) abtn.hidden = !AMBIENT_ENABLED;
       wireModeSwitch($("#modeswitch"));
     }
     VISION_ENABLED = !!c.vision_enabled;
@@ -4862,9 +4866,9 @@ function setPanelState(st){ PANEL_STATE = st; document.body.dataset.panel = st; 
 function wireModeSwitch(el){
   if(!el) return;
   el.querySelectorAll(".mbtn").forEach(b => b.addEventListener("click", () => {
-    // Rx Check is a separate sub-app (deterministic prescription-safety); navigate to it
-    // rather than swapping the shell in place.
+    // Rx Check and Encounter are separate sub-apps; navigate to them rather than swapping the shell.
     if(b.dataset.mode === "rxcds"){ location.href = "/rx"; return; }
+    if(b.dataset.mode === "ambient"){ location.href = "/ambient"; return; }
     setMode(b.dataset.mode);
   }));
 }

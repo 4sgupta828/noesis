@@ -98,6 +98,21 @@
   .gapc{background:var(--gap);border:1px solid #f0e0c0;border-radius:8px;padding:9px 12px;margin-bottom:8px;font-size:13.5px}
   .gapc b{color:var(--gapln)}
   .empty{color:var(--muted);font-size:14px} .foot{font-size:11.5px;color:var(--muted);margin:6px 0 24px;text-align:center}
+  /* care-pathway flow diagram */
+  .flow{display:flex;align-items:stretch}
+  .fnode{flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 1px 2px rgba(18,40,30,.05),0 8px 18px rgba(18,40,30,.04);overflow:hidden;display:flex;flex-direction:column}
+  .fnode .fh{display:flex;align-items:center;gap:8px;padding:10px 12px;font-weight:650;font-size:13px}
+  .fnode .fav{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;flex:none}
+  .fnode .fstage{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;opacity:.6}
+  .fnode .fb{padding:2px 12px 12px;flex:1}
+  .fnode .fl{font-size:12.5px;color:var(--ink);padding:5px 0;border-top:1px solid #f2f4f7;line-height:1.4} .fnode .fl:first-child{border-top:0}
+  .fnode-pre{border-top:3px solid #5b6b80} .fnode-pre .fav{background:#5b6b80} .fnode-pre .fh{color:#3a4351}
+  .fnode-dx{border-top:3px solid var(--accent)} .fnode-dx .fav{background:var(--accent)} .fnode-dx .fh{color:#1c3f8f}
+  .fnode-rx{border-top:3px solid var(--brand)} .fnode-rx .fav{background:var(--brand)} .fnode-rx .fh{color:var(--brand-ink)}
+  .fnode-fu{border-top:3px solid #2f8f82} .fnode-fu .fav{background:#2f8f82} .fnode-fu .fh{color:#1f6b60}
+  .farrow{display:flex;align-items:center;justify-content:center;color:#b3bcc7;font-size:20px;padding:0 5px;flex:none}
+  .fbad{color:var(--flag);font-weight:650} .fgood{color:var(--ok);font-weight:650}
+  @media(max-width:640px){ .flow{flex-direction:column} .farrow{padding:5px 0;transform:rotate(90deg)} }
   @media (max-width:560px){ .med{grid-template-columns:1fr} .kv{flex-direction:column;gap:0} .kv .k{min-width:0} }
 </style>
 </head>
@@ -128,6 +143,7 @@
       <section class="sec"><h3>Prescription deep-check &amp; proposed refinements</h3><div id="secChecks"></div></section>
       <section class="sec" id="secPrecWrap" hidden><h3>Precedents — similar patients</h3><div id="secPrec"></div></section>
       <section class="sec"><h3>Post-visit — follow-up plan</h3><div id="secPost"></div></section>
+      <section class="sec"><h3>Care pathway — this visit at a glance</h3><div id="flow"></div></section>
       <div class="foot" id="disc"></div>
     </div>
   </div>
@@ -258,9 +274,40 @@ function render(res){
   post+= nd.length? box('pt','🏃','Non-drug / rehab referrals',nd.length,titems(nd,'🏃')) : '<div class="empty">None indicated this visit</div>';
   document.getElementById('secPost').innerHTML=post;
 
+  // 8. Care-pathway flow diagram
+  renderFlow(res,c);
+
   document.getElementById('disc').textContent=res.disclaimer;
   window._note=buildNote(res,c);
   const cb=document.getElementById('cpbtn'); cb.textContent='📋 Copy note'; cb.classList.remove('done');
+}
+
+// Care-pathway flow: Presentation -> Assessment -> Plan -> Follow-up, summarised from the analysis.
+function renderFlow(res,c){
+  const pv=res.pre_visit, M=res.medications||{start:[],hold:[],continue:[]}, labs=res.labs||{};
+  const short=s=>esc(String(s).replace(/\s*\(.*/,''));
+  const flag={potassium:v=>v>=5.0,egfr:v=>v<30,hr:v=>v<50};
+  const abn=Object.entries(labs).filter(([k,v])=> k==='bp'? v.systolic<90 : (flag[k]?flag[k](v.value):false))
+    .map(([k,v])=> k==='bp'?`BP ${v.systolic}/${v.diastolic}`:`${k.toUpperCase()} ${v.value}`);
+  const dx=pv.conditions.map(x=>x.label);
+  const startNames=(M.start||[]).map(m=>short(m.med)).slice(0,2);
+  const fu=res.follow_up||[], nd=res.non_drug||[];
+  const node=(cls,stage,icon,title,lines)=>`<div class="fnode fnode-${cls}"><div class="fh"><span class="fav">${icon}</span><span><span class="fstage">${stage}</span><br>${title}</span></div><div class="fb">${lines.filter(Boolean).map(l=>`<div class="fl">${l}</div>`).join('')}</div></div>`;
+  const arrow='<div class="farrow">→</div>';
+  const n1=node('pre','Incoming','🧍','Presentation',[
+    `<b>${c.age} · ${cap(c.sex)}</b>${c.recent_hosp?' · post-discharge':''}`,
+    abn.length? `<span class="fbad">Abnormal: ${abn.join(' · ')}</span>` : 'No flagged vitals/labs' ]);
+  const n2=node('dx','Assessment','🩺','Diagnosis',
+    dx.length? dx.slice(0,3).map(esc).concat(dx.length>3?[`+${dx.length-3} more`]:[]) : ['No chronic diagnosis']);
+  const n3=node('rx','Prescription','💊','Plan',[
+    (M.start||[]).length? `<span class="fgood">▶ Start ${(M.start).length}</span>${startNames.length?': '+startNames.join(', '):''}` : '',
+    (M.continue||[]).length? `✓ Continue ${(M.continue).length}` : '',
+    (M.hold||[]).length? `<span class="fbad">■ Hold ${(M.hold).length}</span>` : '' ]);
+  const n4=node('fu','Follow-up','📅','Next steps',[
+    fu.length? `${fu.length} test${fu.length>1?'s':''}${fu[0]?': '+short(fu[0]):''}` : 'No specific tests',
+    nd.length? `${nd.length} therapy referral${nd.length>1?'s':''}` : '',
+    c.recent_hosp? 'Early post-discharge review' : '' ]);
+  document.getElementById('flow').innerHTML=`<div class="flow">${n1}${arrow}${n2}${arrow}${n3}${arrow}${n4}</div>`;
 }
 
 // Invoke Noesis's evidence-grounded medical Q&A, prefilled from this case (opens the main app).

@@ -98,28 +98,33 @@
   .gapc{background:var(--gap);border:1px solid #f0e0c0;border-radius:8px;padding:9px 12px;margin-bottom:8px;font-size:13.5px}
   .gapc b{color:var(--gapln)}
   .empty{color:var(--muted);font-size:14px} .foot{font-size:11.5px;color:var(--muted);margin:6px 0 24px;text-align:center}
-  /* care-pathway — a causal flow diagram (summary, with labeled edges) */
-  .cflow{display:flex;align-items:stretch;gap:0}
-  .cnode{flex:1;min-width:0;border:1px solid var(--line);border-top:3px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 1px 2px rgba(18,40,30,.05),0 8px 18px rgba(18,40,30,.04);padding:12px 13px;display:flex;flex-direction:column;gap:9px}
-  .cnode .ch{display:flex;align-items:center;gap:9px}
-  .cnode .cav{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;flex:none}
-  .cnode .cstage{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;opacity:.6;display:block}
-  .cnode .ctitle{font-weight:650;font-size:14px}
-  .cnode .cbody{font-size:13px;line-height:1.4;display:flex;flex-direction:column;gap:6px}
-  .cnode .cprimary{font-weight:600}
-  .cnode .cmore{font-size:12px;color:var(--muted)}
-  .cdrv{font-size:12.5px;line-height:1.35;background:#f7f9fb;border-radius:7px;padding:5px 8px}
-  .cdrv .cause{color:var(--flag);font-weight:600}
-  .cchips{display:flex;flex-wrap:wrap;gap:5px} .cchip{font-size:11.5px;border-radius:6px;padding:2px 8px;background:#f1f4f8;font-family:ui-monospace,Menlo,monospace} .cchip.bad{background:var(--flagbg);color:var(--flag);font-weight:600}
-  .c-pre{border-top-color:#5b6b80} .c-pre .cav{background:#5b6b80} .c-pre .cstage{color:#5b6b80}
-  .c-dx{border-top-color:var(--accent)} .c-dx .cav{background:var(--accent)} .c-dx .cstage{color:var(--accent)}
-  .c-rx{border-top-color:var(--brand)} .c-rx .cav{background:var(--brand)} .c-rx .cstage{color:var(--brand)}
-  .c-fu{border-top-color:#2f8f82} .c-fu .cav{background:#2f8f82} .c-fu .cstage{color:#1f6b60}
-  .cedge{flex:none;align-self:center;display:flex;flex-direction:column;align-items:center;gap:3px;padding:0 6px}
-  .cedge .clabel{font-size:9px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);background:#eef1f4;border-radius:999px;padding:2px 7px;text-align:center;line-height:1.2;max-width:74px}
-  .cedge .carrow{font-size:24px;color:#aeb7c2;line-height:1}
+  /* care-pathway — a vertical CAUSAL flow: roomy stage cards + flowchart connectors + driver rows */
+  .cflow{display:flex;flex-direction:column;align-items:stretch}
+  .cstage{border:1px solid var(--line);border-left:5px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 1px 2px rgba(18,40,30,.05),0 8px 18px rgba(18,40,30,.04);overflow:hidden}
+  .cstage .csh{display:flex;align-items:center;gap:12px;padding:12px 15px;border-bottom:1px solid #f2f4f7}
+  .cstage .csav{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#fff;flex:none}
+  .cstage .csstage{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;opacity:.6;display:block}
+  .cstage .cstitle{font-weight:650;font-size:16px}
+  .cstage .csbody{padding:13px 15px;font-size:14px;line-height:1.5}
+  .cstage .csprimary{font-weight:600}
+  .cchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px} .cchip{font-size:12.5px;border-radius:7px;padding:3px 10px;background:#f1f4f8;font-family:ui-monospace,Menlo,monospace} .cchip.bad{background:var(--flagbg);color:var(--flag);font-weight:600}
+  .cplanrow{margin:2px 0 4px} .cplanrow b{font-weight:700}
+  .cstart{font-size:13.5px;padding:2px 0;color:var(--ink)} .cstart .fgood{margin-right:4px}
+  /* finding -> decision driver rows (the causal core) */
+  .cdriver{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fdf5f4;border:1px solid #f2cec9;border-radius:9px;padding:8px 11px;margin-top:8px}
+  .cdriver .cfind{font-family:ui-monospace,Menlo,monospace;font-weight:600;color:var(--flag);font-size:13px}
+  .cdriver .carr{color:var(--flag);font-size:17px;line-height:1;font-weight:700}
+  .cdriver .cdec{font-weight:600;font-size:13.5px}
+  .cs-pre{border-left-color:#5b6b80} .cs-pre .csav{background:#5b6b80} .cs-pre .csstage{color:#5b6b80}
+  .cs-dx{border-left-color:var(--accent)} .cs-dx .csav{background:var(--accent)} .cs-dx .csstage{color:var(--accent)}
+  .cs-rx{border-left-color:var(--brand)} .cs-rx .csav{background:var(--brand)} .cs-rx .csstage{color:var(--brand)}
+  .cs-fu{border-left-color:#2f8f82} .cs-fu .csav{background:#2f8f82} .cs-fu .csstage{color:#1f6b60}
+  /* flowchart connector between stages: line · labeled pill · chevron */
+  .cconn{display:flex;flex-direction:column;align-items:center;padding:1px 0}
+  .cconn .cline{width:2px;height:12px;background:#d4dae1}
+  .cconn .cpill{font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:#eef1f4;border:1px solid var(--line);border-radius:999px;padding:4px 13px}
+  .cconn .cchev{color:#9aa4b1;font-size:16px;line-height:1;margin-top:-1px}
   .fbad{color:var(--flag);font-weight:700} .fgood{color:var(--ok);font-weight:700}
-  @media(max-width:720px){ .cflow{flex-direction:column} .cedge{flex-direction:row;padding:7px 0;gap:8px} .cedge .carrow{transform:rotate(90deg)} .cedge .clabel{max-width:none} }
   /* mini-EHR: patient banner, trends, timeline, visit divider */
   .pbanner .pname{font-size:22px;font-weight:700}
   .pbanner .pmeta{color:var(--muted);font-size:13.5px;margin-top:3px}
@@ -389,40 +394,41 @@ function renderHistory(res){
   document.getElementById('histNote').textContent=h.note||'';
 }
 
-// Care-pathway: a CAUSAL flow diagram — a summary where findings drive decisions drive monitoring.
+// Care-pathway: a vertical CAUSAL flow — roomy stage cards, flowchart connectors, finding→decision rows.
 function renderFlow(res,c){
   const pv=res.pre_visit, M=res.medications||{start:[],hold:[],continue:[]}, labs=res.labs||{};
   const flag={potassium:v=>v>=5.0,egfr:v=>v<30,hr:v=>v<50};
-  const short=s=>esc(String(s).replace(/\s*\(.*/,'').slice(0,44));
-  const cnode=(cls,av,stage,title,body)=>`<div class="cnode c-${cls}"><div class="ch"><span class="cav">${av}</span><span><span class="cstage">${stage}</span><span class="ctitle">${title}</span></span></div><div class="cbody">${body}</div></div>`;
-  const cedge=label=>`<div class="cedge"><span class="clabel">${label}</span><span class="carrow">→</span></div>`;
+  const short=s=>esc(String(s).replace(/\s*\(.*/,''));
+  const stage=(cls,av,eyebrow,title,body)=>`<div class="cstage cs-${cls}"><div class="csh"><span class="csav">${av}</span><span><span class="csstage">${eyebrow}</span><span class="cstitle">${title}</span></span></div><div class="csbody">${body}</div></div>`;
+  const conn=label=>`<div class="cconn"><span class="cline"></span><span class="cpill">${label}</span><span class="cchev">▼</span></div>`;
 
-  // Presentation — the abnormal findings that DRIVE the plan
-  const abn=Object.entries(labs).filter(([k,v])=> k==='bp'? v.systolic<90 : (flag[k]?flag[k](v.value):false))
-    .map(([k,v])=> k==='bp'?`BP ${v.systolic}/${v.diastolic}`:`${k.toUpperCase()} ${v.value}`);
-  let b1=`<div class="cprimary">${c.age} · ${esc(cap(c.sex))}${c.recent_hosp?' · post-d/c':''}</div>`;
-  b1+= abn.length? `<div class="cchips">${abn.map(a=>`<span class="cchip bad">${esc(a)}</span>`).join('')}</div>` : '<div class="cmore">No acute red flags</div>';
-  const n1=cnode('pre','🧍','Incoming state','Presentation',b1);
+  // Presentation — key data, abnormal flagged
+  const labChips=Object.entries(labs).map(([k,v])=>{let t,bad=false;
+    if(k==='bp'){t=`BP ${v.systolic}/${v.diastolic}`;bad=v.systolic<90;} else {t=`${k.toUpperCase()} ${v.value}`;bad=flag[k]?flag[k](v.value):false;}
+    return `<span class="cchip ${bad?'bad':''}">${esc(t)}</span>`;}).join('');
+  let b1=`<div class="csprimary">${c.age} · ${esc(cap(c.sex))}${c.recent_hosp?' · recently hospitalized':''}</div>`;
+  b1+= labChips? `<div class="cchips">${labChips}</div>` : `<div style="color:var(--muted);margin-top:4px">No vitals/labs recorded this visit</div>`;
+  const n1=stage('pre','🧍','Incoming state','Presentation & data',b1);
 
-  // Diagnosis
+  // Diagnosis — all problems as chips (roomy, no truncation)
   const dx=pv.conditions.map(x=>x.label);
-  const b2= dx.length? `<div class="cprimary">${esc(dx[0])}</div>`+(dx.length>1?`<div class="cmore">+ ${dx.length-1} more problem${dx.length-1>1?'s':''}</div>`:'') : '<div class="cmore">No chronic diagnosis</div>';
-  const n2=cnode('dx','🩺','Assessment','Working diagnosis',b2);
+  const b2= dx.length? `<div class="cchips" style="margin-top:0">${dx.map(d=>`<span class="cchip">${esc(d)}</span>`).join('')}</div>` : `<div style="color:var(--muted)">No chronic diagnosis detected</div>`;
+  const n2=stage('dx','🩺','Assessment','Working diagnosis',b2);
 
-  // Plan — decisions, each HOLD annotated with the finding that caused it
-  const sN=M.start.length, cN=M.continue.length, hN=M.hold.length;
-  let b3=`<div><span class="fgood">▶ ${sN} start</span> · <span style="color:var(--accent);font-weight:700">✓ ${cN} continue</span>${hN?` · <span class="fbad">⛔ ${hN} hold</span>`:''}</div>`;
+  // Plan — counts + started meds + the finding⟶decision holds (the causal core)
+  let b3=`<div class="cplanrow"><span class="fgood">▶ ${M.start.length} to start</span> &nbsp;·&nbsp; <b style="color:var(--accent)">✓ ${M.continue.length} continue</b>${M.hold.length?` &nbsp;·&nbsp; <span class="fbad">⛔ ${M.hold.length} hold</span>`:''}</div>`;
+  if(M.start.length) b3+=M.start.map(m=>`<div class="cstart"><span class="fgood">▶</span>${esc(m.med)}</div>`).join('');
   M.hold.forEach(h=>{ const drv=(h.why||'').split('—')[0].trim();
-    b3+=`<div class="cdrv">⛔ ${short(h.med)} <span class="cause">← ${esc(drv)}</span></div>`; });
-  if(!sN&&!hN&&cN) b3+='<div class="cmore">Continue current regimen</div>';
-  const n3=cnode('rx','💊','Prescription','Plan',b3);
+    b3+=`<div class="cdriver"><span class="cfind">${esc(drv)}</span><span class="carr">⟶</span><span class="cdec">Hold ${short(h.med)}</span></div>`; });
+  if(!M.start.length&&!M.hold.length&&M.continue.length) b3+=`<div style="color:var(--muted);margin-top:4px">Continue current regimen; no changes</div>`;
+  const n3=stage('rx','💊','Prescription','Plan',b3);
 
-  // Follow-up — the monitoring the plan necessitates (summary of the key items)
+  // Follow-up — the monitoring this plan requires (chips, wrap)
   const fu=res.follow_up||[];
-  const b4= fu.length? fu.slice(0,3).map(t=>`<div class="cmore">• ${short(t)}</div>`).join('')+(fu.length>3?`<div class="cmore">+ ${fu.length-3} more</div>`:'') : '<div class="cmore">Routine follow-up</div>';
-  const n4=cnode('fu','📅','Follow-up','Next steps',b4);
+  const b4= fu.length? `<div class="cchips" style="margin-top:0">${fu.slice(0,6).map(t=>`<span class="cchip">${short(t)}</span>`).join('')}${fu.length>6?`<span class="cchip">+${fu.length-6} more</span>`:''}</div>` : `<div style="color:var(--muted)">Routine interval follow-up</div>`;
+  const n4=stage('fu','📅','Follow-up','Monitoring &amp; next steps',b4);
 
-  document.getElementById('flow').innerHTML=`<div class="cflow">${n1}${cedge('assessed as')}${n2}${cedge('guideline plan + safety')}${n3}${cedge('requires monitoring')}${n4}</div>`;
+  document.getElementById('flow').innerHTML=`<div class="cflow">${n1}${conn('assessed as')}${n2}${conn('guideline-directed plan + safety')}${n3}${conn('requires monitoring')}${n4}</div>`;
 }
 
 // Invoke Noesis's evidence-grounded medical Q&A, prefilled from this case (opens the main app).

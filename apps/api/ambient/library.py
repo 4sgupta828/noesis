@@ -810,7 +810,8 @@ def _seed(s: str) -> int:
 
 
 def enrich(case: dict) -> dict:
-    """Return the case with illustrative identity fields added (name, location, mrn, doctor, date)."""
+    """Return the case with illustrative identity fields (name, location, mrn, doctor, date) plus the
+    detected conditions + primary condition, so the UI can link similar cases as clickable precedents."""
     h = _seed(case["id"])
     firsts = _FIRST_F if case.get("sex") == "female" else _FIRST_M
     # India cases draw locations from the Indian city slice
@@ -821,6 +822,16 @@ def enrich(case: dict) -> dict:
     out["mrn"] = f"MRN-{(h % 900000) + 100000}"
     out["doctor"] = _DOCS[(h // 17) % len(_DOCS)]
     out["date"] = _dt.date.today().isoformat()
+    # tag conditions/primary (keyword extraction — cheap, deterministic) for precedent matching
+    try:
+        from .engine import extract_conditions, _PRIMARY_ORDER
+        chart = [c.lower() for c in case.get("patient", {}).get("conditions", [])]
+        active = [c["condition"] for c in extract_conditions(case.get("transcript", ""), chart)]
+        out["conditions"] = active
+        out["primary"] = next((c for c in _PRIMARY_ORDER if c in active), (active[0] if active else None))
+    except Exception:
+        out["conditions"] = []
+        out["primary"] = None
     return out
 
 

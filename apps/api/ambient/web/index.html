@@ -62,6 +62,7 @@
   .ok{color:var(--ok);font-size:14px}
   .tbl{width:100%;border-collapse:collapse;font-size:13.5px} .tbl th,.tbl td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line);vertical-align:top}
   .tbl th{font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:700}
+  .tbl tr.prow{cursor:pointer} .tbl tr.prow:hover td{background:#eef3fd} .tbl tr.prow td:first-child b{color:var(--accent)}
   .med{display:grid;grid-template-columns:1fr auto;gap:6px;padding:8px 0;border-bottom:1px solid #f0f2f5;font-size:14px} .med:last-child{border-bottom:0}
   .med .mn{font-weight:600} .med .mw{color:var(--muted);font-size:13px} .med .md{font-size:12px;color:var(--brand);white-space:nowrap;font-weight:600}
   .note{font-size:12px;color:var(--muted);margin-top:8px;font-style:italic}
@@ -198,16 +199,8 @@ function render(res){
   const cov=res.coverage.unverifiable||[];
   if(cov.length) ck+=`<div class="lead">Could not verify (not clearance)</div>`+cov.map(g=>`<div class="gapc"><b>${esc(g.molecule)}</b> — ${esc(g.why)}</div>`).join('');
   document.getElementById('secChecks').innerHTML=ck;
-  // 6. Precedents
-  const prec=res.precedents||{};
-  if(prec.rows&&prec.rows.length){
-    document.getElementById('secPrecWrap').hidden=false;
-    document.getElementById('secPrec').innerHTML=
-      `<div class="lead">Similar patients — ${esc(prec.cohort)}</div>
-       <table class="tbl"><thead><tr><th>Patient</th><th>Prescription</th><th>Clinician</th></tr></thead><tbody>`+
-       prec.rows.map(r=>`<tr><td>${esc(r.patient)}</td><td>${esc(r.prescription)}</td><td>${esc(r.doctor)}</td></tr>`).join('')+
-       `</tbody></table><div class="note">${esc(prec.note)}</div>`;
-  } else document.getElementById('secPrecWrap').hidden=true;
+  // 6. Precedents — real similar cases from this library, clickable
+  renderPrecedents(res, c);
   // 7. Post — follow-up
   const M=res.medications||{start:[],hold:[],continue:[]};
   let post=`<div class="lead">New tests / procedures to follow up</div>`;
@@ -223,6 +216,24 @@ function render(res){
   document.getElementById('disc').textContent=res.disclaimer;
   window._note=buildNote(res,c);
   const cb=document.getElementById('cpbtn'); cb.textContent='📋 Copy note'; cb.classList.remove('done');
+}
+
+// Precedents = other REAL cases in the library that share the primary diagnosis, matched on age/sex.
+function renderPrecedents(res, cur){
+  const wrap=document.getElementById('secPrecWrap'), el=document.getElementById('secPrec');
+  const primary=res.primary_condition;
+  if(!primary){ wrap.hidden=true; return; }
+  let m=LIB.filter(x=>x.id!==cur.id && x.primary===primary);
+  m.sort((a,b)=> ((a.sex===cur.sex?0:1)-(b.sex===cur.sex?0:1)) || (Math.abs(a.age-cur.age)-Math.abs(b.age-cur.age)));
+  m=m.slice(0,4);
+  if(!m.length){ wrap.hidden=true; return; }
+  wrap.hidden=false;
+  const label=(res.pre_visit.conditions.find(x=>x.condition===primary)||{}).label || primary;
+  el.innerHTML=`<div class="lead">Similar patients with ${esc(label)} — click a row to open that case</div>
+    <table class="tbl"><thead><tr><th>Patient</th><th>Their prescription</th><th>Clinician</th></tr></thead><tbody>`+
+    m.map(x=>{const meds=((x.patient||{}).current_meds||[]).join(', ')||'—';
+      return `<tr class="prow" onclick="openCase('${esc(x.id)}')"><td><b>${esc(x.name)}</b><br><span style="color:var(--muted);font-size:12px">${x.age} · ${esc(cap(x.sex))}</span></td><td>${esc(meds)}</td><td>${esc(x.doctor)}</td></tr>`;}).join('')+
+    `</tbody></table><div class="note">Other real cases in this library sharing the diagnosis (matched on age and sex). Shown for context — the recommendations above are guideline-anchored, not peer-copied.</div>`;
 }
 
 // clean PLAIN-TEXT note (no markdown symbols) assembled from the sections

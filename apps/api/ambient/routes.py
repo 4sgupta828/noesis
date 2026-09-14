@@ -56,10 +56,11 @@ def build_router() -> APIRouter:
     def library() -> Dict:
         """The demo case library (browsable board). Each case carries its inputs so the UI can run it."""
         try:
-            from .library import LIBRARY
+            from .library import library as _lib
+            cases = _lib()
         except Exception:
-            LIBRARY = []
-        return {"cases": LIBRARY, "count": len(LIBRARY)}
+            cases = []
+        return {"cases": cases, "count": len(cases)}
 
     @router.post("/analyze")
     def analyze(body: AnalyzeIn) -> Dict:

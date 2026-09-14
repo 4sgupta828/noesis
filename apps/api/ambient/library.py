@@ -786,3 +786,43 @@ LIBRARY = [
         "demonstrates": "ASCVD primary-prevention statin gap in diabetes",
     },
 ]
+
+
+# --- Illustrative patient identity (synthetic, deterministic per case) ---------------------------
+# Demo-only demographics so the encounter reads like a real note. NOT real patient data.
+import datetime as _dt
+import hashlib as _hl
+
+_FIRST_M = ["James", "Robert", "David", "Michael", "William", "Thomas", "Raj", "Wei", "Omar", "Luis",
+            "Henry", "George", "Samuel", "Arjun", "Daniel", "Frank", "Peter", "Carl"]
+_FIRST_F = ["Mary", "Patricia", "Linda", "Barbara", "Susan", "Margaret", "Priya", "Mei", "Fatima", "Sofia",
+            "Alice", "Helen", "Ruth", "Ananya", "Grace", "Nora", "Clara", "Rosa"]
+_LAST = ["Anderson", "Miller", "Garcia", "Nguyen", "Patel", "Kim", "Johnson", "Brown", "Okafor", "Rossi",
+         "Silva", "Ivanov", "Sharma", "Cohen", "Hansen", "Mbeki", "Olsen", "Reyes"]
+_CITY = ["Springfield, IL", "Aurora, CO", "Fresno, CA", "Dayton, OH", "Tacoma, WA", "Akron, OH",
+         "Mumbai, MH", "Pune, MH", "Bengaluru, KA", "Jaipur, RJ", "Kochi, KL", "Nagpur, MH"]
+_DOCS = ["Dr. A. Rao", "Dr. M. Chen", "Dr. S. Patel", "Dr. J. Okafor", "Dr. L. Nguyen", "Dr. R. Kapoor",
+         "Dr. E. Martinez", "Dr. K. Sharma", "Dr. T. Ibrahim", "Dr. P. Andersson"]
+
+
+def _seed(s: str) -> int:
+    return int(_hl.md5(s.encode()).hexdigest(), 16)
+
+
+def enrich(case: dict) -> dict:
+    """Return the case with illustrative identity fields added (name, location, mrn, doctor, date)."""
+    h = _seed(case["id"])
+    firsts = _FIRST_F if case.get("sex") == "female" else _FIRST_M
+    # India cases draw locations from the Indian city slice
+    cities = _CITY[6:] if case.get("mode") == "IN" else _CITY[:6]
+    out = dict(case)
+    out["name"] = f"{firsts[h % len(firsts)]} {_LAST[(h // 7) % len(_LAST)]}"
+    out["location"] = cities[(h // 13) % len(cities)]
+    out["mrn"] = f"MRN-{(h % 900000) + 100000}"
+    out["doctor"] = _DOCS[(h // 17) % len(_DOCS)]
+    out["date"] = _dt.date.today().isoformat()
+    return out
+
+
+def library() -> list:
+    return [enrich(c) for c in LIBRARY]

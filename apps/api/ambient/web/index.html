@@ -6,20 +6,20 @@
 <title>Noesis Ambient CDS — case library</title>
 <style>
   :root{
-    --bg:#f6f7f9; --card:#fff; --ink:#131720; --muted:#5b6472; --line:#e4e7ec;
+    --bg:#f6f7f9; --card:#fff; --ink:#1a1f28; --muted:#5b6472; --line:#e4e7ec;
     --brand:#12603b; --brand-ink:#0b4429; --accent:#2559c9;
-    --s-contra:#8a1c1c; --s-major:#b42318; --s-mod:#b25e09; --s-minor:#5b6472; --s-info:#356;
-    --chip:#eef1f4; --ok:#eef7f1; --gap:#fff8ec; --gapln:#8a5a00;
+    --s-major:#b42318; --s-mod:#b25e09; --ok:#0b7a4b; --okbg:#eef7f1; --flag:#b42318; --flagbg:#fdeceb;
+    --chip:#eef1f4; --gap:#fff8ec; --gapln:#8a5a00;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
   header{background:var(--brand);color:#fff;padding:14px 16px}
   header .back{display:inline-block;color:#fff;opacity:.85;text-decoration:none;font-size:13px;font-weight:600;margin-bottom:6px}
   header .back:hover{opacity:1;text-decoration:underline}
   header .t{font-weight:700;font-size:18px}
   header .s{opacity:.85;font-size:12.5px}
-  .wrap{max-width:1060px;margin:0 auto;padding:16px}
-  /* library */
+  .wrap{max-width:900px;margin:0 auto;padding:16px}
+  /* library board */
   .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
   #search{flex:1 1 220px;min-width:180px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;min-height:44px}
   .filters{display:flex;flex-wrap:wrap;gap:6px}
@@ -28,133 +28,77 @@
   .count{font-size:12.5px;color:var(--muted)}
   .catgroup{margin:18px 0 6px;font-size:12.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
-  .case{text-align:left;cursor:pointer;border:1px solid var(--line);border-radius:12px;padding:12px 13px;background:var(--card);font:inherit;transition:border-color .1s}
+  .case{text-align:left;cursor:pointer;border:1px solid var(--line);border-radius:12px;padding:12px 13px;background:var(--card);font:inherit}
   .case:hover{border-color:var(--brand)}
   .case .ct{font-weight:650;font-size:14.5px;margin-bottom:3px}
-  .case .cm{font-size:12px;color:var(--muted)}
-  .case .cd{font-size:12px;color:var(--accent);margin-top:6px}
-  .case .tag{display:inline-block;font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 6px;background:var(--chip);color:var(--muted);margin-left:6px}
-  .case .tag.IN{background:#fff3e8;color:#b25e09}
-  /* analyzer */
+  .case .cm{font-size:12px;color:var(--muted)} .case .cd{font-size:12px;color:var(--accent);margin-top:6px}
+  .case .tag{display:inline-block;font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 6px;background:#fff3e8;color:#b25e09;margin-left:6px}
+  /* analyzer / clinical document */
   .abar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
   .btnlink{appearance:none;border:0;background:none;color:var(--accent);font:inherit;font-weight:600;cursor:pointer;padding:6px 0;min-height:40px}
-  .atitle{font-weight:700;font-size:16px}
-  .grid2{display:grid;gap:14px;grid-template-columns:1fr 1fr;align-items:start}
-  .col{display:grid;gap:14px;align-content:start}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
-  .card h2{margin:0 0 4px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
-  .sub{font-size:12px;color:var(--muted);margin:2px 0 8px}
-  .enc{font-size:14px;line-height:1.55}
-  .enc .pl{font-weight:600;margin-bottom:6px}
-  .enc .tx{background:#f1f4f8;border-radius:9px;padding:10px 12px;font-size:13.5px;color:var(--ink)}
-  .picture{font-size:15.5px;line-height:1.6}
-  .gdmt{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-  .gdmt .p{font-size:12px;border-radius:999px;padding:4px 10px;border:1px solid var(--line)}
-  .gdmt .p.have{background:var(--ok);color:var(--brand);border-color:#cfe7d8}
-  .gdmt .p.miss{background:#fff1f0;color:var(--s-major);border-color:#f4d3d0}
-  .gdmt .lead{font-size:12px;color:var(--muted);width:100%;margin-bottom:2px}
+  .cpbtn{margin-left:auto;background:var(--brand);color:#fff;border:0;border-radius:9px;padding:9px 14px;font:inherit;font-weight:600;cursor:pointer;min-height:42px} .cpbtn.done{background:var(--brand-ink)}
+  .doc{max-width:760px;margin:0 auto}
+  .sec{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px}
+  .sec h3{margin:0 0 12px;font-size:12.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700;border-bottom:1px solid var(--line);padding-bottom:8px}
+  .pname{font-size:20px;font-weight:700} .pmeta{font-size:13.5px;color:var(--muted);margin-top:3px}
+  .kv{display:flex;gap:8px;font-size:14px;margin:3px 0} .kv .k{color:var(--muted);min-width:120px}
+  .quote{background:#f1f4f8;border-radius:9px;padding:10px 12px;font-size:14px;margin-top:6px}
+  .picture{font-size:15px;line-height:1.6}
+  .pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .pill{font-size:12px;border-radius:999px;padding:4px 10px;border:1px solid var(--line)}
+  .pill.have{background:var(--okbg);color:var(--ok);border-color:#cfe7d8} .pill.miss{background:var(--flagbg);color:var(--flag);border-color:#f4d3d0}
   .labs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-  .labs .l{font-size:12px;border-radius:6px;padding:3px 9px;background:#f1f4f8;font-family:ui-monospace,Menlo,monospace}
-  .labs .l.flag{background:#fdeceb;color:var(--s-major)}
-  .labs .lead{width:100%;font-size:12px;color:var(--muted)}
-  .prio{display:grid;gap:10px}
-  .pr{display:grid;grid-template-columns:26px 1fr;gap:10px;border:1px solid var(--line);border-radius:10px;padding:11px 12px}
-  .pr .rk{width:24px;height:24px;border-radius:50%;background:var(--brand);color:#fff;font-weight:700;font-size:12.5px;display:flex;align-items:center;justify-content:center}
-  .pr.safety .rk{background:var(--s-major)} .pr.hold{border-color:#f0c9c4;background:#fdf5f4} .pr.hold .rk{background:var(--s-major)}
-  .pr .when{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
-  .pr .ttl{font-weight:650;margin:1px 0 2px}
-  .pr .why{font-size:13.5px} .pr .why b{color:var(--brand)} .pr.safety .why b{color:var(--s-major)}
-  .pr .bs{font-size:11px;color:var(--muted);margin-top:5px}
-  .caut{font-size:12.5px;margin-top:6px;border-radius:8px;padding:6px 9px}
-  .caut.hold{background:#fdeceb;color:var(--s-major);border:1px solid #f4d3d0}
-  .caut.confirm{background:#fff5e8;color:var(--s-mod);border:1px solid #f0e0c0}
-  .caut b{text-transform:uppercase;font-size:10.5px;letter-spacing:.03em}
-  .strength{display:inline-block;font-size:10.5px;font-weight:800;color:var(--brand);background:var(--ok);border-radius:5px;padding:1px 6px;margin-left:6px;vertical-align:middle}
-  details.ph{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:0 14px}
-  details.ph summary{cursor:pointer;list-style:none;padding:12px 0;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:700}
-  details.ph summary::-webkit-details-marker{display:none}
-  details.ph[open] summary{border-bottom:1px solid var(--line)}
-  details.ph .body{padding:12px 0}
-  .item{border:1px solid var(--line);border-left-width:5px;border-radius:10px;padding:10px 12px;margin-bottom:9px}
-  .item.sev-info{border-left-color:var(--s-info)} .item.sev-major{border-left-color:var(--s-major)}
-  .item.sev-moderate{border-left-color:var(--s-mod)} .item.sev-contraindicated{border-left-color:var(--s-contra)}
-  .item .it{font-weight:650} .item .nd{margin:4px 0;font-size:13.5px} .item .bs{font-size:11.5px;color:var(--muted);margin-top:6px}
-  .item .link{font-size:11.5px;color:var(--accent);margin-top:4px} .item .link em{color:var(--ink);font-style:normal;background:#eef3fd;border-radius:4px;padding:1px 4px}
-  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}
-  .chip{font-size:12px;border-radius:999px;padding:3px 10px;background:var(--chip)} .chip.ok{background:var(--ok);color:var(--brand)}
-  .gapc{background:var(--gap);border:1px solid #f0e0c0;border-left:5px solid var(--gapln);border-radius:10px;padding:9px 12px;margin-bottom:8px;font-size:13.5px}
+  .lab{font-size:12.5px;border-radius:6px;padding:3px 10px;background:#f1f4f8;font-family:ui-monospace,Menlo,monospace} .lab.flag{background:var(--flagbg);color:var(--flag)}
+  .lead{font-size:12px;color:var(--muted);margin:10px 0 4px;font-weight:600}
+  ul.clean{list-style:none;padding:0;margin:0} ul.clean li{padding:7px 0;border-bottom:1px solid #f0f2f5;font-size:14px} ul.clean li:last-child{border-bottom:0}
+  .dx{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+  .dx .code{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted)}
+  .chk{border-left:4px solid var(--line);padding:9px 12px;border-radius:0 8px 8px 0;margin-bottom:8px;background:#fafbfc;font-size:14px}
+  .chk.safety{border-left-color:var(--s-major)} .chk.hold{border-left-color:var(--s-major);background:var(--flagbg)}
+  .chk.confirm{border-left-color:var(--s-mod)} .chk.start{border-left-color:var(--ok)} .chk.warn{border-left-color:var(--s-mod);background:var(--gap)}
+  .chk .ct{font-weight:650} .chk .why{color:var(--ink);margin-top:3px;font-size:13.5px} .chk .why b{color:var(--brand)}
+  .chk .bs{font-size:11.5px;color:var(--muted);margin-top:5px}
+  .strength{display:inline-block;font-size:10.5px;font-weight:800;color:var(--ok);background:var(--okbg);border-radius:5px;padding:1px 6px;margin-left:6px}
+  .ok{color:var(--ok);font-size:14px}
+  .tbl{width:100%;border-collapse:collapse;font-size:13.5px} .tbl th,.tbl td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  .tbl th{font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:700}
+  .med{display:grid;grid-template-columns:1fr auto;gap:6px;padding:8px 0;border-bottom:1px solid #f0f2f5;font-size:14px} .med:last-child{border-bottom:0}
+  .med .mn{font-weight:600} .med .mw{color:var(--muted);font-size:13px} .med .md{font-size:12px;color:var(--brand);white-space:nowrap;font-weight:600}
+  .note{font-size:12px;color:var(--muted);margin-top:8px;font-style:italic}
+  .gapc{background:var(--gap);border:1px solid #f0e0c0;border-radius:8px;padding:9px 12px;margin-bottom:8px;font-size:13.5px}
   .gapc b{color:var(--gapln)}
-  .ap{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,Menlo,monospace;background:#0f1720;color:#e6edf3;border-radius:10px;padding:12px;max-height:340px;overflow:auto}
-  .cpbtn{background:var(--brand);color:#fff;border:0;border-radius:9px;padding:9px 14px;font:inherit;font-weight:600;cursor:pointer;min-height:42px} .cpbtn.done{background:#0b4429}
-  .foot{font-size:11.5px;color:var(--muted);margin-top:8px}
-  .empty{color:var(--muted);font-size:14px}
-  @media (max-width:760px){ .grid2{grid-template-columns:1fr} }
+  .empty{color:var(--muted);font-size:14px} .foot{font-size:11.5px;color:var(--muted);margin:6px 0 24px;text-align:center}
+  @media (max-width:560px){ .med{grid-template-columns:1fr} .kv{flex-direction:column;gap:0} .kv .k{min-width:0} }
 </style>
 </head>
 <body>
 <header>
   <a class="back" href="/app">← Noesis</a>
   <div class="t">Ambient CDS — Case Library</div>
-  <div class="s">50 realistic encounters. Pick one to see the safety-and-correctness read the CDS produces.</div>
+  <div class="s">50 realistic encounters. Pick one to see the clinical read the CDS produces.</div>
 </header>
 
 <div class="wrap">
-  <!-- LIBRARY VIEW -->
   <div id="libraryView">
-    <div class="toolbar">
-      <input id="search" placeholder="Search cases (condition, drug, age)…" oninput="renderBoard()">
-      <span class="count" id="count"></span>
-    </div>
+    <div class="toolbar"><input id="search" placeholder="Search cases (condition, drug, age)…" oninput="renderBoard()"><span class="count" id="count"></span></div>
     <div class="filters" id="filters"></div>
     <div id="board"></div>
   </div>
 
-  <!-- ANALYZER VIEW -->
   <div id="analyzerView" hidden>
     <div class="abar">
       <button class="btnlink" onclick="showLibrary()">← All cases</button>
-      <span class="atitle" id="atitle"></span>
-      <span class="chip" id="amode"></span>
+      <button class="cpbtn" id="cpbtn" onclick="copyNote()">📋 Copy note</button>
     </div>
-    <div class="grid2">
-      <div class="col">
-        <div class="card">
-          <h2>The encounter</h2>
-          <div class="enc"><div class="pl" id="encpl"></div><div class="tx" id="enctx"></div></div>
-        </div>
-        <div class="card" id="pictureCard" hidden>
-          <h2>Clinical picture</h2>
-          <div id="picture" class="picture"></div>
-          <div id="gdmt" class="gdmt"></div>
-          <div id="labs" class="labs"></div>
-        </div>
-        <div class="card" id="apCard" hidden>
-          <h2>Assessment &amp; plan — copy to note</h2>
-          <div class="sub">Grouped by problem; holds/cautions reflected.</div>
-          <button class="cpbtn" id="cpbtn" onclick="copyAP()">📋 Copy A&amp;P</button>
-          <div class="ap" id="ap" style="margin-top:10px"></div>
-        </div>
-      </div>
-      <div class="col">
-        <div class="card" id="prioCard" hidden>
-          <h2>What to do — and why</h2>
-          <div class="sub">One prioritized thread. Each step says why it matters and when.</div>
-          <div id="prio" class="prio"></div>
-        </div>
-        <div class="card" id="covCard" hidden>
-          <h2>Could not verify (not clearance)</h2>
-          <div id="cov"></div>
-        </div>
-        <details class="ph" id="detailsBox">
-          <summary>Show pre / encounter / post detail</summary>
-          <div class="body">
-            <div id="preNote" class="sub"></div><div id="pre"></div>
-            <div id="encNote" class="sub" style="margin-top:10px"></div><div id="enc"></div>
-            <div id="postNote" class="sub" style="margin-top:10px"></div><div id="post"></div>
-          </div>
-        </details>
-        <div class="foot" id="disc"></div>
-      </div>
+    <div class="doc">
+      <section class="sec" id="secPatient"></section>
+      <section class="sec" id="secEnc"></section>
+      <section class="sec"><h3>Pre-visit — clinical picture &amp; data</h3><div id="secPicture"></div></section>
+      <section class="sec"><h3>Working diagnosis &amp; current prescription</h3><div id="secDx"></div></section>
+      <section class="sec"><h3>Prescription deep-check &amp; proposed refinements</h3><div id="secChecks"></div></section>
+      <section class="sec" id="secPrecWrap" hidden><h3>Precedents — similar patients</h3><div id="secPrec"></div></section>
+      <section class="sec"><h3>Post-visit — follow-up plan</h3><div id="secPost"></div></section>
+      <div class="foot" id="disc"></div>
     </div>
   </div>
 </div>
@@ -162,6 +106,7 @@
 <script>
 let LIB=[], ACTIVE_CAT="All";
 function esc(s){return (s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function cap(s){return (s||'').charAt(0).toUpperCase()+(s||'').slice(1);}
 
 async function loadLibrary(){
   try{ LIB=(await (await fetch('/ambient/library')).json()).cases||[]; }catch(e){ LIB=[]; }
@@ -175,94 +120,141 @@ function renderBoard(){
   let cases=LIB.filter(c=>ACTIVE_CAT==='All'||c.category===ACTIVE_CAT);
   if(q) cases=cases.filter(c=>JSON.stringify(c).toLowerCase().includes(q));
   document.getElementById('count').textContent=`${cases.length} case${cases.length===1?'':'s'}`;
-  const groups={};
-  cases.forEach(c=>{ (groups[c.category]=groups[c.category]||[]).push(c); });
+  const groups={}; cases.forEach(c=>{ (groups[c.category]=groups[c.category]||[]).push(c); });
   document.getElementById('board').innerHTML=Object.keys(groups).map(cat=>`
     <div class="catgroup">${esc(cat)}</div>
     <div class="grid">${groups[cat].map(c=>`
       <button class="case" onclick="openCase('${esc(c.id)}')">
-        <div class="ct">${esc(c.title)}${c.mode==='IN'?'<span class="tag IN">India</span>':''}</div>
-        <div class="cm">${c.age}${esc((c.sex||'')[0]||'')} · ${esc(c.complexity||'')}</div>
+        <div class="ct">${esc(c.title)}${c.mode==='IN'?'<span class="tag">India</span>':''}</div>
+        <div class="cm">${esc(c.name||'')} · ${c.age}${esc((c.sex||'')[0]||'')} · ${esc(c.complexity||'')}</div>
         <div class="cd">${esc(c.demonstrates||'')}</div>
       </button>`).join('')}</div>`).join('') || '<div class="empty">No cases match.</div>';
 }
 
 async function openCase(id){
   const c=LIB.find(x=>x.id===id); if(!c) return;
+  window._case=c;
   document.getElementById('libraryView').hidden=true;
-  document.getElementById('analyzerView').hidden=false;
-  window.scrollTo(0,0);
-  document.getElementById('atitle').textContent=c.title;
-  document.getElementById('amode').textContent=c.mode==='IN'?'India':'US';
-  const p=c.patient||{};
-  const bits=[`${c.age}${(c.sex||'')[0]||''}`];
-  if(p.conditions&&p.conditions.length) bits.push('PMH: '+p.conditions.join(', '));
-  if(p.current_meds&&p.current_meds.length) bits.push('Meds: '+p.current_meds.join(', '));
-  if(p.allergies&&p.allergies.length) bits.push('Allergy: '+p.allergies.join(', '));
-  if(c.recent_hosp) bits.push('recently hospitalized');
-  document.getElementById('encpl').textContent=bits.join('  ·  ');
-  document.getElementById('enctx').textContent='“'+(c.transcript||'')+'”';
-  const body={transcript:c.transcript, patient:p, mode:c.mode||'US', recent_hospitalization:!!c.recent_hosp};
+  document.getElementById('analyzerView').hidden=false; window.scrollTo(0,0);
+  // age/sex live at the case top level — fold them into the patient context the engine reads
+  const body={transcript:c.transcript,
+    patient:Object.assign({}, c.patient||{}, {age_years:c.age, sex:c.sex}),
+    mode:c.mode||'US', recent_hospitalization:!!c.recent_hosp};
   const r=await fetch('/ambient/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   render(await r.json());
 }
 function showLibrary(){ document.getElementById('analyzerView').hidden=true; document.getElementById('libraryView').hidden=false; window.scrollTo(0,0); }
 
-const SEV_COLOR={contraindicated:"#8a1c1c",major:"#b42318",moderate:"#b25e09",minor:"#5b6472",info:"#356",none:"#12603b"};
 function render(res){
-  // picture
-  document.getElementById('picture').textContent=res.clinical_picture||'';
-  const gd=res.gdmt, gdEl=document.getElementById('gdmt');
-  gdEl.innerHTML = gd ? `<span class="lead">Heart-failure GDMT pillars — ${gd.n_have} of ${gd.n_total} present</span>`+
-    gd.have.map(h=>`<span class="p have">✓ ${esc(h)}</span>`).join('')+gd.missing.map(m=>`<span class="p miss">✗ ${esc(m)}</span>`).join('') : '';
-  const labs=res.labs||{}, labsEl=document.getElementById('labs');
-  const flag={potassium:v=>v>=5.0,egfr:v=>v<30,hr:v=>v<50};
-  const lc=Object.entries(labs).map(([k,v])=>{ let t,f=false; if(k==='bp'){t=`BP ${v.systolic}/${v.diastolic}`;f=v.systolic<90;} else {t=`${k.toUpperCase()} ${v.value}`;f=flag[k]?flag[k](v.value):false;} return `<span class="l ${f?'flag':''}">${esc(t)}</span>`; });
-  labsEl.innerHTML = lc.length ? `<span class="lead">Vitals / labs heard</span>`+lc.join('') : '';
-  document.getElementById('pictureCard').hidden=false;
-
-  // priorities
-  const prio=res.priorities||[];
-  document.getElementById('prio').innerHTML=prio.map(p=>{ const c=p.caution, hold=c&&c.level==='hold';
-    return `<div class="pr ${p.kind==='safety'?'safety':''} ${hold?'hold':''}"><div class="rk">${p.rank}</div><div>
-      <div class="when">${esc(p.when)}</div><div class="ttl">${esc(p.title)}${p.strength?`<span class="strength">${esc(p.strength)}</span>`:''}</div>
-      <div class="why"><b>Why:</b> ${esc(p.why)}</div>
-      ${c?`<div class="caut ${esc(c.level)}"><b>${c.level==='hold'?'⛔ Hold':'⚠ Confirm first'}:</b> ${esc(c.reason)}</div>`:''}
-      ${p.basis?`<div class="bs">${esc(p.basis.source)}${p.basis.citation?' · '+esc(p.basis.citation):''}</div>`:''}</div></div>`;}).join('')
-    || '<div class="empty">No prioritized actions for this encounter.</div>';
-  document.getElementById('prioCard').hidden = prio.length===0;
-
-  // phase notes + details
-  const pn=res.phase_notes||{};
-  document.getElementById('preNote').textContent=pn.pre||'';
-  document.getElementById('encNote').textContent=pn.encounter||'';
-  document.getElementById('postNote').textContent=pn.post||'';
+  const c=window._case||{}, p=c.patient||{};
+  // 1. Patient
+  document.getElementById('secPatient').innerHTML=
+    `<div class="pname">${esc(c.name||'Patient')}</div>
+     <div class="pmeta">${c.age} yrs · ${esc(cap(c.sex||''))} · ${esc(c.location||'')} · ${esc(c.mrn||'')}</div>`;
+  // 2. Encounter
+  document.getElementById('secEnc').innerHTML=
+    `<h3>Encounter</h3>
+     <div class="kv"><span class="k">Examining clinician</span><span>${esc(c.doctor||'—')}</span></div>
+     <div class="kv"><span class="k">Date</span><span>${esc(c.date||'')} · ${c.mode==='IN'?'India':'US'}${c.recent_hosp?' · recently hospitalized':''}</span></div>
+     <div class="lead">Reason / narrative</div><div class="quote">“${esc(c.transcript||'')}”</div>`;
+  // 3. Pre — clinical picture & data
+  const gd=res.gdmt;
+  let pic=`<div class="picture">${esc(res.clinical_picture||'')}</div>`;
+  if(gd) pic+=`<div class="lead">Heart-failure GDMT pillars — ${gd.n_have} of ${gd.n_total} present</div><div class="pills">`+
+    gd.have.map(h=>`<span class="pill have">✓ ${esc(h)}</span>`).join('')+gd.missing.map(m=>`<span class="pill miss">✗ ${esc(m)}</span>`).join('')+`</div>`;
+  const labs=res.labs||{}; const flag={potassium:v=>v>=5.0,egfr:v=>v<30,hr:v=>v<50};
+  const lc=Object.entries(labs).map(([k,v])=>{let t,f=false; if(k==='bp'){t=`BP ${v.systolic}/${v.diastolic}`;f=v.systolic<90;} else {t=`${k.toUpperCase()} ${v.value}`;f=flag[k]?flag[k](v.value):false;} return `<span class="lab ${f?'flag':''}">${esc(t)}</span>`;});
+  pic+= lc.length ? `<div class="lead">Test results / vitals</div><div class="labs">${lc.join('')}</div>` : '';
+  document.getElementById('secPicture').innerHTML=pic;
+  // 4. Working diagnosis & current prescription
   const pv=res.pre_visit;
-  document.getElementById('pre').innerHTML=(pv.conditions.length?pv.conditions.map(c=>{const ev=(c.evidence||[])[0]||{};return `<div class="item sev-info"><div class="it">${esc(c.label)}</div>${ev.text?`<div class="link">${ev.source==='transcript'?'from the conversation':'from the chart'}: <em>${esc(ev.text)}</em></div>`:''}</div>`;}).join(''):'<span class="empty">no problems detected</span>')+
-    `<div class="sub" style="margin-top:8px">Therapies on board</div><div class="chips">${pv.present_therapies.map(t=>`<span class="chip ok">✓ ${esc(t)}</span>`).join('')||'<span class="empty">none in the GDMT classes</span>'}</div>`;
-  const ec=res.encounter;
-  document.getElementById('enc').innerHTML=(ec.medications.length?ec.medications.map(m=>`<div class="item sev-info"><div class="it">${esc(m.mention)} <span class="sub">→ ${esc(m.molecules.join(' + '))}</span></div>${m.text?`<div class="link">from the conversation: <em>${esc(m.text)}</em></div>`:'<span class="sub">from the chart</span>'}</div>`).join(''):'<span class="empty">no meds detected</span>')+
-    (ec.safety_findings.length?`<div class="sub" style="margin-top:8px">Drug safety</div>`+ec.safety_findings.map(f=>`<div class="item sev-${f.severity}"><div class="it">${esc(f.title)}</div><div class="nd">${esc(f.detail)}</div><div class="bs">Basis — ${esc(f.basis.source)}: ${esc(f.basis.citation)}</div></div>`).join(''):'<div class="chip ok" style="margin-top:8px">✓ No drug-safety findings</div>');
-  const post=res.post_visit;
-  document.getElementById('post').innerHTML = post.kind==='coding'
-    ? post.icd10.map(c=>`<div class="item sev-info"><div class="it">${esc(c.code)} — ${esc(c.desc)}</div><div class="bs">Basis — ${esc(c.basis.citation)}</div></div>`).join('')+`<div class="item sev-info"><div class="it">E/M ${esc(post.em.suggestion)}</div><div class="bs">${esc(post.em.basis.citation)}</div></div>`
-    : post.summary.map(s=>`<div class="item sev-info"><div class="it">${esc(s.line)}</div></div>`).join('');
+  let dx=`<div class="lead">Working diagnoses</div><ul class="clean">`+
+    (pv.conditions.length? pv.conditions.map(cd=>{const code=(res.post_visit.icd10||[]).find(x=>x.condition===cd.condition);
+      return `<li class="dx"><span>${esc(cd.label)}</span><span class="code">${code?esc(code.code):''}</span></li>`;}).join('')
+      : '<li class="empty">No chronic diagnosis detected</li>')+`</ul>`;
+  const meds=res.encounter.medications;
+  dx+=`<div class="lead">Current prescription (medications on record / heard)</div><ul class="clean">`+
+    (meds.length? meds.map(m=>`<li>${esc(m.mention)} <span class="mw" style="color:var(--muted);font-size:13px">→ ${esc(m.molecules.join(' + '))}</span></li>`).join('')
+      : '<li class="empty">None recorded</li>')+`</ul>`;
+  document.getElementById('secDx').innerHTML=dx;
+  // 5. Deep checks & refinements
+  let ck='';
+  const saf=res.encounter.safety_findings||[];
+  ck+=`<div class="lead">Drug-safety checks</div>`;
+  ck+= saf.length? saf.map(f=>`<div class="chk safety"><div class="ct">${esc(f.title)}</div><div class="why">${esc(f.detail)}${f.management?' — '+esc(f.management):''}</div><div class="bs">Basis — ${esc(f.basis.source)}: ${esc(f.basis.citation)}</div></div>`).join('')
+    : '<div class="ok">✓ No drug-safety issues on the current medications</div>';
+  const coh=(res.coherency||[]).filter(x=>!x.indication_present);
+  ck+=`<div class="lead">Coherency with the clinical picture</div>`;
+  ck+= coh.length? coh.map(x=>`<div class="chk warn"><div class="ct">${esc(x.med)}</div><div class="why">${esc(x.note)}</div></div>`).join('')
+    : '<div class="ok">✓ Prescription is consistent with the documented problems</div>';
+  const gaps=(res.priorities||[]).filter(x=>x.kind==='gap');
+  ck+=`<div class="lead">Proposed refinements</div>`;
+  ck+= gaps.length? gaps.map(g=>{const cn=g.caution, hold=cn&&cn.level==='hold';
+    return `<div class="chk ${hold?'hold':(cn?'confirm':'start')}"><div class="ct">${esc(g.title)}${g.strength?`<span class="strength">${esc(g.strength)}</span>`:''} <span class="mw" style="color:var(--muted);font-size:12px">· ${esc(g.when)}</span></div>
+      <div class="why"><b>Why:</b> ${esc(g.why)}</div>
+      ${cn?`<div class="why" style="color:${hold?'var(--s-major)':'var(--s-mod)'}"><b>${hold?'⛔ Hold':'⚠ Confirm first'}:</b> ${esc(cn.reason)}</div>`:''}
+      <div class="bs">${esc(g.basis.source)}${g.basis.citation?' · '+esc(g.basis.citation):''}</div></div>`;}).join('')
+    : '<div class="ok">✓ No guideline gaps for the documented problems</div>';
+  const cov=res.coverage.unverifiable||[];
+  if(cov.length) ck+=`<div class="lead">Could not verify (not clearance)</div>`+cov.map(g=>`<div class="gapc"><b>${esc(g.molecule)}</b> — ${esc(g.why)}</div>`).join('');
+  document.getElementById('secChecks').innerHTML=ck;
+  // 6. Precedents
+  const prec=res.precedents||{};
+  if(prec.rows&&prec.rows.length){
+    document.getElementById('secPrecWrap').hidden=false;
+    document.getElementById('secPrec').innerHTML=
+      `<div class="lead">Similar patients — ${esc(prec.cohort)}</div>
+       <table class="tbl"><thead><tr><th>Patient</th><th>Prescription</th><th>Clinician</th></tr></thead><tbody>`+
+       prec.rows.map(r=>`<tr><td>${esc(r.patient)}</td><td>${esc(r.prescription)}</td><td>${esc(r.doctor)}</td></tr>`).join('')+
+       `</tbody></table><div class="note">${esc(prec.note)}</div>`;
+  } else document.getElementById('secPrecWrap').hidden=true;
+  // 7. Post — follow-up
+  const M=res.medications||{start:[],hold:[],continue:[]};
+  let post=`<div class="lead">New tests / procedures to follow up</div>`;
+  post+= (res.follow_up&&res.follow_up.length)? `<ul class="clean">`+res.follow_up.map(t=>`<li>${esc(t)}</li>`).join('')+`</ul>` : '<div class="empty">None specific this visit</div>';
+  post+=`<div class="lead">Medications — what, why, how long</div>`;
+  const mrow=(m,tag)=>`<div class="med"><div><span class="mn">${tag} ${esc(m.med)}</span><div class="mw">${esc(m.why||'')}</div></div>${m.duration?`<div class="md">${esc(m.duration)}</div>`:''}</div>`;
+  const allMeds=M.start.map(m=>mrow(m,'Start')).concat(M.hold.map(m=>mrow(m,'⛔ Hold'))).concat(M.continue.map(m=>mrow(m,'Continue')));
+  post+= allMeds.length? allMeds.join('') : '<div class="empty">No medication changes</div>';
+  post+=`<div class="lead">Physical therapy / non-drug</div>`;
+  post+= (res.non_drug&&res.non_drug.length)? `<ul class="clean">`+res.non_drug.map(n=>`<li>${esc(n)}</li>`).join('')+`</ul>` : '<div class="empty">None indicated</div>';
+  document.getElementById('secPost').innerHTML=post;
 
-  // coverage
-  const gaps=res.coverage.unverifiable||[];
-  document.getElementById('covCard').hidden=gaps.length===0;
-  document.getElementById('cov').innerHTML=gaps.map(g=>`<div class="gapc"><b>${esc(g.molecule)}</b> — ${esc(g.why)}</div>`).join('');
-
-  // A&P
-  window._ap=res.assessment_plan||'';
-  document.getElementById('ap').textContent=window._ap;
-  document.getElementById('apCard').hidden=!window._ap;
-  const cb=document.getElementById('cpbtn'); cb.textContent='📋 Copy A&P'; cb.classList.remove('done');
   document.getElementById('disc').textContent=res.disclaimer;
+  window._note=buildNote(res,c);
+  const cb=document.getElementById('cpbtn'); cb.textContent='📋 Copy note'; cb.classList.remove('done');
 }
-async function copyAP(){ const b=document.getElementById('cpbtn');
-  try{ await navigator.clipboard.writeText(window._ap||''); b.textContent='✓ Copied to clipboard'; b.classList.add('done'); }
-  catch(e){ const el=document.getElementById('ap'),r=document.createRange(); r.selectNode(el); getSelection().removeAllRanges(); getSelection().addRange(r); b.textContent='Selected — ⌘/Ctrl+C'; } }
+
+// clean PLAIN-TEXT note (no markdown symbols) assembled from the sections
+function buildNote(res,c){
+  const L=[]; const push=(s)=>L.push(s);
+  push(`${c.name||'Patient'}  (${c.age} yrs, ${cap(c.sex||'')})  ${c.location||''}  ${c.mrn||''}`);
+  push(`Seen by ${c.doctor||''} on ${c.date||''}`); push('');
+  push('CLINICAL PICTURE'); push(res.clinical_picture||'');
+  const labs=res.labs||{}; const ls=Object.entries(labs).map(([k,v])=>k==='bp'?`BP ${v.systolic}/${v.diastolic}`:`${k.toUpperCase()} ${v.value}`);
+  if(ls.length) push('Data: '+ls.join(', '));
+  push('');
+  push('WORKING DIAGNOSES');
+  (res.pre_visit.conditions||[]).forEach(cd=>{const code=(res.post_visit.icd10||[]).find(x=>x.condition===cd.condition); push(`  - ${cd.label}${code?'  ['+code.code+']':''}`);});
+  push('');
+  const saf=res.encounter.safety_findings||[];
+  if(saf.length){ push('DRUG-SAFETY CHECKS'); saf.forEach(f=>push(`  - ${f.title} — ${f.management||f.detail}`)); push(''); }
+  const gaps=(res.priorities||[]).filter(x=>x.kind==='gap');
+  if(gaps.length){ push('PROPOSED REFINEMENTS'); gaps.forEach(g=>{const cn=g.caution; push(`  - ${g.title}${cn?(cn.level==='hold'?' — HOLD: '+cn.reason:' — CONFIRM: '+cn.reason):''}`);}); push(''); }
+  const M=res.medications||{start:[],hold:[],continue:[]};
+  push('MEDICATIONS');
+  M.start.forEach(m=>push(`  - Start ${m.med} (${m.why}) — ${m.duration}`));
+  M.hold.forEach(m=>push(`  - HOLD ${m.med} — ${m.why}`));
+  M.continue.forEach(m=>push(`  - Continue ${m.med} ${m.why} — ${m.duration}`));
+  push('');
+  if((res.follow_up||[]).length){ push('FOLLOW-UP TESTS / PROCEDURES'); res.follow_up.forEach(t=>push(`  - ${t}`)); push(''); }
+  if((res.non_drug||[]).length){ push('PHYSICAL THERAPY / NON-DRUG'); res.non_drug.forEach(n=>push(`  - ${n}`)); push(''); }
+  push('— Advisory decision support (Noesis). Clinician confirms and signs.');
+  return L.join('\n');
+}
+async function copyNote(){ const b=document.getElementById('cpbtn');
+  try{ await navigator.clipboard.writeText(window._note||''); b.textContent='✓ Copied to clipboard'; b.classList.add('done'); }
+  catch(e){ b.textContent='Copy failed — select the note manually'; } }
 
 loadLibrary();
 </script>

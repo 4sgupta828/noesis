@@ -22,10 +22,14 @@ from typing import Dict, List, Optional, Tuple
 from api.rxcds import data as rxdata
 from api.rxcds.engine import PatientContext, check_prescription, normalize
 
+from . import clinical
 from . import contraindications
 from . import data as adata
 from . import synthesis
 from .modes import MODES, resolve_mode
+
+_PRIMARY_ORDER = ["heart_failure", "cad", "atrial_fibrillation", "diabetes", "ckd", "copd", "asthma",
+                  "depression", "osteoporosis", "hypertension", "hyperlipidemia", "hypothyroidism"]
 
 logger = logging.getLogger("noesis.ambient")
 
@@ -120,6 +124,10 @@ def extract_meds(transcript: str, current_meds: List[str]) -> List[Dict]:
     transcript span (or 'chart' for current meds). Longest-name-first, non-overlapping."""
     found: List[Dict] = []
     claimed: List[Tuple[int, int]] = []
+    seen_sigs: set = set()  # dedupe the same molecule set said in both transcript AND chart
+
+    def _sig(mols):
+        return tuple(sorted(mols))
 
     def overlaps(s, e):
         return any(not (e <= cs or s >= ce) for (cs, ce) in claimed)
@@ -128,17 +136,21 @@ def extract_meds(transcript: str, current_meds: List[str]) -> List[Dict]:
         for (s, e) in _find_spans(transcript, name):
             if overlaps(s, e):
                 continue
+            claimed.append((s, e))
             # a stopped/discontinued med is not a CURRENT med — don't count it as present
             if _is_negated(transcript, s):
-                claimed.append((s, e))
                 continue
-            claimed.append((s, e))
+            sig = _sig(mols)
+            if sig in seen_sigs:
+                continue
+            seen_sigs.add(sig)
             found.append({"mention": transcript[s:e], "molecules": mols, "source": "transcript",
                           "span": [s, e], "text": _snippet(transcript, s, e)})
-    # explicit current meds (chart)
+    # explicit current meds (chart) — skip any already heard in the transcript
     for cm in current_meds:
         it = normalize(cm)
-        if it.molecules():
+        if it.molecules() and _sig(it.molecules()) not in seen_sigs:
+            seen_sigs.add(_sig(it.molecules()))
             found.append({"mention": cm, "molecules": it.molecules(), "source": "chart", "text": cm})
     return found
 
@@ -202,7 +214,7 @@ def care_gaps(active_conditions: List[str], present_classes: set, recent_hospita
         if not satisfied and rule.get("boost_if_condition") and cond_set.intersection(rule["boost_if_condition"]):
             sev = "major"
         entry = {"id": rule["id"], "label": rule["label"], "severity": sev, "note": rule["note"],
-                 "basis": rule["basis"], "condition": rule["condition"],
+                 "basis": rule["basis"], "condition": rule["condition"], "need_any": rule.get("need_any", []),
                  "satisfied_by": sorted(present_classes.intersection(rule["need_any"]))}
         (covered if satisfied else gaps).append(entry)
     # age-based prevention (independent of a detected condition)
@@ -273,9 +285,12 @@ def analyze_encounter(transcript: str, patient: PatientContext, mode: str = "US"
     all_molecules = sorted({m for md in meds for m in md["molecules"]})
     present_classes = _classes_of_molecules(all_molecules)
 
-    # --- ENCOUNTER: drug safety (reuse Rx-CDS). Pass RESOLVED molecules (not raw brand mentions) so a
-    # brand said without a strength ("Augmentin") still screens for interactions/allergy/contraindication.
-    safety = check_prescription(all_molecules, patient) if all_molecules else {
+    # --- ENCOUNTER: drug safety (reuse Rx-CDS). Pass RESOLVED molecules per deduped item (a brand said
+    # without a strength like "Augmentin" still screens); `meds` is already deduped across transcript+chart,
+    # so clear ctx.current_meds to avoid double-counting the same drug as two items (false duplicates).
+    safety_input = [m for md in meds for m in md["molecules"]]
+    patient.current_meds = []
+    safety = check_prescription(safety_input, patient) if safety_input else {
         "findings": [], "coverage": {"unverifiable": []}, "summary": {"finding_count": 0}}
 
     # --- care gaps + contraindication/caution annotation on each drug gap ---
@@ -323,6 +338,10 @@ def analyze_encounter(transcript: str, patient: PatientContext, mode: str = "US"
         findings, post, recent_hospitalization,
     )
 
+    # --- clinical-note sections (follow-up, meds plan, non-drug, coherency, precedents) ---
+    primary = next((c for c in _PRIMARY_ORDER if c in active), (active[0] if active else None))
+    clin = clinical.build(conds, meds, present_classes, gaps, patient, primary)
+
     return {
         "mode": mode, "mode_label": cfg["label"],
         "clinical_picture": synth["clinical_picture"],
@@ -330,6 +349,12 @@ def analyze_encounter(transcript: str, patient: PatientContext, mode: str = "US"
         "priorities": synth["priorities"],
         "phase_notes": synth["phase_notes"],
         "assessment_plan": synth["assessment_plan"],
+        "primary_condition": primary,
+        "coherency": clin["coherency"],
+        "medications": clin["medications"],
+        "follow_up": clin["follow_up"],
+        "non_drug": clin["non_drug"],
+        "precedents": clin["precedents"],
         "pre_visit": {
             "conditions": conds,
             "present_therapies": [adata.CLASS_LABEL.get(c, c) for c in present_readout],

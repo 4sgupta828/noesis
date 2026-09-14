@@ -140,6 +140,17 @@
   .dot-hospitalization{background:var(--flag)} .dot-procedure{background:#7a4fd1} .dot-ed{background:#d1671f} .dot-routine{background:#5b6b80} .dot-diagnosis{background:var(--accent)}
   .visitdiv{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin:6px 0 12px}
   .visitdiv::before,.visitdiv::after{content:"";flex:1;height:1px;background:var(--line)}
+  .bg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .bgcard{border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:#fbfcfd}
+  .bgcard .bt{font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .bgcard .bi{font-size:13px;padding:2px 0;line-height:1.4}
+  .tevent .tmeta{font-size:12.5px;color:var(--muted);margin:2px 0}
+  .edetail{margin-top:7px;display:grid;gap:6px}
+  .echips{display:flex;flex-wrap:wrap;gap:5px}
+  .echip{font-size:11.5px;background:#f1f4f8;border-radius:6px;padding:2px 8px;font-family:ui-monospace,Menlo,monospace}
+  .echip.lab{background:#eef3fd;color:#1c3f8f}
+  .edl{font-size:12.5px;line-height:1.45} .edl b{color:var(--muted);font-weight:800;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em}
+  @media(max-width:560px){.bg{grid-template-columns:1fr}}
   @media (max-width:560px){ .med{grid-template-columns:1fr} .kv{flex-direction:column;gap:0} .kv .k{min-width:0} }
 </style>
 </head>
@@ -167,6 +178,8 @@
       <section class="sec" id="histWrap" hidden>
         <h3>History context — past 5 years</h3>
         <div id="histSummary" class="histsum"></div>
+        <div class="lead" style="margin-top:16px">Background</div>
+        <div id="histBg"></div>
         <div class="lead" style="margin-top:16px">Key lab trends</div>
         <div id="trends"></div>
         <div class="lead" style="margin-top:16px">Encounters, procedures &amp; emergencies</div>
@@ -342,14 +355,35 @@ function renderHistory(res){
   if(!h||!h.summary){ wrap.hidden=true; return; }
   wrap.hidden=false;
   document.getElementById('histSummary').textContent=h.summary;
+  // background
+  const bg=h.background||{};
+  const bgcard=(t,items)=>(items&&items.length)?`<div class="bgcard"><div class="bt">${t}</div>${items.map(x=>`<div class="bi">${esc(x)}</div>`).join('')}</div>`:'';
+  document.getElementById('histBg').innerHTML='<div class="bg">'+
+    bgcard('Social history',bg.social)+bgcard('Family history',bg.family)+bgcard('Baseline',bg.baseline)+
+    bgcard('Immunizations',bg.immunizations)+bgcard('Screenings',bg.screenings)+'</div>';
+  // trends
   const arrow={down:'↓',up:'↑',stable:'→'};
   document.getElementById('trends').innerHTML=(h.trends||[]).map(t=>{
     const cls=t.good===true?'good':t.good===false?'bad':'flat';
     const word=t.dir==='stable'?'stable':(t.good===true?'improving':t.good===false?'worsening':(t.dir==='down'?'down':'up'));
     return `<div class="trend"><div class="tl"><div class="tname">${esc(t.label)}</div><div class="tval">${t.first} → ${t.last} ${esc(t.unit)}</div></div>${sparkline(t.points,t.good)}<div class="tdir ${cls}">${arrow[t.dir]||''} ${esc(word)}</div></div>`;
   }).join('') || '<div class="empty">No tracked labs for these problems</div>';
-  document.getElementById('timeline').innerHTML='<div class="tline">'+(h.encounters||[]).map(e=>
-    `<div class="tevent"><span class="dot dot-${e.type}"></span><div class="ty">${e.year} · ${esc(labelType(e.type))}</div><div class="tt">${esc(e.title)}</div><div class="tc">${esc(e.carepath)}</div></div>`).join('')+'</div>';
+  // detailed encounters timeline
+  document.getElementById('timeline').innerHTML='<div class="tline">'+(h.encounters||[]).map(e=>{
+    const vit=(e.vitals||[]).map(v=>`<span class="echip">${esc(v)}</span>`).join('');
+    const lab=(e.labs||[]).map(v=>`<span class="echip lab">${esc(v)}</span>`).join('');
+    const chg=(e.changes||[]).map(esc).join('; ');
+    return `<div class="tevent"><span class="dot dot-${e.type}"></span>
+      <div class="ty">${esc(e.date.disp)} · ${esc(labelType(e.type))} · ${esc(e.provider)}</div>
+      <div class="tt">${esc(e.title)}</div>
+      ${e.reason?`<div class="tmeta">${esc(e.reason)}</div>`:''}
+      <div class="edetail">
+        ${vit?`<div class="echips">${vit}</div>`:''}
+        ${lab?`<div class="echips">${lab}</div>`:''}
+        ${chg?`<div class="edl"><b>Changes</b> · ${esc(chg)}</div>`:''}
+        <div class="edl"><b>Assessment / plan</b> · ${esc(e.assessment||'')} ${esc(e.plan||'')}</div>
+      </div></div>`;
+  }).join('')+'</div>';
   document.getElementById('histNote').textContent=h.note||'';
 }
 
@@ -425,7 +459,15 @@ function buildNote(res,c){
   const L=[]; const push=(s)=>L.push(s);
   push(`${c.name||'Patient'}  (${c.age} yrs, ${cap(c.sex||'')})  ${c.location||''}  ${c.mrn||''}`);
   push(`Seen by ${c.doctor||''} on ${c.date||''}`); push('');
-  if(res.history&&res.history.summary){ push('HISTORY CONTEXT (past 5 years)'); push(res.history.summary); push(''); }
+  if(res.history&&res.history.summary){ const H=res.history, bg=H.background||{};
+    push('HISTORY CONTEXT (past 5 years)'); push(H.summary);
+    if(bg.social) push('Social: '+bg.social.join('; '));
+    if(bg.family) push('Family Hx: '+bg.family.join('; '));
+    if(bg.baseline) push('Baseline: '+bg.baseline.join('; '));
+    if(H.encounters&&H.encounters.length){ push(''); push('Past encounters:');
+      H.encounters.forEach(e=>push(`  - ${e.date.disp} · ${e.title} — ${e.assessment||''} [${(e.changes||[]).join('; ')}]`)); }
+    push('');
+  }
   push('CLINICAL PICTURE'); push(res.clinical_picture||'');
   const labs=res.labs||{}; const ls=Object.entries(labs).map(([k,v])=>k==='bp'?`BP ${v.systolic}/${v.diastolic}`:`${k.toUpperCase()} ${v.value}`);
   if(ls.length) push('Data: '+ls.join(', '));

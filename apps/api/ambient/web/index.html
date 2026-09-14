@@ -63,20 +63,38 @@
   .tbl{width:100%;border-collapse:collapse;font-size:13.5px} .tbl th,.tbl td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line);vertical-align:top}
   .tbl th{font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:700}
   .tbl tr.prow{cursor:pointer} .tbl tr.prow:hover td{background:#eef3fd} .tbl tr.prow td:first-child b{color:var(--accent)}
-  .grps{display:grid;gap:10px}
-  .grp{border:1px solid var(--line);border-radius:10px;overflow:hidden}
-  .grp .ghead{padding:9px 12px;font-size:11.5px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;display:flex;justify-content:space-between}
-  .grp .ghead .n{opacity:.7;font-weight:700}
-  .grp .gbody{padding:4px 12px}
-  .grp-start{border-color:#cfe7d8} .grp-start .ghead{background:var(--okbg);color:var(--ok)}
-  .grp-cont{border-color:#d3e0f7} .grp-cont .ghead{background:#eef3fd;color:var(--accent)}
-  .grp-stop{border-color:#f4d3d0} .grp-stop .ghead{background:var(--flagbg);color:var(--flag)}
-  .grp-test .ghead,.grp-pt .ghead{background:#f1f4f8;color:var(--muted)}
-  .grp .gbody ul.clean li{border-bottom:1px solid #f0f2f5}
-  .medi{padding:9px 0;border-bottom:1px solid #f0f2f5} .medi:last-child{border-bottom:0}
-  .medi .mn{font-weight:650;font-size:14px} .medi .mw{color:var(--muted);font-size:13px;margin-top:1px}
-  .medi .md{display:inline-block;font-size:11px;color:var(--brand);font-weight:700;background:var(--okbg);border-radius:5px;padding:1px 7px;margin-top:5px}
+  .grps{display:grid;gap:12px}
+  .grp{border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 1px 2px rgba(18,40,30,.04),0 6px 16px rgba(18,40,30,.03)}
+  .grp .ghead{padding:11px 13px;display:flex;align-items:center;gap:10px;font-size:14px;font-weight:650}
+  .grp .gav{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none;color:#fff}
+  .grp .gn{margin-left:auto;font-size:12px;font-weight:700;background:#fff;border-radius:999px;min-width:22px;height:22px;padding:0 7px;display:flex;align-items:center;justify-content:center}
+  .grp .gbody{padding:10px 12px}
+  .grp-start{border-color:#cbe6d8} .grp-start .ghead{background:linear-gradient(#f4fbf7,#eef7f1);color:var(--brand-ink)} .grp-start .gav{background:var(--ok)} .grp-start .gn{color:var(--ok)}
+  .grp-cont{border-color:#d3e0f7} .grp-cont .ghead{background:linear-gradient(#f5f9ff,#eef3fd);color:#1c3f8f} .grp-cont .gav{background:var(--accent)} .grp-cont .gn{color:var(--accent)}
+  .grp-stop{border-color:#f2cec9} .grp-stop .ghead{background:linear-gradient(#fef4f3,#fdeceb);color:#7a1a12} .grp-stop .gav{background:var(--flag)} .grp-stop .gn{color:var(--flag)}
+  .grp-test .ghead,.grp-pt .ghead{background:#f4f6f9;color:#3a4351} .grp-test .gav{background:#5b6b80} .grp-pt .gav{background:#2f8f82} .grp-test .gn,.grp-pt .gn{color:#5b6b80}
+  /* medication mini-cards, status-tinted */
+  .medi{border-radius:9px;padding:10px 12px;margin-bottom:8px} .medi:last-child{margin-bottom:2px}
+  .grp-start .medi{background:#f4fbf7;border:1px solid #e3f2ea} .grp-cont .medi{background:#f6f9ff;border:1px solid #e6eefb} .grp-stop .medi{background:#fef5f4;border:1px solid #f6ddd9}
+  .medi .mtop{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .medi .mn{font-weight:650;font-size:14.5px;line-height:1.3} .medi .mw{color:var(--muted);font-size:13px;margin-top:3px}
+  .medi .md{font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap;flex:none}
+  .grp-start .medi .md{color:var(--ok);background:#e3f2ea} .grp-cont .medi .md{color:var(--accent);background:#e6eefb}
+  /* test / therapy rows with a leading icon */
+  .titem{display:flex;align-items:flex-start;gap:11px;padding:9px 2px;font-size:14px;border-bottom:1px solid #f0f2f5} .titem:last-child{border-bottom:0}
+  .titem .ti{width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+  .grp-test .titem .ti{background:#eaf0f6} .grp-pt .titem .ti{background:#e6f4f1}
   .note{font-size:12px;color:var(--muted);margin-top:8px;font-style:italic}
+  .ask{margin-top:14px;border:1px solid #d7e6de;background:linear-gradient(#f6fbf8,#f1f8f4);border-radius:11px;padding:12px 13px}
+  .ask .al{font-size:12.5px;font-weight:700;color:var(--brand);display:flex;align-items:center;gap:7px}
+  .ask .al .sp{width:20px;height:20px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px}
+  .askchips{display:flex;flex-wrap:wrap;gap:6px;margin:9px 0}
+  .askchip{appearance:none;border:1px solid #cfe3d8;background:#fff;color:var(--brand-ink);border-radius:999px;padding:6px 11px;font:inherit;font-size:12.5px;cursor:pointer}
+  .askchip:hover{border-color:var(--brand);background:#eef7f1}
+  .askrow{display:flex;gap:8px;margin-top:4px}
+  .askrow input{flex:1;border:1px solid #cfe3d8;border-radius:9px;padding:9px 11px;font:inherit;min-height:42px;background:#fff}
+  .askbtn{border:0;background:var(--brand);color:#fff;border-radius:9px;padding:9px 14px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap;min-height:42px}
+  .ask .sub{margin-top:8px}
   .gapc{background:var(--gap);border:1px solid #f0e0c0;border-radius:8px;padding:9px 12px;margin-bottom:8px;font-size:13.5px}
   .gapc b{color:var(--gapln)}
   .empty{color:var(--muted);font-size:14px} .foot{font-size:11.5px;color:var(--muted);margin:6px 0 24px;text-align:center}
@@ -188,6 +206,15 @@ function render(res){
   dx+=`<div class="lead">Current prescription (medications on record / heard)</div><ul class="clean">`+
     (meds.length? meds.map(m=>`<li>${esc(m.mention)} <span class="mw" style="color:var(--muted);font-size:13px">→ ${esc(m.molecules.join(' + '))}</span></li>`).join('')
       : '<li class="empty">None recorded</li>')+`</ul>`;
+  // Ask Noesis — invoke the evidence-grounded medical Q&A on this case
+  const dxChips=pv.conditions.slice(0,3).map(cd=>`<button class="askchip" onclick="askNoesis('What is the guideline-based first-line management of ${esc(cd.label).replace(/'/g,'')}?')">Guideline for ${esc(cd.label)}</button>`).join('');
+  const rxChip=meds.length?`<button class="askchip" onclick="askNoesis('${esc(meds.map(m=>m.molecules.join('+')).slice(0,6).join(', '))} — any interactions or evidence concerns?')">Review this prescription</button>`:'';
+  dx+=`<div class="ask">
+    <div class="al"><span class="sp">◆</span> Ask Noesis — evidence-grounded medical Q&amp;A</div>
+    <div class="askchips">${dxChips}${rxChip}</div>
+    <div class="askrow"><input id="askq" placeholder="Ask an evidence question about this case…" onkeydown="if(event.key==='Enter')askNoesis()"><button class="askbtn" onclick="askNoesis()">Ask →</button></div>
+    <div class="note">Opens Noesis's cited, abstain-when-unsure answer engine in a new tab, prefilled with your question.</div>
+  </div>`;
   document.getElementById('secDx').innerHTML=dx;
   // 5. Deep checks & refinements
   let ck='';
@@ -212,27 +239,36 @@ function render(res){
   document.getElementById('secChecks').innerHTML=ck;
   // 6. Precedents — real similar cases from this library, clickable
   renderPrecedents(res, c);
-  // 7. Post — follow-up plan (grouped boxes)
+  // 7. Post — follow-up plan (status-grouped boxes)
   const M=res.medications||{start:[],hold:[],continue:[]};
-  const medItem=(m,dur)=>`<div class="medi"><div class="mn">${esc(m.med)}</div><div class="mw">${esc(m.why||'')}</div>${dur&&m.duration?`<span class="md">${esc(m.duration)}</span>`:''}</div>`;
-  const box=(cls,title,n,inner)=>`<div class="grp grp-${cls}"><div class="ghead"><span>${title}</span><span class="n">${n}</span></div><div class="gbody">${inner}</div></div>`;
+  const medItem=(m,dur)=>`<div class="medi"><div class="mtop"><span class="mn">${esc(m.med)}</span>${dur&&m.duration?`<span class="md">${esc(m.duration)}</span>`:''}</div>${m.why?`<div class="mw">${esc(m.why)}</div>`:''}</div>`;
+  const box=(cls,av,title,n,inner)=>`<div class="grp grp-${cls}"><div class="ghead"><span class="gav">${av}</span><span>${title}</span><span class="gn">${n}</span></div><div class="gbody">${inner}</div></div>`;
+  const titems=(arr,icon)=>arr.map(t=>`<div class="titem"><span class="ti">${icon}</span><span>${esc(t)}</span></div>`).join('');
   let post='<div class="lead">Medication plan</div><div class="grps">';
   let anyMed=false;
-  if(M.start.length){anyMed=true; post+=box('start','▶ Start / initiate',M.start.length,M.start.map(m=>medItem(m,true)).join(''));}
-  if(M.continue.length){anyMed=true; post+=box('cont','✓ Continue',M.continue.length,M.continue.map(m=>medItem(m,true)).join(''));}
-  if(M.hold.length){anyMed=true; post+=box('stop','⛔ Stop / hold',M.hold.length,M.hold.map(m=>medItem(m,false)).join(''));}
-  post+= anyMed?'':'<div class="empty">No medication changes</div>';
+  if(M.start.length){anyMed=true; post+=box('start','▶','Start / initiate',M.start.length,M.start.map(m=>medItem(m,true)).join(''));}
+  if(M.continue.length){anyMed=true; post+=box('cont','✓','Continue',M.continue.length,M.continue.map(m=>medItem(m,true)).join(''));}
+  if(M.hold.length){anyMed=true; post+=box('stop','■','Stop / hold',M.hold.length,M.hold.map(m=>medItem(m,false)).join(''));}
+  post+= anyMed?'':'<div class="empty">No medication changes this visit</div>';
   post+='</div>';
   const fu=res.follow_up||[], nd=res.non_drug||[];
   post+='<div class="lead" style="margin-top:16px">Tests &amp; procedures</div>';
-  post+= fu.length? box('test','🧪 Follow-up tests / procedures',fu.length,'<ul class="clean">'+fu.map(t=>`<li>${esc(t)}</li>`).join('')+'</ul>') : '<div class="empty">None specific this visit</div>';
+  post+= fu.length? box('test','🧪','Follow-up tests / procedures',fu.length,titems(fu,'🧪')) : '<div class="empty">None specific this visit</div>';
   post+='<div class="lead" style="margin-top:16px">Physical therapy &amp; lifestyle</div>';
-  post+= nd.length? box('pt','🏃 Non-drug / rehab referrals',nd.length,'<ul class="clean">'+nd.map(n=>`<li>${esc(n)}</li>`).join('')+'</ul>') : '<div class="empty">None indicated this visit</div>';
+  post+= nd.length? box('pt','🏃','Non-drug / rehab referrals',nd.length,titems(nd,'🏃')) : '<div class="empty">None indicated this visit</div>';
   document.getElementById('secPost').innerHTML=post;
 
   document.getElementById('disc').textContent=res.disclaimer;
   window._note=buildNote(res,c);
   const cb=document.getElementById('cpbtn'); cb.textContent='📋 Copy note'; cb.classList.remove('done');
+}
+
+// Invoke Noesis's evidence-grounded medical Q&A, prefilled from this case (opens the main app).
+function askNoesis(preset){
+  const el=document.getElementById('askq');
+  const q=(preset || (el&&el.value) || '').trim();
+  if(!q) return;
+  window.open('/app?ask='+encodeURIComponent(q), '_blank');
 }
 
 // Precedents = other REAL cases in the library that share the primary diagnosis, matched on age/sex.

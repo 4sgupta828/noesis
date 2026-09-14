@@ -6603,6 +6603,14 @@ function syncComposerPad(){   // keep the thread clear of the fixed bottom compo
 q.addEventListener("input", autoGrow);
 window.addEventListener("resize", syncComposerPad);
 window.addEventListener("load", autoGrow);
+// Prefill the composer from ?ask=… (e.g. a hand-off from the Ambient CDS "Ask Noesis" action).
+// Prefill + focus only — never auto-submit, so asking stays an explicit, gated action.
+window.addEventListener("load", () => {
+  try {
+    const a = new URLSearchParams(location.search).get("ask");
+    if (a) { q.value = a; autoGrow(); q.focus(); try { q.setSelectionRange(a.length, a.length); } catch (e) {} }
+  } catch (e) {}
+});
 $("#newbtn").addEventListener("click", newConversation);   // masthead: start a fresh chat
 
 // ---- Past Sessions: full-page master/detail ----

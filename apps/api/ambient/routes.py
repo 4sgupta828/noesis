@@ -52,6 +52,15 @@ def build_router() -> APIRouter:
     def health() -> Dict:
         return {"status": "ok", "app": "ambient-cds", "modes": list(MODES.keys())}
 
+    @router.get("/library")
+    def library() -> Dict:
+        """The demo case library (browsable board). Each case carries its inputs so the UI can run it."""
+        try:
+            from .library import LIBRARY
+        except Exception:
+            LIBRARY = []
+        return {"cases": LIBRARY, "count": len(LIBRARY)}
+
     @router.post("/analyze")
     def analyze(body: AnalyzeIn) -> Dict:
         p = body.patient

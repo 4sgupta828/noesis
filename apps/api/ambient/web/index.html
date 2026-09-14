@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Noesis Ambient CDS — encounter intelligence</title>
+<title>Noesis Ambient CDS — case library</title>
 <style>
   :root{
     --bg:#f6f7f9; --card:#fff; --ink:#131720; --muted:#5b6472; --line:#e4e7ec;
@@ -12,344 +12,259 @@
     --chip:#eef1f4; --ok:#eef7f1; --gap:#fff8ec; --gapln:#8a5a00;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
   header{background:var(--brand);color:#fff;padding:14px 16px}
   header .back{display:inline-block;color:#fff;opacity:.85;text-decoration:none;font-size:13px;font-weight:600;margin-bottom:6px}
   header .back:hover{opacity:1;text-decoration:underline}
-  header .t{font-weight:700;font-size:17px}
+  header .t{font-weight:700;font-size:18px}
   header .s{opacity:.85;font-size:12.5px}
-  .wrap{max-width:1040px;margin:0 auto;padding:16px;display:grid;gap:14px;grid-template-columns:1fr 1fr}
+  .wrap{max-width:1060px;margin:0 auto;padding:16px}
+  /* library */
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+  #search{flex:1 1 220px;min-width:180px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;min-height:44px}
+  .filters{display:flex;flex-wrap:wrap;gap:6px}
+  .fchip{appearance:none;border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--muted);min-height:36px}
+  .fchip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .count{font-size:12.5px;color:var(--muted)}
+  .catgroup{margin:18px 0 6px;font-size:12.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+  .case{text-align:left;cursor:pointer;border:1px solid var(--line);border-radius:12px;padding:12px 13px;background:var(--card);font:inherit;transition:border-color .1s}
+  .case:hover{border-color:var(--brand)}
+  .case .ct{font-weight:650;font-size:14.5px;margin-bottom:3px}
+  .case .cm{font-size:12px;color:var(--muted)}
+  .case .cd{font-size:12px;color:var(--accent);margin-top:6px}
+  .case .tag{display:inline-block;font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 6px;background:var(--chip);color:var(--muted);margin-left:6px}
+  .case .tag.IN{background:#fff3e8;color:#b25e09}
+  /* analyzer */
+  .abar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .btnlink{appearance:none;border:0;background:none;color:var(--accent);font:inherit;font-weight:600;cursor:pointer;padding:6px 0;min-height:40px}
+  .atitle{font-weight:700;font-size:16px}
+  .grid2{display:grid;gap:14px;grid-template-columns:1fr 1fr;align-items:start}
   .col{display:grid;gap:14px;align-content:start}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
   .card h2{margin:0 0 4px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
-  .card h2 .ph{color:var(--accent);font-weight:800}
-  label{display:block;font-size:12.5px;color:var(--muted);margin:8px 0 3px}
-  input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:9px;font:inherit;background:#fff;min-height:42px}
-  textarea{min-height:120px;resize:vertical;line-height:1.5}
-  .row{display:flex;gap:10px;flex-wrap:wrap}
-  .row>div{flex:1 1 110px}
-  .btn{appearance:none;border:0;border-radius:10px;padding:12px 16px;font:inherit;font-weight:600;cursor:pointer;min-height:46px}
-  .btn.primary{background:var(--brand);color:#fff;width:100%}
-  .btn.primary:active{background:var(--brand-ink)}
-  .btn.mini{padding:8px 10px;min-height:42px;background:var(--chip);color:var(--ink)}
-  .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:#fff}
-  .seg button{appearance:none;border:0;background:#fff;padding:8px 16px;font:inherit;font-weight:600;cursor:pointer;color:var(--muted);min-height:40px}
-  .seg button.on{background:var(--brand);color:#fff}
-  .cases{display:flex;flex-wrap:wrap;gap:8px}
-  .case{appearance:none;cursor:pointer;text-align:left;flex:1 1 46%;min-width:150px;border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:#fbfcfd;font:inherit}
-  .case:active{background:var(--chip)}
-  .case b{display:block;font-size:13.5px;color:var(--ink)} .case span{font-size:11.5px;color:var(--muted)}
-  .hint{font-size:12px;color:var(--muted)}
-  .summary{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
-  .pill{border-radius:999px;padding:4px 10px;font-weight:700;font-size:12px;color:#fff}
-  .item{border:1px solid var(--line);border-left-width:5px;border-radius:10px;padding:10px 12px;margin-bottom:9px}
-  .item .ih{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
-  .item .it{font-weight:650} .item .sev{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
-  .item .nd{margin:4px 0;font-size:13.5px;color:var(--ink)}
-  .item .basis{font-size:11.5px;color:var(--muted);margin-top:6px;border-top:1px dashed var(--line);padding-top:6px}
-  .item .link{font-size:11.5px;color:var(--accent);margin-top:4px}
-  .item .link em{color:var(--ink);font-style:normal;background:#eef3fd;border-radius:4px;padding:1px 4px}
-  .sev-contraindicated{border-left-color:var(--s-contra)} .sev-contraindicated .sev{color:var(--s-contra)}
-  .sev-major{border-left-color:var(--s-major)} .sev-major .sev{color:var(--s-major)}
-  .sev-moderate{border-left-color:var(--s-mod)} .sev-moderate .sev{color:var(--s-mod)}
-  .sev-minor{border-left-color:var(--s-minor)} .sev-minor .sev{color:var(--s-minor)}
-  .sev-info{border-left-color:var(--s-info)} .sev-info .sev{color:var(--s-info)}
-  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}
-  .chip{font-size:12px;border-radius:999px;padding:3px 10px;background:var(--chip);color:var(--ink)}
-  .chip.ok{background:var(--ok);color:var(--brand)}
-  .gap{background:var(--gap);border:1px solid #f0e0c0;border-left:5px solid var(--gapln);border-radius:10px;padding:9px 12px;margin-bottom:8px;font-size:13.5px}
-  .gap b{color:var(--gapln)}
-  .code{display:flex;justify-content:space-between;gap:8px;border:1px solid var(--line);border-radius:9px;padding:8px 11px;margin-bottom:7px}
-  .code .c{font-weight:700;font-family:ui-monospace,Menlo,monospace} .code .d{font-size:13px;color:var(--muted)}
   .sub{font-size:12px;color:var(--muted);margin:2px 0 8px}
-  .empty{color:var(--muted);font-size:14px} .foot{font-size:11.5px;color:var(--muted);margin-top:8px}
-  .picture{font-size:15.5px;line-height:1.6;color:var(--ink)}
+  .enc{font-size:14px;line-height:1.55}
+  .enc .pl{font-weight:600;margin-bottom:6px}
+  .enc .tx{background:#f1f4f8;border-radius:9px;padding:10px 12px;font-size:13.5px;color:var(--ink)}
+  .picture{font-size:15.5px;line-height:1.6}
   .gdmt{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
   .gdmt .p{font-size:12px;border-radius:999px;padding:4px 10px;border:1px solid var(--line)}
   .gdmt .p.have{background:var(--ok);color:var(--brand);border-color:#cfe7d8}
   .gdmt .p.miss{background:#fff1f0;color:var(--s-major);border-color:#f4d3d0}
   .gdmt .lead{font-size:12px;color:var(--muted);width:100%;margin-bottom:2px}
-  .pnote{font-size:13.5px;color:var(--muted);border-left:3px solid var(--line);padding:2px 0 2px 10px;margin-bottom:10px}
+  .labs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .labs .l{font-size:12px;border-radius:6px;padding:3px 9px;background:#f1f4f8;font-family:ui-monospace,Menlo,monospace}
+  .labs .l.flag{background:#fdeceb;color:var(--s-major)}
+  .labs .lead{width:100%;font-size:12px;color:var(--muted)}
   .prio{display:grid;gap:10px}
   .pr{display:grid;grid-template-columns:26px 1fr;gap:10px;border:1px solid var(--line);border-radius:10px;padding:11px 12px}
   .pr .rk{width:24px;height:24px;border-radius:50%;background:var(--brand);color:#fff;font-weight:700;font-size:12.5px;display:flex;align-items:center;justify-content:center}
-  .pr.safety .rk{background:var(--s-major)}
+  .pr.safety .rk{background:var(--s-major)} .pr.hold{border-color:#f0c9c4;background:#fdf5f4} .pr.hold .rk{background:var(--s-major)}
   .pr .when{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
   .pr .ttl{font-weight:650;margin:1px 0 2px}
-  .pr .why{font-size:13.5px;color:var(--ink)}
-  .pr .why b{color:var(--brand)}
+  .pr .why{font-size:13.5px} .pr .why b{color:var(--brand)} .pr.safety .why b{color:var(--s-major)}
   .pr .bs{font-size:11px;color:var(--muted);margin-top:5px}
-  .pr.safety .why b{color:var(--s-major)}
-  .pr.hold{border-color:#f0c9c4;background:#fdf5f4}
-  .pr.hold .rk{background:var(--s-major)}
   .caut{font-size:12.5px;margin-top:6px;border-radius:8px;padding:6px 9px}
   .caut.hold{background:#fdeceb;color:var(--s-major);border:1px solid #f4d3d0}
   .caut.confirm{background:#fff5e8;color:var(--s-mod);border:1px solid #f0e0c0}
   .caut b{text-transform:uppercase;font-size:10.5px;letter-spacing:.03em}
   .strength{display:inline-block;font-size:10.5px;font-weight:800;color:var(--brand);background:var(--ok);border-radius:5px;padding:1px 6px;margin-left:6px;vertical-align:middle}
-  .labs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-  .labs .l{font-size:12px;border-radius:6px;padding:3px 9px;background:#f1f4f8;color:var(--ink);font-family:ui-monospace,Menlo,monospace}
-  .labs .l.flag{background:#fdeceb;color:var(--s-major)}
-  .labs .lead{width:100%;font-size:12px;color:var(--muted)}
-  .ap{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,Menlo,monospace;background:#0f1720;color:#e6edf3;border-radius:10px;padding:12px;max-height:300px;overflow:auto}
-  .cpbtn{background:var(--brand);color:#fff;border:0;border-radius:9px;padding:9px 14px;font:inherit;font-weight:600;cursor:pointer;min-height:42px}
-  .cpbtn.done{background:#0b4429}
-  @media (max-width:760px){ .wrap{grid-template-columns:1fr;padding:12px} .case{flex:1 1 100%} }
+  details.ph{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:0 14px}
+  details.ph summary{cursor:pointer;list-style:none;padding:12px 0;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  details.ph summary::-webkit-details-marker{display:none}
+  details.ph[open] summary{border-bottom:1px solid var(--line)}
+  details.ph .body{padding:12px 0}
+  .item{border:1px solid var(--line);border-left-width:5px;border-radius:10px;padding:10px 12px;margin-bottom:9px}
+  .item.sev-info{border-left-color:var(--s-info)} .item.sev-major{border-left-color:var(--s-major)}
+  .item.sev-moderate{border-left-color:var(--s-mod)} .item.sev-contraindicated{border-left-color:var(--s-contra)}
+  .item .it{font-weight:650} .item .nd{margin:4px 0;font-size:13.5px} .item .bs{font-size:11.5px;color:var(--muted);margin-top:6px}
+  .item .link{font-size:11.5px;color:var(--accent);margin-top:4px} .item .link em{color:var(--ink);font-style:normal;background:#eef3fd;border-radius:4px;padding:1px 4px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}
+  .chip{font-size:12px;border-radius:999px;padding:3px 10px;background:var(--chip)} .chip.ok{background:var(--ok);color:var(--brand)}
+  .gapc{background:var(--gap);border:1px solid #f0e0c0;border-left:5px solid var(--gapln);border-radius:10px;padding:9px 12px;margin-bottom:8px;font-size:13.5px}
+  .gapc b{color:var(--gapln)}
+  .ap{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,Menlo,monospace;background:#0f1720;color:#e6edf3;border-radius:10px;padding:12px;max-height:340px;overflow:auto}
+  .cpbtn{background:var(--brand);color:#fff;border:0;border-radius:9px;padding:9px 14px;font:inherit;font-weight:600;cursor:pointer;min-height:42px} .cpbtn.done{background:#0b4429}
+  .foot{font-size:11.5px;color:var(--muted);margin-top:8px}
+  .empty{color:var(--muted);font-size:14px}
+  @media (max-width:760px){ .grid2{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
 <header>
   <a class="back" href="/app">← Noesis</a>
-  <div class="t">Noesis Ambient CDS</div>
-  <div class="s">The safety &amp; correctness layer over the scribe — grounded in the conversation, cited to guidelines, silent when unsure</div>
+  <div class="t">Ambient CDS — Case Library</div>
+  <div class="s">50 realistic encounters. Pick one to see the safety-and-correctness read the CDS produces.</div>
 </header>
+
 <div class="wrap">
-  <div class="col">
-    <div class="card">
-      <h2>Mode &amp; example cases</h2>
-      <div class="row" style="align-items:center;justify-content:space-between">
-        <div class="seg" id="modeseg">
-          <button data-mode="US" class="on" onclick="setMode('US')">🇺🇸 US</button>
-          <button data-mode="IN" onclick="setMode('IN')">🇮🇳 India</button>
-        </div>
-        <span class="hint" id="modehint">US: guideline CDS + defensible coding</span>
-      </div>
-      <div class="cases" id="cases" style="margin-top:10px"></div>
+  <!-- LIBRARY VIEW -->
+  <div id="libraryView">
+    <div class="toolbar">
+      <input id="search" placeholder="Search cases (condition, drug, age)…" oninput="renderBoard()">
+      <span class="count" id="count"></span>
     </div>
-    <div class="card">
-      <h2>Encounter transcript</h2>
-      <div class="sub">Paste (or dictate into) what was said — the note-taker's job. We read it and check it.</div>
-      <textarea id="tx" placeholder="e.g. Since your heart failure hospitalization you've been on furosemide and lisinopril, and we're continuing metformin for diabetes. You're still smoking…"></textarea>
-    </div>
-    <div class="card">
-      <h2>Patient context</h2>
-      <div class="row">
-        <div><label>Age</label><input id="age" type="number" inputmode="numeric"></div>
-        <div><label>Sex</label><select id="sex"><option value="">—</option><option>male</option><option>female</option></select></div>
-        <div><label>eGFR</label><input id="egfr" type="number" inputmode="numeric" placeholder="blank=unknown"></div>
-      </div>
-      <label>Allergies (comma-separated)</label><input id="allergies" placeholder="e.g. penicillin">
-      <label>Current medicines (comma-separated)</label><input id="current" placeholder="e.g. furosemide, lisinopril">
-      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:14px;color:var(--ink)">
-        <input type="checkbox" id="hosp" style="width:auto;min-height:auto"> Recently hospitalized (transitions of care)</label>
-    </div>
-    <button class="btn primary" onclick="run()">Analyze encounter</button>
-    <div class="foot">Deterministic core · reuses the Rx-CDS safety engine · illustrative seed knowledge (not a licensed clinical/coding DB).</div>
+    <div class="filters" id="filters"></div>
+    <div id="board"></div>
   </div>
 
-  <div class="col">
-    <div class="card">
-      <h2>Result</h2>
-      <div id="summary" class="summary"><span class="empty">Load a case or paste a transcript, then Analyze.</span></div>
+  <!-- ANALYZER VIEW -->
+  <div id="analyzerView" hidden>
+    <div class="abar">
+      <button class="btnlink" onclick="showLibrary()">← All cases</button>
+      <span class="atitle" id="atitle"></span>
+      <span class="chip" id="amode"></span>
     </div>
-    <div class="card" id="pictureCard" hidden>
-      <h2>Clinical picture</h2>
-      <div id="picture" class="picture"></div>
-      <div id="gdmt" class="gdmt"></div>
-      <div id="labs" class="labs"></div>
+    <div class="grid2">
+      <div class="col">
+        <div class="card">
+          <h2>The encounter</h2>
+          <div class="enc"><div class="pl" id="encpl"></div><div class="tx" id="enctx"></div></div>
+        </div>
+        <div class="card" id="pictureCard" hidden>
+          <h2>Clinical picture</h2>
+          <div id="picture" class="picture"></div>
+          <div id="gdmt" class="gdmt"></div>
+          <div id="labs" class="labs"></div>
+        </div>
+        <div class="card" id="apCard" hidden>
+          <h2>Assessment &amp; plan — copy to note</h2>
+          <div class="sub">Grouped by problem; holds/cautions reflected.</div>
+          <button class="cpbtn" id="cpbtn" onclick="copyAP()">📋 Copy A&amp;P</button>
+          <div class="ap" id="ap" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card" id="prioCard" hidden>
+          <h2>What to do — and why</h2>
+          <div class="sub">One prioritized thread. Each step says why it matters and when.</div>
+          <div id="prio" class="prio"></div>
+        </div>
+        <div class="card" id="covCard" hidden>
+          <h2>Could not verify (not clearance)</h2>
+          <div id="cov"></div>
+        </div>
+        <details class="ph" id="detailsBox">
+          <summary>Show pre / encounter / post detail</summary>
+          <div class="body">
+            <div id="preNote" class="sub"></div><div id="pre"></div>
+            <div id="encNote" class="sub" style="margin-top:10px"></div><div id="enc"></div>
+            <div id="postNote" class="sub" style="margin-top:10px"></div><div id="post"></div>
+          </div>
+        </details>
+        <div class="foot" id="disc"></div>
+      </div>
     </div>
-    <div class="card" id="prioCard" hidden>
-      <h2>What to do — and why</h2>
-      <div class="sub">One prioritized thread across the visit. Each step says why it matters and when.</div>
-      <div id="prio" class="prio"></div>
-    </div>
-    <div class="card" id="preCard" hidden>
-      <h2><span class="ph">Pre-visit</span> — brief &amp; care gaps</h2>
-      <div class="pnote" id="preNote"></div>
-      <div id="pre"></div>
-    </div>
-    <div class="card" id="encCard" hidden>
-      <h2><span class="ph">Encounter</span> — real-time CDS</h2>
-      <div class="pnote" id="encNote"></div>
-      <div id="enc"></div>
-    </div>
-    <div class="card" id="postCard" hidden>
-      <h2><span class="ph">Post-visit</span> — <span id="postLabel">coding</span></h2>
-      <div class="pnote" id="postNote"></div>
-      <div id="post"></div>
-    </div>
-    <div class="card" id="covCard" hidden>
-      <h2>Could not verify (not clearance)</h2>
-      <div id="cov"></div>
-    </div>
-    <div class="card" id="apCard" hidden>
-      <h2>Assessment &amp; plan — copy to note</h2>
-      <div class="sub">Grouped by problem; holds/cautions reflected. One tap to paste into your note.</div>
-      <button class="cpbtn" id="cpbtn" onclick="copyAP()">📋 Copy A&amp;P</button>
-      <div class="ap" id="ap" style="margin-top:10px"></div>
-    </div>
-    <div class="foot" id="disc"></div>
   </div>
 </div>
 
 <script>
-let MODE='US';
-const SEV_COLOR={contraindicated:"#8a1c1c",major:"#b42318",moderate:"#b25e09",minor:"#5b6472",info:"#356",none:"#12603b"};
+let LIB=[], ACTIVE_CAT="All";
 function esc(s){return (s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
 
-const CASES=[
-  {key:'alyssa', mode:'US', title:'Alyssa, 64 — HF + diabetes', sub:'GDMT gaps, defensible coding, transitions',
-   tx:"So since your heart failure hospitalization last month you've been on furosemide and lisinopril, and we're continuing metformin for your diabetes. You mentioned you're still smoking about half a pack a day. Your breathing is better but let's review your medications.",
-   age:64, sex:'female', hosp:true},
-  {key:'complex', mode:'US', title:'HF — labs change the plan', sub:'K 5.6, HR 44 → holds; SGLT2 still go',
-   tx:"Chronic systolic heart failure, on lisinopril. Labs today: potassium 5.6, heart rate 44, BP 96 over 60, eGFR 38.",
-   age:71, sex:'male'},
-  {key:'warfarin', mode:'US', title:'Warfarin safety', sub:'Real-time interaction caught mid-visit',
-   tx:"You're on warfarin for your clot. For this dental infection I'm going to start you on clarithromycin, and take some ibuprofen for the pain.",
-   age:70, sex:'male'},
-  {key:'india', mode:'IN', title:'India — brands + CKD', sub:'Indian brands, safety + gaps, summary',
-   tx:"We'll continue Glycomet for your diabetes and Cardace for the heart. For your knee pain start Hifenac. You also have chronic kidney disease.",
-   age:62, sex:'male', conditions:'ckd'},
-  {key:'quiet', mode:'US', title:'Low-risk (stays quiet)', sub:'Well-managed — few flags, honest gaps',
-   tx:"Here for a routine check. Feeling well, no new symptoms. Continuing lisinopril for blood pressure.",
-   age:50, sex:'female', egfr:90},
-];
-
-function setMode(m){ MODE=m; document.querySelectorAll('#modeseg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));
-  document.getElementById('modehint').textContent = m==='US' ? 'US: guideline CDS + defensible coding' : 'India: guideline CDS + patient summary (no HCC)'; }
-function listVal(id){return document.getElementById(id).value.split(',').map(s=>s.trim()).filter(Boolean);}
-
-function loadCase(k){ const c=CASES.find(x=>x.key===k); if(!c)return;
-  setMode(c.mode||'US');
-  document.getElementById('tx').value=c.tx||'';
-  document.getElementById('age').value=c.age||''; document.getElementById('sex').value=c.sex||'';
-  document.getElementById('egfr').value=c.egfr||''; document.getElementById('allergies').value=c.allergies||'';
-  document.getElementById('current').value=c.current||''; document.getElementById('hosp').checked=!!c.hosp;
-  // note: comorbidities not on transcript go via current context; we fold them into the transcript-free path
-  window._extraConditions = c.conditions ? c.conditions.split(',').map(s=>s.trim()) : [];
-  run();
+async function loadLibrary(){
+  try{ LIB=(await (await fetch('/ambient/library')).json()).cases||[]; }catch(e){ LIB=[]; }
+  const cats=["All",...Array.from(new Set(LIB.map(c=>c.category)))];
+  document.getElementById('filters').innerHTML=cats.map(c=>`<button class="fchip ${c==='All'?'on':''}" onclick="setCat('${esc(c)}')">${esc(c)}</button>`).join('');
+  renderBoard();
 }
-function renderCases(){ document.getElementById('cases').innerHTML = CASES.map(c=>
-  `<button class="case" onclick="loadCase('${c.key}')"><b>${esc(c.title)}</b><span>${esc(c.sub)} · ${c.mode}</span></button>`).join(''); }
+function setCat(c){ ACTIVE_CAT=c; document.querySelectorAll('.fchip').forEach(b=>b.classList.toggle('on',b.textContent===c)); renderBoard(); }
+function renderBoard(){
+  const q=(document.getElementById('search').value||'').toLowerCase();
+  let cases=LIB.filter(c=>ACTIVE_CAT==='All'||c.category===ACTIVE_CAT);
+  if(q) cases=cases.filter(c=>JSON.stringify(c).toLowerCase().includes(q));
+  document.getElementById('count').textContent=`${cases.length} case${cases.length===1?'':'s'}`;
+  const groups={};
+  cases.forEach(c=>{ (groups[c.category]=groups[c.category]||[]).push(c); });
+  document.getElementById('board').innerHTML=Object.keys(groups).map(cat=>`
+    <div class="catgroup">${esc(cat)}</div>
+    <div class="grid">${groups[cat].map(c=>`
+      <button class="case" onclick="openCase('${esc(c.id)}')">
+        <div class="ct">${esc(c.title)}${c.mode==='IN'?'<span class="tag IN">India</span>':''}</div>
+        <div class="cm">${c.age}${esc((c.sex||'')[0]||'')} · ${esc(c.complexity||'')}</div>
+        <div class="cd">${esc(c.demonstrates||'')}</div>
+      </button>`).join('')}</div>`).join('') || '<div class="empty">No cases match.</div>';
+}
 
-async function run(){
-  const patient={ age_years:parseFloat(document.getElementById('age').value)||null,
-    sex:document.getElementById('sex').value||null,
-    egfr:document.getElementById('egfr').value===''?null:parseFloat(document.getElementById('egfr').value),
-    allergies:listVal('allergies'), conditions:(window._extraConditions||[]), current_meds:listVal('current') };
-  const body={ transcript:document.getElementById('tx').value, patient, mode:MODE, recent_hospitalization:document.getElementById('hosp').checked };
+async function openCase(id){
+  const c=LIB.find(x=>x.id===id); if(!c) return;
+  document.getElementById('libraryView').hidden=true;
+  document.getElementById('analyzerView').hidden=false;
+  window.scrollTo(0,0);
+  document.getElementById('atitle').textContent=c.title;
+  document.getElementById('amode').textContent=c.mode==='IN'?'India':'US';
+  const p=c.patient||{};
+  const bits=[`${c.age}${(c.sex||'')[0]||''}`];
+  if(p.conditions&&p.conditions.length) bits.push('PMH: '+p.conditions.join(', '));
+  if(p.current_meds&&p.current_meds.length) bits.push('Meds: '+p.current_meds.join(', '));
+  if(p.allergies&&p.allergies.length) bits.push('Allergy: '+p.allergies.join(', '));
+  if(c.recent_hosp) bits.push('recently hospitalized');
+  document.getElementById('encpl').textContent=bits.join('  ·  ');
+  document.getElementById('enctx').textContent='“'+(c.transcript||'')+'”';
+  const body={transcript:c.transcript, patient:p, mode:c.mode||'US', recent_hospitalization:!!c.recent_hosp};
   const r=await fetch('/ambient/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  render(await r.json()); window._extraConditions=[];
+  render(await r.json());
 }
+function showLibrary(){ document.getElementById('analyzerView').hidden=true; document.getElementById('libraryView').hidden=false; window.scrollTo(0,0); }
 
-function itemHTML(sev,title,note,basis,link){
-  return `<div class="item sev-${sev}"><div class="ih"><span class="it">${esc(title)}</span><span class="sev">${esc(sev)}</span></div>
-    ${note?`<div class="nd">${esc(note)}</div>`:''}
-    ${link?`<div class="link">from the conversation: <em>${esc(link)}</em></div>`:''}
-    ${basis?`<div class="basis">Basis — ${esc(basis.source)}: ${esc(basis.citation)}</div>`:''}</div>`;
-}
-
+const SEV_COLOR={contraindicated:"#8a1c1c",major:"#b42318",moderate:"#b25e09",minor:"#5b6472",info:"#356",none:"#12603b"};
 function render(res){
-  const S=res.summary;
-  document.getElementById('summary').innerHTML=
-    `<span class="pill" style="background:${S.care_gaps_major?SEV_COLOR.major:(res.encounter.safety_findings.length?SEV_COLOR.major:SEV_COLOR.none)}">${res.mode_label}</span>
-     <span>${S.conditions} condition(s)</span> · <span>${S.medications} med(s)</span> ·
-     <span>${S.safety_findings} safety</span> · <span>${S.care_gaps} care-gap(s)</span>
-     <span class="hint">· ${res.latency_ms} ms</span>`;
-
-  // CLINICAL PICTURE
-  document.getElementById('picture').textContent = res.clinical_picture || '';
-  const gd=res.gdmt; const gdEl=document.getElementById('gdmt');
-  if(gd){
-    gdEl.innerHTML = `<span class="lead">Heart-failure GDMT pillars — ${gd.n_have} of ${gd.n_total} present</span>`+
-      gd.have.map(h=>`<span class="p have">✓ ${esc(h)}</span>`).join('')+
-      gd.missing.map(m=>`<span class="p miss">✗ ${esc(m)}</span>`).join('');
-  } else { gdEl.innerHTML=''; }
+  // picture
+  document.getElementById('picture').textContent=res.clinical_picture||'';
+  const gd=res.gdmt, gdEl=document.getElementById('gdmt');
+  gdEl.innerHTML = gd ? `<span class="lead">Heart-failure GDMT pillars — ${gd.n_have} of ${gd.n_total} present</span>`+
+    gd.have.map(h=>`<span class="p have">✓ ${esc(h)}</span>`).join('')+gd.missing.map(m=>`<span class="p miss">✗ ${esc(m)}</span>`).join('') : '';
+  const labs=res.labs||{}, labsEl=document.getElementById('labs');
+  const flag={potassium:v=>v>=5.0,egfr:v=>v<30,hr:v=>v<50};
+  const lc=Object.entries(labs).map(([k,v])=>{ let t,f=false; if(k==='bp'){t=`BP ${v.systolic}/${v.diastolic}`;f=v.systolic<90;} else {t=`${k.toUpperCase()} ${v.value}`;f=flag[k]?flag[k](v.value):false;} return `<span class="l ${f?'flag':''}">${esc(t)}</span>`; });
+  labsEl.innerHTML = lc.length ? `<span class="lead">Vitals / labs heard</span>`+lc.join('') : '';
   document.getElementById('pictureCard').hidden=false;
 
-  // labs strip
-  const labs=res.labs||{}; const labsEl=document.getElementById('labs');
-  const flag={potassium:v=>v>=5.0, egfr:v=>v<30, hr:v=>v<50};
-  const labChips=Object.entries(labs).map(([k,v])=>{
-    let txt, isFlag=false;
-    if(k==='bp'){ txt=`BP ${v.systolic}/${v.diastolic}`; isFlag=v.systolic<90; }
-    else { txt=`${k.toUpperCase()} ${v.value}`; isFlag=flag[k]?flag[k](v.value):false; }
-    return `<span class="l ${isFlag?'flag':''}">${esc(txt)}</span>`;
-  });
-  labsEl.innerHTML = labChips.length ? `<span class="lead">Vitals / labs heard</span>`+labChips.join('') : '';
-
-  // PRIORITIES — the spine (what to do and why)
+  // priorities
   const prio=res.priorities||[];
-  document.getElementById('prio').innerHTML = prio.map(p=>{
-    const c=p.caution; const hold=c&&c.level==='hold';
-    return `<div class="pr ${p.kind==='safety'?'safety':''} ${hold?'hold':''}">
-      <div class="rk">${p.rank}</div>
-      <div>
-        <div class="when">${esc(p.when)}</div>
-        <div class="ttl">${esc(p.title)}${p.strength?`<span class="strength">${esc(p.strength)}</span>`:''}</div>
-        <div class="why"><b>Why:</b> ${esc(p.why)}</div>
-        ${c?`<div class="caut ${esc(c.level)}"><b>${c.level==='hold'?'⛔ Hold':'⚠ Confirm first'}:</b> ${esc(c.reason)}</div>`:''}
-        ${p.basis?`<div class="bs">${esc(p.basis.source)}${p.basis.citation?' · '+esc(p.basis.citation):''}</div>`:''}
-      </div>
-    </div>`;}).join('') || '<div class="empty">No prioritized actions — see the phases below.</div>';
+  document.getElementById('prio').innerHTML=prio.map(p=>{ const c=p.caution, hold=c&&c.level==='hold';
+    return `<div class="pr ${p.kind==='safety'?'safety':''} ${hold?'hold':''}"><div class="rk">${p.rank}</div><div>
+      <div class="when">${esc(p.when)}</div><div class="ttl">${esc(p.title)}${p.strength?`<span class="strength">${esc(p.strength)}</span>`:''}</div>
+      <div class="why"><b>Why:</b> ${esc(p.why)}</div>
+      ${c?`<div class="caut ${esc(c.level)}"><b>${c.level==='hold'?'⛔ Hold':'⚠ Confirm first'}:</b> ${esc(c.reason)}</div>`:''}
+      ${p.basis?`<div class="bs">${esc(p.basis.source)}${p.basis.citation?' · '+esc(p.basis.citation):''}</div>`:''}</div></div>`;}).join('')
+    || '<div class="empty">No prioritized actions for this encounter.</div>';
   document.getElementById('prioCard').hidden = prio.length===0;
 
-  // phase framing notes
+  // phase notes + details
   const pn=res.phase_notes||{};
-  document.getElementById('preNote').textContent = pn.pre||'';
-  document.getElementById('encNote').textContent = pn.encounter||'';
-  document.getElementById('postNote').textContent = pn.post||'';
-
-  // PRE-VISIT — the factual brief (the actionable gaps live in the priorities spine above)
+  document.getElementById('preNote').textContent=pn.pre||'';
+  document.getElementById('encNote').textContent=pn.encounter||'';
+  document.getElementById('postNote').textContent=pn.post||'';
   const pv=res.pre_visit;
-  let pre='';
-  pre+=`<div class="sub">Active problems (grounded in the encounter/chart)</div>`;
-  pre+= pv.conditions.length ? pv.conditions.map(c=>{
-      const ev=(c.evidence||[])[0]||{};
-      return `<div class="item sev-info"><div class="it">${esc(c.label)}</div>`+
-        (ev.text?`<div class="link">${ev.source==='transcript'?'from the conversation':'from the chart'}: <em>${esc(ev.text)}</em></div>`:'')+`</div>`;
-    }).join('') : '<span class="empty">none detected</span>';
-  pre+=`<div class="sub" style="margin-top:10px">Guideline therapies already on board</div><div class="chips">${pv.present_therapies.map(t=>`<span class="chip ok">✓ ${esc(t)}</span>`).join('')||'<span class="hint">none detected</span>'}</div>`;
-  document.getElementById('pre').innerHTML=pre; document.getElementById('preCard').hidden=false;
+  document.getElementById('pre').innerHTML=(pv.conditions.length?pv.conditions.map(c=>{const ev=(c.evidence||[])[0]||{};return `<div class="item sev-info"><div class="it">${esc(c.label)}</div>${ev.text?`<div class="link">${ev.source==='transcript'?'from the conversation':'from the chart'}: <em>${esc(ev.text)}</em></div>`:''}</div>`;}).join(''):'<span class="empty">no problems detected</span>')+
+    `<div class="sub" style="margin-top:8px">Therapies on board</div><div class="chips">${pv.present_therapies.map(t=>`<span class="chip ok">✓ ${esc(t)}</span>`).join('')||'<span class="empty">none in the GDMT classes</span>'}</div>`;
+  const ec=res.encounter;
+  document.getElementById('enc').innerHTML=(ec.medications.length?ec.medications.map(m=>`<div class="item sev-info"><div class="it">${esc(m.mention)} <span class="sub">→ ${esc(m.molecules.join(' + '))}</span></div>${m.text?`<div class="link">from the conversation: <em>${esc(m.text)}</em></div>`:'<span class="sub">from the chart</span>'}</div>`).join(''):'<span class="empty">no meds detected</span>')+
+    (ec.safety_findings.length?`<div class="sub" style="margin-top:8px">Drug safety</div>`+ec.safety_findings.map(f=>`<div class="item sev-${f.severity}"><div class="it">${esc(f.title)}</div><div class="nd">${esc(f.detail)}</div><div class="bs">Basis — ${esc(f.basis.source)}: ${esc(f.basis.citation)}</div></div>`).join(''):'<div class="chip ok" style="margin-top:8px">✓ No drug-safety findings</div>');
+  const post=res.post_visit;
+  document.getElementById('post').innerHTML = post.kind==='coding'
+    ? post.icd10.map(c=>`<div class="item sev-info"><div class="it">${esc(c.code)} — ${esc(c.desc)}</div><div class="bs">Basis — ${esc(c.basis.citation)}</div></div>`).join('')+`<div class="item sev-info"><div class="it">E/M ${esc(post.em.suggestion)}</div><div class="bs">${esc(post.em.basis.citation)}</div></div>`
+    : post.summary.map(s=>`<div class="item sev-info"><div class="it">${esc(s.line)}</div></div>`).join('');
 
-  // ENCOUNTER
-  const ec=res.encounter; let enc='';
-  enc+=`<div class="sub">Medications heard</div>`;
-  enc+= ec.medications.length ? ec.medications.map(m=>
-     `<div class="item sev-info"><div class="it">${esc(m.mention)} <span class="hint">→ ${esc(m.molecules.join(' + '))}</span></div>
-       ${m.text?`<div class="link">from the conversation: <em>${esc(m.text)}</em></div>`:`<div class="hint">from the chart</div>`}</div>`).join('')
-     : '<span class="hint">none detected</span>';
-  enc+=`<div class="sub" style="margin-top:10px">Real-time safety (Rx-CDS)</div>`;
-  enc+= ec.safety_findings.length ? ec.safety_findings.map(f=>itemHTML(f.severity,f.title,f.detail,f.basis,null)).join('')
-        : '<div class="chip ok">✓ No drug-safety findings on the medications heard</div>';
-  document.getElementById('enc').innerHTML=enc; document.getElementById('encCard').hidden=false;
-
-  // POST-VISIT
-  const post=res.post_visit; let ph='';
-  document.getElementById('postLabel').textContent = post.kind==='coding' ? 'defensible coding' : 'patient summary';
-  if(post.kind==='coding'){
-    ph+=`<div class="sub">Suggested ICD-10 (only where the encounter supports it — MEAT)</div>`;
-    ph+= post.icd10.map(c=>`<div class="code"><span><span class="c">${esc(c.code)}</span> <span class="d">${esc(c.desc)}</span></span></div>
-        <div class="basis" style="margin:-4px 0 8px">Basis — ${esc(c.basis.citation)}</div>`).join('') || '<span class="hint">no coding-supportable conditions</span>';
-    ph+=`<div class="sub">E/M complexity (advisory)</div><div class="item sev-info"><div class="it">${esc(post.em.suggestion)}</div><div class="basis">Basis — ${esc(post.em.basis.citation)}</div></div>`;
-  } else {
-    ph+=`<div class="sub">Patient summary</div>`+post.summary.map(s=>`<div class="item sev-info"><div class="it">${esc(s.line)}</div><div class="basis">Basis — ${esc(s.basis.citation)}</div></div>`).join('');
-  }
-  document.getElementById('post').innerHTML=ph; document.getElementById('postCard').hidden=false;
-
-  // COVERAGE
+  // coverage
   const gaps=res.coverage.unverifiable||[];
   document.getElementById('covCard').hidden=gaps.length===0;
-  document.getElementById('cov').innerHTML=gaps.map(g=>`<div class="gap"><b>${esc(g.molecule)}</b> — ${esc(g.why)}</div>`).join('');
+  document.getElementById('cov').innerHTML=gaps.map(g=>`<div class="gapc"><b>${esc(g.molecule)}</b> — ${esc(g.why)}</div>`).join('');
 
-  // ASSESSMENT & PLAN (copy to note)
-  window._ap = res.assessment_plan||'';
-  document.getElementById('ap').textContent = window._ap;
-  document.getElementById('apCard').hidden = !window._ap;
+  // A&P
+  window._ap=res.assessment_plan||'';
+  document.getElementById('ap').textContent=window._ap;
+  document.getElementById('apCard').hidden=!window._ap;
   const cb=document.getElementById('cpbtn'); cb.textContent='📋 Copy A&P'; cb.classList.remove('done');
-
   document.getElementById('disc').textContent=res.disclaimer;
 }
-
-async function copyAP(){
-  const b=document.getElementById('cpbtn');
+async function copyAP(){ const b=document.getElementById('cpbtn');
   try{ await navigator.clipboard.writeText(window._ap||''); b.textContent='✓ Copied to clipboard'; b.classList.add('done'); }
-  catch(e){ const el=document.getElementById('ap'); const r=document.createRange(); r.selectNode(el);
-    getSelection().removeAllRanges(); getSelection().addRange(r); b.textContent='Selected — press ⌘/Ctrl+C'; }
-}
+  catch(e){ const el=document.getElementById('ap'),r=document.createRange(); r.selectNode(el); getSelection().removeAllRanges(); getSelection().addRange(r); b.textContent='Selected — ⌘/Ctrl+C'; } }
 
-renderCases(); loadCase('alyssa');
+loadLibrary();
 </script>
 </body>
 </html>

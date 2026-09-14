@@ -26,6 +26,18 @@ RATIONALE: Dict[str, str] = {
                      "the visit is high-yield and low-effort.",
     "toc_medrec": "Discharge medication changes are where errors cluster — reconcile before anything else changes.",
     "toc_followup": "Early follow-up after a heart-failure admission is the best-evidenced lever against readmission.",
+    "afib_anticoag": "With an elevated CHA2DS2-VASc score, anticoagulation prevents most AF-related strokes; a DOAC is preferred over warfarin for most patients.",
+    "cad_statin": "In established ASCVD a high-intensity statin is the single most impactful secondary-prevention drug.",
+    "cad_antiplatelet": "Antiplatelet therapy reduces recurrent events in established coronary disease.",
+    "asthma_controller": "Rescue-only asthma is undertreatment — an ICS-containing controller reduces exacerbations and death.",
+    "copd_controller": "Long-acting inhaled maintenance therapy reduces COPD exacerbations and hospitalizations.",
+    "osteo_therapy": "Antiresorptive therapy meaningfully lowers fracture risk once osteoporosis is established.",
+    "osteo_calvitd": "Calcium and vitamin D are the necessary adjunct to any osteoporosis pharmacotherapy.",
+    "depression_mgmt": "Measurement-based care (PHQ-9) with therapy and/or an SSRI improves depression outcomes.",
+    "hypothyroid_tsh": "Periodic TSH confirms the levothyroxine dose is at target and avoids over-/under-treatment.",
+    "screen_colon": "Colorectal cancer screening 45–75 prevents cancer deaths — confirm it's current.",
+    "imm_shingles": "The recombinant zoster vaccine is recommended for adults ≥50 to prevent shingles and its complications.",
+    "imm_pneumo": "Pneumococcal vaccination reduces invasive disease in adults ≥65.",
 }
 
 

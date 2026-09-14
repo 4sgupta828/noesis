@@ -33,6 +33,31 @@ CONDITIONS: Dict[str, Dict] = {
     "hyperlipidemia": {"label": "Hyperlipidemia",
                        "keywords": ["hyperlipidemia", "high cholesterol", "dyslipidemia", "elevated ldl"],
                        "icd10": {"code": "E78.5", "desc": "Hyperlipidemia, unspecified"}},
+    "atrial_fibrillation": {"label": "Atrial fibrillation",
+                            "keywords": ["atrial fibrillation", "afib", "a-fib", "a fib"],
+                            "icd10": {"code": "I48.91", "desc": "Unspecified atrial fibrillation"}},
+    "cad": {"label": "Coronary artery disease / ASCVD",
+            "keywords": ["coronary artery", "coronary disease", "cad", "post-mi", "post mi",
+                         "myocardial infarction", "heart attack", "angina", "stent", "ascvd", "prior mi"],
+            "icd10": {"code": "I25.10", "desc": "ASCVD of native coronary artery without angina"}},
+    "asthma": {"label": "Asthma",
+               "keywords": ["asthma", "asthmatic"],
+               "icd10": {"code": "J45.909", "desc": "Unspecified asthma, uncomplicated"}},
+    "copd": {"label": "COPD",
+             "keywords": ["copd", "emphysema", "chronic bronchitis"],
+             "icd10": {"code": "J44.9", "desc": "COPD, unspecified"}},
+    "depression": {"label": "Depression",
+                   "keywords": ["depression", "depressed", "major depressive", "mdd", "low mood"],
+                   "icd10": {"code": "F32.9", "desc": "Major depressive disorder, single episode, unspecified"}},
+    "osteoporosis": {"label": "Osteoporosis",
+                     "keywords": ["osteoporosis", "osteoporotic", "fragility fracture", "low bone density"],
+                     "icd10": {"code": "M81.0", "desc": "Age-related osteoporosis without fracture"}},
+    "hypothyroidism": {"label": "Hypothyroidism",
+                       "keywords": ["hypothyroid", "hashimoto", "underactive thyroid"],
+                       "icd10": {"code": "E03.9", "desc": "Hypothyroidism, unspecified"}},
+    "obesity": {"label": "Obesity",
+                "keywords": ["obesity", "obese"],
+                "icd10": {"code": "E66.9", "desc": "Obesity, unspecified"}},
 }
 
 # --- Care-gap rules: guideline-recommended therapy/action a patient should have --
@@ -83,6 +108,64 @@ CARE_GAPS: List[Dict] = [
      "label": "Offer tobacco-cessation counseling + pharmacotherapy",
      "severity": "moderate", "note": "Brief counseling + pharmacotherapy at every visit.",
      "basis": {"source": "USPSTF", "citation": "Tobacco cessation intervention — illustrative."}},
+    # Atrial fibrillation — stroke prophylaxis (only when stroke risk present)
+    {"id": "afib_anticoag", "condition": "atrial_fibrillation", "kind": "drug",
+     "label": "Oral anticoagulation for stroke prevention", "need_any": ["anticoagulant"],
+     "severity": "major", "requires_risk": True,
+     "note": "Indicated when CHA2DS2-VASc risk is elevated (age ≥65 or a stroke risk factor); a DOAC is preferred over warfarin for most.",
+     "basis": {"source": "AHA/ACC/HRS AF guideline", "citation": "Anticoagulation by CHA2DS2-VASc in AF — illustrative."}},
+    # Coronary artery disease / ASCVD
+    {"id": "cad_statin", "condition": "cad", "kind": "drug",
+     "label": "High-intensity statin", "need_any": ["statin"], "severity": "major",
+     "note": "Secondary prevention — a high-intensity statin is guideline-recommended in established ASCVD.",
+     "basis": {"source": "ACC/AHA cholesterol guideline", "citation": "High-intensity statin in ASCVD — illustrative."}},
+    {"id": "cad_antiplatelet", "condition": "cad", "kind": "drug",
+     "label": "Antiplatelet therapy (aspirin or clopidogrel)", "need_any": ["antiplatelet"], "severity": "major",
+     "note": "Secondary prevention in established coronary disease.",
+     "basis": {"source": "ACC/AHA guideline", "citation": "Antiplatelet in secondary prevention — illustrative."}},
+    # Airways
+    {"id": "asthma_controller", "condition": "asthma", "kind": "drug",
+     "label": "Inhaled controller (ICS-containing)", "need_any": ["inhaled-controller"], "severity": "moderate",
+     "note": "All but the mildest asthma needs ICS-containing controller therapy, not just a rescue inhaler.",
+     "basis": {"source": "GINA", "citation": "ICS-containing controller in asthma — illustrative."}},
+    {"id": "copd_controller", "condition": "copd", "kind": "drug",
+     "label": "Inhaled long-acting bronchodilator/controller", "need_any": ["inhaled-controller"], "severity": "moderate",
+     "note": "Maintenance inhaled therapy reduces COPD exacerbations.",
+     "basis": {"source": "GOLD", "citation": "Long-acting inhaled maintenance in COPD — illustrative."}},
+    # Osteoporosis
+    {"id": "osteo_therapy", "condition": "osteoporosis", "kind": "drug",
+     "label": "Antiresorptive therapy (bisphosphonate)", "need_any": ["bisphosphonate"], "severity": "moderate",
+     "note": "Pharmacologic therapy reduces fracture risk in osteoporosis.",
+     "basis": {"source": "Endocrine Society / ACP", "citation": "Bisphosphonate in osteoporosis — illustrative."}},
+    {"id": "osteo_calvitd", "condition": "osteoporosis", "kind": "action",
+     "label": "Ensure adequate calcium + vitamin D", "severity": "info",
+     "note": "Adjunct to any antiresorptive therapy.",
+     "basis": {"source": "Endocrine Society", "citation": "Calcium/vitamin D in osteoporosis — illustrative."}},
+    # Depression / thyroid — confirmations
+    {"id": "depression_mgmt", "condition": "depression", "kind": "action",
+     "label": "Confirm PHQ-9 severity and a treatment plan (therapy ± SSRI)", "severity": "moderate",
+     "note": "Measurement-based care; SSRIs are first-line pharmacotherapy.",
+     "basis": {"source": "USPSTF / APA", "citation": "Measurement-based depression care — illustrative."}},
+    {"id": "hypothyroid_tsh", "condition": "hypothyroidism", "kind": "action",
+     "label": "Confirm TSH monitoring on levothyroxine", "severity": "info",
+     "note": "Periodic TSH to confirm the dose is at target.",
+     "basis": {"source": "ATA", "citation": "TSH monitoring on levothyroxine — illustrative."}},
+]
+
+# --- Age-based preventive actions (fire on patient age, not on a detected condition) -------------
+PREVENTION: List[Dict] = [
+    {"id": "screen_colon", "kind": "action", "severity": "info", "min_age": 45, "max_age": 75,
+     "label": "Confirm colorectal cancer screening is up to date",
+     "note": "Average-risk adults 45–75 (colonoscopy or FIT).",
+     "basis": {"source": "USPSTF", "citation": "Colorectal cancer screening 45–75 — illustrative."}},
+    {"id": "imm_shingles", "kind": "action", "severity": "info", "min_age": 50,
+     "label": "Offer recombinant zoster (shingles) vaccine",
+     "note": "Recommended for adults ≥50.",
+     "basis": {"source": "ACIP", "citation": "Recombinant zoster vaccine ≥50 — illustrative."}},
+    {"id": "imm_pneumo", "kind": "action", "severity": "info", "min_age": 65,
+     "label": "Offer pneumococcal vaccination",
+     "note": "Recommended for adults ≥65 (and younger with risk factors).",
+     "basis": {"source": "ACIP", "citation": "Pneumococcal vaccination ≥65 — illustrative."}},
 ]
 
 # --- Post-discharge transitions-of-care actions (fire when recent_hospitalization) --
@@ -103,6 +186,10 @@ STRENGTH: Dict[str, str] = {
     "dm_statin": "Class I", "dm_sglt2_organ": "Class I", "dm_a1c": "Class I",
     "ckd_renin": "Class I", "tob_cessation": "Class I",
     "toc_medrec": "Class I", "toc_followup": "Class I",
+    "afib_anticoag": "Class I", "cad_statin": "Class I", "cad_antiplatelet": "Class I",
+    "asthma_controller": "Class I", "copd_controller": "Class I", "osteo_therapy": "Class I",
+    "depression_mgmt": "Class B (USPSTF)", "screen_colon": "Grade A (USPSTF)",
+    "imm_shingles": "ACIP", "imm_pneumo": "ACIP",
 }
 
 # --- Vitals / labs extraction (regex over the transcript) ------------------------------------

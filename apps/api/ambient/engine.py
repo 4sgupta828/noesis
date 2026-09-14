@@ -153,28 +153,63 @@ def _classes_of_molecules(molecules: List[str]) -> set:
 
 # --- Care gaps ----------------------------------------------------------------
 
-def care_gaps(active_conditions: List[str], present_classes: set, recent_hospitalization: bool) -> Dict:
+_STROKE_RISK_CONDS = {"hypertension", "diabetes", "heart_failure", "cad"}
+
+
+def _age_ok(rule: Dict, age) -> bool:
+    if age is None:
+        return "min_age" not in rule and "max_age" not in rule or True  # unknown age → don't suppress
+    if "min_age" in rule and age < rule["min_age"]:
+        return False
+    if "max_age" in rule and age > rule["max_age"]:
+        return False
+    return True
+
+
+def _has_stroke_risk(active_conditions: List[str], patient) -> bool:
+    age = getattr(patient, "age_years", None)
+    if age is not None and age >= 65:
+        return True
+    if set(active_conditions) & _STROKE_RISK_CONDS:
+        return True
+    ctext = " ".join(getattr(patient, "conditions", []))
+    return "stroke" in ctext or "tia" in ctext or "vascular" in ctext
+
+
+def care_gaps(active_conditions: List[str], present_classes: set, recent_hospitalization: bool,
+              patient=None) -> Dict:
     """Return {gaps, covered, actions} anchored to guideline basis. A drug rule is a GAP when the
-    patient is on none of its satisfying classes; a covered rule is reported as reassurance
-    (evidence-anchored, not peer-conformity). Action rules are surfaced as prompts to confirm."""
+    patient is on none of its satisfying classes (a covered rule is reported as reassurance). Rules can
+    be age-gated (min_age/max_age) or risk-gated (requires_risk, e.g. AF anticoagulation by CHA2DS2-VASc).
+    Age-based prevention (screening/immunization) fires on patient age, not a detected condition."""
     gaps, covered, actions = [], [], []
     cond_set = set(active_conditions)
+    age = getattr(patient, "age_years", None) if patient is not None else None
     for rule in adata.CARE_GAPS:
         if rule["condition"] not in cond_set:
+            continue
+        if not _age_ok(rule, age):
             continue
         if rule["kind"] == "action":
             actions.append({"id": rule["id"], "label": rule["label"], "severity": rule["severity"],
                             "note": rule["note"], "basis": rule["basis"], "condition": rule["condition"]})
             continue
+        # risk-gated drug rule (AF anticoagulation): only a gap when stroke risk is present
+        if rule.get("requires_risk") and not _has_stroke_risk(active_conditions, patient):
+            continue
         satisfied = bool(present_classes.intersection(rule["need_any"]))
         sev = rule["severity"]
-        # a doubly-indicated therapy (e.g. SGLT2i with both HF and diabetes) is escalated
         if not satisfied and rule.get("boost_if_condition") and cond_set.intersection(rule["boost_if_condition"]):
             sev = "major"
         entry = {"id": rule["id"], "label": rule["label"], "severity": sev, "note": rule["note"],
                  "basis": rule["basis"], "condition": rule["condition"],
                  "satisfied_by": sorted(present_classes.intersection(rule["need_any"]))}
         (covered if satisfied else gaps).append(entry)
+    # age-based prevention (independent of a detected condition)
+    for p in adata.PREVENTION:
+        if age is not None and _age_ok(p, age):
+            actions.append({"id": p["id"], "label": p["label"], "severity": p["severity"],
+                            "note": p["note"], "basis": p["basis"], "condition": "prevention"})
     if recent_hospitalization:
         for a in adata.TRANSITION_ACTIONS:
             actions.append({"id": a["id"], "label": a["label"], "severity": a["severity"],
@@ -244,7 +279,7 @@ def analyze_encounter(transcript: str, patient: PatientContext, mode: str = "US"
         "findings": [], "coverage": {"unverifiable": []}, "summary": {"finding_count": 0}}
 
     # --- care gaps + contraindication/caution annotation on each drug gap ---
-    gaps = care_gaps(active, present_classes, recent_hospitalization)
+    gaps = care_gaps(active, present_classes, recent_hospitalization, patient)
     cond_texts = list(patient.conditions)
     for g in gaps["gaps"]:
         g["strength"] = adata.STRENGTH.get(g["id"])

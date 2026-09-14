@@ -48,6 +48,19 @@ MOLECULE_CLASSES: Dict[str, List[str]] = {
     "dapagliflozin": ["sglt2"],
     "eplerenone": ["potassium-sparing-diuretic", "mra"],
     "insulin glargine": ["insulin"],
+    # anticoagulation / antiplatelet (afib, VTE, ASCVD)
+    "warfarin": ["anticoagulant", "vka"],
+    "apixaban": ["anticoagulant", "doac"],
+    "rivaroxaban": ["anticoagulant", "doac"],
+    "dabigatran": ["anticoagulant", "doac"],
+    # respiratory controllers
+    "budesonide/formoterol": ["ics-laba", "inhaled-controller"],
+    "fluticasone/salmeterol": ["ics-laba", "inhaled-controller"],
+    "tiotropium": ["lama", "inhaled-controller"],
+    "albuterol": ["saba"],
+    # psych / bone
+    "escitalopram": ["ssri", "serotonergic"],
+    "alendronate": ["bisphosphonate"],
 }
 # spironolactone is also an MRA (GDMT pillar) in addition to its class above
 MOLECULE_CLASSES.setdefault("spironolactone", []).append("mra")
@@ -118,6 +131,34 @@ BRANDS: Dict[str, Dict] = {
     "atorvastatin": {"components": [{"molecule": "atorvastatin", "strength": None, "unit": "mg", "form": "tablet"}]},
     "furosemide": {"components": [{"molecule": "furosemide", "strength": None, "unit": "mg", "form": "tablet"}]},
     "insulin glargine": {"components": [{"molecule": "insulin glargine", "strength": None, "unit": "unit", "form": "injection"}]},
+    "warfarin": {"components": [{"molecule": "warfarin", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "apixaban": {"components": [{"molecule": "apixaban", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "eliquis": {"components": [{"molecule": "apixaban", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "rivaroxaban": {"components": [{"molecule": "rivaroxaban", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "xarelto": {"components": [{"molecule": "rivaroxaban", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "dabigatran": {"components": [{"molecule": "dabigatran", "strength": None, "unit": "mg", "form": "capsule"}]},
+    "clopidogrel": {"components": [{"molecule": "clopidogrel", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "plavix": {"components": [{"molecule": "clopidogrel", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "aspirin": {"components": [{"molecule": "aspirin", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "sertraline": {"components": [{"molecule": "sertraline", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "escitalopram": {"components": [{"molecule": "escitalopram", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "alendronate": {"components": [{"molecule": "alendronate", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "budesonide/formoterol": {"components": [{"molecule": "budesonide/formoterol", "strength": None, "unit": "mcg", "form": "inhaler"}]},
+    "symbicort": {"components": [{"molecule": "budesonide/formoterol", "strength": None, "unit": "mcg", "form": "inhaler"}]},
+    "fluticasone/salmeterol": {"components": [{"molecule": "fluticasone/salmeterol", "strength": None, "unit": "mcg", "form": "inhaler"}]},
+    "advair": {"components": [{"molecule": "fluticasone/salmeterol", "strength": None, "unit": "mcg", "form": "inhaler"}]},
+    "tiotropium": {"components": [{"molecule": "tiotropium", "strength": None, "unit": "mcg", "form": "inhaler"}]},
+    "spiriva": {"components": [{"molecule": "tiotropium", "strength": None, "unit": "mcg", "form": "inhaler"}]},
+    "albuterol": {"components": [{"molecule": "albuterol", "strength": None, "unit": "mcg", "form": "inhaler"}]},
+    "gabapentin": {"components": [{"molecule": "gabapentin", "strength": None, "unit": "mg", "form": "capsule"}]},
+    "tramadol": {"components": [{"molecule": "tramadol", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "ibuprofen": {"components": [{"molecule": "ibuprofen", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "naproxen": {"components": [{"molecule": "naproxen", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "clarithromycin": {"components": [{"molecule": "clarithromycin", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "spironolactone": {"components": [{"molecule": "spironolactone", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "ramipril": {"components": [{"molecule": "ramipril", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "amlodipine": {"components": [{"molecule": "amlodipine", "strength": None, "unit": "mg", "form": "tablet"}]},
+    "levothyroxine": {"components": [{"molecule": "levothyroxine", "strength": None, "unit": "mcg", "form": "tablet"}]},
 }
 
 # --- CDSCO banned fixed-dose combinations (illustrative) ----------------------
@@ -187,6 +228,22 @@ DDI_PAIRS: List[Dict] = [
      "mechanism": "Sacubitril/valsartan (ARNI) with an ACE inhibitor → additive bradykinin, angioedema risk.",
      "management": "Do not co-prescribe; allow a 36-hour washout when switching between ACEi and ARNI.",
      "basis": {"source": "Label / guideline", "citation": "ARNI contraindicated with ACEi (angioedema) — illustrative."}},
+    {"pair": frozenset({"anticoagulant", "nsaid"}), "is_class": True, "severity": "major",
+     "mechanism": "Anticoagulant + NSAID → substantially increased GI/systemic bleeding risk.",
+     "management": "Avoid the NSAID; use acetaminophen/topical analgesia; if unavoidable, gastroprotection + close monitoring.",
+     "basis": {"source": "Drug interaction reference", "citation": "Anticoagulant–NSAID bleeding risk — illustrative."}},
+    {"pair": frozenset({"anticoagulant", "antiplatelet"}), "is_class": True, "severity": "major",
+     "mechanism": "Anticoagulant + antiplatelet → additive bleeding; combine only with a clear indication and duration.",
+     "management": "Confirm the indication for dual therapy; minimize duration; add gastroprotection.",
+     "basis": {"source": "Drug interaction reference", "citation": "Anticoagulant–antiplatelet bleeding risk — illustrative."}},
+    {"pair": frozenset({"ssri", "nsaid"}), "is_class": True, "severity": "moderate",
+     "mechanism": "SSRI + NSAID → increased upper-GI bleeding risk (additive antiplatelet effect).",
+     "management": "Prefer acetaminophen; add gastroprotection if an NSAID is needed.",
+     "basis": {"source": "Drug interaction reference", "citation": "SSRI–NSAID GI-bleeding risk — illustrative."}},
+    {"pair": frozenset({"ssri", "anticoagulant"}), "is_class": True, "severity": "moderate",
+     "mechanism": "SSRI + anticoagulant → increased bleeding risk.",
+     "management": "Counsel on bleeding signs; monitor.",
+     "basis": {"source": "Drug interaction reference", "citation": "SSRI–anticoagulant bleeding risk — illustrative."}},
 ]
 
 # --- Drug-disease contraindications (comorbidity concurrency) ------------------

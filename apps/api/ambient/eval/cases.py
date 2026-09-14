@@ -144,4 +144,66 @@ CASES = [
      "transcript": "On Warf for the clot. Starting Hifenac for back pain.",
      "patient": {"age": 66, "sex": "male", "current_meds": ["Warf 5"]},
      "gold": {"safety_categories": ["drug-drug-interaction"]}},
+
+    # 21 — AF with stroke risk (age >=65) -> anticoagulation gap
+    {"id": "afib_anticoag_risk", "mode": "US",
+     "transcript": "Atrial fibrillation, rate-controlled on metoprolol. He is not anticoagulated.",
+     "patient": {"age": 72, "sex": "male"},
+     "gold": {"conditions": ["atrial_fibrillation"], "gaps": ["afib_anticoag"], "codes": ["I48.91"]}},
+
+    # 22 — lone AF, young, no risk -> NO anticoagulation gap
+    {"id": "afib_lone_norisk", "mode": "US",
+     "transcript": "Lone atrial fibrillation, otherwise healthy, no other conditions.",
+     "patient": {"age": 38, "sex": "male"},
+     "gold": {"conditions": ["atrial_fibrillation"], "forbid_gaps": ["afib_anticoag"]}},
+
+    # 23 — post-MI: statin gap; antiplatelet covered by aspirin
+    {"id": "cad_statin_gap", "mode": "US",
+     "transcript": "Coronary artery disease, prior heart attack with a stent. Currently on aspirin.",
+     "patient": {"age": 61, "sex": "male"},
+     "gold": {"conditions": ["cad"], "gaps": ["cad_statin"], "forbid_gaps": ["cad_antiplatelet"],
+              "codes": ["I25.10"]}},
+
+    # 24 — asthma, rescue-only -> controller gap
+    {"id": "asthma_controller", "mode": "US",
+     "transcript": "Asthma, using albuterol several times a week. No controller inhaler.",
+     "patient": {"age": 27, "sex": "female"},
+     "gold": {"conditions": ["asthma"], "gaps": ["asthma_controller"], "codes": ["J45.909"]}},
+
+    # 25 — DOAC + NSAID bleeding
+    {"id": "doac_nsaid", "mode": "US",
+     "transcript": "Atrial fibrillation on apixaban. Starting ibuprofen for back pain.",
+     "patient": {"age": 70, "sex": "male"},
+     "gold": {"conditions": ["atrial_fibrillation"], "safety_categories": ["drug-drug-interaction"]}},
+
+    # 26 — depression: SSRI + tramadol serotonin risk + management action
+    {"id": "depression_ssri_tramadol", "mode": "US",
+     "transcript": "Depression, on sertraline. Adding tramadol for chronic back pain.",
+     "patient": {"age": 44, "sex": "female"},
+     "gold": {"conditions": ["depression"], "actions": ["depression_mgmt"],
+              "safety_categories": ["drug-drug-interaction"]}},
+
+    # 27 — osteoporosis untreated
+    {"id": "osteoporosis_gap", "mode": "US",
+     "transcript": "Osteoporosis diagnosed after a wrist fragility fracture. Not on any bone medication.",
+     "patient": {"age": 69, "sex": "female"},
+     "gold": {"conditions": ["osteoporosis"], "gaps": ["osteo_therapy"], "codes": ["M81.0"]}},
+
+    # 28 — routine well visit, age-based prevention only
+    {"id": "prevention_midlife", "mode": "US",
+     "transcript": "Here for a routine physical. Feeling well, no chronic problems.",
+     "patient": {"age": 53, "sex": "female"},
+     "gold": {"actions": ["screen_colon", "imm_shingles"], "coverage": True}},
+
+    # 29 — COPD, controller gap
+    {"id": "copd_controller", "mode": "US",
+     "transcript": "COPD with frequent exacerbations, only using albuterol.",
+     "patient": {"age": 66, "sex": "male"},
+     "gold": {"conditions": ["copd"], "gaps": ["copd_controller"], "codes": ["J44.9"]}},
+
+    # 30 — CAD fully treated -> no secondary-prevention gaps
+    {"id": "cad_optimized", "mode": "US",
+     "transcript": "Coronary disease, doing well on atorvastatin and clopidogrel.",
+     "patient": {"age": 64, "sex": "male"},
+     "gold": {"conditions": ["cad"], "forbid_gaps": ["cad_statin", "cad_antiplatelet"]}},
 ]

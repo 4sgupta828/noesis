@@ -16,7 +16,7 @@ from typing import Dict, List
 # canonical -> {label, keywords, icd10 (US coding hint), display}
 CONDITIONS: Dict[str, Dict] = {
     "heart_failure": {"label": "Heart failure (reduced EF)",
-                      "keywords": ["heart failure", "hfref", "chf", "systolic heart failure", "reduced ejection", "hf with reduced"],
+                      "keywords": ["heart failure", "hfref", "chf", "hf", "systolic heart failure", "reduced ejection", "hf with reduced"],
                       "icd10": {"code": "I50.22", "desc": "Chronic systolic (congestive) heart failure"}},
     "diabetes": {"label": "Type 2 diabetes mellitus",
                  "keywords": ["diabetes", "t2dm", "type 2 diabet", "diabetic", "a1c", "hba1c"],
@@ -96,6 +96,27 @@ TRANSITION_ACTIONS: List[Dict] = [
      "note": "Early follow-up reduces readmission after a heart-failure hospitalization.",
      "basis": {"source": "Transitions-of-care guidance", "citation": "Early post-discharge follow-up — illustrative."}},
 ]
+
+# --- Guideline strength (Class of Recommendation) per care-gap rule — illustrative --------------
+STRENGTH: Dict[str, str] = {
+    "hf_renin": "Class I", "hf_bb": "Class I", "hf_mra": "Class I", "hf_sglt2": "Class I",
+    "dm_statin": "Class I", "dm_sglt2_organ": "Class I", "dm_a1c": "Class I",
+    "ckd_renin": "Class I", "tob_cessation": "Class I",
+    "toc_medrec": "Class I", "toc_followup": "Class I",
+}
+
+# --- Vitals / labs extraction (regex over the transcript) ------------------------------------
+# name -> {pattern, unit, kind}. Patterns capture a numeric value near a cue. Values are transcript-
+# linked and drive threshold-aware contraindication checks (see contraindications.py).
+LAB_PATTERNS: Dict[str, Dict] = {
+    "bp": {"regex": r"(?:blood pressure|bp)\D{0,14}(\d{2,3})\s*/\s*(\d{2,3})", "unit": "mmHg", "kind": "bp"},
+    "hr": {"regex": r"(?:heart rate|pulse|hr)\D{0,14}(\d{2,3})\b", "unit": "bpm", "kind": "num"},
+    "egfr": {"regex": r"(?:egfr|gfr)\D{0,14}(\d{1,3})\b", "unit": "mL/min/1.73m2", "kind": "num"},
+    "potassium": {"regex": r"(?:potassium|k\+|serum k)\D{0,14}(\d\.\d)\b", "unit": "mmol/L", "kind": "num"},
+    "a1c": {"regex": r"(?:hba1c|a1c)\D{0,14}(\d{1,2}(?:\.\d)?)\b", "unit": "%", "kind": "num"},
+    "ldl": {"regex": r"(?:ldl)\D{0,14}(\d{2,3})\b", "unit": "mg/dL", "kind": "num"},
+    "ef": {"regex": r"(?:ejection fraction|ef)\D{0,14}(\d{1,2})\s*%?", "unit": "%", "kind": "num"},
+}
 
 # Therapy classes the care-gap engine cares about (for the "present therapies" readout)
 GDMT_CLASSES = ["acei", "arb", "arni", "gdmt-betablocker", "mra", "sglt2", "statin"]

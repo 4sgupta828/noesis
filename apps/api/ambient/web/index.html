@@ -81,6 +81,20 @@
   .pr .why b{color:var(--brand)}
   .pr .bs{font-size:11px;color:var(--muted);margin-top:5px}
   .pr.safety .why b{color:var(--s-major)}
+  .pr.hold{border-color:#f0c9c4;background:#fdf5f4}
+  .pr.hold .rk{background:var(--s-major)}
+  .caut{font-size:12.5px;margin-top:6px;border-radius:8px;padding:6px 9px}
+  .caut.hold{background:#fdeceb;color:var(--s-major);border:1px solid #f4d3d0}
+  .caut.confirm{background:#fff5e8;color:var(--s-mod);border:1px solid #f0e0c0}
+  .caut b{text-transform:uppercase;font-size:10.5px;letter-spacing:.03em}
+  .strength{display:inline-block;font-size:10.5px;font-weight:800;color:var(--brand);background:var(--ok);border-radius:5px;padding:1px 6px;margin-left:6px;vertical-align:middle}
+  .labs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .labs .l{font-size:12px;border-radius:6px;padding:3px 9px;background:#f1f4f8;color:var(--ink);font-family:ui-monospace,Menlo,monospace}
+  .labs .l.flag{background:#fdeceb;color:var(--s-major)}
+  .labs .lead{width:100%;font-size:12px;color:var(--muted)}
+  .ap{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,Menlo,monospace;background:#0f1720;color:#e6edf3;border-radius:10px;padding:12px;max-height:300px;overflow:auto}
+  .cpbtn{background:var(--brand);color:#fff;border:0;border-radius:9px;padding:9px 14px;font:inherit;font-weight:600;cursor:pointer;min-height:42px}
+  .cpbtn.done{background:#0b4429}
   @media (max-width:760px){ .wrap{grid-template-columns:1fr;padding:12px} .case{flex:1 1 100%} }
 </style>
 </head>
@@ -133,6 +147,7 @@
       <h2>Clinical picture</h2>
       <div id="picture" class="picture"></div>
       <div id="gdmt" class="gdmt"></div>
+      <div id="labs" class="labs"></div>
     </div>
     <div class="card" id="prioCard" hidden>
       <h2>What to do — and why</h2>
@@ -158,6 +173,12 @@
       <h2>Could not verify (not clearance)</h2>
       <div id="cov"></div>
     </div>
+    <div class="card" id="apCard" hidden>
+      <h2>Assessment &amp; plan — copy to note</h2>
+      <div class="sub">Grouped by problem; holds/cautions reflected. One tap to paste into your note.</div>
+      <button class="cpbtn" id="cpbtn" onclick="copyAP()">📋 Copy A&amp;P</button>
+      <div class="ap" id="ap" style="margin-top:10px"></div>
+    </div>
     <div class="foot" id="disc"></div>
   </div>
 </div>
@@ -171,6 +192,9 @@ const CASES=[
   {key:'alyssa', mode:'US', title:'Alyssa, 64 — HF + diabetes', sub:'GDMT gaps, defensible coding, transitions',
    tx:"So since your heart failure hospitalization last month you've been on furosemide and lisinopril, and we're continuing metformin for your diabetes. You mentioned you're still smoking about half a pack a day. Your breathing is better but let's review your medications.",
    age:64, sex:'female', hosp:true},
+  {key:'complex', mode:'US', title:'HF — labs change the plan', sub:'K 5.6, HR 44 → holds; SGLT2 still go',
+   tx:"Chronic systolic heart failure, on lisinopril. Labs today: potassium 5.6, heart rate 44, BP 96 over 60, eGFR 38.",
+   age:71, sex:'male'},
   {key:'warfarin', mode:'US', title:'Warfarin safety', sub:'Real-time interaction caught mid-visit',
    tx:"You're on warfarin for your clot. For this dental infection I'm going to start you on clarithromycin, and take some ibuprofen for the pain.",
    age:70, sex:'male'},
@@ -234,18 +258,31 @@ function render(res){
   } else { gdEl.innerHTML=''; }
   document.getElementById('pictureCard').hidden=false;
 
+  // labs strip
+  const labs=res.labs||{}; const labsEl=document.getElementById('labs');
+  const flag={potassium:v=>v>=5.0, egfr:v=>v<30, hr:v=>v<50};
+  const labChips=Object.entries(labs).map(([k,v])=>{
+    let txt, isFlag=false;
+    if(k==='bp'){ txt=`BP ${v.systolic}/${v.diastolic}`; isFlag=v.systolic<90; }
+    else { txt=`${k.toUpperCase()} ${v.value}`; isFlag=flag[k]?flag[k](v.value):false; }
+    return `<span class="l ${isFlag?'flag':''}">${esc(txt)}</span>`;
+  });
+  labsEl.innerHTML = labChips.length ? `<span class="lead">Vitals / labs heard</span>`+labChips.join('') : '';
+
   // PRIORITIES — the spine (what to do and why)
   const prio=res.priorities||[];
-  document.getElementById('prio').innerHTML = prio.map(p=>`
-    <div class="pr ${p.kind==='safety'?'safety':''}">
+  document.getElementById('prio').innerHTML = prio.map(p=>{
+    const c=p.caution; const hold=c&&c.level==='hold';
+    return `<div class="pr ${p.kind==='safety'?'safety':''} ${hold?'hold':''}">
       <div class="rk">${p.rank}</div>
       <div>
         <div class="when">${esc(p.when)}</div>
-        <div class="ttl">${esc(p.title)}</div>
+        <div class="ttl">${esc(p.title)}${p.strength?`<span class="strength">${esc(p.strength)}</span>`:''}</div>
         <div class="why"><b>Why:</b> ${esc(p.why)}</div>
+        ${c?`<div class="caut ${esc(c.level)}"><b>${c.level==='hold'?'⛔ Hold':'⚠ Confirm first'}:</b> ${esc(c.reason)}</div>`:''}
         ${p.basis?`<div class="bs">${esc(p.basis.source)}${p.basis.citation?' · '+esc(p.basis.citation):''}</div>`:''}
       </div>
-    </div>`).join('') || '<div class="empty">No prioritized actions — see the phases below.</div>';
+    </div>`;}).join('') || '<div class="empty">No prioritized actions — see the phases below.</div>';
   document.getElementById('prioCard').hidden = prio.length===0;
 
   // phase framing notes
@@ -295,7 +332,21 @@ function render(res){
   const gaps=res.coverage.unverifiable||[];
   document.getElementById('covCard').hidden=gaps.length===0;
   document.getElementById('cov').innerHTML=gaps.map(g=>`<div class="gap"><b>${esc(g.molecule)}</b> — ${esc(g.why)}</div>`).join('');
+
+  // ASSESSMENT & PLAN (copy to note)
+  window._ap = res.assessment_plan||'';
+  document.getElementById('ap').textContent = window._ap;
+  document.getElementById('apCard').hidden = !window._ap;
+  const cb=document.getElementById('cpbtn'); cb.textContent='📋 Copy A&P'; cb.classList.remove('done');
+
   document.getElementById('disc').textContent=res.disclaimer;
+}
+
+async function copyAP(){
+  const b=document.getElementById('cpbtn');
+  try{ await navigator.clipboard.writeText(window._ap||''); b.textContent='✓ Copied to clipboard'; b.classList.add('done'); }
+  catch(e){ const el=document.getElementById('ap'); const r=document.createRange(); r.selectNode(el);
+    getSelection().removeAllRanges(); getSelection().addRange(r); b.textContent='Selected — press ⌘/Ctrl+C'; }
 }
 
 renderCases(); loadCase('alyssa');

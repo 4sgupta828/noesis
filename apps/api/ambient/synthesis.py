@@ -94,14 +94,10 @@ def priorities(pre: Dict, safety: List[Dict], gdmt: Optional[Dict]) -> List[Dict
     # surface the doubly-indicated SGLT2 first if present
     majors.sort(key=lambda g: (0 if g["id"] == "dm_sglt2_organ" else 1))
     for g in majors:
-        out.append({"when": "Start / plan this visit", "title": g["label"],
-                    "action": _action_for(g), "why": RATIONALE.get(g["id"], g["note"]),
-                    "basis": g["basis"], "severity": g["severity"], "kind": "gap"})
+        out.append(_gap_entry(g, "Start / plan this visit"))
     # 3. Moderate gaps.
     for g in [g for g in pre["care_gaps"] if g["severity"] == "moderate"]:
-        out.append({"when": "This visit / near-term", "title": g["label"], "action": _action_for(g),
-                    "why": RATIONALE.get(g["id"], g["note"]), "basis": g["basis"],
-                    "severity": g["severity"], "kind": "gap"})
+        out.append(_gap_entry(g, "This visit / near-term"))
     # 4. Actions (counseling, reconciliation, follow-up, confirmations).
     for a in pre["actions"]:
         when = "Before other changes" if a["id"] == "toc_medrec" else (
@@ -136,6 +132,25 @@ def phase_notes(active_labels: List[Dict], pre: Dict, safety: List[Dict],
 
 # --- helpers ------------------------------------------------------------------
 
+def _gap_entry(g: Dict, default_when: str) -> Dict:
+    """Build a priority entry for a care gap, folding in its contraindication caution + guideline
+    strength. A caution changes WHEN (hold / confirm first) and is surfaced as a first-class field."""
+    caution = g.get("caution")
+    when = default_when
+    action = _action_for(g)
+    if caution:
+        if caution["level"] == "hold":
+            when = "Hold — address first"
+            action = f"Hold {g['label']} — {caution['reason']}"
+        elif caution["level"] == "confirm":
+            when = "Confirm first, then start"
+            action = f"Before starting {g['label']}: {caution['reason']}"
+    return {"when": when, "title": g["label"], "action": action,
+            "why": RATIONALE.get(g["id"], g["note"]), "basis": g["basis"],
+            "severity": g["severity"], "kind": "gap",
+            "strength": g.get("strength"), "caution": caution}
+
+
 def _action_for(gap: Dict) -> str:
     label = gap["label"]
     # phrase the gap as an action
@@ -155,6 +170,56 @@ def _join(items: List[str]) -> str:
     return ", ".join(items[:-1]) + f", and {items[-1]}"
 
 
+def assessment_plan(patient, active_labels: List[Dict], present_classes: set, pre: Dict,
+                    safety: List[Dict], post: Dict, recent_hosp: bool) -> str:
+    """A copy-ready Assessment & Plan the clinician can paste into the note — grouped by problem, each
+    plan line reflecting any contraindication caution. Plain text on purpose."""
+    lines = ["ASSESSMENT & PLAN", ""]
+    lines.append(clinical_picture(patient, active_labels, present_classes, recent_hosp))
+    lines.append("")
+    codes = {c["condition"]: c["code"] for c in (post.get("icd10") or [])}
+    gaps_by_cond: Dict[str, List[Dict]] = {}
+    for g in pre["care_gaps"]:
+        gaps_by_cond.setdefault(g["condition"], []).append(g)
+    actions_by_cond: Dict[str, List[Dict]] = {}
+    for a in pre["actions"]:
+        actions_by_cond.setdefault(a["condition"], []).append(a)
+
+    for c in active_labels:
+        cond = c["condition"]
+        hdr = f"# {c['label']}" + (f"  [{codes[cond]}]" if cond in codes else "")
+        lines.append(hdr)
+        for g in gaps_by_cond.get(cond, []):
+            caution = g.get("caution")
+            if caution and caution["level"] == "hold":
+                lines.append(f"- HOLD {g['label']} — {caution['reason']}")
+            elif caution and caution["level"] == "confirm":
+                lines.append(f"- {g['label']}: confirm first — {caution['reason']}")
+            else:
+                lines.append(f"- Start/optimize {g['label']} ({RATIONALE.get(g['id'], g['note'])})")
+        for a in actions_by_cond.get(cond, []):
+            lines.append(f"- {a['label']}")
+        lines.append("")
+    # transitions + health maintenance actions not tied to a problem
+    misc = actions_by_cond.get("transition_of_care", [])
+    if misc:
+        lines.append("# Transitions of care")
+        for a in misc:
+            lines.append(f"- {a['label']}")
+        lines.append("")
+    if safety:
+        lines.append("# Medication safety")
+        for f in safety:
+            lines.append(f"- {f['title']} — {f.get('management', '')}")
+        lines.append("")
+    if post.get("kind") == "coding":
+        cds = ", ".join(f"{c['code']}" for c in post.get("icd10", []))
+        lines.append(f"Codes: {cds or '—'}  |  E/M: {post.get('em', {}).get('suggestion', '—')}")
+    lines.append("")
+    lines.append("— Advisory decision support (Noesis). Clinician confirms and signs.")
+    return "\n".join(lines).strip()
+
+
 def build(patient, active_labels: List[Dict], present_classes: set, pre: Dict,
           safety: List[Dict], post: Dict, recent_hosp: bool) -> Dict:
     active = [c["condition"] for c in active_labels]
@@ -164,4 +229,5 @@ def build(patient, active_labels: List[Dict], present_classes: set, pre: Dict,
         "gdmt": gd,
         "priorities": priorities(pre, safety, gd),
         "phase_notes": phase_notes(active_labels, pre, safety, post, recent_hosp),
+        "assessment_plan": assessment_plan(patient, active_labels, present_classes, pre, safety, post, recent_hosp),
     }

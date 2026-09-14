@@ -22,11 +22,21 @@ from typing import Dict, List, Optional, Tuple
 from api.rxcds import data as rxdata
 from api.rxcds.engine import PatientContext, check_prescription, normalize
 
+from . import contraindications
 from . import data as adata
 from . import synthesis
 from .modes import MODES, resolve_mode
 
 logger = logging.getLogger("noesis.ambient")
+
+_NEGATION_CUES = ("no ", "not ", "denies", "without", "negative for", "ruled out", "never ",
+                  "quit", "stopped", "discontinued", "no longer", "d/c", " off ", "resolved")
+
+
+def _is_negated(text: str, start: int, window: int = 34) -> bool:
+    """Lightweight negation: is the term negated by a cue in the preceding window?"""
+    pre = text[max(0, start - window):start].lower()
+    return any(cue in pre for cue in _NEGATION_CUES)
 
 
 # --- Transcript-linked extraction ---------------------------------------------
@@ -73,13 +83,36 @@ def extract_conditions(transcript: str, chart_conditions: List[str]) -> List[Dic
             if any(kw in cl for kw in meta["keywords"]) or cond in cl:
                 out.setdefault(cond, {"condition": cond, "label": meta["label"], "evidence": []})
                 out[cond]["evidence"].append({"source": "chart", "text": c})
-        # transcript
+        # transcript (skip negated mentions — "no diabetes", "quit smoking")
         for kw in meta["keywords"]:
             for (s, e) in _find_spans(tl, kw):
+                if _is_negated(transcript, s):
+                    continue
                 out.setdefault(cond, {"condition": cond, "label": meta["label"], "evidence": []})
                 out[cond]["evidence"].append({"source": "transcript", "span": [s, e], "text": _snippet(transcript, s, e)})
-                break  # one span per keyword is enough
+                break  # one non-negated span per keyword is enough
     return list(out.values())
+
+
+def extract_labs(transcript: str) -> Dict:
+    """Extract vitals/labs (BP, HR, eGFR, K+, A1c, LDL, EF) from the transcript, each transcript-linked.
+    These drive threshold-aware contraindication checks."""
+    import re as _re
+    labs: Dict = {}
+    for name, spec in adata.LAB_PATTERNS.items():
+        m = _re.search(spec["regex"], transcript, flags=_re.IGNORECASE)
+        if not m:
+            continue
+        if spec["kind"] == "bp":
+            labs[name] = {"systolic": int(m.group(1)), "diastolic": int(m.group(2)), "unit": spec["unit"],
+                          "text": _snippet(transcript, m.start(), m.end())}
+        else:
+            try:
+                val = float(m.group(1))
+            except ValueError:
+                continue
+            labs[name] = {"value": val, "unit": spec["unit"], "text": _snippet(transcript, m.start(), m.end())}
+    return labs
 
 
 def extract_meds(transcript: str, current_meds: List[str]) -> List[Dict]:
@@ -94,6 +127,10 @@ def extract_meds(transcript: str, current_meds: List[str]) -> List[Dict]:
     for name, mols in _NAME_INDEX:
         for (s, e) in _find_spans(transcript, name):
             if overlaps(s, e):
+                continue
+            # a stopped/discontinued med is not a CURRENT med — don't count it as present
+            if _is_negated(transcript, s):
+                claimed.append((s, e))
                 continue
             claimed.append((s, e))
             found.append({"mention": transcript[s:e], "molecules": mols, "source": "transcript",
@@ -186,17 +223,34 @@ def analyze_encounter(transcript: str, patient: PatientContext, mode: str = "US"
     active = [c["condition"] for c in conds]
     cond_evidence = {c["condition"]: c for c in conds}
 
+    # Fold transcript-detected conditions into the context so drug-disease safety + contraindication
+    # checks see comorbidities that were only SPOKEN (not already in the chart problem list).
+    _detected = [c["condition"] for c in conds] + [c["label"].lower() for c in conds]
+    patient.conditions = list(dict.fromkeys([c.lower() for c in patient.conditions] + _detected))
+
+    # vitals/labs from the transcript drive threshold-aware contraindication checks; a value spoken in
+    # the visit fills an unknown context field (never overrides an explicitly-provided one).
+    labs = extract_labs(transcript)
+    if patient.egfr is None and isinstance(labs.get("egfr"), dict):
+        patient.egfr = labs["egfr"]["value"]
+
     meds = extract_meds(transcript, patient.current_meds)
     all_molecules = sorted({m for md in meds for m in md["molecules"]})
     present_classes = _classes_of_molecules(all_molecules)
 
-    # --- ENCOUNTER: drug safety (reuse Rx-CDS over the meds heard in the visit) ---
-    med_mentions = [md["mention"] for md in meds]
-    safety = check_prescription(med_mentions, patient) if med_mentions else {
+    # --- ENCOUNTER: drug safety (reuse Rx-CDS). Pass RESOLVED molecules (not raw brand mentions) so a
+    # brand said without a strength ("Augmentin") still screens for interactions/allergy/contraindication.
+    safety = check_prescription(all_molecules, patient) if all_molecules else {
         "findings": [], "coverage": {"unverifiable": []}, "summary": {"finding_count": 0}}
 
-    # --- care gaps ---
+    # --- care gaps + contraindication/caution annotation on each drug gap ---
     gaps = care_gaps(active, present_classes, recent_hospitalization)
+    cond_texts = list(patient.conditions)
+    for g in gaps["gaps"]:
+        g["strength"] = adata.STRENGTH.get(g["id"])
+        caution = contraindications.assess(g["id"], labs, cond_texts, patient)
+        if caution:
+            g["caution"] = caution
 
     # --- POST-VISIT output (mode) ---
     post: Dict = {}
@@ -240,6 +294,7 @@ def analyze_encounter(transcript: str, patient: PatientContext, mode: str = "US"
         "gdmt": synth["gdmt"],
         "priorities": synth["priorities"],
         "phase_notes": synth["phase_notes"],
+        "assessment_plan": synth["assessment_plan"],
         "pre_visit": {
             "conditions": conds,
             "present_therapies": [adata.CLASS_LABEL.get(c, c) for c in present_readout],
@@ -251,6 +306,7 @@ def analyze_encounter(transcript: str, patient: PatientContext, mode: str = "US"
             "care_gap_prompts": gaps["gaps"],
         },
         "post_visit": post,
+        "labs": labs,
         "coverage": {"unverifiable": unverifiable},
         "summary": {
             "conditions": len(active), "medications": len(meds),

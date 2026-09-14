@@ -98,21 +98,26 @@
   .gapc{background:var(--gap);border:1px solid #f0e0c0;border-radius:8px;padding:9px 12px;margin-bottom:8px;font-size:13.5px}
   .gapc b{color:var(--gapln)}
   .empty{color:var(--muted);font-size:14px} .foot{font-size:11.5px;color:var(--muted);margin:6px 0 24px;text-align:center}
-  /* care-pathway flow diagram */
-  .flow{display:flex;align-items:stretch}
-  .fnode{flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 1px 2px rgba(18,40,30,.05),0 8px 18px rgba(18,40,30,.04);overflow:hidden;display:flex;flex-direction:column}
-  .fnode .fh{display:flex;align-items:center;gap:8px;padding:10px 12px;font-weight:650;font-size:13px}
-  .fnode .fav{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;flex:none}
-  .fnode .fstage{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;opacity:.6}
-  .fnode .fb{padding:2px 12px 12px;flex:1}
-  .fnode .fl{font-size:12.5px;color:var(--ink);padding:5px 0;border-top:1px solid #f2f4f7;line-height:1.4} .fnode .fl:first-child{border-top:0}
-  .fnode-pre{border-top:3px solid #5b6b80} .fnode-pre .fav{background:#5b6b80} .fnode-pre .fh{color:#3a4351}
-  .fnode-dx{border-top:3px solid var(--accent)} .fnode-dx .fav{background:var(--accent)} .fnode-dx .fh{color:#1c3f8f}
-  .fnode-rx{border-top:3px solid var(--brand)} .fnode-rx .fav{background:var(--brand)} .fnode-rx .fh{color:var(--brand-ink)}
-  .fnode-fu{border-top:3px solid #2f8f82} .fnode-fu .fav{background:#2f8f82} .fnode-fu .fh{color:#1f6b60}
-  .farrow{display:flex;align-items:center;justify-content:center;color:#b3bcc7;font-size:20px;padding:0 5px;flex:none}
-  .fbad{color:var(--flag);font-weight:650} .fgood{color:var(--ok);font-weight:650}
-  @media(max-width:640px){ .flow{flex-direction:column} .farrow{padding:5px 0;transform:rotate(90deg)} }
+  /* care-pathway flow diagram — full-width vertical pathway (no truncation) */
+  .flow{display:flex;flex-direction:column;align-items:stretch}
+  .fnode{border:1px solid var(--line);border-left:4px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 1px 2px rgba(18,40,30,.04),0 8px 18px rgba(18,40,30,.035);overflow:hidden}
+  .fnode .fh{display:flex;align-items:center;gap:11px;padding:12px 15px;border-bottom:1px solid #f2f4f7}
+  .fnode .fav{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;flex:none}
+  .fnode .fstage{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;opacity:.6;display:block}
+  .fnode .ftitle{font-weight:650;font-size:15.5px}
+  .fnode .fb{padding:13px 15px;display:grid;gap:13px}
+  .fnode .fsub{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  .fnode .frow{font-size:13.5px;padding:3px 0;display:flex;justify-content:space-between;gap:12px;line-height:1.4}
+  .fnode .frow .fc{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted);white-space:nowrap}
+  .fnode .fmed{font-size:13.5px;padding:4px 0;line-height:1.45} .fnode .fmed .d{color:var(--muted)}
+  .fchips{display:flex;flex-wrap:wrap;gap:6px}
+  .fchip{font-size:12px;border-radius:6px;padding:3px 9px;background:#f1f4f8;font-family:ui-monospace,Menlo,monospace} .fchip.bad{background:var(--flagbg);color:var(--flag);font-weight:600}
+  .fnode-pre{border-left-color:#5b6b80} .fnode-pre .fav{background:#5b6b80} .fnode-pre .fstage{color:#5b6b80}
+  .fnode-dx{border-left-color:var(--accent)} .fnode-dx .fav{background:var(--accent)} .fnode-dx .fstage{color:var(--accent)}
+  .fnode-rx{border-left-color:var(--brand)} .fnode-rx .fav{background:var(--brand)} .fnode-rx .fstage{color:var(--brand)}
+  .fnode-fu{border-left-color:#2f8f82} .fnode-fu .fav{background:#2f8f82} .fnode-fu .fstage{color:#1f6b60}
+  .farrow{align-self:center;color:#c2cad4;font-size:22px;line-height:1;padding:6px 0}
+  .fbad{color:var(--flag);font-weight:700} .fgood{color:var(--ok);font-weight:700}
   @media (max-width:560px){ .med{grid-template-columns:1fr} .kv{flex-direction:column;gap:0} .kv .k{min-width:0} }
 </style>
 </head>
@@ -282,31 +287,44 @@ function render(res){
   const cb=document.getElementById('cpbtn'); cb.textContent='📋 Copy note'; cb.classList.remove('done');
 }
 
-// Care-pathway flow: Presentation -> Assessment -> Plan -> Follow-up, summarised from the analysis.
+// Care-pathway flow: Presentation -> Diagnosis -> Plan -> Follow-up. Full detail, no truncation.
 function renderFlow(res,c){
   const pv=res.pre_visit, M=res.medications||{start:[],hold:[],continue:[]}, labs=res.labs||{};
-  const short=s=>esc(String(s).replace(/\s*\(.*/,''));
   const flag={potassium:v=>v>=5.0,egfr:v=>v<30,hr:v=>v<50};
-  const abn=Object.entries(labs).filter(([k,v])=> k==='bp'? v.systolic<90 : (flag[k]?flag[k](v.value):false))
-    .map(([k,v])=> k==='bp'?`BP ${v.systolic}/${v.diastolic}`:`${k.toUpperCase()} ${v.value}`);
-  const dx=pv.conditions.map(x=>x.label);
-  const startNames=(M.start||[]).map(m=>short(m.med)).slice(0,2);
+  const node=(cls,stage,icon,title,body)=>`<div class="fnode fnode-${cls}"><div class="fh"><span class="fav">${icon}</span><span><span class="fstage">${stage}</span><span class="ftitle">${title}</span></span></div><div class="fb">${body}</div></div>`;
+  const grp=(label,inner)=>`<div><div class="fsub">${label}</div>${inner}</div>`;
+  const muted=t=>`<div class="frow" style="color:var(--muted)">${t}</div>`;
+  const arrow='<div class="farrow">↓</div>';
+
+  // 1 — Incoming state: demographics + full vitals/labs + context
+  const labChips=Object.entries(labs).map(([k,v])=>{let t,bad=false;
+    if(k==='bp'){t=`BP ${v.systolic}/${v.diastolic}`;bad=v.systolic<90;} else {t=`${k.toUpperCase()} ${v.value}`;bad=flag[k]?flag[k](v.value):false;}
+    return `<span class="fchip ${bad?'bad':''}">${esc(t)}</span>`;}).join('');
+  let b1=grp('Patient',`<div class="frow"><span><b>${c.age}</b> yrs · ${esc(cap(c.sex))} · ${esc(c.location||'')}</span>${c.recent_hosp?'<span class="fchip bad">recently hospitalized</span>':''}</div>`);
+  b1+=grp('Vitals & labs', labChips? `<div class="fchips">${labChips}</div>` : muted('None recorded this visit'));
+  const n1=node('pre','Incoming state','🧍','Presentation & data',b1);
+
+  // 2 — Working diagnosis: all problems with ICD codes
+  const codes=res.post_visit.icd10||[];
+  const dxRows=pv.conditions.length? pv.conditions.map(cd=>{const code=codes.find(x=>x.condition===cd.condition);
+    return `<div class="frow"><span>${esc(cd.label)}</span><span class="fc">${code?esc(code.code):''}</span></div>`;}).join('') : muted('No chronic diagnosis detected');
+  const n2=node('dx','Assessment','🩺','Working diagnosis',grp('Problems addressed',dxRows));
+
+  // 3 — Prescription: every medication (full names), grouped by action
+  let b3='';
+  if(M.start.length) b3+=grp('Start / initiate', M.start.map(m=>`<div class="fmed"><span class="fgood">▶</span> ${esc(m.med)}${m.duration?` <span class="d">— ${esc(m.duration)}</span>`:''}</div>`).join(''));
+  if(M.continue.length) b3+=grp('Continue', M.continue.map(m=>`<div class="fmed"><span style="color:var(--accent);font-weight:700">✓</span> ${esc(m.med)}${m.why?` <span class="d">${esc(m.why)}</span>`:''}</div>`).join(''));
+  if(M.hold.length) b3+=grp('Stop / hold', M.hold.map(m=>`<div class="fmed"><span class="fbad">■</span> ${esc(m.med)}${m.why?` <span class="d">— ${esc(m.why)}</span>`:''}</div>`).join(''));
+  if(!b3) b3=muted('No medication changes this visit');
+  const n3=node('rx','Prescription','💊','Medication plan',b3);
+
+  // 4 — Follow-up: all tests + all therapy + timing
   const fu=res.follow_up||[], nd=res.non_drug||[];
-  const node=(cls,stage,icon,title,lines)=>`<div class="fnode fnode-${cls}"><div class="fh"><span class="fav">${icon}</span><span><span class="fstage">${stage}</span><br>${title}</span></div><div class="fb">${lines.filter(Boolean).map(l=>`<div class="fl">${l}</div>`).join('')}</div></div>`;
-  const arrow='<div class="farrow">→</div>';
-  const n1=node('pre','Incoming','🧍','Presentation',[
-    `<b>${c.age} · ${cap(c.sex)}</b>${c.recent_hosp?' · post-discharge':''}`,
-    abn.length? `<span class="fbad">Abnormal: ${abn.join(' · ')}</span>` : 'No flagged vitals/labs' ]);
-  const n2=node('dx','Assessment','🩺','Diagnosis',
-    dx.length? dx.slice(0,3).map(esc).concat(dx.length>3?[`+${dx.length-3} more`]:[]) : ['No chronic diagnosis']);
-  const n3=node('rx','Prescription','💊','Plan',[
-    (M.start||[]).length? `<span class="fgood">▶ Start ${(M.start).length}</span>${startNames.length?': '+startNames.join(', '):''}` : '',
-    (M.continue||[]).length? `✓ Continue ${(M.continue).length}` : '',
-    (M.hold||[]).length? `<span class="fbad">■ Hold ${(M.hold).length}</span>` : '' ]);
-  const n4=node('fu','Follow-up','📅','Next steps',[
-    fu.length? `${fu.length} test${fu.length>1?'s':''}${fu[0]?': '+short(fu[0]):''}` : 'No specific tests',
-    nd.length? `${nd.length} therapy referral${nd.length>1?'s':''}` : '',
-    c.recent_hosp? 'Early post-discharge review' : '' ]);
+  let b4=grp('Tests & procedures', fu.length? fu.map(t=>`<div class="fmed">🧪 ${esc(t)}</div>`).join('') : muted('None specific this visit'));
+  if(nd.length) b4+=grp('Therapy & lifestyle', nd.map(n=>`<div class="fmed">🏃 ${esc(n)}</div>`).join(''));
+  b4+=grp('Timing', `<div class="frow">${c.recent_hosp?'Early post-discharge review (≈7–14 days)':'Routine interval follow-up'}</div>`);
+  const n4=node('fu','Follow-up','📅','Next steps',b4);
+
   document.getElementById('flow').innerHTML=`<div class="flow">${n1}${arrow}${n2}${arrow}${n3}${arrow}${n4}</div>`;
 }
 

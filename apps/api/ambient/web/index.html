@@ -98,26 +98,28 @@
   .gapc{background:var(--gap);border:1px solid #f0e0c0;border-radius:8px;padding:9px 12px;margin-bottom:8px;font-size:13.5px}
   .gapc b{color:var(--gapln)}
   .empty{color:var(--muted);font-size:14px} .foot{font-size:11.5px;color:var(--muted);margin:6px 0 24px;text-align:center}
-  /* care-pathway flow diagram — full-width vertical pathway (no truncation) */
-  .flow{display:flex;flex-direction:column;align-items:stretch}
-  .fnode{border:1px solid var(--line);border-left:4px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 1px 2px rgba(18,40,30,.04),0 8px 18px rgba(18,40,30,.035);overflow:hidden}
-  .fnode .fh{display:flex;align-items:center;gap:11px;padding:12px 15px;border-bottom:1px solid #f2f4f7}
-  .fnode .fav{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;flex:none}
-  .fnode .fstage{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;opacity:.6;display:block}
-  .fnode .ftitle{font-weight:650;font-size:15.5px}
-  .fnode .fb{padding:13px 15px;display:grid;gap:13px}
-  .fnode .fsub{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
-  .fnode .frow{font-size:13.5px;padding:3px 0;display:flex;justify-content:space-between;gap:12px;line-height:1.4}
-  .fnode .frow .fc{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted);white-space:nowrap}
-  .fnode .fmed{font-size:13.5px;padding:4px 0;line-height:1.45} .fnode .fmed .d{color:var(--muted)}
-  .fchips{display:flex;flex-wrap:wrap;gap:6px}
-  .fchip{font-size:12px;border-radius:6px;padding:3px 9px;background:#f1f4f8;font-family:ui-monospace,Menlo,monospace} .fchip.bad{background:var(--flagbg);color:var(--flag);font-weight:600}
-  .fnode-pre{border-left-color:#5b6b80} .fnode-pre .fav{background:#5b6b80} .fnode-pre .fstage{color:#5b6b80}
-  .fnode-dx{border-left-color:var(--accent)} .fnode-dx .fav{background:var(--accent)} .fnode-dx .fstage{color:var(--accent)}
-  .fnode-rx{border-left-color:var(--brand)} .fnode-rx .fav{background:var(--brand)} .fnode-rx .fstage{color:var(--brand)}
-  .fnode-fu{border-left-color:#2f8f82} .fnode-fu .fav{background:#2f8f82} .fnode-fu .fstage{color:#1f6b60}
-  .farrow{align-self:center;color:#c2cad4;font-size:22px;line-height:1;padding:6px 0}
+  /* care-pathway — a causal flow diagram (summary, with labeled edges) */
+  .cflow{display:flex;align-items:stretch;gap:0}
+  .cnode{flex:1;min-width:0;border:1px solid var(--line);border-top:3px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 1px 2px rgba(18,40,30,.05),0 8px 18px rgba(18,40,30,.04);padding:12px 13px;display:flex;flex-direction:column;gap:9px}
+  .cnode .ch{display:flex;align-items:center;gap:9px}
+  .cnode .cav{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;flex:none}
+  .cnode .cstage{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;opacity:.6;display:block}
+  .cnode .ctitle{font-weight:650;font-size:14px}
+  .cnode .cbody{font-size:13px;line-height:1.4;display:flex;flex-direction:column;gap:6px}
+  .cnode .cprimary{font-weight:600}
+  .cnode .cmore{font-size:12px;color:var(--muted)}
+  .cdrv{font-size:12.5px;line-height:1.35;background:#f7f9fb;border-radius:7px;padding:5px 8px}
+  .cdrv .cause{color:var(--flag);font-weight:600}
+  .cchips{display:flex;flex-wrap:wrap;gap:5px} .cchip{font-size:11.5px;border-radius:6px;padding:2px 8px;background:#f1f4f8;font-family:ui-monospace,Menlo,monospace} .cchip.bad{background:var(--flagbg);color:var(--flag);font-weight:600}
+  .c-pre{border-top-color:#5b6b80} .c-pre .cav{background:#5b6b80} .c-pre .cstage{color:#5b6b80}
+  .c-dx{border-top-color:var(--accent)} .c-dx .cav{background:var(--accent)} .c-dx .cstage{color:var(--accent)}
+  .c-rx{border-top-color:var(--brand)} .c-rx .cav{background:var(--brand)} .c-rx .cstage{color:var(--brand)}
+  .c-fu{border-top-color:#2f8f82} .c-fu .cav{background:#2f8f82} .c-fu .cstage{color:#1f6b60}
+  .cedge{flex:none;align-self:center;display:flex;flex-direction:column;align-items:center;gap:3px;padding:0 6px}
+  .cedge .clabel{font-size:9px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);background:#eef1f4;border-radius:999px;padding:2px 7px;text-align:center;line-height:1.2;max-width:74px}
+  .cedge .carrow{font-size:24px;color:#aeb7c2;line-height:1}
   .fbad{color:var(--flag);font-weight:700} .fgood{color:var(--ok);font-weight:700}
+  @media(max-width:720px){ .cflow{flex-direction:column} .cedge{flex-direction:row;padding:7px 0;gap:8px} .cedge .carrow{transform:rotate(90deg)} .cedge .clabel{max-width:none} }
   /* mini-EHR: patient banner, trends, timeline, visit divider */
   .pbanner .pname{font-size:22px;font-weight:700}
   .pbanner .pmeta{color:var(--muted);font-size:13.5px;margin-top:3px}
@@ -387,45 +389,40 @@ function renderHistory(res){
   document.getElementById('histNote').textContent=h.note||'';
 }
 
-// Care-pathway flow: Presentation -> Diagnosis -> Plan -> Follow-up. Full detail, no truncation.
+// Care-pathway: a CAUSAL flow diagram — a summary where findings drive decisions drive monitoring.
 function renderFlow(res,c){
   const pv=res.pre_visit, M=res.medications||{start:[],hold:[],continue:[]}, labs=res.labs||{};
   const flag={potassium:v=>v>=5.0,egfr:v=>v<30,hr:v=>v<50};
-  const node=(cls,stage,icon,title,body)=>`<div class="fnode fnode-${cls}"><div class="fh"><span class="fav">${icon}</span><span><span class="fstage">${stage}</span><span class="ftitle">${title}</span></span></div><div class="fb">${body}</div></div>`;
-  const grp=(label,inner)=>`<div><div class="fsub">${label}</div>${inner}</div>`;
-  const muted=t=>`<div class="frow" style="color:var(--muted)">${t}</div>`;
-  const arrow='<div class="farrow">↓</div>';
+  const short=s=>esc(String(s).replace(/\s*\(.*/,'').slice(0,44));
+  const cnode=(cls,av,stage,title,body)=>`<div class="cnode c-${cls}"><div class="ch"><span class="cav">${av}</span><span><span class="cstage">${stage}</span><span class="ctitle">${title}</span></span></div><div class="cbody">${body}</div></div>`;
+  const cedge=label=>`<div class="cedge"><span class="clabel">${label}</span><span class="carrow">→</span></div>`;
 
-  // 1 — Incoming state: demographics + full vitals/labs + context
-  const labChips=Object.entries(labs).map(([k,v])=>{let t,bad=false;
-    if(k==='bp'){t=`BP ${v.systolic}/${v.diastolic}`;bad=v.systolic<90;} else {t=`${k.toUpperCase()} ${v.value}`;bad=flag[k]?flag[k](v.value):false;}
-    return `<span class="fchip ${bad?'bad':''}">${esc(t)}</span>`;}).join('');
-  let b1=grp('Patient',`<div class="frow"><span><b>${c.age}</b> yrs · ${esc(cap(c.sex))} · ${esc(c.location||'')}</span>${c.recent_hosp?'<span class="fchip bad">recently hospitalized</span>':''}</div>`);
-  b1+=grp('Vitals & labs', labChips? `<div class="fchips">${labChips}</div>` : muted('None recorded this visit'));
-  const n1=node('pre','Incoming state','🧍','Presentation & data',b1);
+  // Presentation — the abnormal findings that DRIVE the plan
+  const abn=Object.entries(labs).filter(([k,v])=> k==='bp'? v.systolic<90 : (flag[k]?flag[k](v.value):false))
+    .map(([k,v])=> k==='bp'?`BP ${v.systolic}/${v.diastolic}`:`${k.toUpperCase()} ${v.value}`);
+  let b1=`<div class="cprimary">${c.age} · ${esc(cap(c.sex))}${c.recent_hosp?' · post-d/c':''}</div>`;
+  b1+= abn.length? `<div class="cchips">${abn.map(a=>`<span class="cchip bad">${esc(a)}</span>`).join('')}</div>` : '<div class="cmore">No acute red flags</div>';
+  const n1=cnode('pre','🧍','Incoming state','Presentation',b1);
 
-  // 2 — Working diagnosis: all problems with ICD codes
-  const codes=res.post_visit.icd10||[];
-  const dxRows=pv.conditions.length? pv.conditions.map(cd=>{const code=codes.find(x=>x.condition===cd.condition);
-    return `<div class="frow"><span>${esc(cd.label)}</span><span class="fc">${code?esc(code.code):''}</span></div>`;}).join('') : muted('No chronic diagnosis detected');
-  const n2=node('dx','Assessment','🩺','Working diagnosis',grp('Problems addressed',dxRows));
+  // Diagnosis
+  const dx=pv.conditions.map(x=>x.label);
+  const b2= dx.length? `<div class="cprimary">${esc(dx[0])}</div>`+(dx.length>1?`<div class="cmore">+ ${dx.length-1} more problem${dx.length-1>1?'s':''}</div>`:'') : '<div class="cmore">No chronic diagnosis</div>';
+  const n2=cnode('dx','🩺','Assessment','Working diagnosis',b2);
 
-  // 3 — Prescription: every medication (full names), grouped by action
-  let b3='';
-  if(M.start.length) b3+=grp('Start / initiate', M.start.map(m=>`<div class="fmed"><span class="fgood">▶</span> ${esc(m.med)}${m.duration?` <span class="d">— ${esc(m.duration)}</span>`:''}</div>`).join(''));
-  if(M.continue.length) b3+=grp('Continue', M.continue.map(m=>`<div class="fmed"><span style="color:var(--accent);font-weight:700">✓</span> ${esc(m.med)}${m.why?` <span class="d">${esc(m.why)}</span>`:''}</div>`).join(''));
-  if(M.hold.length) b3+=grp('Stop / hold', M.hold.map(m=>`<div class="fmed"><span class="fbad">■</span> ${esc(m.med)}${m.why?` <span class="d">— ${esc(m.why)}</span>`:''}</div>`).join(''));
-  if(!b3) b3=muted('No medication changes this visit');
-  const n3=node('rx','Prescription','💊','Medication plan',b3);
+  // Plan — decisions, each HOLD annotated with the finding that caused it
+  const sN=M.start.length, cN=M.continue.length, hN=M.hold.length;
+  let b3=`<div><span class="fgood">▶ ${sN} start</span> · <span style="color:var(--accent);font-weight:700">✓ ${cN} continue</span>${hN?` · <span class="fbad">⛔ ${hN} hold</span>`:''}</div>`;
+  M.hold.forEach(h=>{ const drv=(h.why||'').split('—')[0].trim();
+    b3+=`<div class="cdrv">⛔ ${short(h.med)} <span class="cause">← ${esc(drv)}</span></div>`; });
+  if(!sN&&!hN&&cN) b3+='<div class="cmore">Continue current regimen</div>';
+  const n3=cnode('rx','💊','Prescription','Plan',b3);
 
-  // 4 — Follow-up: all tests + all therapy + timing
-  const fu=res.follow_up||[], nd=res.non_drug||[];
-  let b4=grp('Tests & procedures', fu.length? fu.map(t=>`<div class="fmed">🧪 ${esc(t)}</div>`).join('') : muted('None specific this visit'));
-  if(nd.length) b4+=grp('Therapy & lifestyle', nd.map(n=>`<div class="fmed">🏃 ${esc(n)}</div>`).join(''));
-  b4+=grp('Timing', `<div class="frow">${c.recent_hosp?'Early post-discharge review (≈7–14 days)':'Routine interval follow-up'}</div>`);
-  const n4=node('fu','Follow-up','📅','Next steps',b4);
+  // Follow-up — the monitoring the plan necessitates (summary of the key items)
+  const fu=res.follow_up||[];
+  const b4= fu.length? fu.slice(0,3).map(t=>`<div class="cmore">• ${short(t)}</div>`).join('')+(fu.length>3?`<div class="cmore">+ ${fu.length-3} more</div>`:'') : '<div class="cmore">Routine follow-up</div>';
+  const n4=cnode('fu','📅','Follow-up','Next steps',b4);
 
-  document.getElementById('flow').innerHTML=`<div class="flow">${n1}${arrow}${n2}${arrow}${n3}${arrow}${n4}</div>`;
+  document.getElementById('flow').innerHTML=`<div class="cflow">${n1}${cedge('assessed as')}${n2}${cedge('guideline plan + safety')}${n3}${cedge('requires monitoring')}${n4}</div>`;
 }
 
 // Invoke Noesis's evidence-grounded medical Q&A, prefilled from this case (opens the main app).

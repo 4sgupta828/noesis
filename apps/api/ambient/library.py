@@ -785,6 +785,38 @@ LIBRARY = [
         "mode": "US",
         "demonstrates": "ASCVD primary-prevention statin gap in diabetes",
     },
+    {
+        "id": "hf_mra_gap_hyperkalemia",
+        "title": "HFrEF, MRA indicated but K 5.6",
+        "category": "Cardiometabolic",
+        "age": 68,
+        "sex": "male",
+        "complexity": "Titration/new-dx",
+        "transcript": "68-year-old with HFrEF, EF 32%, on lisinopril, carvedilol, and empagliflozin. Not on an MRA yet. Today potassium is 5.6.",
+        "patient": {
+            "egfr": 46,
+            "conditions": ["HFrEF"],
+            "current_meds": ["lisinopril", "carvedilol", "empagliflozin"],
+        },
+        "mode": "US",
+        "demonstrates": "Causal hold: MRA indicated but held for hyperkalemia (K 5.6)",
+    },
+    {
+        "id": "hf_bb_gap_bradycardia",
+        "title": "HFrEF, beta-blocker indicated but HR 42",
+        "category": "Cardiometabolic",
+        "age": 74,
+        "sex": "female",
+        "complexity": "Titration/new-dx",
+        "transcript": "74-year-old with HFrEF on lisinopril, spironolactone, and dapagliflozin. No beta-blocker yet. Heart rate today is 42.",
+        "patient": {
+            "egfr": 55,
+            "conditions": ["HFrEF"],
+            "current_meds": ["lisinopril", "spironolactone", "dapagliflozin"],
+        },
+        "mode": "US",
+        "demonstrates": "Causal hold: beta-blocker indicated but held for bradycardia (HR 42)",
+    },
 ]
 
 

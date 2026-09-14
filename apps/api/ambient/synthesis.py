@@ -199,30 +199,32 @@ def assessment_plan(patient, active_labels: List[Dict], present_classes: set, pr
 
     for c in active_labels:
         cond = c["condition"]
-        hdr = f"# {c['label']}" + (f"  [{codes[cond]}]" if cond in codes else "")
+        hdr = c["label"] + (f"  [{codes[cond]}]" if cond in codes else "")
         lines.append(hdr)
+        if not gaps_by_cond.get(cond) and not actions_by_cond.get(cond):
+            lines.append("  - Continue current management")
         for g in gaps_by_cond.get(cond, []):
             caution = g.get("caution")
             if caution and caution["level"] == "hold":
-                lines.append(f"- HOLD {g['label']} — {caution['reason']}")
+                lines.append(f"  - HOLD {g['label']} — {caution['reason']}")
             elif caution and caution["level"] == "confirm":
-                lines.append(f"- {g['label']}: confirm first — {caution['reason']}")
+                lines.append(f"  - {g['label']}: confirm first — {caution['reason']}")
             else:
-                lines.append(f"- Start/optimize {g['label']} ({RATIONALE.get(g['id'], g['note'])})")
+                lines.append(f"  - Start/optimize {g['label']} ({RATIONALE.get(g['id'], g['note'])})")
         for a in actions_by_cond.get(cond, []):
-            lines.append(f"- {a['label']}")
+            lines.append(f"  - {a['label']}")
         lines.append("")
     # transitions + health maintenance actions not tied to a problem
-    misc = actions_by_cond.get("transition_of_care", [])
+    misc = actions_by_cond.get("transition_of_care", []) + actions_by_cond.get("prevention", [])
     if misc:
-        lines.append("# Transitions of care")
+        lines.append("Health maintenance / transitions")
         for a in misc:
-            lines.append(f"- {a['label']}")
+            lines.append(f"  - {a['label']}")
         lines.append("")
     if safety:
-        lines.append("# Medication safety")
+        lines.append("Medication safety")
         for f in safety:
-            lines.append(f"- {f['title']} — {f.get('management', '')}")
+            lines.append(f"  - {f['title']} — {f.get('management', '')}")
         lines.append("")
     if post.get("kind") == "coding":
         cds = ", ".join(f"{c['code']}" for c in post.get("icd10", []))

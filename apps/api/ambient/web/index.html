@@ -118,6 +118,28 @@
   .fnode-fu{border-left-color:#2f8f82} .fnode-fu .fav{background:#2f8f82} .fnode-fu .fstage{color:#1f6b60}
   .farrow{align-self:center;color:#c2cad4;font-size:22px;line-height:1;padding:6px 0}
   .fbad{color:var(--flag);font-weight:700} .fgood{color:var(--ok);font-weight:700}
+  /* mini-EHR: patient banner, trends, timeline, visit divider */
+  .pbanner .pname{font-size:22px;font-weight:700}
+  .pbanner .pmeta{color:var(--muted);font-size:13.5px;margin-top:3px}
+  .pbanner .prow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  .pbanner .plab{font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);min-width:64px}
+  .pchip{background:var(--chip);border-radius:999px;padding:3px 11px;font-size:12.5px}
+  .pchip.al{background:var(--flagbg);color:var(--flag);font-weight:600}
+  .histsum{font-size:14.5px;line-height:1.6;background:#f7f9fb;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .trend{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f0f2f5} .trend:last-child{border-bottom:0}
+  .trend .tl{flex:1;min-width:0} .trend .tname{font-weight:600;font-size:14px} .trend .tval{font-size:12.5px;color:var(--muted);font-family:ui-monospace,Menlo,monospace}
+  .trend svg{flex:none} .trend .tdir{font-size:12.5px;font-weight:700;white-space:nowrap;min-width:82px;text-align:right}
+  .tdir.good{color:var(--ok)} .tdir.bad{color:var(--flag)} .tdir.flat{color:var(--muted)}
+  .tline{position:relative;padding-left:24px;margin-top:2px}
+  .tline::before{content:"";position:absolute;left:6px;top:6px;bottom:8px;width:2px;background:var(--line)}
+  .tevent{position:relative;padding:2px 0 14px}
+  .tevent .dot{position:absolute;left:-24px;top:5px;width:14px;height:14px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px var(--line)}
+  .tevent .ty{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+  .tevent .tt{font-weight:600;font-size:14.5px;margin:1px 0}
+  .tevent .tc{font-size:13px;color:var(--muted);line-height:1.45}
+  .dot-hospitalization{background:var(--flag)} .dot-procedure{background:#7a4fd1} .dot-ed{background:#d1671f} .dot-routine{background:#5b6b80} .dot-diagnosis{background:var(--accent)}
+  .visitdiv{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin:6px 0 12px}
+  .visitdiv::before,.visitdiv::after{content:"";flex:1;height:1px;background:var(--line)}
   @media (max-width:560px){ .med{grid-template-columns:1fr} .kv{flex-direction:column;gap:0} .kv .k{min-width:0} }
 </style>
 </head>
@@ -141,7 +163,17 @@
       <button class="cpbtn" id="cpbtn" onclick="copyNote()">📋 Copy note</button>
     </div>
     <div class="doc">
-      <section class="sec" id="secPatient"></section>
+      <section class="sec pbanner" id="secPatient"></section>
+      <section class="sec" id="histWrap" hidden>
+        <h3>History context — past 5 years</h3>
+        <div id="histSummary" class="histsum"></div>
+        <div class="lead" style="margin-top:16px">Key lab trends</div>
+        <div id="trends"></div>
+        <div class="lead" style="margin-top:16px">Encounters, procedures &amp; emergencies</div>
+        <div id="timeline"></div>
+        <div class="note" id="histNote" style="margin-top:10px"></div>
+      </section>
+      <div class="visitdiv" id="visitdiv">This visit</div>
       <section class="sec" id="secEnc"></section>
       <section class="sec"><h3>Pre-visit — clinical picture &amp; data</h3><div id="secPicture"></div></section>
       <section class="sec"><h3>Working diagnosis &amp; current prescription</h3><div id="secDx"></div></section>
@@ -198,10 +230,17 @@ function showLibrary(){ document.getElementById('analyzerView').hidden=true; doc
 
 function render(res){
   const c=window._case||{}, p=c.patient||{};
-  // 1. Patient
+  // 1. Patient banner (mini-EHR header) — problems + allergies
+  const problems=(res.pre_visit.conditions||[]).map(x=>x.label);
+  const allergies=(p.allergies||[]);
   document.getElementById('secPatient').innerHTML=
     `<div class="pname">${esc(c.name||'Patient')}</div>
-     <div class="pmeta">${c.age} yrs · ${esc(cap(c.sex||''))} · ${esc(c.location||'')} · ${esc(c.mrn||'')}</div>`;
+     <div class="pmeta">${c.age} yrs · ${esc(cap(c.sex||''))} · ${esc(c.location||'')} · ${esc(c.mrn||'')}</div>
+     <div class="prow"><span class="plab">Problems</span>${problems.length?problems.map(x=>`<span class="pchip">${esc(x)}</span>`).join(''):'<span class="pchip">none recorded</span>'}</div>
+     <div class="prow"><span class="plab">Allergies</span>${allergies.length?allergies.map(a=>`<span class="pchip al">⚠ ${esc(a)}</span>`).join(''):'<span class="pchip">NKDA</span>'}</div>`;
+  // 1b. History (mini-EHR longitudinal record)
+  renderHistory(res);
+  document.getElementById('visitdiv').textContent='This visit · '+(c.date||'')+' · '+(c.doctor||'');
   // 2. Encounter
   document.getElementById('secEnc').innerHTML=
     `<h3>Encounter</h3>
@@ -287,6 +326,33 @@ function render(res){
   const cb=document.getElementById('cpbtn'); cb.textContent='📋 Copy note'; cb.classList.remove('done');
 }
 
+// Mini-EHR longitudinal history: context summary + lab-trend sparklines + encounters timeline.
+function sparkline(points, good){
+  const w=112,h=34,pad=4, vals=points.map(p=>p.value);
+  const min=Math.min(...vals),max=Math.max(...vals),rng=(max-min)||1;
+  const x=i=>pad+i*(w-2*pad)/(points.length-1), y=v=>h-pad-((v-min)/rng)*(h-2*pad);
+  const pts=points.map((p,i)=>`${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
+  const col= good===true?'#0b7a4b':good===false?'#b42318':'#5b6b80';
+  const lx=x(points.length-1).toFixed(1), ly=y(vals[vals.length-1]).toFixed(1);
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${lx}" cy="${ly}" r="3.2" fill="${col}"/></svg>`;
+}
+function labelType(t){return {routine:'Routine visit',hospitalization:'Hospitalization',ed:'Emergency',procedure:'Procedure',diagnosis:'New diagnosis'}[t]||t;}
+function renderHistory(res){
+  const h=res.history, wrap=document.getElementById('histWrap');
+  if(!h||!h.summary){ wrap.hidden=true; return; }
+  wrap.hidden=false;
+  document.getElementById('histSummary').textContent=h.summary;
+  const arrow={down:'↓',up:'↑',stable:'→'};
+  document.getElementById('trends').innerHTML=(h.trends||[]).map(t=>{
+    const cls=t.good===true?'good':t.good===false?'bad':'flat';
+    const word=t.dir==='stable'?'stable':(t.good===true?'improving':t.good===false?'worsening':(t.dir==='down'?'down':'up'));
+    return `<div class="trend"><div class="tl"><div class="tname">${esc(t.label)}</div><div class="tval">${t.first} → ${t.last} ${esc(t.unit)}</div></div>${sparkline(t.points,t.good)}<div class="tdir ${cls}">${arrow[t.dir]||''} ${esc(word)}</div></div>`;
+  }).join('') || '<div class="empty">No tracked labs for these problems</div>';
+  document.getElementById('timeline').innerHTML='<div class="tline">'+(h.encounters||[]).map(e=>
+    `<div class="tevent"><span class="dot dot-${e.type}"></span><div class="ty">${e.year} · ${esc(labelType(e.type))}</div><div class="tt">${esc(e.title)}</div><div class="tc">${esc(e.carepath)}</div></div>`).join('')+'</div>';
+  document.getElementById('histNote').textContent=h.note||'';
+}
+
 // Care-pathway flow: Presentation -> Diagnosis -> Plan -> Follow-up. Full detail, no truncation.
 function renderFlow(res,c){
   const pv=res.pre_visit, M=res.medications||{start:[],hold:[],continue:[]}, labs=res.labs||{};
@@ -359,6 +425,7 @@ function buildNote(res,c){
   const L=[]; const push=(s)=>L.push(s);
   push(`${c.name||'Patient'}  (${c.age} yrs, ${cap(c.sex||'')})  ${c.location||''}  ${c.mrn||''}`);
   push(`Seen by ${c.doctor||''} on ${c.date||''}`); push('');
+  if(res.history&&res.history.summary){ push('HISTORY CONTEXT (past 5 years)'); push(res.history.summary); push(''); }
   push('CLINICAL PICTURE'); push(res.clinical_picture||'');
   const labs=res.labs||{}; const ls=Object.entries(labs).map(([k,v])=>k==='bp'?`BP ${v.systolic}/${v.diastolic}`:`${k.toUpperCase()} ${v.value}`);
   if(ls.length) push('Data: '+ls.join(', '));

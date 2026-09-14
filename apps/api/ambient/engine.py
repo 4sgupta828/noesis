@@ -25,6 +25,7 @@ from api.rxcds.engine import PatientContext, check_prescription, normalize
 from . import clinical
 from . import contraindications
 from . import data as adata
+from . import history as hist
 from . import synthesis
 from .modes import MODES, resolve_mode
 
@@ -342,6 +343,9 @@ def analyze_encounter(transcript: str, patient: PatientContext, mode: str = "US"
     primary = next((c for c in _PRIMARY_ORDER if c in active), (active[0] if active else None))
     clin = clinical.build(conds, meds, present_classes, gaps, patient, primary)
 
+    # synthetic 5-year longitudinal history (illustrative), seeded per case for stability
+    history = hist.build_history(conds, labs, patient, transcript, recent_hospitalization)
+
     return {
         "mode": mode, "mode_label": cfg["label"],
         "clinical_picture": synth["clinical_picture"],
@@ -355,6 +359,7 @@ def analyze_encounter(transcript: str, patient: PatientContext, mode: str = "US"
         "follow_up": clin["follow_up"],
         "non_drug": clin["non_drug"],
         "precedents": clin["precedents"],
+        "history": history,
         "pre_visit": {
             "conditions": conds,
             "present_therapies": [adata.CLASS_LABEL.get(c, c) for c in present_readout],

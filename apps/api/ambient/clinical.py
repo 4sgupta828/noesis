@@ -152,7 +152,14 @@ def build(conds: List[Dict], meds: List[Dict], present_classes: set, gaps: Dict,
         matched = sorted(inds & active_set)
         why = ("for " + ", ".join(adata.CONDITIONS.get(c, {}).get("label", c) for c in matched)) if matched else "review indication"
         medications["continue"].append({"med": md["mention"], "why": why, "duration": _duration_for(md["molecules"])})
+    # one entry per therapy CLASS — the same drug flagged from two conditions (e.g. SGLT2 for HF and
+    # for diabetes, or RAS inhibition for HF and CKD) collapses to a single medication line.
+    seen_class = set()
     for g in gaps["gaps"]:
+        sig = frozenset(g.get("need_any") or [g["id"]])
+        if sig in seen_class:
+            continue
+        seen_class.add(sig)
         caution = g.get("caution")
         if caution and caution["level"] == "hold":
             medications["hold"].append({"med": g["label"], "why": caution["reason"]})

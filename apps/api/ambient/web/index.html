@@ -63,8 +63,19 @@
   .tbl{width:100%;border-collapse:collapse;font-size:13.5px} .tbl th,.tbl td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--line);vertical-align:top}
   .tbl th{font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:700}
   .tbl tr.prow{cursor:pointer} .tbl tr.prow:hover td{background:#eef3fd} .tbl tr.prow td:first-child b{color:var(--accent)}
-  .med{display:grid;grid-template-columns:1fr auto;gap:6px;padding:8px 0;border-bottom:1px solid #f0f2f5;font-size:14px} .med:last-child{border-bottom:0}
-  .med .mn{font-weight:600} .med .mw{color:var(--muted);font-size:13px} .med .md{font-size:12px;color:var(--brand);white-space:nowrap;font-weight:600}
+  .grps{display:grid;gap:10px}
+  .grp{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .grp .ghead{padding:9px 12px;font-size:11.5px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;display:flex;justify-content:space-between}
+  .grp .ghead .n{opacity:.7;font-weight:700}
+  .grp .gbody{padding:4px 12px}
+  .grp-start{border-color:#cfe7d8} .grp-start .ghead{background:var(--okbg);color:var(--ok)}
+  .grp-cont{border-color:#d3e0f7} .grp-cont .ghead{background:#eef3fd;color:var(--accent)}
+  .grp-stop{border-color:#f4d3d0} .grp-stop .ghead{background:var(--flagbg);color:var(--flag)}
+  .grp-test .ghead,.grp-pt .ghead{background:#f1f4f8;color:var(--muted)}
+  .grp .gbody ul.clean li{border-bottom:1px solid #f0f2f5}
+  .medi{padding:9px 0;border-bottom:1px solid #f0f2f5} .medi:last-child{border-bottom:0}
+  .medi .mn{font-weight:650;font-size:14px} .medi .mw{color:var(--muted);font-size:13px;margin-top:1px}
+  .medi .md{display:inline-block;font-size:11px;color:var(--brand);font-weight:700;background:var(--okbg);border-radius:5px;padding:1px 7px;margin-top:5px}
   .note{font-size:12px;color:var(--muted);margin-top:8px;font-style:italic}
   .gapc{background:var(--gap);border:1px solid #f0e0c0;border-radius:8px;padding:9px 12px;margin-bottom:8px;font-size:13.5px}
   .gapc b{color:var(--gapln)}
@@ -201,16 +212,22 @@ function render(res){
   document.getElementById('secChecks').innerHTML=ck;
   // 6. Precedents — real similar cases from this library, clickable
   renderPrecedents(res, c);
-  // 7. Post — follow-up
+  // 7. Post — follow-up plan (grouped boxes)
   const M=res.medications||{start:[],hold:[],continue:[]};
-  let post=`<div class="lead">New tests / procedures to follow up</div>`;
-  post+= (res.follow_up&&res.follow_up.length)? `<ul class="clean">`+res.follow_up.map(t=>`<li>${esc(t)}</li>`).join('')+`</ul>` : '<div class="empty">None specific this visit</div>';
-  post+=`<div class="lead">Medications — what, why, how long</div>`;
-  const mrow=(m,tag)=>`<div class="med"><div><span class="mn">${tag} ${esc(m.med)}</span><div class="mw">${esc(m.why||'')}</div></div>${m.duration?`<div class="md">${esc(m.duration)}</div>`:''}</div>`;
-  const allMeds=M.start.map(m=>mrow(m,'Start')).concat(M.hold.map(m=>mrow(m,'⛔ Hold'))).concat(M.continue.map(m=>mrow(m,'Continue')));
-  post+= allMeds.length? allMeds.join('') : '<div class="empty">No medication changes</div>';
-  post+=`<div class="lead">Physical therapy / non-drug</div>`;
-  post+= (res.non_drug&&res.non_drug.length)? `<ul class="clean">`+res.non_drug.map(n=>`<li>${esc(n)}</li>`).join('')+`</ul>` : '<div class="empty">None indicated</div>';
+  const medItem=(m,dur)=>`<div class="medi"><div class="mn">${esc(m.med)}</div><div class="mw">${esc(m.why||'')}</div>${dur&&m.duration?`<span class="md">${esc(m.duration)}</span>`:''}</div>`;
+  const box=(cls,title,n,inner)=>`<div class="grp grp-${cls}"><div class="ghead"><span>${title}</span><span class="n">${n}</span></div><div class="gbody">${inner}</div></div>`;
+  let post='<div class="lead">Medication plan</div><div class="grps">';
+  let anyMed=false;
+  if(M.start.length){anyMed=true; post+=box('start','▶ Start / initiate',M.start.length,M.start.map(m=>medItem(m,true)).join(''));}
+  if(M.continue.length){anyMed=true; post+=box('cont','✓ Continue',M.continue.length,M.continue.map(m=>medItem(m,true)).join(''));}
+  if(M.hold.length){anyMed=true; post+=box('stop','⛔ Stop / hold',M.hold.length,M.hold.map(m=>medItem(m,false)).join(''));}
+  post+= anyMed?'':'<div class="empty">No medication changes</div>';
+  post+='</div>';
+  const fu=res.follow_up||[], nd=res.non_drug||[];
+  post+='<div class="lead" style="margin-top:16px">Tests &amp; procedures</div>';
+  post+= fu.length? box('test','🧪 Follow-up tests / procedures',fu.length,'<ul class="clean">'+fu.map(t=>`<li>${esc(t)}</li>`).join('')+'</ul>') : '<div class="empty">None specific this visit</div>';
+  post+='<div class="lead" style="margin-top:16px">Physical therapy &amp; lifestyle</div>';
+  post+= nd.length? box('pt','🏃 Non-drug / rehab referrals',nd.length,'<ul class="clean">'+nd.map(n=>`<li>${esc(n)}</li>`).join('')+'</ul>') : '<div class="empty">None indicated this visit</div>';
   document.getElementById('secPost').innerHTML=post;
 
   document.getElementById('disc').textContent=res.disclaimer;
